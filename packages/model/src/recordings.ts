@@ -30,6 +30,24 @@ export function requestHash(provider: string, body: unknown): string {
   return sha256(canonical({ provider, body: wireJson(body) }));
 }
 
+// One call's reply within one run: the body hash, the run id and the how-many-th identical body this run sent, so two runs never share a reply.
+export type RunRecording = {
+  hash: string;
+  body_hash: string;
+  run_id: string;
+  occurrence: number;
+  provider: string;
+  response: unknown;
+  headers: Record<string, string>;
+  status: number;
+  latency_ms: number;
+  recorded_at: string;
+};
+
+export function runRecordingKey(provider: string, bodyHash: string, runId: string, occurrence: number): string {
+  return sha256(canonical({ provider, body_hash: bodyHash, run_id: runId, occurrence }));
+}
+
 export function pickHeaders(h: Headers): Record<string, string> {
   const out: Record<string, string> = {};
   for (const k of HEADER_WHITELIST) {
@@ -40,7 +58,7 @@ export function pickHeaders(h: Headers): Record<string, string> {
 }
 
 // Refuses to write a recording that contains any secret value.
-export function writeRecording(dir: string, rec: Recording, secrets: readonly string[]): string {
+export function writeRecording(dir: string, rec: Recording | RunRecording, secrets: readonly string[]): string {
   const text = `${JSON.stringify(rec, null, 2)}\n`;
   if (secrets.some((s) => s.length > 0 && text.includes(s))) throw new ModelError("secret_in_recording", "a key value appeared in a recording; nothing was written");
   mkdirSync(dir, { recursive: true });
@@ -49,6 +67,15 @@ export function writeRecording(dir: string, rec: Recording, secrets: readonly st
   writeFileSync(tmp, text, { flag: "wx" });
   renameSync(tmp, file);
   return file;
+}
+
+// The run-keyed reply when one was recorded, else null; replay then falls back to the body-keyed recording.
+export function readRunRecording(dir: string, key: string, bodyHash: string): RunRecording | null {
+  const file = join(dir, `${key}.json`);
+  if (!existsSync(file)) return null;
+  const rec = JSON.parse(readFileSync(file, "utf8")) as RunRecording;
+  if (rec.body_hash !== bodyHash) throw new ModelError("replay_miss", `run recording ${key} answers a different request`, { hash: bodyHash, dir });
+  return rec;
 }
 
 export function readRecording(dir: string, hash: string): Recording {

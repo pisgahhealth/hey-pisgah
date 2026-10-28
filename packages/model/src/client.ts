@@ -6,7 +6,7 @@ import type { z } from "zod";
 import { budgetFromEnv, weekSpendUsd, type Budget } from "./budget.js";
 import { loadKeys } from "./env.js";
 import { ModelError } from "./errors.js";
-import { DEFAULT_RECORDINGS_DIR, pickHeaders, readRecording, requestHash, wireJson, writeRecording } from "./recordings.js";
+import { DEFAULT_RECORDINGS_DIR, pickHeaders, readRecording, readRunRecording, requestHash, runRecordingKey, wireJson, writeRecording } from "./recordings.js";
 import { ROUTES, parseUsage, routeFor, type EffortLevel, type ProviderId } from "./routes.js";
 
 export type ChatCompletion = OpenAI.Chat.Completions.ChatCompletion;
@@ -87,6 +87,7 @@ export class ModelClient {
   private readonly inflight = new Map<string, number>();
   private readonly sdk = new Map<string, OpenAI>();
   private readonly recordingsDir: string;
+  private readonly occurrences = new Map<string, number>();
 
   constructor(private readonly opts: ClientOptions) {
     const m = opts.mode ?? (process.env.HEY_PISGAH_MODE as Mode | undefined) ?? "mock";
@@ -177,6 +178,13 @@ export class ModelClient {
     return c;
   }
 
+  // The run-keyed recording name for this call; identical bodies within one run are numbered by answered calls, so a failed attempt takes no number.
+  private nextRunKey(provider: string, bodyHash: string, runId: string): { key: string; occurrence: number; slot: string } {
+    const slot = `${runId}|${bodyHash}`;
+    const occurrence = (this.occurrences.get(slot) ?? 0) + 1;
+    return { key: runRecordingKey(provider, bodyHash, runId, occurrence), occurrence, slot };
+  }
+
   async call(args: CallArgs): Promise<CallResult> {
     const route = routeFor(args.provider, args.model);
     if (!Effort.safeParse(args.effort).success) throw new ModelError("effort_required", "every call names low, medium, high or xhigh", { effort: args.effort });
@@ -195,6 +203,7 @@ export class ModelClient {
 
     const body = this.body(args);
     const hash = requestHash(args.provider, body);
+    const runKey = args.run_id ? this.nextRunKey(args.provider, hash, args.run_id) : null;
     const ledgerId = this.ledgerStreamId(args.run_id);
     this.inflight.set(ledgerId, (this.inflight.get(ledgerId) ?? 0) + 1);
     let completion: ChatCompletion;
@@ -203,7 +212,8 @@ export class ModelClient {
       if (this.mode === "mock") {
         completion = (this.opts.mock ?? fixedMock)({ provider: args.provider, body, hash });
       } else if (this.mode === "replay") {
-        const rec = readRecording(this.recordingsDir, hash);
+        const own = runKey ? readRunRecording(this.recordingsDir, runKey.key, hash) : null;
+        const rec = own ?? readRecording(this.recordingsDir, hash);
         completion = rec.response as ChatCompletion;
         latency = rec.latency_ms;
       } else {
@@ -221,15 +231,15 @@ export class ModelClient {
         }
         latency = Math.round(performance.now() - t0);
         completion = res.data;
-        writeRecording(
-          this.recordingsDir,
-          { hash, provider: args.provider, request: body, response: completion, headers: pickHeaders(res.response.headers), status: res.response.status, latency_ms: latency, recorded_at: this.now().toISOString() },
-          Object.values(this.keys).filter((v) => v.length >= 6).concat(route.apiKey(this.keys) ?? [])
-        );
+        const secrets = Object.values(this.keys).filter((v) => v.length >= 6).concat(route.apiKey(this.keys) ?? []);
+        const kept = { provider: args.provider, response: completion, headers: pickHeaders(res.response.headers), status: res.response.status, latency_ms: latency, recorded_at: this.now().toISOString() };
+        writeRecording(this.recordingsDir, { hash, request: body, ...kept }, secrets);
+        if (runKey && args.run_id) writeRecording(this.recordingsDir, { hash: runKey.key, body_hash: hash, run_id: args.run_id, occurrence: runKey.occurrence, ...kept }, secrets);
       }
     } finally {
       this.inflight.set(ledgerId, Math.max(0, (this.inflight.get(ledgerId) ?? 1) - 1));
     }
+    if (runKey) this.occurrences.set(runKey.slot, runKey.occurrence);
 
     const usage = parseUsage(args.provider, completion.usage);
     const row = LedgerRow.parse({

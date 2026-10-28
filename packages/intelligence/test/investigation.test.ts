@@ -53,7 +53,31 @@ describe("uniform unknown_id", () => {
         s.validationReport({ proposal_id: "p-12345678" }),
         typeof id !== "string" ? UNKNOWN_ID : s.recordHypothesis({ statement: "s", mechanism: "m", subject_refs: [], competing: { none_identified_reason: "r" }, evidence: [...evidence().slice(0, 2), { event_id: "ev-00000000", case_id: id, stance: "context", note: "" }], if_true: pred("intervention_lt_control", 30), if_false: pred("no_difference", 10), refuted_if: "r" })
       ];
+      const hyp = answers.pop()!;
       for (const a of answers) expect(JSON.stringify(a)).toBe(JSON.stringify(UNKNOWN_ID));
+      if (typeof id === "string") expect(hyp).toEqual({ ...UNKNOWN_ID, field: "evidence[2]", detail: "The event_id is not an event of the case_id given with it in this pool." });
+    }
+    s.close();
+  });
+});
+
+describe("record_hypothesis errors", () => {
+  it("name the field that held an unknown id and never the id", () => {
+    const s = session();
+    const h1 = hyp(s);
+    const base = { statement: "s", mechanism: "m", subject_refs: [], competing: { none_identified_reason: "r" }, evidence: evidence(), if_true: pred("intervention_lt_control", 30), if_false: pred("no_difference", 10), refuted_if: "r" };
+    const wrongCase = [...evidence().slice(0, 2), { ...evidence()[2]!, case_id: LONG[1] }];
+    const reserved = "c-zz99zz99";
+    const answers = [
+      s.recordHypothesis({ ...base, competing: [h1, "h-0ther5e5"] }),
+      s.recordHypothesis({ ...base, revises: "h-0ther5e5" }),
+      s.recordHypothesis({ ...base, evidence: wrongCase }),
+      s.recordHypothesis({ ...base, if_false: pred("no_difference", 10, "post_signoff_wait_min", [LONG[0], reserved]) })
+    ];
+    expect(answers.map((a) => a.field)).toEqual(["competing[1]", "revises", "evidence[2]", "if_false.scope.cases[1]"]);
+    for (const a of answers) {
+      expect(a).toMatchObject(UNKNOWN_ID);
+      expect(JSON.stringify(a)).not.toMatch(/h-0ther5e5|c-zz99zz99|ev-[0-9a-f]{8}|c-[0-9a-f]{8}/);
     }
     s.close();
   });

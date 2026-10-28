@@ -4,7 +4,7 @@ import { SIM_EVENT_KINDS } from "@hey-pisgah/workflow";
 import type { DiscoveryPool, PoolCase } from "./pool.js";
 
 // Every tool result is capped so one read can never flood the context.
-export const RESULT_CHAR_CAP = 12_000;
+export const RESULT_CHAR_CAP = 8_000;
 export const NOTE_CHAR_CAP = 500;
 
 type Row = Record<string, unknown>;

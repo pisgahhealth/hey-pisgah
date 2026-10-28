@@ -24,7 +24,7 @@ const last = (ctx: Ctx, name: string, n = 1) => ctx.results.filter((r) => r.name
 function eventOf(ctx: Ctx, caseId: string, subject: string): string {
   for (const r of ctx.results) {
     if (r.name !== "get_case_timeline" || r.value.case_id !== caseId) continue;
-    const hit = (r.value.items as { kind?: string; subject?: string; event_id?: string }[]).find((e) => e.kind === "step.completed" && e.subject === subject);
+    const hit = ((r.value.items ?? []) as { kind?: string; subject?: string; event_id?: string }[]).find((e) => e.kind === "step.completed" && e.subject === subject);
     if (hit?.event_id) return hit.event_id;
   }
   return "ev-00000000";
@@ -57,7 +57,7 @@ function script(arm: Arm, step: number, ctx: Ctx): Call[] | string {
   }
   const reads: Call[][] = [
     [{ name: "list_cases", args: {} }, { name: "get_workflow_definition", args: {} }, { name: "get_ward_requirements", args: {} }],
-    [MOCK_CASES.long[0], MOCK_CASES.short].map((c) => ({ name: "get_case_timeline", args: { case_id: c, order: "occurred", limit: 60 } })),
+    [MOCK_CASES.long[0], MOCK_CASES.short].map((c) => ({ name: "get_case_timeline", args: { case_id: c, order: "occurred", limit: 60, kinds: ["step.completed"] } })),
     [{ name: "compute_intervals", args: { case_ids: [...MOCK_CASES.long, MOCK_CASES.short], from: { kind: "step.completed", step_id: "st05" }, to: { kind: "step.completed", step_id: "st16" }, clock: "occurred" } }]
   ];
   if (step < reads.length) return reads[step]!;

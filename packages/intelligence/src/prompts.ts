@@ -1,5 +1,6 @@
 import { hashJson, sha256 } from "@hey-pisgah/contracts";
 import type { Arm } from "./session.js";
+import { ARGS_NOTE, DEFINITION_NOTE, DIGEST_NOTE, DROPPED_NOTE } from "./digest.js";
 import { DESCRIPTIONS, toolDefs } from "./tools.js";
 import { ENGINE_SEMANTICS, OPERATION_VOCABULARY } from "./views.js";
 
@@ -61,6 +62,10 @@ export function appTexts(arm: Arm): { label: string; text: string }[] {
     { label: "nudge", text: NUDGE },
     { label: "elided", text: ELIDED },
     { label: "repeat_note", text: REPEAT_NOTE },
+    { label: "digest_note", text: DIGEST_NOTE },
+    { label: "definition_note", text: DEFINITION_NOTE },
+    { label: "args_note", text: ARGS_NOTE },
+    { label: "dropped_note", text: DROPPED_NOTE },
     ...Object.entries(DESCRIPTIONS).map(([k, v]) => ({ label: `tool.${k}`, text: v })),
     { label: `${arm}.tool_schemas`, text: JSON.stringify(toolDefs(arm, { insufficientEvidence: true })) },
     { label: "operation_vocabulary", text: JSON.stringify(OPERATION_VOCABULARY) },
@@ -72,5 +77,5 @@ export const ARMS: readonly Arm[] = ["adaptive", "a3", "a4", "prior"];
 
 // The hashes a run is reported under; the commitments file must carry them before a live run.
 export function armHashes(arm: Arm): { prompt: string; tools: string } {
-  return { prompt: sha256(`${systemPrompt(arm)}\n---\n${kickoffTemplate(arm)}\n---\n${CYCLE_TWO}\n---\n${NUDGE}\n---\n${ELIDED}\n---\n${REPEAT_NOTE}`), tools: hashJson({ defs: toolDefs(arm), vocabulary: OPERATION_VOCABULARY, semantics: ENGINE_SEMANTICS }) };
+  return { prompt: sha256(`${systemPrompt(arm)}\n---\n${kickoffTemplate(arm)}\n---\n${CYCLE_TWO}\n---\n${NUDGE}\n---\n${ELIDED}\n---\n${REPEAT_NOTE}\n---\n${DIGEST_NOTE}\n---\n${DEFINITION_NOTE}\n---\n${ARGS_NOTE}\n---\n${DROPPED_NOTE}`), tools: hashJson({ defs: toolDefs(arm), vocabulary: OPERATION_VOCABULARY, semantics: ENGINE_SEMANTICS }) };
 }

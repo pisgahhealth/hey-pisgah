@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { LedgerRow, estimateCostUsd, verifyChain } from "@hey-pisgah/contracts";
 import { readStream } from "@hey-pisgah/store";
-import { DEFAULT_RECORDINGS_DIR, KEYS_PATH, ModelError, callStructured, createModelClient, parseUsage, secretValues, type CallArgs, type ChatCompletion, type ClientOptions, type MockResponder } from "./index.js";
+import { DEFAULT_RECORDINGS_DIR, KEYS_PATH, ModelError, callStructured, createModelClient, runRecordingKey, parseUsage, secretValues, type CallArgs, type ChatCompletion, type ClientOptions, type MockResponder } from "./index.js";
 import { SMOKE_REQUEST, SmokeArgs } from "./smoke.js";
 
 let dir: string;
@@ -219,8 +219,11 @@ describe("record and replay", () => {
       expect(route.seen[0]!.headers["modal-routing-affinity-key"]).toBe("case-1");
       expect(route.seen[0]!.body.reasoning_effort).toBe("low");
       const files = readdirSync(rec);
-      expect(files).toEqual([`${a.hash}.json`]);
-      const text = readFileSync(join(rec, files[0]!), "utf8");
+      const own = runRecordingKey("modal", a.hash, base.run_id!, 1);
+      expect(files.sort()).toEqual([`${a.hash}.json`, `${own}.json`].sort());
+      expect(JSON.parse(readFileSync(join(rec, `${own}.json`), "utf8"))).toMatchObject({ body_hash: a.hash, run_id: base.run_id, occurrence: 1 });
+      expect(JSON.parse(readFileSync(join(rec, `${own}.json`), "utf8"))).not.toHaveProperty("request");
+      const text = readFileSync(join(rec, `${a.hash}.json`), "utf8");
       for (const v of Object.values(keys)) expect(text).not.toContain(v);
       expect(text.toLowerCase()).not.toContain("set-cookie");
       expect(Object.keys(JSON.parse(text).headers).sort()).toEqual(["content-type", "date", "x-request-id"]);
@@ -237,6 +240,28 @@ describe("record and replay", () => {
       }
       expect(miss?.code).toBe("replay_miss");
       expect(miss?.message).toContain("HEY_PISGAH_MODE=live");
+      replay.close();
+    } finally {
+      route.server.close();
+    }
+  });
+
+  it("keys recordings by run as well as body, so two runs with one body each replay their own reply", async () => {
+    const route = await fakeRoute([() => completion({ content: "first run" }), () => completion({ content: "second run" }), () => completion({ content: "second run, same body again" })]);
+    const rec = join(dir, "rec-runs");
+    try {
+      const keys = { ...fakeKeys, MODAL_ENDPOINT_URL: route.url };
+      const live = createModelClient({ storeRoot: join(dir, "r1"), mode: "live", keys, recordingsDir: rec, budget: budget() });
+      await live.call({ ...base, run_id: "run-aaaa0001" });
+      await live.call({ ...base, run_id: "run-aaaa0002" });
+      await live.call({ ...base, run_id: "run-aaaa0002" });
+      live.close();
+      const replay = createModelClient({ storeRoot: join(dir, "r2"), mode: "replay", recordingsDir: rec, budget: budget() });
+      const text = async (run: string) => (await replay.call({ ...base, run_id: run })).completion.choices[0]!.message.content;
+      expect(await text("run-aaaa0001")).toBe("first run");
+      expect(await text("run-aaaa0002")).toBe("second run");
+      expect(await text("run-aaaa0002")).toBe("second run, same body again");
+      expect(await text("run-unseen01")).toBe("second run, same body again");
       replay.close();
     } finally {
       route.server.close();
@@ -322,7 +347,7 @@ describe("structured repair", () => {
       expect(a.repairs).toBe(2);
       expect(b.repairs).toBe(2);
       expect(b.value).toEqual(a.value);
-      expect(readdirSync(rec)).toHaveLength(3);
+      expect(readdirSync(rec)).toHaveLength(6);
     } finally {
       route.server.close();
     }
