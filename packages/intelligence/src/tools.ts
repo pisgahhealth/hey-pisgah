@@ -53,7 +53,7 @@ export const TOOL_ARGS = {
   }),
   get_validation_report: z.object({ proposal_id: z.string() }),
   list_ledger: z.object({}),
-  record_note: z.object({ note: z.string() }),
+  record_note: z.object({ note: z.string(), no_hypothesis_reason: z.string().optional() }),
   end_session: z.object({ result: z.enum(["no_change_warranted"]), note: z.string(), evidence_event_ids: z.array(z.string()) })
 } as const;
 export type ToolName = keyof typeof TOOL_ARGS;
@@ -61,8 +61,8 @@ export type ToolName = keyof typeof TOOL_ARGS;
 // Descriptions say what each tool returns or records, never what to look for.
 export const DESCRIPTIONS: Record<ToolName, string> = {
   list_cases: "List the recorded discharge cases in this session's pool: case id, ward, payer, requirement version, event and note counts, and the facts recorded when each case opened.",
-  get_case_timeline: "Read one page of a case's recorded events and staff notes, ordered by the occurred clock or the recorded clock. Every event carries both clocks; a late entry carries its reason. Note text arrives inside untrusted_text. Page with offset and next_offset; kinds filters by event kind, and note.recorded selects notes.",
-  get_record: "Read the recorded versions of one record kind in a case, with content where the record holds any, or every event that names one document_id.",
+  get_case_timeline: "Read one page of a case's recorded events and staff notes, ordered by the occurred clock or the recorded clock. Every event carries both clocks; a late entry carries its reason. Note text arrives inside untrusted_text. Page with offset and next_offset; kinds filters by event kind, and note.recorded selects notes. Until a hypothesis is recorded, reads share a window of 25 timeline pages or 12 model calls.",
+  get_record: "Read the recorded versions of one record kind in a case, with content where the record holds any, or every event that names one document_id. Until a hypothesis is recorded, reads share a window of 25 timeline pages or 12 model calls.",
   compute_intervals: "Minutes between two selected events in each listed case, on one clock. A selector names an event kind, may narrow by step_id, record_kind, document_id, stage or role, and takes the first or last match. Returns per-case minutes with the event ids used, and the median, min and max.",
   get_queue_snapshot: "The state of each staff role in a case at one minute on the occurred clock: other patients' work that had arrived, this case's queued, running and finished jobs, and any busy block in progress.",
   get_staff_activity: "Every job one role did on a case, per staff member, with queue, start and completion minutes, and that role's busy blocks.",
@@ -76,7 +76,7 @@ export const DESCRIPTIONS: Record<ToolName, string> = {
   submit_proposal: "Submit a workflow change: base version, 1 to 3 operations, scope (wards and an optional condition), rationale, evidence (hypothesis, experiment and event ids), expected effects and known exceptions. The server adds the id, the cases viewed and a hash. Validation runs on cases outside the pool; the reply says whether the report is ready.",
   get_validation_report: "Read the validation report for a proposal: status, pass or fail per case on both versions with failing check ids, deltas, and the gate result.",
   list_ledger: "List this session's hypotheses, experiments, proposals and the budget left.",
-  record_note: "Save a short free-text note, up to 600 characters, for later turns. Saved notes are shown as a numbered list at the top of every later turn; at most 20 notes are kept.",
+  record_note: "Save a short free-text note, up to 600 characters, for later turns. Saved notes are shown as a numbered list at the top of every later turn; at most 20 notes are kept. A no_hypothesis_reason, given while no hypothesis is recorded, opens a new reading window.",
   end_session: "End the session with a result, a note and the recorded event ids inspected. no_change_warranted is a valid result."
 };
 
@@ -110,7 +110,7 @@ export function toolDefs(arm: Arm, flags: { insufficientEvidence?: boolean | und
 }
 
 // Runs one tool call; unknown tools and unparseable arguments come back as data the model can read, and pageChars shortens timeline pages.
-export async function dispatch(s: Session, name: string, argText: string, o: { pageChars?: number } = {}): Promise<Record<string, unknown>> {
+export async function dispatch(s: Session, name: string, argText: string, o: { pageChars?: number; turn?: number } = {}): Promise<Record<string, unknown>> {
   if (!(armTools(s.o.arm) as string[]).includes(name)) return { ok: false, error: "no_such_tool", message: "No tool has that name in this session." };
   let args: unknown;
   try { args = argText.trim() ? JSON.parse(argText) : {}; } catch { s.counters.repairs += 1; return { ok: false, error: "invalid_arguments", message: "The arguments are not valid JSON." }; }
@@ -128,7 +128,7 @@ export async function dispatch(s: Session, name: string, argText: string, o: { p
     case "get_queue_snapshot": return s.queue(a);
     case "get_staff_activity": return s.staff(a);
     case "get_ward_requirements": return s.requirements(a);
-    case "get_workflow_definition": return s.definition();
+    case "get_workflow_definition": return s.definition(o.turn);
     case "record_hypothesis": return s.recordHypothesis(args);
     case "set_hypothesis_status": return s.setStatus(args);
     case "run_experiment": return s.runExperiment(args);

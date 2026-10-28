@@ -1,8 +1,8 @@
 import type { WorkflowDefinition } from "@hey-pisgah/contracts";
-import { ENGINE_SEMANTICS } from "./views.js";
+import { ENGINE_SEMANTICS, OPERATION_VOCABULARY } from "./views.js";
 
 export const DIGEST_NOTE = "Short form of an older tool result, kept to save context; call the tool again for the full result.";
-export const DEFINITION_NOTE = "Short form of the workflow definition read above; call get_workflow_definition again for documents, permissions, registries and the operation vocabulary.";
+export const DEFINITION_NOTE = "Short form of the workflow definition read above: steps, edges, triggers, engine rules and operation shapes. It leaves out document sections, permissions, the event and action registries, condition fact values and the operation examples.";
 export const DROPPED_NOTE = "Older turns removed to save context; the short forms of the definition and the case list are kept here when they were read, list_ledger lists this session's hypotheses, experiments and proposals, and the tools return any record again.";
 export const ARGS_NOTE = "Arguments of an older call removed to save context; list_ledger lists this session's records.";
 
@@ -17,7 +17,8 @@ export function definitionDigest(def: WorkflowDefinition): Row {
     steps: def.steps.map((s) => [s.step_id, s.action_kind, s.document_ref ? `${s.document_ref.document_id}/${s.document_ref.stage}` : null, s.external ? "external" : null, s.required_when ? `required_when ${j(s.required_when)}` : null].filter(Boolean).join(" ")),
     edges: def.edges.map((e) => `${e.edge_id} ${e.from.step}>${e.to.step} ${e.gate} ${e.kind}`),
     triggers: def.triggers.map((t) => `${t.target.step} when ${j(t.when)}${t.condition ? ` if ${j(t.condition)}` : ""}`),
-    engine_semantics: ENGINE_SEMANTICS
+    engine_semantics: ENGINE_SEMANTICS,
+    operations: OPERATION_VOCABULARY.map((o) => o.shape)
   };
 }
 
@@ -30,7 +31,7 @@ const nonZero = (o: unknown): Row => Object.fromEntries(Object.entries((o ?? {})
 export function resultDigest(name: string, result: Row, def: WorkflowDefinition): Row | null {
   if (result.ok === false) return null;
   switch (name) {
-    case "get_workflow_definition": return definitionDigest(def);
+    case "get_workflow_definition": return result.unchanged ? null : definitionDigest(def);
     case "run_experiment":
     case "get_experiment": {
       const b = (result.behaviour ?? null) as Row | null;

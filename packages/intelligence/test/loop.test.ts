@@ -9,8 +9,10 @@ import { ELIDED, NOTES_HEADER, REPEAT_NOTE, systemPrompt } from "../src/prompts.
 import { ENGINE_SEMANTICS } from "../src/views.js";
 import { SETTINGS, compact, dropOldTurns, runLoop, type Digests } from "../src/loop.js";
 import { scriptedInvestigator } from "../src/mock.js";
-import { STREAMS, Session, sessionStreamId, type Arm } from "../src/session.js";
-import { LEARNED, LONG, SHORT, evidence, pool, tempRoot } from "./helpers.js";
+import { DEFINITION_UNCHANGED, READ_BUDGET, READ_BUDGET_MESSAGE, STREAMS, Session, sessionStreamId, type Arm } from "../src/session.js";
+import { dispatch } from "../src/tools.js";
+import { denyScan } from "../src/deny.js";
+import { LEARNED, LONG, SHORT, evidence, hyp, pool, tempRoot } from "./helpers.js";
 
 const repoRoot = join(import.meta.dirname, "..", "..", "..");
 const budget = (calls = 40) => ({ runUsd: 1, runMaxCalls: calls, weekUsd: 120, weekStopFraction: 0.8, weekSince: () => new Date(0) });
@@ -149,8 +151,8 @@ describe("discovery loop in mock mode", () => {
     expect(out[3]!.role).toBe("assistant");
     expect(dropOldTurns(m, 1_000_000)).toEqual(m);
     const huge = [...m.slice(0, 6), ...turn(9, "x".repeat(60_000))];
-    expect(dropOldTurns(huge, 8000)).toEqual(huge);
-    expect(compact(huge, 8000).filter((x) => x.role === "tool").map((x) => (x.content as string).length)).toEqual(huge.filter((x) => x.role === "tool").map((x) => (x.content as string).length));
+    expect(dropOldTurns(huge, 12_000)).toEqual(huge);
+    expect(compact(huge, 12_000).filter((x) => x.role === "tool").map((x) => (x.content as string).length)).toEqual(huge.filter((x) => x.role === "tool").map((x) => (x.content as string).length));
     s.close();
   });
 
@@ -214,6 +216,53 @@ describe("pinned results", () => {
     expect(s.citedCases().size).toBe(0);
     s.recordHypothesis({ statement: "s", mechanism: "m", subject_refs: [], competing: { none_identified_reason: "r" }, evidence: evidence(), if_true: { metric: "post_signoff_wait_min", comparison: "intervention_lt_control", tolerance_min: 30, scope: { cases: [LONG[2]] } }, if_false: { metric: "post_signoff_wait_min", comparison: "no_difference", tolerance_min: 10, scope: { cases: [LONG[2]] } }, refuted_if: "r" });
     expect([...s.citedCases()].sort()).toEqual([LONG[0], LONG[2], SHORT].sort());
+    s.close();
+  });
+});
+
+describe("revision 7 read rules", () => {
+  it("answers a repeated definition read with the turn and hash of the first read, no body, and counts it", async () => {
+    const s = new Session({ storeRoot: tempRoot(), runId: "run-0e7e0007", arm: "adaptive", pool: pool() });
+    const first = await dispatch(s, "get_workflow_definition", "{}", { turn: 3 });
+    expect(first).toHaveProperty("definition");
+    const again = await dispatch(s, "get_workflow_definition", "{}", { turn: 9 });
+    expect(again).toEqual({ ok: true, unchanged: true, read_at_turn: 3, definition_hash: s.base.definition_hash, note: DEFINITION_UNCHANGED });
+    expect(s.counters.definition_unchanged).toBe(1);
+    expect(resultDigest("get_workflow_definition", again, s.base)).toBeNull();
+    expect(DEFINITION_NOTE).not.toMatch(/call get_workflow_definition/);
+    s.close();
+  });
+
+  it("keeps the definition short form when a later unchanged answer follows it", () => {
+    const s = new Session({ storeRoot: tempRoot(), runId: "run-0e7e0008", arm: "adaptive", pool: pool() });
+    const digest = JSON.stringify(resultDigest("get_workflow_definition", s.definition(), s.base));
+    const unchanged = JSON.stringify(s.definition(5));
+    const call = (id: string) => ({ role: "assistant" as const, content: null, tool_calls: [{ id, type: "function" as const, function: { name: "get_workflow_definition", arguments: "{}" } }] });
+    const digests: Digests = new Map([["d1", { name: "get_workflow_definition", digest, cases: [] }], ["d2", { name: "get_workflow_definition", digest: null, cases: [] }]]);
+    const m = [{ role: "system" as const, content: "s" }, { role: "user" as const, content: "k" }, call("d1"), { role: "tool" as const, tool_call_id: "d1", content: JSON.stringify(s.definition()) }, call("d2"), { role: "tool" as const, tool_call_id: "d2", content: unchanged }, { role: "assistant" as const, content: "next" }];
+    const out = compact(m, 100_000, digests);
+    expect(out[3]!.content).toBe(digest);
+    expect(out[5]!.content).toBe(unchanged);
+    s.close();
+  });
+
+  it("budgets reads before a hypothesis, counts refusals, and reopens on a no_hypothesis_reason note or a hypothesis", () => {
+    let calls = 0;
+    const s = new Session({ storeRoot: tempRoot(), runId: "run-0e7e0009", arm: "adaptive", pool: pool(), usage: () => ({ calls, usd: 0, max_calls: 60, max_usd: 6 }) });
+    for (let i = 0; i < READ_BUDGET.pages; i++) expect(s.timeline({ case_id: LONG[i % 3]!, order: "occurred", offset: i })).toHaveProperty("items");
+    const r = s.timeline({ case_id: LONG[0], order: "occurred" });
+    expect(r).toEqual({ ok: false, error: "reading_budget", message: READ_BUDGET_MESSAGE });
+    expect(s.record({ case_id: LONG[0], record_kind: "take_home_order" }).error).toBe("reading_budget");
+    expect(s.intervals({ case_ids: [LONG[0]], from: { kind: "step.completed", step_id: "st05" }, to: { kind: "step.completed", step_id: "st16" }, clock: "occurred" })).toHaveProperty("rows");
+    expect(s.counters).toMatchObject({ read_refusals: 2, experiments_used: 0, invalid_requests: 0 });
+    expect(s.recordNote({ note: "nothing yet", no_hypothesis_reason: "the waits differ by ward and I have not seen Ward C" })).toMatchObject({ ok: true, reading_window_reopened: true });
+    expect(s.timeline({ case_id: LONG[0], order: "occurred" })).toHaveProperty("items");
+    calls = 12;
+    expect(s.timeline({ case_id: LONG[0], order: "occurred" }).error).toBe("reading_budget");
+    hyp(s);
+    expect(s.timeline({ case_id: LONG[0], order: "occurred" })).toHaveProperty("items");
+    expect(s.counters.read_refusals).toBe(3);
+    expect(denyScan([{ label: "budget", text: READ_BUDGET_MESSAGE }, { label: "unchanged", text: DEFINITION_UNCHANGED }, { label: "def", text: DEFINITION_NOTE }])).toEqual([]);
     s.close();
   });
 });

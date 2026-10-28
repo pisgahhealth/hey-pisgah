@@ -29,6 +29,7 @@ export function runRecord(storeRoot: string, runId: string, note: string | null 
     hypotheses: hyps.map((h) => ({ hypothesis_id: h.hypothesis_id, status: last.get(h.hypothesis_id), statement: h.statement, competing: h.competing, if_true: h.if_true, if_false: h.if_false })),
     experiments: exps.map((x) => ({ experiment_id: x.experiment_id, ops: (x.request as Row).ops, case_ids: (x.request as Row).case_ids, prediction_check: x.prediction_check, event_logs_identical_to_control: x.behaviour?.event_logs_identical_to_control ?? null, behaviour_note: x.behaviour?.note ?? null, no_pair_reason: x.no_pair_reason, median_delta: x.summary })),
     notes: log.filter((e) => e.record_type === "note.recorded").map((e) => String((e.payload as Row).note)),
+    definition_unchanged_answers: c.summary.definition_unchanged ?? null, reading_budget_refusals: c.summary.read_refusals ?? null,
     pair_refusals: c.summary.pair_refusals, say_do_mismatches: c.summary.say_do_mismatches, proposals: c.summary.proposals, validations,
     declared_result: result ? { result: result.result, note: result.note } : null,
     calls: rows.length, cost_usd: Math.round(rows.reduce((s, r) => s + r.cost_usd, 0) * 1e4) / 1e4,

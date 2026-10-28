@@ -79,7 +79,12 @@ export const StatusInput = z.strictObject({
 export const ProposalInput = WorkflowChangeProposal.omit({ proposal_id: true, viewed_case_ids: true, status: true, hash: true });
 
 export const NOTE_LIMIT = 20;
-export const NoteInput = z.strictObject({ note: z.string().trim().min(1).max(600) });
+export const NoteInput = z.strictObject({ note: z.string().trim().min(1).max(600), no_hypothesis_reason: z.string().trim().min(1).max(300).optional() });
+
+// Before any hypothesis exists, reads are budgeted per window; a no_hypothesis_reason note opens a new window.
+export const READ_BUDGET = { pages: 25, calls: 12 } as const;
+export const READ_BUDGET_MESSAGE = `Reading budget reached: ${READ_BUDGET.pages} timeline pages or ${READ_BUDGET.calls} model calls with no hypothesis recorded. Record a hypothesis with record_hypothesis, or a note with record_note that gives a no_hypothesis_reason, before further get_case_timeline or get_record reads. This refusal is counted and uses no experiment.`;
+export const DEFINITION_UNCHANGED = "The workflow definition is unchanged since your first read of it; its short form stays in this conversation.";
 
 export const EndInput = z.strictObject({
   result: z.enum(["no_change_warranted", "insufficient_evidence"]),
@@ -134,7 +139,9 @@ export class Session {
   readonly viewed = new Set<string>();
   readonly frozen = new Set<string>();
   readonly notes: string[] = [];
-  counters = { experiments_used: 0, invalid_requests: 0, pair_refusals: 0, no_pair_reasons: 0, zod_streak: 0, repairs: 0, listed_used: 0, proposals_used: 0, say_do_mismatches: 0, retains: 0, rejects: 0 };
+  private readWindow = { pages: 0, callsAtStart: 0 };
+  private definitionRead: { turn: number; hash: string } | null = null;
+  counters = { definition_unchanged: 0, read_refusals: 0, timeline_pages: 0, experiments_used: 0, invalid_requests: 0, pair_refusals: 0, no_pair_reasons: 0, zod_streak: 0, repairs: 0, listed_used: 0, proposals_used: 0, say_do_mismatches: 0, retains: 0, rejects: 0 };
   stop: { reason: StopReason; detail: string } | null = null;
   private readonly streams: { hypotheses: Stream; experiments: Stream; proposals: Stream; log: Stream };
   private serial = 0;
@@ -180,14 +187,30 @@ export class Session {
   // Read tools: every id outside the discovery pool gets the same unknown_id.
   listCases(): Result { return views.listCases(this.pool); }
 
+  // The refusal a budgeted read gets once the window is spent with no hypothesis recorded; null while reads may go on.
+  private readBudgetRefusal(tool: string): Result | null {
+    if (this.hypotheses.size > 0) return null;
+    const calls = this.o.usage?.().calls ?? 0;
+    if (this.readWindow.pages < READ_BUDGET.pages && calls - this.readWindow.callsAtStart < READ_BUDGET.calls) return null;
+    this.counters.read_refusals += 1;
+    this.log("read.refused", { tool, pages: this.readWindow.pages, calls_in_window: calls - this.readWindow.callsAtStart, read_refusals: this.counters.read_refusals });
+    return refusal("reading_budget", READ_BUDGET_MESSAGE);
+  }
+
   timeline(a: { case_id: string; order: "occurred" | "recorded"; offset?: number | undefined; limit?: number | undefined; kinds?: string[] | undefined }, cap?: number): Result {
+    const budget = this.readBudgetRefusal("get_case_timeline");
+    if (budget) return budget;
     const c = this.pool.get(a.case_id);
     if (!c) return UNKNOWN_ID;
     this.view(c.case_id);
+    this.readWindow.pages += 1;
+    this.counters.timeline_pages += 1;
     return views.timeline(c, a, cap);
   }
 
   record(a: { case_id: string; record_kind?: string | undefined; document_id?: string | undefined }): Result {
+    const budget = this.readBudgetRefusal("get_record");
+    if (budget) return budget;
     const c = this.pool.get(a.case_id);
     if (!c) return UNKNOWN_ID;
     this.view(c.case_id);
@@ -216,7 +239,16 @@ export class Session {
   }
 
   requirements(a: { ward_id?: string | undefined }): Result { return views.wardRequirements(a.ward_id) ?? UNKNOWN_ID; }
-  definition(): Result { return views.definitionView(this.base); }
+  // The full definition on the first read; later reads of the same definition answer with the turn and hash of that read and no body.
+  definition(turn?: number): Result {
+    const hash = this.base.definition_hash;
+    if (turn !== undefined && this.definitionRead && this.definitionRead.hash === hash) {
+      this.counters.definition_unchanged += 1;
+      return { ok: true, unchanged: true, read_at_turn: this.definitionRead.turn, definition_hash: hash, note: DEFINITION_UNCHANGED };
+    }
+    if (turn !== undefined) this.definitionRead = { turn, hash };
+    return views.definitionView(this.base);
+  }
 
   // Records a hypothesis; ids are checked against the pool and the session, predictions against the per-metric caps.
   recordHypothesis(raw: unknown): Result {
@@ -464,9 +496,12 @@ export class Session {
     const parsed = NoteInput.safeParse(raw);
     if (!parsed.success) { this.counters.repairs += 1; return refusal("invalid_arguments", "The arguments do not match the schema.", { issues: zodIssues(parsed.error) }); }
     if (this.notes.length >= NOTE_LIMIT) return refusal("notes_full", `At most ${NOTE_LIMIT} notes are kept.`);
-    this.notes.push(parsed.data.note);
-    this.log("note.recorded", { number: this.notes.length, note: parsed.data.note });
-    return { ok: true, note_number: this.notes.length, notes_left: NOTE_LIMIT - this.notes.length };
+    const reason = parsed.data.no_hypothesis_reason;
+    const text = reason ? `${parsed.data.note} (no hypothesis yet: ${reason})` : parsed.data.note;
+    this.notes.push(text);
+    this.log("note.recorded", { number: this.notes.length, note: text, no_hypothesis_reason: reason ?? null });
+    if (reason && this.hypotheses.size === 0) this.readWindow = { pages: 0, callsAtStart: this.o.usage?.().calls ?? 0 };
+    return { ok: true, note_number: this.notes.length, notes_left: NOTE_LIMIT - this.notes.length, ...(reason ? { reading_window_reopened: this.hypotheses.size === 0 } : {}) };
   }
 
   // Cases cited by an active hypothesis, in its evidence or its prediction scopes.

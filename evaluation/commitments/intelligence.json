@@ -215,6 +215,43 @@
         "insufficient_evidence_default": false
       },
       "hash": "d112937c83fe783643627ff749647fa2934b50d968b44bbc3b2a134e8d886452"
+    },
+    {
+      "revision": 7,
+      "at": "2026-10-28T12:48:55.315Z",
+      "reason": "Stop the definition re-read loop and budget reads before a hypothesis, in the tool layer: the definition short-form note now states what it leaves out instead of inviting another call, and adds the operation shapes; a repeat get_workflow_definition answers unchanged with the turn and hash of the first read and no body, counted; until a hypothesis is recorded, get_case_timeline and get_record share a window of 25 timeline pages or 12 model calls, after which they refuse (counted, no experiment used) until a hypothesis or a record_note with a no_hypothesis_reason. Reason: revision 6 runs run-b41ebef2 and run-22009f5a read for 60 calls and re-read the definition 21 and 24 times with it already in context. Control disclosure: before this revision, run run-54ff5a29 was made as a control against revision 2 (hash b317394e616d, L2.1's prompt, tools and 60000-character elision) from a detached checkout of commit 96effde, to separate method from run-to-run variance; it recorded 3 hypotheses and ran 2 experiments, its first hypothesis at turn 42 of 60.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "2e6638db3a4e5e5cc8a9088d074e4aae669e0469671edf9740ddcdfcad62d2e0",
+            "tools": "4b8ea95e299ff5b5e41278d940df9d495e89883250c38f03f74fbf9b8add2f80"
+          },
+          "a3": {
+            "prompt": "e59c96d5669220fe7c17d7e5392e1cedfef131a8bcbdd64c883b3b4668e1d405",
+            "tools": "1a8eaa92eebe410b5013a594531f5b32e0b32dd64116d416f21bb1d31763939c"
+          },
+          "a4": {
+            "prompt": "68c4e31c428d69f42af901e8f68194f6d859395cc30a018148e741cfb7cdbfe6",
+            "tools": "4e47b792676d3185cbb43099035d41d6113ed9b82a7c17b0c415115940989ca2"
+          },
+          "prior": {
+            "prompt": "fa917ff4d55a5bdb2db4d300fa1f6f335d678fb34993cdc6efbf32770de10932",
+            "tools": "2fd590e02488a003e8deb611346c1209fc6a604d9cb9138f4867447bb975b514"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 30000,
+          "history_chars": 70000,
+          "turn_result_chars": 20000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "45421eeb06d7decc267ada6eae1421d66553fb492e13f726cd3ef9f80f6192c8"
     }
   ]
 }

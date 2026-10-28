@@ -73,8 +73,8 @@ export function compact(messages: readonly ChatMessage[], budget: number, digest
     if (m.role !== "tool" || typeof m.content !== "string") continue;
     if (i > lastAssistant) continue;
     const d = digests.get(m.tool_call_id);
-    if (d?.name === "get_workflow_definition") {
-      out[i] = { ...m, content: definitionPinned || !d.digest ? ELIDED_MIN : d.digest };
+    if (d?.name === "get_workflow_definition" && d.digest) {
+      out[i] = { ...m, content: definitionPinned ? ELIDED_MIN : d.digest };
       definitionPinned = true;
       continue;
     }
@@ -197,7 +197,7 @@ export async function runLoop(o: LoopOptions): Promise<LoopOutcome> {
       const repeated = key === previous;
       previous = key;
       if (repeated) repeats += 1;
-      const result = repeated ? { ok: false, error: "repeated_call", message: REPEAT_NOTE } : await dispatch(s, c.name, c.arguments, { pageChars });
+      const result = repeated ? { ok: false, error: "repeated_call", message: REPEAT_NOTE } : await dispatch(s, c.name, c.arguments, { pageChars, turn: turns });
       const text = JSON.stringify(result);
       s.log("tool.called", { turn: turns, index: i, call_id: c.id, name: c.name, args: c.arguments.slice(0, 8000), args_hash: sha256(c.arguments), result_hash: sha256(text), ok: result.ok !== false, error: result.ok === false ? String(result.error) : null, result: text.slice(0, 30_000) });
       const short = resultDigest(c.name, result, s.base);

@@ -1,6 +1,7 @@
 import { hashJson, sha256 } from "@hey-pisgah/contracts";
 import type { Arm } from "./session.js";
 import { ARGS_NOTE, DEFINITION_NOTE, DIGEST_NOTE, DROPPED_NOTE } from "./digest.js";
+import { DEFINITION_UNCHANGED, READ_BUDGET_MESSAGE } from "./session.js";
 import { DESCRIPTIONS, toolDefs } from "./tools.js";
 import { ENGINE_SEMANTICS, OPERATION_VOCABULARY } from "./views.js";
 
@@ -62,6 +63,8 @@ export function appTexts(arm: Arm): { label: string; text: string }[] {
     { label: "cycle_two", text: CYCLE_TWO },
     { label: "nudge", text: NUDGE },
     { label: "notes_header", text: NOTES_HEADER },
+    { label: "read_budget", text: READ_BUDGET_MESSAGE },
+    { label: "definition_unchanged", text: DEFINITION_UNCHANGED },
     { label: "elided", text: ELIDED },
     { label: "repeat_note", text: REPEAT_NOTE },
     { label: "digest_note", text: DIGEST_NOTE },
@@ -79,5 +82,5 @@ export const ARMS: readonly Arm[] = ["adaptive", "a3", "a4", "prior"];
 
 // The hashes a run is reported under; the commitments file must carry them before a live run.
 export function armHashes(arm: Arm): { prompt: string; tools: string } {
-  return { prompt: sha256(`${systemPrompt(arm)}\n---\n${kickoffTemplate(arm)}\n---\n${CYCLE_TWO}\n---\n${NUDGE}\n---\n${ELIDED}\n---\n${REPEAT_NOTE}\n---\n${DIGEST_NOTE}\n---\n${DEFINITION_NOTE}\n---\n${ARGS_NOTE}\n---\n${DROPPED_NOTE}\n---\n${NOTES_HEADER}`), tools: hashJson({ defs: toolDefs(arm), vocabulary: OPERATION_VOCABULARY, semantics: ENGINE_SEMANTICS }) };
+  return { prompt: sha256(`${systemPrompt(arm)}\n---\n${kickoffTemplate(arm)}\n---\n${CYCLE_TWO}\n---\n${NUDGE}\n---\n${ELIDED}\n---\n${REPEAT_NOTE}\n---\n${DIGEST_NOTE}\n---\n${DEFINITION_NOTE}\n---\n${ARGS_NOTE}\n---\n${DROPPED_NOTE}\n---\n${NOTES_HEADER}\n---\n${READ_BUDGET_MESSAGE}\n---\n${DEFINITION_UNCHANGED}`), tools: hashJson({ defs: toolDefs(arm), vocabulary: OPERATION_VOCABULARY, semantics: ENGINE_SEMANTICS }) };
 }
