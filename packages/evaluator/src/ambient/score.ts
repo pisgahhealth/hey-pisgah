@@ -5,7 +5,7 @@ const WRITTEN = new Set(["acknowledged", "completed"]);
 // One finalised utterance as the agent heard it, mapped to the talk's key by the chunks that made it.
 export type RunLine = { line_id: string; key_id: string | null; text: string; classes: string[]; seqs: number[]; ended_at: string | null; finished_by?: string | null };
 // The ways listening may finish a line; anything else, or a line whose last chunk was not final when no reason is kept, counts as partial text.
-const FINISHED = new Set(["quiet_tail", "short_chunk", "pause_after_cap", "held_dropped_gap"]);
+const FINISHED = new Set(["quiet_tail", "short_chunk", "pause_after_cap", "held_dropped_gap", "joined_across_cut", "number_alone"]);
 export type RunAction = { action_id: string; line_id: string; kind: string; args: Record<string, unknown>; state: string; corrects_action_id: string | null; written_at: string | null };
 export type RunChunk = { seq: number; key_ids: string[]; final: boolean; why: string };
 // Everything one run of the talk produced, read back from serve; the scorer needs nothing else.

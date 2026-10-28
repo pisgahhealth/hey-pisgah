@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { z } from "zod";
 import { loadKeys, ModelClient, type Mode } from "@hey-pisgah/model";
-import { VoiceError, buildKeywords, transcribeWav, type FinalTranscript } from "@hey-pisgah/voice";
+import { VITALS_KEYWORDS, VoiceError, buildKeywords, cleanTranscript, transcribeWav, vitalsVocabulary, type FinalTranscript } from "@hey-pisgah/voice";
 import { EmrRuntime, type EmrRuntimeOptions } from "./runtime.js";
 import { ListenError, ListenSessions, type ListenOptions, type Transcriber } from "./listen.js";
 import { EmrId, EmrPortError, type EmrPort } from "./port.js";
@@ -112,7 +112,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const target = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
     const ctx = await rt.port.resolve(target, { owner: b.owner, evidence: "transcript:audio-context", spoken_at: new Date(arrived).toISOString() });
     const wav = new Uint8Array(await audio.arrayBuffer());
-    const keywords = buildKeywords({ wards: [], documents: ctx.keywords, staff: [], beds: [] });
+    const keywords = buildKeywords({ vitals: VITALS_KEYWORDS, wards: [], documents: ctx.keywords, staff: [], beds: [] });
     let heard: FinalTranscript;
     let keywordsDropped = false;
     try {
@@ -126,8 +126,9 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     }
     if (!heard.text) return [200, { task_id: null, line_id: null, transcript: "", audio_ms: heard.audio_ms, cost_usd: heard.cost_usd }];
     const spoken = new Date(arrived - heard.audio_ms).toISOString();
-    const r = await rt.say({ owner: b.owner, target: { admission_id: ctx.admission_id }, text: heard.text, source: "audio", spoken_at: spoken, audio: { audio_ms: heard.audio_ms, cost_usd: heard.cost_usd, session_id: heard.session_id } });
-    return [202, { ...r, transcript: heard.text, audio_ms: heard.audio_ms, cost_usd: heard.cost_usd, keywords_dropped: keywordsDropped }];
+    const v = vitalsVocabulary(cleanTranscript(heard.text));
+    const r = await rt.say({ owner: b.owner, target: { admission_id: ctx.admission_id }, text: v.text, source: "audio", spoken_at: spoken, audio: { audio_ms: heard.audio_ms, cost_usd: heard.cost_usd, session_id: heard.session_id } });
+    return [202, { ...r, transcript: v.text, audio_ms: heard.audio_ms, cost_usd: heard.cost_usd, keywords_dropped: keywordsDropped }];
   };
 
   const route = async (req: IncomingMessage): Promise<[number, unknown]> => {
@@ -202,6 +203,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     urls, url: urls[0] ?? "", runtime: rt, client, listening,
     close: async () => {
       await Promise.all(servers.map((s) => new Promise<void>((r) => s.close(() => r()))));
+      listening.close();
       await rt.stop();
       if (!o.client) client.close();
     }

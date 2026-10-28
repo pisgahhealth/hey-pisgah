@@ -5,7 +5,7 @@ export { DECIDE_TOOL, DEFAULT_INTENT_ROUTE, Decide, EMR_SYSTEM_PROMPT, FALLBACK_
 export { EmrRuntime, SPOKEN_PAUSE, SPOKEN_RESUME, applyEmr, emrIntentKey, fromLine, projectEmr, summarise, viewOf, type EmrPause, type WatchChange, type EmrAction, type AmbientMeta, type EmrActionState, type EmrRefusal, type EmrRuntimeOptions, type EmrTask, type EmrTaskView, type SayInput } from "./runtime.js";
 export { EMR_SERVE_PORT, startEmrServe, voiceTranscriber, type EmrServe, type EmrServeOptions } from "./serve.js";
 export { WorkClause, WorkOutput, isWide, CONFIDENCE_FLOOR, GATE_DENY, GATE_FACTS, GATE_SETTINGS, GATE_TOOL, GateClause, GateOutput, MAX_CLAUSES, SPEECH_CLASSES, denyHits, gateCommitmentBody, gateMessage, gatePrompt, gateTool, gateUtterance, type GateAction, type GateInput, type GateResult, type GateSettings, type SpeechClass } from "./gate.js";
-export { CHUNK_CAP_MS, FINAL_SILENCE_MS, ListenError, ListenSessions, MAX_HELD_MS, recordingTranscriber, replayTranscriber, type ListenChunk, type ListenOptions, type ListenOutcome, type ListenReply, type ListenUtterance, type Transcriber } from "./listen.js";
+export { CHUNK_CAP_MS, FINAL_SILENCE_MS, ListenError, ListenSessions, MAX_HELD_MS, NUMBER_JOIN_WAIT_MS, STRONG_JOIN_WAIT_MS, recordingTranscriber, replayTranscriber, type ListenChunk, type ListenOptions, type ListenOutcome, type ListenReply, type ListenUtterance, type Transcriber } from "./listen.js";
 export { primaryClass } from "./classes.js";
 export { MemoryEmrPort, keepingContext, readKeptContext, type KeptContext } from "./memory-port.js";
 export { GATE_COMMITMENT_FILE, commitGate, committedGateHash, currentGateHash } from "./gate.commit.js";
