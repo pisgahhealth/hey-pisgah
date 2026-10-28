@@ -13,11 +13,14 @@ export const HypothesisId = id("h");
 export const ExperimentId = id("x");
 export const ProposalId = id("p");
 export const ActionId = id("a");
-export const StepId = z.string().regex(/^st\d{2}$/);
-export const EdgeId = z.string().regex(/^e\d{2}$/);
+// A letter suffix lets one hospital step split into single-kind steps (st12a payment, st12b waiver) without renumbering.
+export const StepId = z.string().regex(/^st\d{2}[a-z]?$/);
+export const EdgeId = z.string().regex(/^e\d{2}[a-z]?$/);
 export const ClaimId = z.string().regex(/^C-\d{2}$/);
-export const StreamId = z.string().regex(/^[a-z]+(\/[a-z0-9-]+)*$/);
+export const StreamId = z.string().regex(/^[a-z][a-z0-9_]*(\/[a-z0-9_-]+)*$/);
 export const Sha256 = z.string().regex(/^[0-9a-f]{64}$/);
+export const VersionNumber = z.number().int().min(1);
+export const IsoDateTime = z.iso.datetime();
 
 export type CaseId = z.infer<typeof CaseId>;
 export type EventId = z.infer<typeof EventId>;
@@ -33,4 +36,3 @@ export type StepId = z.infer<typeof StepId>;
 export type EdgeId = z.infer<typeof EdgeId>;
 export type ClaimId = z.infer<typeof ClaimId>;
 export type StreamId = z.infer<typeof StreamId>;
-export const VersionNumber = z.number().int().min(1);

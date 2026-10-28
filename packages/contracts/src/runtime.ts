@@ -9,29 +9,31 @@ export type TaskState = z.infer<typeof TaskState>;
 
 export const ActionState = z.enum(["intended", "written", "completed", "refused", "retrying", "failed"]);
 
-export const Wake = z.object({
+export const Wake = z.strictObject({
   wake_id: WakeId,
   predicate: EventPredicate,
   record_ids: z.array(RecordId),
-  deadline_simulated_min: z.number().int().min(0).max(2880),
+  deadline_simulated_min: z.number().int().min(0).max(2880).nullable(),
+  registered_by: z.enum(["runtime", "model"]),
   registered_at: Clocks,
   consumed_by: z.string().nullable()
 });
 export type Wake = z.infer<typeof Wake>;
 
-export const Proof = z.object({
+export const Proof = z.strictObject({
   verified_at: Clocks,
   record_id: RecordId,
   record_version: z.number().int().min(1),
   record_hash: Sha256,
   produced_event_ids: z.array(EventId).min(1),
+  source_refs: z.array(z.strictObject({ record_id: RecordId, version: z.number().int().min(1) })),
   intent_key: Sha256,
   tool_call_ids: z.array(z.string()),
   model_response_id: z.string().nullable()
 });
 export type Proof = z.infer<typeof Proof>;
 
-export const AgentAction = z.object({
+export const AgentAction = z.strictObject({
   action_id: ActionId,
   action_kind: ActionKind,
   args_hash: Sha256,
@@ -42,9 +44,9 @@ export const AgentAction = z.object({
 }).refine((a) => a.state !== "completed" || a.proof !== null, { message: "completed requires a proof" });
 export type AgentAction = z.infer<typeof AgentAction>;
 
-export const AcceptanceCondition = z.object({ condition_id: z.string(), description: z.string().max(200), proof_action_id: ActionId.nullable() });
+export const AcceptanceCondition = z.strictObject({ condition_id: z.string(), description: z.string().max(200), proof_action_id: ActionId.nullable() });
 
-export const AgentTask = z.object({
+export const AgentTask = z.strictObject({
   task_id: TaskId,
   owner: z.string(),
   case_id: CaseId,
@@ -54,10 +56,17 @@ export const AgentTask = z.object({
   state: TaskState,
   actions: z.array(AgentAction),
   wakes: z.array(Wake),
-  budget: z.object({ max_calls: z.number().int().min(1), max_usd: z.number().min(0), calls_used: z.number().int().min(0), usd_used: z.number().min(0) }),
+  budget: z.strictObject({ max_calls: z.number().int().min(1), max_usd: z.number().min(0), calls_used: z.number().int().min(0), usd_used: z.number().min(0) }),
   created: Clocks,
   updated: Clocks
-}).refine((t) => t.state !== "done" || t.acceptance_conditions.every((c) => c.proof_action_id !== null), { message: "done requires a proof per acceptance condition" });
+}).superRefine((t, ctx) => {
+  if (t.state !== "done") return;
+  if (t.acceptance_conditions.length === 0) ctx.addIssue({ code: "custom", message: "done requires at least one acceptance condition" });
+  for (const c of t.acceptance_conditions) {
+    const a = t.actions.find((x) => x.action_id === c.proof_action_id);
+    if (!a || a.state !== "completed" || a.proof === null) ctx.addIssue({ code: "custom", message: `${c.condition_id} lacks a completed, proved action` });
+  }
+});
 export type AgentTask = z.infer<typeof AgentTask>;
 
 export const RUNTIME_EVENT_TYPES = [

@@ -6,8 +6,8 @@ import { TaskState } from "./runtime.js";
 export const Provider = z.enum(["modal", "baseten", "fireworks", "meta"]);
 export const Effort = z.enum(["low", "medium", "high", "xhigh"]);
 
-export const LedgerRow = z.object({
-  at_wall: z.string().datetime(),
+export const LedgerRow = z.strictObject({
+  at_wall: z.iso.datetime(),
   provider: Provider,
   model: z.string(),
   mode: z.enum(["live", "replay", "mock"]),
