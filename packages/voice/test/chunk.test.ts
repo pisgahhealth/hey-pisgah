@@ -49,5 +49,7 @@ describe("transcript cleaning", () => {
     expect(cleanTranscript("Pulse Pulse ninety six. Respiratory rate twenty..")).toBe("Pulse 96. Respiratory rate 20.");
     expect(cleanTranscript("the pressure is 128 128 over 76")).toBe("the pressure is 128 over 76");
     expect(cleanTranscript("ninety, ninety")).toBe("90, 90");
+    expect(cleanTranscript("Temperature thirty seven point point nine. Pulse ninety six. six. Respiratory rate twenty.")).toBe("Temperature 37.9. Pulse 96. Respiratory rate 20.");
+    expect(cleanTranscript("It's 104, 104, not 96.")).toBe("It's 104, not 96.");
   });
 });

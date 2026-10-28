@@ -141,7 +141,8 @@ export class ListenSessions {
     const r = await this.rt.say({
       owner: s.owner, target: { admission_id: s.ctx.admission_id }, text, source: "audio", spoken_at: new Date(arrived - totalMs).toISOString(),
       audio: { audio_ms: totalMs, cost_usd: heard.cost_usd, session_id: sessionId },
-      ambient: { session_id: sessionId, seqs, raw_text: heard.text.slice(0, 2000), ended_at: new Date(arrived - silence).toISOString(), final_at: new Date(arrived).toISOString(), trailing_silence_ms: silence }
+      ambient: { session_id: sessionId, seqs, raw_text: heard.text.slice(0, 2000), ended_at: new Date(arrived - silence).toISOString(), final_at: new Date(arrived).toISOString(), trailing_silence_ms: silence, finished_by: why },
+      context: s.ctx
     });
     const u: ListenUtterance = { id: r.line_id, line_id: r.line_id, task_id: r.task_id, text, seqs, class: null, classes: [] };
     s.unreported.push(u);

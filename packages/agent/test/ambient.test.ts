@@ -127,6 +127,53 @@ describe("speech gate", () => {
     expect(v.actions.map((a) => a.args)).toEqual([{ resp_rate: 22 }]);
   });
 
+  it("applies only clauses whose words come from the line, and a correction with no value said asks instead of copying", async () => {
+    const { rt, port, listen } = boot((said) => {
+      if (said.startsWith("Chart pulse 96")) return [{ class: "instruction", kind: "record_observation", pulse: 96, confidence: 0.95, words: "Chart pulse 96." }];
+      if (said.startsWith("Respiratory rate 22")) return [
+        { class: "instruction", kind: "record_observation", pulse: 96, confidence: 0.95, words: "Chart pulse 96." },
+        { class: "instruction", kind: "record_observation", resp_rate: 22, confidence: 0.95, words: "respiratory rate 22, put that down" }
+      ];
+      return [{ class: "correction", kind: "record_observation", pulse: 104, target: "#1", confidence: 0.9, words: said }];
+    }, earOf({ 1000: "Chart pulse 96.", 1100: "Respiratory rate 22, put that down.", 1200: "No, that one is wrong." }));
+    for (const [i, ms] of [1000, 1100, 1200].entries()) { await say(listen, i, chunkWav(ms, 700)); await rt.settled(); }
+    expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, pulse: 96 }, { admission_id: ADM, resp_rate: 22 }]);
+    const v = rt.views(OWNER)[0]!;
+    expect(v.transcript[1]!.classes).toEqual(["instruction"]);
+    expect(v.asked.map((q) => q.text)).toEqual(["Which value should I correct? Please say it again."]);
+  });
+
+  it("charts one spoken set of observations as one entry, and asks when one value is given twice", async () => {
+    const { rt, port, listen } = boot((said) => (said.startsWith("Let's chart") ? [
+      { class: "instruction", kind: "record_observation", confidence: 0.9, words: "Let's chart her observations." },
+      { class: "instruction", kind: "record_observation", temp_c: "37.9", confidence: 0.95, words: "Temperature 37.9." },
+      { class: "instruction", kind: "record_observation", pulse: 96, confidence: 0.95, words: "Pulse 96." },
+      { class: "aside", words: "Thanks." }
+    ] : [
+      { class: "instruction", kind: "record_observation", pulse: 88, confidence: 0.95, words: "Pulse 88." },
+      { class: "instruction", kind: "record_observation", pulse: 90, confidence: 0.95, words: "pulse 90." }
+    ]), earOf({ 1000: "Let's chart her observations. Temperature 37.9. Pulse 96. Thanks.", 1100: "Pulse 88. No wait, pulse 90." }));
+    for (const [i, ms] of [1000, 1100].entries()) { await say(listen, i, chunkWav(ms, 700)); await rt.settled(); }
+    expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, temp_c: "37.9", pulse: 96 }]);
+    expect(rt.views(OWNER)[0]!.asked.map((q) => q.text)).toEqual(["You gave two values for pulse: 88 and 90. Which one should I chart?"]);
+  });
+
+  it("shows the gate only words said before the line, even when later lines are already heard", async () => {
+    const users: string[] = [];
+    const { rt, listen } = boot((_said, user) => { users.push(user); return [{ class: "aside" }]; }, earOf({ 1000: "First line.", 1100: "Second line.", 1200: "Third line." }), 0);
+    void listen;
+    const ctx = { admission_id: ADM, patient_id: null, label: "Test Patient", facts: { ward: "Ward A" }, keywords: [] };
+    const meta = (seq: number) => ({ session_id: "s1", seqs: [seq], raw_text: "", ended_at: new Date().toISOString(), final_at: new Date().toISOString(), trailing_silence_ms: 700, finished_by: "quiet_tail" });
+    // Three lines land before the first decision runs, so the queue holds all of them at once.
+    const said = ["First line.", "Second line.", "Third line."].map((text, i) => rt.say({ owner: OWNER, target: { admission_id: ADM }, text, source: "audio", ambient: meta(i), context: ctx }));
+    await Promise.all(said);
+    await rt.settled();
+    expect(rt.views(OWNER)[0]!.transcript).toHaveLength(3);
+    const first = users.find((u) => u.includes('clinician_said: "First line."'))!;
+    expect(first).not.toContain("Second line.");
+    expect(users.find((u) => u.includes('clinician_said: "Second line."'))).not.toContain("Third line.");
+  });
+
   it("drops a value the clinician did not say", async () => {
     const { rt, port, listen } = boot(() => [{ class: "instruction", kind: "record_observation", pulse: 96, resp_rate: 20, confidence: 0.95 }], earOf({ 1000: "Chart pulse 96." }));
     await say(listen, 0, chunkWav(1000, 700));
@@ -148,7 +195,9 @@ describe("listening", () => {
     expect(sent).toEqual([7700]);
     await rt.settled();
     expect(port.writes).toHaveLength(1);
-    expect(rt.views(OWNER)[0]!.transcript[0]!.ambient).toMatchObject({ session_id: "s1", seqs: [0, 1], trailing_silence_ms: 700 });
+    expect(rt.views(OWNER)[0]!.transcript[0]!.ambient).toMatchObject({ session_id: "s1", seqs: [0, 1], trailing_silence_ms: 700, finished_by: "quiet_tail" });
+    // The session read the patient once; the line reused it instead of reading again.
+    expect(port.calls.filter((c) => c.op === "resolve")).toHaveLength(1);
   });
 
   it("finishes held audio alone when the cap fell in the pause after speech", async () => {

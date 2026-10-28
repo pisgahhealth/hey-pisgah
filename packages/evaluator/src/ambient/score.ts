@@ -3,7 +3,9 @@ import type { ExpectedAction, Talk } from "./talk.js";
 
 const WRITTEN = new Set(["acknowledged", "completed"]);
 // One finalised utterance as the agent heard it, mapped to the talk's key by the chunks that made it.
-export type RunLine = { line_id: string; key_id: string | null; text: string; classes: string[]; seqs: number[]; ended_at: string | null };
+export type RunLine = { line_id: string; key_id: string | null; text: string; classes: string[]; seqs: number[]; ended_at: string | null; finished_by?: string | null };
+// The ways listening may finish a line; anything else, or a line whose last chunk was not final when no reason is kept, counts as partial text.
+const FINISHED = new Set(["quiet_tail", "short_chunk", "pause_after_cap", "held_dropped_gap"]);
 export type RunAction = { action_id: string; line_id: string; kind: string; args: Record<string, unknown>; state: string; corrects_action_id: string | null; written_at: string | null };
 export type RunChunk = { seq: number; key_ids: string[]; final: boolean; why: string };
 // Everything one run of the talk produced, read back from serve; the scorer needs nothing else.
@@ -13,6 +15,8 @@ export type AmbientRun = {
   chunks: RunChunk[]; calls: number; cost_usd: number; asr_cost_usd: number;
 };
 
+// The measured values of an action, without the record id a correction cites.
+const valuesOf = (args: Record<string, unknown>) => Object.fromEntries(Object.entries(args).filter(([k]) => k !== "corrects_record_id"));
 const sameValue = (want: unknown, got: unknown) => (typeof want === "number" ? Number(got) === want : String(got).replace(/\s+/g, "") === String(want).replace(/\s+/g, ""));
 
 // Scores one run against the labelled key: actions by precision and recall, actions from talk that was not an instruction, questions against labelled ambiguities, latency from utterance end to the write.
@@ -47,7 +51,11 @@ export function scoreAmbient(talk: Talk, run: AmbientRun, opts: { replay_same?: 
     return end && a.written_at ? [Date.parse(a.written_at) - Date.parse(end)] : [];
   }).sort((x, y) => x - y);
   const finalOf = new Map(run.chunks.map((c) => [c.seq, c.final]));
-  const partialsActed = taken.filter((a) => { const l = run.lines.find((x) => x.line_id === a.line_id); return !l || finalOf.get(l.seqs.at(-1) ?? -1) === false; }).length;
+  const partialsActed = taken.filter((a) => {
+    const l = run.lines.find((x) => x.line_id === a.line_id);
+    if (!l) return true;
+    return l.finished_by ? !FINISHED.has(l.finished_by) : finalOf.get(l.seqs.at(-1) ?? -1) === false;
+  }).length;
   const utterances = talk.utterances.map((u) => {
     const lines = run.lines.filter((l) => l.key_id === u.id);
     const ids = new Set(lines.map((l) => l.line_id));
@@ -55,7 +63,7 @@ export function scoreAmbient(talk: Talk, run: AmbientRun, opts: { replay_same?: 
     return {
       id: u.id, said: u.say, heard: lines.map((l) => l.text), expected_classes: u.key.classes, classes: got,
       classes_agree: got.length === u.key.classes.length && u.key.classes.every((c) => got.includes(c)),
-      expected_actions: u.key.actions.length, actions: run.actions.filter((a) => ids.has(a.line_id)).map((a) => ({ kind: a.kind, args: a.args, state: a.state, corrects: a.corrects_action_id ? actionKey.get(a.corrects_action_id) ?? "unknown" : null, matched: used.has(a.action_id) })),
+      expected_actions: u.key.actions.length, actions: run.actions.filter((a) => ids.has(a.line_id)).map((a) => ({ kind: a.kind, args: valuesOf(a.args), state: a.state, corrects: a.corrects_action_id ? actionKey.get(a.corrects_action_id) ?? "unknown" : null, matched: used.has(a.action_id) })),
       questions: run.questions.filter((q) => ids.has(q.line_id)).map((q) => q.text), ambiguity: u.key.ambiguity,
       refusals: run.refusals.filter((r) => ids.has(r.line_id)).map((r) => r.asked_for), refusal_expected: u.key.refusal
     };
@@ -85,7 +93,7 @@ export function runSignature(run: AmbientRun): string {
   const aKey = new Map(run.actions.map((a) => [a.action_id, key.get(a.line_id)]));
   return canonical({
     lines: run.lines.map((l) => ({ key: l.key_id, text: l.text, classes: l.classes })),
-    actions: run.actions.filter((a) => WRITTEN.has(a.state)).map((a) => ({ key: key.get(a.line_id) ?? null, kind: a.kind, args: Object.fromEntries(Object.entries(a.args).filter(([k]) => k !== "corrects_record_id")), corrects: a.corrects_action_id ? aKey.get(a.corrects_action_id) ?? null : null })),
+    actions: run.actions.filter((a) => WRITTEN.has(a.state)).map((a) => ({ key: key.get(a.line_id) ?? null, kind: a.kind, args: valuesOf(a.args), corrects: a.corrects_action_id ? aKey.get(a.corrects_action_id) ?? null : null })),
     questions: run.questions.map((q) => key.get(q.line_id) ?? null), refusals: run.refusals.map((r) => key.get(r.line_id) ?? null)
   });
 }

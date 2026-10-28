@@ -7,3 +7,4 @@ export { CONFIDENCE_FLOOR, GATE_DENY, GATE_FACTS, GATE_SETTINGS, GATE_TOOL, Gate
 export { CHUNK_CAP_MS, FINAL_SILENCE_MS, ListenError, ListenSessions, MAX_HELD_MS, recordingTranscriber, replayTranscriber, type ListenChunk, type ListenOptions, type ListenOutcome, type ListenReply, type ListenUtterance, type Transcriber } from "./listen.js";
 export { primaryClass } from "./classes.js";
 export { MemoryEmrPort, keepingContext, readKeptContext, type KeptContext } from "./memory-port.js";
+export { GATE_COMMITMENT_FILE, commitGate, committedGateHash, currentGateHash } from "./gate.commit.js";

@@ -1,10 +1,10 @@
 import { join } from "node:path";
-import { startEmrServe } from "@hey-pisgah/agent";
+import { keepingContext, recordingTranscriber, startEmrServe, voiceTranscriber } from "@hey-pisgah/agent";
 import { loadProfile } from "./profile.js";
 import { PisgahPort } from "./port.js";
 import { SandboxBlock, mintAgentBearer, sandboxQuery } from "./sandbox.js";
 
-// Starts the EMR-facing serve on port 4100 over the agent door; the bearer comes from the environment or a sandbox mint.
+// Starts the EMR-facing serve over the agent door on HEY_PISGAH_EMR_PORT (default 4100); the bearer comes from the environment or a sandbox mint.
 async function main(): Promise<void> {
   const profile = loadProfile();
   const sandbox = profile.sandbox ? SandboxBlock.parse(profile.sandbox) : null;
@@ -23,8 +23,11 @@ async function main(): Promise<void> {
     ...(sandbox ? { episodeFor: async (admission: string) => String(sandboxQuery(sandbox, "episode_for_admission", { admission })[0]?.["id"] ?? "") || null } : {}),
     onRequest: (l) => process.stderr.write(`door ${l.method} ${l.status ?? l.outcome} ${l.ms}ms${l.replayed ? " replayed" : ""}${l.reason ? ` ${l.reason}` : ""}\n`)
   });
+  // With HEY_PISGAH_RECORDINGS set, model replies, transcripts and the patient context are kept there so the run can be replayed.
+  const rec = process.env["HEY_PISGAH_RECORDINGS"];
   const s = await startEmrServe({
-    storeRoot: store, port, recordingsDir: join(store, "..", "emr-recordings"), hosts: ["127.0.0.1", "::1"],
+    storeRoot: store, port: rec ? keepingContext(port, join(rec, "context.json")) : port, recordingsDir: rec ? join(rec, "model") : join(store, "..", "emr-recordings"), hosts: ["127.0.0.1", "::1"],
+    ...(rec ? { transcribe: recordingTranscriber(voiceTranscriber, join(rec, "transcripts.json")) } : {}),
     listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4100), runtime: { holdMs: Number(process.env["HEY_PISGAH_HOLD_MS"] ?? 4000) },
     log: (l) => process.stderr.write(`${l}\n`)
   });

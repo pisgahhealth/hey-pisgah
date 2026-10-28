@@ -37,15 +37,20 @@ export function spokenDigits(text: string): string {
   });
 }
 
-// Cleans one finished transcript: digits for spoken numbers, one copy of a word the recogniser repeated, and one closing full stop.
-export function cleanTranscript(raw: string): string {
-  const words = spokenDigits(raw.replace(/\s+/g, " ").trim()).split(" ");
+const bare = (w: string) => w.toLowerCase().replace(/[.,;:?!]+$/, "").replace(/[^a-z0-9.]/g, "");
+// Drops a word the recogniser said twice in a row; a repeat across punctuation goes only when both copies are identical, so "90, 90" stays.
+function collapseRepeats(text: string): string {
   const kept: string[] = [];
-  const bare = (w: string) => w.toLowerCase().replace(/[.,;:?!]+$/, "").replace(/[^a-z0-9.]/g, "");
-  for (const w of words) {
+  for (const w of text.split(" ")) {
     const prev = kept.at(-1);
-    if (prev !== undefined && bare(w).length > 1 && bare(prev) === bare(w) && !/[.,;:?!]$/.test(prev)) { kept[kept.length - 1] = w; continue; }
+    if (prev !== undefined && bare(w).length > 1 && bare(prev) === bare(w) && (!/[.,;:?!]$/.test(prev) || prev === w)) { kept[kept.length - 1] = w; continue; }
     kept.push(w);
   }
-  return kept.join(" ").replace(/\.{2,}$/, ".").trim();
+  return kept.join(" ");
+}
+
+// Cleans one finished transcript: one copy of a word the recogniser repeated, digits for spoken numbers, and one closing full stop.
+export function cleanTranscript(raw: string): string {
+  const once = collapseRepeats(raw.replace(/\s+/g, " ").trim());
+  return collapseRepeats(spokenDigits(once)).replace(/\.{2,}$/, ".").trim();
 }

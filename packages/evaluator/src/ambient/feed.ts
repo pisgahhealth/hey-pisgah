@@ -40,7 +40,7 @@ export function joinedAudio(chunks: readonly TalkChunk[], capMs = 6000, finalSil
 
 type View = {
   task_id: string; admission_id: string; state: string; calls: number; usd: number;
-  transcript: { id: string; text: string; decided: boolean; classes: string[]; ambient?: { session_id: string; seqs: number[]; ended_at: string } }[];
+  transcript: { id: string; text: string; decided: boolean; classes: string[]; ambient?: { session_id: string; seqs: number[]; ended_at: string; finished_by?: string } }[];
   actions: { action_id: string; line_id: string; kind: string; args: Record<string, unknown>; state: string; corrects_action_id: string | null; written_at: string | null }[];
   asked: { line_id: string; text: string }[]; refusals: { line_id: string; kind: string | null; asked_for: string }[];
 };
@@ -82,7 +82,7 @@ export async function feedTalk(o: FeedOptions): Promise<AmbientRun> {
   }
   const keysBySeq = new Map(o.chunks.map((c) => [c.seq, c.key_ids]));
   const lines = mine.flatMap((v) => v.transcript.filter((t) => t.ambient?.session_id === o.sessionId)).map((t) => ({
-    line_id: t.id, key_id: keysBySeq.get(t.ambient!.seqs.at(-1)!)?.[0] ?? null, text: t.text, classes: t.classes, seqs: t.ambient!.seqs, ended_at: t.ambient!.ended_at
+    line_id: t.id, key_id: keysBySeq.get(t.ambient!.seqs.at(-1)!)?.[0] ?? null, text: t.text, classes: t.classes, seqs: t.ambient!.seqs, ended_at: t.ambient!.ended_at, finished_by: t.ambient!.finished_by ?? null
   }));
   const ids = new Set(lines.map((l) => l.line_id));
   const chunks: RunChunk[] = o.chunks.map((c, i) => ({ seq: c.seq, key_ids: c.key_ids, final: outcomes[i]!.final, why: outcomes[i]!.why }));

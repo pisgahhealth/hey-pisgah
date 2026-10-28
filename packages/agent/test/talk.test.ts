@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ModelClient } from "@hey-pisgah/model";
 import { cleanTranscript, encodeWav } from "@hey-pisgah/voice";
-import { MOCK_GATE_FILE, claimStatus, feedTalk, joinedAudio, loadTalk, parseClaimPredicate, sameRun, scoreAmbient, talkChunks, type Timeline } from "@hey-pisgah/evaluator";
-import { MemoryEmrPort } from "../src/emr/memory-port.js";
+import { MOCK_GATE_FILE, Timeline as TimelineSchema, claimStatus, feedTalk, joinedAudio, loadTalk, parseClaimPredicate, sameRun, scoreAmbient, talkChunks, type Timeline } from "@hey-pisgah/evaluator";
+import { MemoryEmrPort, readKeptContext } from "../src/emr/memory-port.js";
 import { replayTranscriber } from "../src/emr/listen.js";
 import { startEmrServe } from "../src/emr/serve.js";
 import { currentGateHash } from "../src/emr/gate.commit.js";
@@ -77,4 +77,19 @@ describe("the labelled talk through the listen endpoint", () => {
     expect(amber.questions_untied).toBe(1);
     expect(claimStatus(parseClaimPredicate(C17.acceptance.predicate), amber).status).toBe("amber");
   });
+
+  // A kept live run replays only where its recordings are; point AMBIENT_RUN at a folder holding talk.wav, talk.timeline.json, rec/ and run.live.json.
+  it.skipIf(!process.env["AMBIENT_RUN"])("replays a kept live run to the same result", async () => {
+    const dir = process.env["AMBIENT_RUN"]!;
+    const live = JSON.parse(readFileSync(join(dir, "run.live.json"), "utf8"));
+    const chunks = talkChunks(new Uint8Array(readFileSync(join(dir, "talk.wav"))), TimelineSchema.parse(JSON.parse(readFileSync(join(dir, "talk.timeline.json"), "utf8"))));
+    const store = mkdtempSync(join(tmpdir(), "hp-replay-"));
+    let s: Awaited<ReturnType<typeof startEmrServe>> | null = null;
+    const client = new ModelClient({ storeRoot: store, mode: "replay", recordingsDir: join(dir, "rec", "model"), taskStateOf: (id) => s?.runtime.stateOf(id) ?? null });
+    s = await startEmrServe({ storeRoot: store, port: new MemoryEmrPort(readKeptContext(join(dir, "rec", "context.json")), ADM), client, listenPort: 0, transcribe: replayTranscriber(join(dir, "rec", "transcripts.json")), runtime: { holdMs: 0, proofRetryMs: 1 } });
+    const replay = await feedTalk({ serveUrl: s.url, owner: OWNER, admissionId: ADM, sessionId: "replay-1", chunks, pace: "fast", mode: "replay", talkId: talk.talk_id, gateHash: currentGateHash(), settleMs: 30_000 });
+    await s.close();
+    client.close();
+    expect(sameRun(live, replay)).toBe(true);
+  }, 60_000);
 });

@@ -83,7 +83,7 @@ export function gater(script: (said: string, user: string) => C[], seen: string[
     seen.push(said);
     const c: ChatCompletion = {
       id: `mock-${hash.slice(0, 12)}`, object: "chat.completion", created: 0, model: String(body["model"]),
-      choices: [{ index: 0, finish_reason: "tool_calls", logprobs: null, message: { role: "assistant", content: null, refusal: null, tool_calls: [{ id: "call_1", type: "function", function: { name: "gate", arguments: JSON.stringify({ clauses: script(said, user).map(clause) }) } }] } }],
+      choices: [{ index: 0, finish_reason: "tool_calls", logprobs: null, message: { role: "assistant", content: null, refusal: null, tool_calls: [{ id: "call_1", type: "function", function: { name: "gate", arguments: JSON.stringify({ clauses: script(said, user).map((c) => clause({ words: said, ...c })) }) } }] } }],
       usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }
     };
     return c;

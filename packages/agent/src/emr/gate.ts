@@ -109,6 +109,15 @@ export const GATE_DENY: readonly RegExp[] = [
 ];
 export const denyHits = (text: string): string[] => GATE_DENY.filter((r) => r.test(text)).map((r) => r.source);
 
+// What the runtime does with the gate's clauses before any of them acts; part of the commitment because it shapes every action.
+export const CLAUSE_RULES = [
+  "A clause is applied only when at least four in five of its words are in the utterance it was given for.",
+  "Confident instructions of one kind in one utterance are one action; their values merge, and a value given twice differently becomes a question.",
+  "A value is kept only when its number was said in the utterance; a correction with no value said becomes a question.",
+  "An instruction or correction below the confidence floor becomes a question; an instruction of a kind the owner does not hold is refused and shown.",
+  "A correction targets the action it names, else the most recent action that still stands."
+] as const;
+
 export type GateSettings = { effort: "low"; route: IntentRoute; fallback: IntentRoute | null; confidence_floor: number; max_clauses: number };
 export const GATE_SETTINGS: GateSettings = { effort: "low", route: DEFAULT_INTENT_ROUTE, fallback: FALLBACK_INTENT_ROUTE, confidence_floor: CONFIDENCE_FLOOR, max_clauses: MAX_CLAUSES };
 
@@ -118,7 +127,7 @@ export function gateCommitmentBody(kinds: readonly EmrWriteKind[] = [OBSERVATION
   const tool = gateTool();
   return {
     artifact: "gate", kinds: [...kinds], prompt, prompt_sha256: sha256(prompt), tool_sha256: hashJson(tool), facts: [...GATE_FACTS],
-    classes: [...SPEECH_CLASSES], settings: GATE_SETTINGS, deny_hits: denyHits(`${prompt}\n${JSON.stringify(tool)}`)
+    classes: [...SPEECH_CLASSES], settings: GATE_SETTINGS, clause_rules: [...CLAUSE_RULES], deny_hits: denyHits(`${prompt}\n${JSON.stringify(tool)}`)
   };
 }
 

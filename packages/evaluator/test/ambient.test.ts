@@ -62,6 +62,10 @@ describe("ambient scoring", () => {
     expect(s.actions_taken).toBe(4);
     expect(s.false_actions_from_talk).toBe(0);
     expect(s.partials_acted).toBe(1);
+    r.lines[3]!.finished_by = "pause_after_cap";
+    expect(scoreAmbient(talk, r).partials_acted).toBe(0);
+    r.lines[3]!.finished_by = "held_for_join";
+    expect(scoreAmbient(talk, r).partials_acted).toBe(1);
   });
 
   it("compares replays by what was heard, classed, written and asked, not by record ids or times", () => {
