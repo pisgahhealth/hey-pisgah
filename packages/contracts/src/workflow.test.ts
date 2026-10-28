@@ -9,8 +9,8 @@ const minimal = (): WD => ({
   permissions: { clinical_discharge: ["doctor"], prepare_document: ["nurse", "agent"] },
   documents: [{ document_id: "discharge_summary", produced_by: null, preparable_by: ["nurse", "agent"], stages: ["draft", "final"], sections: [], check: { role: "nurse", before: "st14" } }],
   steps: [
-    { step_id: "st05", action_kind: "clinical_discharge", actor_roles: ["doctor"], external: true, document_ref: null, produces: ["signoff_record"], consumes: [], clock: "server", required_when: null },
-    { step_id: "st06", action_kind: "prepare_document", actor_roles: ["nurse", "agent"], external: false, document_ref: { document_id: "discharge_summary", stage: "draft" }, produces: [], consumes: [], clock: "server", required_when: null }
+    { step_id: "st05", action_kind: "clinical_discharge", actor_roles: ["doctor"], external: true, document_ref: null, produces: ["signoff_record"], consumes: [], clock: "server", required_when: null, alternative_group: null },
+    { step_id: "st06", action_kind: "prepare_document", actor_roles: ["nurse", "agent"], external: false, document_ref: { document_id: "discharge_summary", stage: "draft" }, produces: [], consumes: [], clock: "server", required_when: null, alternative_group: null }
   ],
   edges: [
     { edge_id: "e01", from: { step: "st05" }, to: { step: "st06" }, gate: "start", kind: "fence", origin: "platform", immutable: true, note: "platform" },

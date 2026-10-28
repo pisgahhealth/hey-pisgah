@@ -5,7 +5,7 @@ import { CappedCondition, CappedPredicate, DocumentId, SectionId, SourceRef, Ste
 // Draft (v0): the six operations a proposal or experiment may apply; only soft structure is reachable.
 export const ConditionTarget = z.union([
   z.strictObject({ step: StepRef }),
-  z.strictObject({ trigger_index: z.number().int().min(0) }),
+  z.strictObject({ trigger: StepRef }),
   z.literal("scope")
 ]);
 

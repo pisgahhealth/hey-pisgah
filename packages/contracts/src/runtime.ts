@@ -17,7 +17,7 @@ export const Wake = z.strictObject({
   registered_by: z.enum(["runtime", "model"]),
   registered_at: Clocks,
   consumed_by: z.string().nullable()
-});
+}).refine((w) => w.registered_by !== "model" || w.deadline_simulated_min !== null, { message: "a model-registered wake carries a deadline" });
 export type Wake = z.infer<typeof Wake>;
 
 export const Proof = z.strictObject({

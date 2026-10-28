@@ -57,6 +57,7 @@ export function verifyChain(stream: readonly Envelope[]): ChainCheck {
 // Frozen: one simulation event; no wall time and no hash, so identical runs produce identical events.
 export const SimEvent = z.strictObject({
   event_id: EventId,
+  seq: z.number().int().min(1),
   case_id: CaseId,
   kind: z.string().regex(/^[a-z_]+\.[a-z_]+$/),
   clock: z.enum(["server", "two_clock"]),

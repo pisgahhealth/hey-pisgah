@@ -80,14 +80,11 @@ function validValue(fact: ConditionFact, v: string): boolean {
   return allowed instanceof RegExp ? allowed.test(v) : (allowed as readonly string[]).includes(v);
 }
 
-const Atom = z
-  .strictObject({ fact: ConditionFact, eq: z.string().optional(), in: z.array(z.string()).min(1).max(6).optional() })
-  .superRefine((a, ctx) => {
-    if ((a.eq === undefined) === (a.in === undefined)) ctx.addIssue({ code: "custom", message: "an atom has exactly one of eq or in" });
-    for (const v of a.eq !== undefined ? [a.eq] : a.in ?? []) {
-      if (!validValue(a.fact, v)) ctx.addIssue({ code: "custom", message: `${v} is not a value of ${a.fact}` });
-    }
-  });
+// An atom is one of two shapes so a strict tool schema can express it; for ward_requires, eq means "the ward requires this document".
+const Atom = z.union([
+  z.strictObject({ fact: ConditionFact, eq: z.string() }).refine((a) => validValue(a.fact, a.eq), { message: "value is not allowed for this fact" }),
+  z.strictObject({ fact: ConditionFact, in: z.array(z.string()).min(1).max(6) }).refine((a) => a.in.every((v) => validValue(a.fact, v)), { message: "a value is not allowed for this fact" })
+]);
 export type Atom = z.infer<typeof Atom>;
 export type ConditionExpr = Atom | { not: ConditionExpr } | { all: ConditionExpr[] } | { any: ConditionExpr[] };
 export const ConditionExpr: z.ZodType<ConditionExpr> = z.lazy(() =>
@@ -141,9 +138,11 @@ export const Step = z.strictObject({
   produces: z.array(RecordKind),
   consumes: z.array(SourceRef),
   clock: z.enum(["server", "two_clock"]),
-  required_when: CappedCondition.nullable()
+  required_when: CappedCondition.nullable(),
+  alternative_group: z.string().regex(/^[a-z_]+$/).nullable()
 });
 export type Step = z.infer<typeof Step>;
+// Alternatives rule: steps sharing an alternative_group are mutually exclusive ways of reaching the same state (payment, waiver, on-account). An edge whose from-step is in a group is satisfied when any member of the group completes, and a trigger on a group member fires only for the member the schedule selects, so three fences into clearance never deadlock.
 
 // Stored edges are platform, permission, ward_requirement (fences) or ward_procedure, learned (soft); data_integrity fences are derived from bindings at load time and never stored.
 export const StoredEdgeOrigin = z.enum(["platform", "permission", "ward_requirement", "ward_procedure", "learned"]);
@@ -209,7 +208,7 @@ export const WorkflowDefinitionBase = z.strictObject({
   parent_version: VersionNumber.nullable(),
   definition_hash: Sha256,
   status: WorkflowStatus,
-  scope: z.strictObject({ wards: z.union([z.array(z.string()).min(1), z.literal("all")]), condition: CappedCondition.nullable() }),
+  scope: z.strictObject({ wards: z.union([z.array(z.string().regex(FACT_VALUES.ward_id)).min(1), z.literal("all")]), condition: CappedCondition.nullable() }),
   fallback_version: VersionNumber.nullable(),
   actors: z.array(ActorRole),
   permissions: z.partialRecord(ActionKind, z.array(ActorRole)),
@@ -253,7 +252,8 @@ export const WorkflowDefinition = WorkflowDefinitionBase.superRefine((w, ctx) =>
 });
 export type WorkflowDefinition = z.infer<typeof WorkflowDefinitionBase>;
 
-const byKey = <T>(xs: T[], key: (x: T) => string) => [...xs].sort((a, b) => key(a).localeCompare(key(b)));
+// Code-point order, never localeCompare, so hashes agree across machines.
+const byKey = <T>(xs: T[], key: (x: T) => string) => [...xs].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
 
 // The hashes the model can never change: stored fences, permissions and step structure. Each is order-independent.
 export function fencesHash(w: Pick<WorkflowDefinition, "edges">): string {
