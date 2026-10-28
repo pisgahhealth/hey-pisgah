@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { decodeWav, encodeWav } from "@hey-pisgah/voice";
 import { isTalk, loadJourney } from "./script.js";
@@ -14,6 +14,7 @@ export function renderJourney(outDir: string, file?: string): { id: string; owne
     const raw = join(outDir, `${t.id}.raw.wav`);
     execFileSync("say", ["-v", s.voice, "-o", raw, "--file-format=WAVE", `--data-format=LEI16@${s.sample_rate}`, t.say]);
     const { samples } = decodeWav(readFileSync(raw));
+    rmSync(raw, { force: true });
     const quiet = new Float32Array(Math.round(0.7 * s.sample_rate));
     const all = new Float32Array(samples.length + quiet.length);
     all.set(samples);

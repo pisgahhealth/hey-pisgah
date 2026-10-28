@@ -40,7 +40,7 @@ export async function runJourney(o: JourneyRunOptions): Promise<JourneyTrace> {
   const settled = (lineId: string) => (v: JView | null) => {
     if (!v) return false;
     const line = v.transcript.find((x) => x.line_id === lineId);
-    return !!line && line.decided !== false && !v.actions.some((a) => OPEN.has(a.state)) && v.state !== "running";
+    return !!line && line.decided !== false && !v.actions.some((a) => OPEN.has(a.state) && !a.unverified) && v.state !== "running";
   };
   const vars = (): Record<string, string> => ({
     patient_id: o.seed.patient_id, visit_id: o.seed.visit_id, ...(o.seed.ward_id ? { ward_id: o.seed.ward_id } : {}), ...(o.seed.bed_id ? { bed_id: o.seed.bed_id } : {}), ...(admission ? { admission_id: admission } : {})

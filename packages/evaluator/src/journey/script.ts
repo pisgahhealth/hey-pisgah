@@ -5,7 +5,7 @@ import { z } from "zod";
 const Owner = z.enum(["doctor", "nurse", "accounts"]);
 const Clause = z.record(z.string(), z.unknown());
 // An expected action from a line; state is completed unless the EMR is expected to refuse it.
-const Expect = z.strictObject({ kind: z.string().min(1), args: z.record(z.string(), z.union([z.string(), z.number()])).optional(), state: z.enum(["completed", "refused"]).optional() });
+const Expect = z.strictObject({ kind: z.string().min(1), args: z.record(z.string(), z.union([z.string(), z.number()])).optional(), state: z.enum(["completed", "refused", "unverified"]).optional() });
 // One talk line by an owner, with what it should produce and the keyed gate clauses for a mock run.
 const TalkStep = z.strictObject({
   id: z.string().regex(/^[a-z]\d{2}$/), step: z.number().int().min(1).max(7), owner: Owner, at: z.enum(["patient", "admission"]), say: z.string().min(1).max(400),

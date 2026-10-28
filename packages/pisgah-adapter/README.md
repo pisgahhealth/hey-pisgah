@@ -46,7 +46,7 @@ Listening: a chunk that ends in 500 ms of quiet finishes an utterance. A chunk c
 
 A task is `{task_id, goal, state, actions, questions, transcript, watching, changes, pages, pause, digests}`. An action is `{action_id, kind, state, summary, proof?}`, and a proof is `{record_id, record_version, event_ids}`.
 
-Action states: `proposed` (on hold, so a correction or Stop can reach it), `sent`, `acknowledged`, `completed` (proved), `refused`, `cancelled`, `failed`.
+Action states: `proposed` (on hold, so a correction or Stop can reach it), `sent`, `acknowledged`, `completed` (proved), `refused`, `cancelled`, `failed`. An action marked `unverified` is acknowledged by the hospital but no read can show it, so it is never shown as done.
 
 ## Run
 
@@ -57,3 +57,22 @@ HEY_PISGAH_DOOR_PROFILE=<profile> HEY_PISGAH_MODE=live npx tsx packages/pisgah-a
 The sandbox integration test runs only with `SANDBOX=1` and the same profile.
 
 With `HEY_PISGAH_RECORDINGS=<dir>`, serve keeps model replies, transcripts and the patient context there, so `talk.run.ts --replay` can play the same run again without the network.
+
+## The journey
+
+One synthetic patient from arrival to discharge administration, with three owners' agents: the doctor's, the nurse's and the accounts clerk's. The script is in the evaluator package; people do every approval and sign-off.
+
+| File | What |
+| --- | --- |
+| `journey.ts` | Plays the script into serve: talk lines to each owner's task, person steps to the person's own login |
+| `journey.sandbox.ts` | The sandbox run: one agent per owner, read-only record checks afterwards |
+| `journey-fake.ts` | An in-memory hospital for CI, and the replay of a recorded run |
+| `journey.commit.ts` | Commits the decision points and their classes before a run |
+| `journey.run.ts` | `--mode mock` plays the script's keyed answers; `--mode live` calls the model; both replay the recording after |
+| `journey.publish.ts` | Writes a kept run's results with no ids, and its recorded gate answers |
+
+```
+HEY_PISGAH_DOOR_PROFILE=<profile> HEY_PISGAH_EMR_PORT=4102 HEY_PISGAH_BUDGET_USD=5 npx tsx packages/pisgah-adapter/src/journey.run.ts --mode live --out <private dir>
+```
+
+The sandbox test runs with `SANDBOX=1`. CI replays the recorded run over the in-memory hospital and checks it matches the published result.

@@ -17,6 +17,8 @@ export type EmrAction = {
   proposed_at: string; written_at: string | null; completed_at: string | null;
   // What a read-only kind found, and a draft held for the owner's review.
   report: string | null; draft: string | null;
+  // Written and acknowledged, but no read the EMR offers can show it, so it is never marked completed.
+  unverified: boolean;
 };
 // Where an ambient line came from: its listening session, the chunks that made it, and when the speech ended.
 export type AmbientMeta = { session_id: string; seqs: number[]; raw_text: string; ended_at: string; final_at: string; trailing_silence_ms: number; finished_by: string };
@@ -41,7 +43,7 @@ export type EmrTaskView = {
     action_id: string; kind: string; state: EmrActionState; summary: string; reason: string | null; corrects_action_id: string | null;
     line_id: string; args: Record<string, unknown>; proposed_at: string; written_at: string | null;
     proof?: { record_id: string; record_version: number; event_ids: string[] };
-    report?: string; draft?: string;
+    report?: string; draft?: string; unverified?: true;
   }[];
   questions: { question_id: string; text: string }[];
   transcript: { id: string; line_id: string; text: string; at: string; source: "text" | "audio"; decided: boolean; class: SpeechClass | null; classes: SpeechClass[]; ambient?: AmbientMeta }[];
@@ -122,7 +124,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       t.actions.set(String(x["action_id"]), {
         action_id: String(x["action_id"]), kind: String(x["kind"] ?? OBSERVATION_KIND), args: x["args"] as WorkArgs, summary: String(x["summary"]), line_id: String(x["line_id"]),
         corrects_action_id: (x["corrects_action_id"] as string | null) ?? null, state: "proposed", intent_key: null, written: null, proof: null, reason: null,
-        proposed_at: e.wall_at, written_at: null, completed_at: null, report: null, draft: null
+        proposed_at: e.wall_at, written_at: null, completed_at: null, report: null, draft: null, unverified: false
       });
       t.order.push(String(x["action_id"]));
       break;
@@ -132,6 +134,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
     case "action.cancelled": if (act) { act.state = "cancelled"; act.reason = String(x["reason"]); } break;
     case "action.refused": if (act) { act.state = "refused"; act.reason = String(x["reason"]); } break;
     case "action.failed": if (act) { act.state = "failed"; act.reason = String(x["reason"]); } break;
+    case "action.unverified": if (act) { act.unverified = true; act.reason = String(x["reason"]); } break;
     case "action.reported": if (act) { act.report = (x["report"] as string | null) ?? null; act.draft = (x["draft"] as string | null) ?? null; } break;
     case "task.state_changed": t.state = x["to"] as TaskState; t.reason = (x["reason"] as string | null) ?? null; break;
     case "task.linked": t.admission_id = String(x["admission_id"]); break;
@@ -164,7 +167,7 @@ export function viewOf(t: EmrTask): EmrTaskView {
       action_id: a.action_id, kind: a.kind, state: a.state, summary: a.summary, reason: a.reason, corrects_action_id: a.corrects_action_id,
       line_id: a.line_id, args: Object.fromEntries(Object.entries(a.args).filter(([k]) => k !== "admission_id")), proposed_at: a.proposed_at, written_at: a.written_at,
       ...(a.proof ? { proof: { record_id: a.proof.record_id, record_version: a.proof.record_version, event_ids: a.proof.event_ids } } : {}),
-      ...(a.report ? { report: a.report } : {}), ...(a.draft ? { draft: a.draft } : {})
+      ...(a.report ? { report: a.report } : {}), ...(a.draft ? { draft: a.draft } : {}), ...(a.unverified ? { unverified: true as const } : {})
     })),
     questions: t.questions.filter((q) => q.answered_by === null).map((q) => ({ question_id: q.question_id, text: q.text })),
     transcript: t.lines.map((l) => ({ id: l.id, line_id: l.id, text: l.text, at: l.at, source: l.source, decided: l.decided, class: primaryClass(l.classes) as SpeechClass | null, classes: l.classes, ...(l.ambient ? { ambient: l.ambient } : {}) })),
@@ -187,7 +190,7 @@ export function fromLine(words: string, line: string): boolean {
   return hit / w.length >= 0.8;
 }
 
-const VALUE_KEYS = ["temp_c", "pulse", "resp_rate", "bp", "remark", "spo2", "priority"] as const;
+const VALUE_KEYS = ["temp_c", "pulse", "resp_rate", "bp", "remark", "spo2", "weight_kg", "priority"] as const;
 // Only measurement kinds merge; two care-plan items or two pages in one line stay two actions.
 const MERGEABLE: ReadonlySet<string> = new Set([OBSERVATION_KIND, "record_triage_vitals"]);
 // Confident instructions of one kind in one line are one action: values merge, an empty "chart these" clause is absorbed, and a value given twice differently becomes a question.
@@ -288,7 +291,7 @@ export class EmrRuntime {
       if (CLOSED_TASK.has(l.task.state)) continue;
       for (const aid of l.task.order) {
         const a = l.task.actions.get(aid)!;
-        if (a.state === "sent" || a.state === "acknowledged") this.enqueue(l, () => this.execute(l, aid));
+        if (a.state === "sent" || (a.state === "acknowledged" && !a.unverified)) this.enqueue(l, () => this.execute(l, aid));
         else if (a.state === "proposed" && l.task.state === "running") this.hold(l, aid);
       }
       if (l.task.state === "running" && l.task.lines.some((x) => !x.decided)) {
@@ -612,7 +615,7 @@ export class EmrRuntime {
         if (!needVisit()) return;
         raw = { visit_id: t.visit_id, ...ids };
         const dropped: string[] = [];
-        for (const k of ["temp_c", "pulse", "resp_rate", "bp", "spo2"] as const) {
+        for (const k of ["temp_c", "pulse", "resp_rate", "bp", "spo2", "weight_kg"] as const) {
           const v = c[k];
           if (v === null || v === undefined || v === "") continue;
           if (!heard(v)) { dropped.push(`${k} ${String(v)}`); continue; }
@@ -831,6 +834,11 @@ export class EmrRuntime {
       await new Promise((r) => setTimeout(r, this.o.proofRetryMs ?? 500));
       proof = await this.o.port.prove(a.kind, a.args, w, prov);
     }
+    if (!proof && this.o.port.unverifiable?.(a.kind)) {
+      this.append(l, "action.unverified", { action_id: actionId, reason: `Sent, not verified: ${this.o.port.unverifiable(a.kind)}` });
+      this.note(l, `${a.summary}: sent, but not verified. ${this.o.port.unverifiable(a.kind)}`);
+      return this.settle(l, "unverified");
+    }
     if (!proof || proof.record_id !== w.record_id) {
       this.append(l, "action.failed", { action_id: actionId, reason: proof ? "proof_for_another_record" : "unproved" });
       return this.settle(l, "unproved");
@@ -847,7 +855,7 @@ export class EmrRuntime {
   private settle(l: Live, reason: string): void {
     const t = l.task;
     if (t.state === "paused" || CLOSED_TASK.has(t.state)) return;
-    const open = t.order.some((id) => OPEN_ACTION.has(t.actions.get(id)!.state));
+    const open = t.order.some((id) => { const a = t.actions.get(id)!; return OPEN_ACTION.has(a.state) && !a.unverified; });
     if (open) return this.setState(l, "running", null);
     if (t.questions.some((q) => q.answered_by === null)) return this.setState(l, "waiting", "question_open");
     this.setState(l, "done", reason);

@@ -53,7 +53,7 @@ export class PisgahPort implements EmrPort {
     const reads = [
       ...(ops.patient_context ? [ops.patient_context.path] : []), ...profile.owners.flatMap((o) => (o.context ? [o.context.path] : [])), ...Object.values(profile.watches).map((w) => w.path),
       ...(profile.inbox ? [profile.inbox.path, ...(profile.inbox.detail ? [profile.inbox.detail.path] : [])] : []),
-      ...Object.values(profile.work).flatMap((w) => ("reads" in w ? Object.values(w.reads).map((r) => r.path) : [w.proof.path, ...(w.before ?? []).map((b) => b.path)]))
+      ...Object.values(profile.work).flatMap((w) => ("reads" in w ? Object.values(w.reads).map((r) => r.path) : [...(w.proof ? [w.proof.path] : []), ...(w.before ?? []).map((b) => b.path)]))
     ];
     const writes = Object.values(profile.work).flatMap((w) => ("method" in w ? [w.path] : []));
     this.allow = [
@@ -67,6 +67,10 @@ export class PisgahPort implements EmrPort {
     return this.profile.owners.find((x) => x.id === owner)?.kinds ?? this.writeKinds;
   }
   offers(owner: string): readonly WatchOffer[] { return this.profile.owners.find((x) => x.id === owner)?.offers ?? []; }
+  unverifiable(kind: EmrWriteKind): string | null {
+    const w = this.profile.work[kind];
+    return w && "method" in w ? w.unverifiable ?? null : null;
+  }
   names(): SayableNames {
     return {
       page_targets: Object.fromEntries(Object.entries(this.profile.page_targets).map(([k, v]) => [k, v.words])),
@@ -118,7 +122,8 @@ export class PisgahPort implements EmrPort {
     let body: unknown = null;
     try { body = text ? JSON.parse(text) : null; } catch { body = null; }
     const replayed = (res.headers.get(h.replayed) ?? "").toLowerCase() === "true";
-    log(res.status, replayed, "response");
+    // A refused write keeps the door's own words in the log, for the private trace only.
+    log(res.status, replayed, "response", res.status >= 300 ? text.slice(0, 300) : undefined);
     return { kind: "response", status: res.status, json: body, replayed };
   }
 
@@ -194,7 +199,7 @@ export class PisgahPort implements EmrPort {
       this.refusals.push({ at: this.now().toISOString(), method: "POST", path: `kind:${kind}`, reason: "kind_not_held" });
       return { ok: false, reason: "kind_not_held", status: null, retryable: false, counted: true };
     }
-    if (kind !== OBSERVATION_KIND) return this.commitWork(kind, rawArgs, intentKey, prov);
+    if (kind !== OBSERVATION_KIND || this.profile.work[OBSERVATION_KIND]) return this.commitWork(kind, rawArgs, intentKey, prov);
     const parsed = ObservationArgs.safeParse(rawArgs);
     if (!parsed.success) return { ok: false, reason: "invalid_arguments", status: null, retryable: false, counted: false };
     const a = parsed.data;
@@ -220,7 +225,7 @@ export class PisgahPort implements EmrPort {
 
   // A fresh read of the admission must show every written value as its latest observation; the door has no read of one entry by id.
   async prove(kind: EmrWriteKind, rawArgs: WorkArgs, written: { record_id: string; record_version: number; event_ids: string[] }, prov: Provenance): Promise<EmrProof | null> {
-    if (kind !== OBSERVATION_KIND) return this.proveWork(kind, rawArgs, written, prov);
+    if (kind !== OBSERVATION_KIND || this.profile.work[OBSERVATION_KIND]) return this.proveWork(kind, rawArgs, written, prov);
     const args = rawArgs as ObservationArgs;
     const json = await this.readAdmission(args.admission_id, prov);
     const checks = Object.entries(this.profile.ops.read_admission.proof).filter(([k]) => (args as Record<string, unknown>)[k] !== undefined);
@@ -254,6 +259,7 @@ export class PisgahPort implements EmrPort {
     if (!v["visit_id"] && patient) v["visit_id"] = this.learned.visit_by_patient.get(patient);
     if (typeof a["bp"] === "string") { const [sys, dia] = a["bp"].split("/").map(Number); v["bp_sys"] = sys; v["bp_dia"] = dia; }
     if (typeof a["temp_c"] === "string") v["temp_num"] = Number(a["temp_c"]);
+    if (kind === OBSERVATION_KIND) { const r = [a["corrects_record_id"] ? `Corrects entry ${String(a["corrects_record_id"])}.` : null, a["remark"] ?? null].filter(Boolean).join(" "); if (r) v["remarks"] = r; }
     if (kind === "record_note") v["note_body"] = a["label"] === "handover" && !/^handover\b/i.test(String(a["text"])) ? `Handover. ${String(a["text"])}` : a["text"];
     const label = (a["admission_id"] ? this.learned.label.get(String(a["admission_id"])) : undefined) ?? (patient ? this.learned.label.get(patient) : undefined);
     if (kind === "page_staff") {
@@ -284,8 +290,7 @@ export class PisgahPort implements EmrPort {
     for (const b of op.before ?? []) {
       let json: unknown;
       try { json = await this.read(b, vars, prov); } catch (e) { return { ok: false, reason: e instanceof EmrPortError ? `before_${e.code}` : "before_failed", status: null, retryable: false, counted: false }; }
-      const list = pick(json, b.list);
-      const hit = (Array.isArray(list) ? list : []).find((x) => Object.entries(b.where).every(([k, want]) => pick(x, k) === want));
+      const hit = pickAll(json, b.list).find((x) => Object.entries(b.where).every(([k, want]) => pick(x, k) === want));
       if (!hit) return { ok: false, reason: "nothing_free", status: null, retryable: false, counted: false };
       const value = String(pick(hit, b.field) ?? "");
       const parts = b.split ? value.split(b.split) : [value];
@@ -330,21 +335,23 @@ export class PisgahPort implements EmrPort {
       try { await this.read(first, vars, prov); } catch { return null; }
       return { ...written, record_hash: sha256(canonical({ record_id: written.record_id, kind })), verified_at: this.now().toISOString(), read: `fresh read of ${Object.keys(op.reads).join(" and ")}` };
     }
+    if (!op.proof) return null;
+    const proofSpec = op.proof;
     let json: unknown;
-    try { json = await this.read(op.proof, vars, prov); } catch { return null; }
+    try { json = await this.read(proofSpec, vars, prov); } catch { return null; }
     let base: unknown = json;
-    if (op.proof.find) {
-      base = pickAll(json, op.proof.find.list).filter((x) => Object.entries(op.proof.find!.where).every(([k, want]) => checkOne(pick(x, k), want, vars))).at(-1);
+    if (proofSpec.find) {
+      base = pickAll(json, proofSpec.find.list).filter((x) => Object.entries(proofSpec.find!.where).every(([k, want]) => checkOne(pick(x, k), want, vars))).at(-1);
       if (base === undefined) return null;
     }
-    const seen = Object.fromEntries(Object.keys(op.proof.checks).map((k) => [k, pick(base, k) ?? null]));
+    const seen = Object.fromEntries(Object.keys(proofSpec.checks).map((k) => [k, pick(base, k) ?? null]));
     // A check on a value the work did not carry is skipped, but at least one check must run.
-    const run = Object.entries(op.proof.checks).filter(([, want]) => !skipped(want, vars));
+    const run = Object.entries(proofSpec.checks).filter(([, want]) => !skipped(want, vars));
     if (!run.length || !run.every(([k, want]) => checkOne(seen[k], want, vars))) return null;
     return {
       record_id: written.record_id, record_version: written.record_version, event_ids: written.event_ids,
       record_hash: sha256(canonical({ record_id: written.record_id, seen })), verified_at: this.now().toISOString(),
-      read: `fresh read shows ${Object.keys(op.proof.checks).join(", ")} as written`
+      read: `fresh read shows ${Object.keys(proofSpec.checks).join(", ")} as written`
     };
   }
 
@@ -398,6 +405,7 @@ const skipped = (want: string, vars: Vars) => { const m = /\$([a-z_]+)$/.exec(wa
 
 // Picks a list path where "a[].b" flattens each element's b, so nested groups read as one list.
 export function pickAll(v: unknown, path: string): unknown[] {
+  if (path.includes(",")) return path.split(",").flatMap((p) => pickAll(v, p));
   let cur: unknown[] = [v];
   for (const seg of path.split("[].")) cur = cur.flatMap((x) => { const y = pick(x, seg); return Array.isArray(y) ? y : y === undefined ? [] : [y]; });
   return cur;

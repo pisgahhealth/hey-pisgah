@@ -36,7 +36,7 @@
    "step": 1,
    "owner": "nurse",
    "at": "patient",
-   "say": "Triage observations: temperature 37.1, pulse 96, respiratory rate 20, blood pressure 118 over 76, oxygen saturation 98 percent. Priority urgent. Right lower abdominal pain since yesterday.",
+   "say": "Triage observations: temperature 37.1, pulse 96, respiratory rate 20, blood pressure 118 over 76, oxygen saturation 98 percent, weight 68 kilograms. Priority urgent. Right lower abdominal pain since yesterday.",
    "expect": [
     {
      "kind": "record_triage_vitals",
@@ -46,7 +46,8 @@
       "resp_rate": 20,
       "bp": "118/76",
       "spo2": 98,
-      "priority": "urgent"
+      "priority": "urgent",
+      "weight_kg": 68
      }
     }
    ],
@@ -61,7 +62,8 @@
      "bp": "118/76",
      "spo2": 98,
      "priority": "urgent",
-     "text": "Right lower abdominal pain since yesterday."
+     "text": "Right lower abdominal pain since yesterday.",
+     "weight_kg": 68
     }
    ]
   },
@@ -140,6 +142,13 @@
      "text": "observation of the abdominal pain"
     }
    ]
+  },
+  {
+   "id": "p08",
+   "step": 2,
+   "person": "sign_consult",
+   "by": "doctor",
+   "what": "The doctor signs the emergency consultation on the existing screen; signing stays with the doctor."
   },
   {
    "id": "p03",
@@ -477,7 +486,8 @@
    "say": "Send her the pay link.",
    "expect": [
     {
-     "kind": "send_pay_link"
+     "kind": "send_pay_link",
+     "state": "unverified"
     }
    ],
    "key": [

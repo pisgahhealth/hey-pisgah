@@ -11,7 +11,7 @@ const HeaderName = z.string().regex(/^[A-Za-z][A-Za-z0-9-]{0,63}$/);
 const PathTpl = z.string().regex(/^[a-z0-9_{}-]+(\/[a-z0-9_{}-]+)*$/);
 const Dotted = z.string().regex(/^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)*$/);
 // A list path where "a[].b" flattens each element's b.
-const ListPath = z.string().regex(/^[A-Za-z0-9_]+((\.|\[\]\.)[A-Za-z0-9_]+)*$/);
+const ListPath = z.string().regex(/^[A-Za-z0-9_]+((\.|\[\]\.|,)[A-Za-z0-9_]+)*$/);
 const Words = z.array(z.string().min(1).max(40)).min(1).max(12);
 
 // One door read: a path template and query values, each "$name" filled from the subject or the work's arguments.
@@ -23,14 +23,16 @@ const ProofSpec = ReadSpec.extend({
   checks: z.record(z.string(), z.string()).refine((c) => Object.keys(c).length > 0, "a proof needs a check")
 });
 // A read before a write that picks values for it, such as the first free slot of a day.
-const BeforeSpec = ReadSpec.extend({ list: Dotted, where: z.record(z.string(), z.json()), field: Dotted, split: z.string().max(2).optional(), vars: z.array(z.string().regex(/^[a-z_]+$/)).min(1) });
+const BeforeSpec = ReadSpec.extend({ list: z.string().regex(/^[A-Za-z0-9_]+((\.|\[\]\.|,)[A-Za-z0-9_]+)*$/), where: z.record(z.string(), z.json()), field: Dotted, split: z.string().max(2).optional(), vars: z.array(z.string().regex(/^[a-z_]+$/)).min(1) });
 const WriteOp = z.strictObject({
   method: z.literal("POST"), path: PathTpl, body: z.record(z.string(), z.json()),
   // Where the record id is in the answer; store names the event; positive names a count that must be above zero.
   ack: z.strictObject({ id_path: Dotted.optional(), writes_path: Dotted.optional(), primary_store: z.string().optional(), store: z.string().min(1), positive: Dotted.optional() }),
   before: z.array(BeforeSpec).max(3).optional(),
-  proof: ProofSpec
-});
+  proof: ProofSpec.optional(),
+  // Why no read can show this write; the agent then reports it sent but not verified.
+  unverifiable: z.string().min(1).max(200).optional()
+}).refine((w) => !!w.proof !== !!w.unverifiable, "a write needs a proof or a reason it cannot have one");
 // A kind that only reads: the answer is rendered into a report or a draft from "{alias.path}" and "{alias.list[].field}" placeholders.
 const ReadOnlyOp = z.strictObject({ reads: z.record(z.string(), ReadSpec), report: z.string().max(2000).optional(), draft: z.string().max(4000).optional(), store: z.string().min(1) });
 const Fact = z.strictObject({ path: Dotted, label: z.string().min(1).max(60) });
@@ -95,7 +97,7 @@ export function pick(v: unknown, path: string): unknown {
 
 // Fills a body template: a string that is exactly "$name" takes that value, and its key is dropped when the value is absent.
 export function fillTemplate(tpl: unknown, vars: Record<string, unknown>): unknown {
-  if (typeof tpl === "string" && /^\$[a-z_]+$/.test(tpl)) return vars[tpl.slice(1)];
+  if (typeof tpl === "string" && /^\$[a-z_][a-z0-9_]*$/.test(tpl)) return vars[tpl.slice(1)];
   if (Array.isArray(tpl)) return tpl.map((x) => fillTemplate(x, vars)).filter((x) => x !== undefined);
   if (tpl && typeof tpl === "object") {
     const out: Record<string, unknown> = {};

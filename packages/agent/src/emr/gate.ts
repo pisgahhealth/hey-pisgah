@@ -34,7 +34,7 @@ export type GateOutput = z.infer<typeof GateOutput>;
 export const WorkClause = GateClause.extend({
   text: nullish(z.string().max(4000)), title: nullish(z.string().max(200)), item_kind: nullish(z.enum(ITEM_KINDS)), cadence: nullish(z.string().max(8)),
   ward_class: nullish(z.enum(WARD_CLASSES)), admission_type: nullish(z.enum(ADMISSION_TYPES)), note_type: nullish(z.enum(NOTE_TYPES)), priority: nullish(z.enum(PRIORITIES)),
-  spo2: nullish(z.number().int()), to: nullish(z.string().max(30)), clinic: nullish(z.string().max(30)), date: nullish(z.string().max(10))
+  spo2: nullish(z.number().int()), weight_kg: nullish(z.number()), to: nullish(z.string().max(30)), clinic: nullish(z.string().max(30)), date: nullish(z.string().max(10))
 });
 export type WorkClause = z.infer<typeof WorkClause>;
 export const WorkOutput = z.strictObject({ clauses: z.array(WorkClause).min(1).max(MAX_CLAUSES) });
@@ -106,7 +106,7 @@ export type GateInput = {
 export const GATE_FACTS = ["ward", "bed"] as const;
 const untrusted = (v: string | null | undefined) => (v === null || v === undefined ? null : { untrusted_text: v.slice(0, 300) });
 const VALUE_KEYS = ["temp_c", "pulse", "resp_rate", "bp", "remark"] as const;
-const WIDE_KEYS: readonly string[] = [...VALUE_KEYS, "spo2", "title", "cadence", "ward_class", "admission_type", "note_type", "to", "clinic", "date"] satisfies readonly (string | WorkField)[];
+const WIDE_KEYS: readonly string[] = [...VALUE_KEYS, "spo2", "weight_kg", "title", "cadence", "ward_class", "admission_type", "note_type", "to", "clinic", "date"] satisfies readonly (string | WorkField)[];
 
 // The user message for one finalised utterance: the patient in context as untrusted data, the task's actions by number, then the clinician's words.
 export function gateMessage(i: GateInput): string {

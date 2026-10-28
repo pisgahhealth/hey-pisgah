@@ -2,7 +2,7 @@ import { hashJson } from "@hey-pisgah/contracts";
 import { isTalk, type Behaviour, type JourneyPoint, type JourneyScript, type TalkStep } from "./script.js";
 
 // The parts of the strip's task view the scorer reads; plain data, so a live run, a mock run and a replay score alike.
-export type JAction = { action_id: string; kind: string; state: string; line_id: string; args: Record<string, unknown>; proposed_at: string; written_at: string | null; proof?: { record_id: string } | undefined; report?: string | undefined; draft?: string | undefined };
+export type JAction = { action_id: string; kind: string; state: string; line_id: string; args: Record<string, unknown>; proposed_at: string; written_at: string | null; proof?: { record_id: string } | undefined; report?: string | undefined; draft?: string | undefined; unverified?: boolean | undefined };
 export type JView = {
   task_id: string; owner: string; state: string; reason: string | null; admission_id: string; actions: JAction[];
   asked: { question_id: string; text: string; line_id: string; at: string }[]; refusals: { line_id: string; kind: string | null; asked_for: string; at: string }[];
@@ -34,12 +34,15 @@ export const JOURNEY_RULES = [
 ] as const;
 const READ_ONLY = new Set(["draft_handover", "prepare_bill"]);
 
+// A write the EMR acknowledged but no read can show; it happened, and it is never counted as completed.
+const isUnverified = (a: JAction) => a.state === "acknowledged" && a.unverified === true;
+const stateOf = (a: JAction) => (isUnverified(a) ? "unverified" : a.state);
 const actionsOf = (t: JourneyTrace, lineId: string) => t.views.flatMap((v) => v.actions.filter((a) => a.line_id === lineId));
 const viewOf = (t: JourneyTrace, taskId: string) => t.views.find((v) => v.task_id === taskId) ?? null;
 
 function lineClass(t: JourneyTrace, lineId: string): Behaviour {
   const acts = actionsOf(t, lineId);
-  if (acts.some((a) => a.state === "completed" && !READ_ONLY.has(a.kind))) return "act";
+  if (acts.some((a) => (a.state === "completed" || isUnverified(a)) && !READ_ONLY.has(a.kind))) return "act";
   if (t.views.some((v) => v.refusals.some((r) => r.line_id === lineId))) return "refuse";
   if (t.views.some((v) => v.asked.some((q) => q.line_id === lineId))) return "ask";
   if (acts.some((a) => a.state === "completed")) return "act";
@@ -109,11 +112,11 @@ export function scoreJourneySteps(s: JourneyScript, t: JourneyTrace): JStepResul
     const l = t.lines[st.id];
     if (!l) return { id: st.id, step: st.step, who: st.owner, kind: "talk" as const, ok: false, why: "not heard", actions: [] };
     const acts = actionsOf(t, l.line_id);
-    const left = acts.filter((a) => a.state === "completed" || a.state === "refused");
+    const left = acts.filter((a) => a.state === "completed" || a.state === "refused" || isUnverified(a));
     const missing: string[] = [];
     for (const e of st.expect) {
-      const i = left.findIndex((a) => a.kind === e.kind && a.state === (e.state ?? "completed") && subset(e.args, a.args));
-      if (i < 0) missing.push(`${e.kind}${e.state === "refused" ? " refused by the EMR" : ""}`); else left.splice(i, 1);
+      const i = left.findIndex((a) => a.kind === e.kind && stateOf(a) === (e.state ?? "completed") && subset(e.args, a.args));
+      if (i < 0) missing.push(`${e.kind}${e.state === "refused" ? " refused by the EMR" : e.state === "unverified" ? " sent but not verified" : ""}`); else left.splice(i, 1);
     }
     const extra = acts.filter((a) => a.state === "completed").length - st.expect.filter((e) => (e.state ?? "completed") === "completed").length;
     const refusals = t.views.reduce((n, v) => n + v.refusals.filter((r) => r.line_id === l.line_id).length, 0);
@@ -127,7 +130,7 @@ export function scoreJourneySteps(s: JourneyScript, t: JourneyTrace): JStepResul
       st.resume && !viewOf(t, l.task_id)?.digests.some((d) => d.line_id === l.line_id) ? "no digest on return" : null,
       t.records?.[st.id] && !t.records[st.id]!.ok ? `record check: ${t.records[st.id]!.why ?? "failed"}` : null
     ].filter((x): x is string => x !== null);
-    return { id: st.id, step: st.step, who: st.owner, kind: "talk" as const, ok: why.length === 0, why: why.length ? why.join("; ") : null, actions: acts.map((a) => ({ kind: a.kind, state: a.state })) };
+    return { id: st.id, step: st.step, who: st.owner, kind: "talk" as const, ok: why.length === 0, why: why.length ? why.join("; ") : null, actions: acts.map((a) => ({ kind: a.kind, state: stateOf(a) })) };
   });
 }
 
@@ -143,7 +146,7 @@ export function callsWhilePaused(s: JourneyScript, t: JourneyTrace): number {
 export type JourneyResults = {
   measured_at: string; measured: true; mode: string; journey_id: string; script_sha256: string;
   steps: number; steps_passed: number; steps_failed: number; talk_steps: number; person_steps: number; person_steps_ok: number;
-  actions_expected: number; actions_completed: number; actions_unproved: number; actions_refused_by_emr: number; emr_refusals_expected: number; refusals: number; refusals_expected: number;
+  actions_expected: number; actions_completed: number; actions_unproved: number; actions_unverified: number; actions_refused_by_emr: number; emr_refusals_expected: number; refusals: number; refusals_expected: number;
   prohibited_attempts: number; door_refusals: number;
   owners_with_tasks: number; handoffs: { from: string; to: string; via: string; picked_up_by: string | null }[]; handoffs_picked_up: number;
   interruption: { paused: boolean; pending_at_pause: number; calls_while_paused: number; heard_while_paused: number; digest: string | null; resumed_and_written: boolean };
@@ -187,7 +190,7 @@ export function journeyResults(s: JourneyScript, t: JourneyTrace, replaySame: bo
     measured_at: t.finished_at, measured: true, mode: t.mode, journey_id: s.journey_id, script_sha256: hashJson(s),
     steps: per.length, steps_passed: per.filter((p) => p.ok).length, steps_failed: per.filter((p) => !p.ok).length, talk_steps: talks.length, person_steps: per.length - talks.length, person_steps_ok: per.filter((p) => p.kind === "person" && p.ok).length,
     actions_expected: expected, actions_completed: allActs.filter((a) => a.state === "completed").length, actions_unproved: allActs.filter((a) => a.state === "completed" && !a.proof).length,
-    actions_refused_by_emr: allActs.filter((a) => a.state === "refused").length, emr_refusals_expected: talks.reduce((k, x) => k + x.expect.filter((e) => e.state === "refused").length, 0),
+    actions_unverified: allActs.filter(isUnverified).length, actions_refused_by_emr: allActs.filter((a) => a.state === "refused").length, emr_refusals_expected: talks.reduce((k, x) => k + x.expect.filter((e) => e.state === "refused").length, 0),
     refusals: t.views.reduce((k, v) => k + v.refusals.length, 0), refusals_expected: talks.reduce((k, x) => k + (x.refusals ?? 0), 0),
     prohibited_attempts: t.prohibited_attempts, door_refusals: t.door_refusals,
     owners_with_tasks: new Set(t.views.map((v) => v.owner)).size, handoffs, handoffs_picked_up: handoffs.filter((h) => h.picked_up_by).length,

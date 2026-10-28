@@ -58,5 +58,7 @@ export interface EmrPort {
   watch?(owner: string, subject: EmrTarget & { visit_id?: string | null }, prov: Provenance): Promise<WatchRead | null>;
   offers?(owner: string): readonly WatchOffer[];
   inbox?(owner: string, prov: Provenance): Promise<InboxPage[]>;
+  // Why a kind's write cannot be checked by any read the EMR offers, or null when it can.
+  unverifiable?(kind: EmrWriteKind): string | null;
   names?(): SayableNames;
 }

@@ -30,7 +30,8 @@ const vitals = {
   pulse: z.number().int().min(20).max(250).optional(),
   resp_rate: z.number().int().min(4).max(80).optional(),
   bp: z.string().regex(/^\d{2,3}\/\d{2,3}$/).optional(),
-  spo2: z.number().int().min(50).max(100).optional()
+  spo2: z.number().int().min(50).max(100).optional(),
+  weight_kg: z.number().min(2).max(300).refine((v) => Number.isInteger(v * 10), "weight takes one decimal at most").optional()
 };
 const anyVital = (a: Record<string, unknown>) => ["temp_c", "pulse", "resp_rate", "bp", "spo2"].some((k) => a[k] !== undefined);
 
@@ -52,7 +53,7 @@ export const WORK_ARGS: Record<Exclude<WorkKind, typeof OBSERVATION_KIND>, z.Zod
 export const WORK_TEXT: Record<Exclude<WorkKind, typeof OBSERVATION_KIND>, string> = {
   draft_consult_note: "draft_consult_note: save the clinician's dictated assessment as the unsigned consultation draft, before the patient is admitted; text is their words.",
   request_admission: "request_admission: request admission for the patient in context; ward_class (general, private, icu, hdu, paeds, isolation, maternity), admission_type (emergency, planned, day_case), and text as the reason, all as said.",
-  record_triage_vitals: "record_triage_vitals: the triage observations at arrival: temp_c, pulse, resp_rate, bp, spo2 (oxygen saturation in percent), priority (normal, urgent, emergency) and text as the triage note, all as said.",
+  record_triage_vitals: "record_triage_vitals: the triage observations at arrival: temp_c, pulse, resp_rate, bp, spo2 (oxygen saturation in percent), weight_kg, priority (normal, urgent, emergency) and text as the triage note, all as said.",
   add_care_plan_item: "add_care_plan_item: add one item to the care plan: title in the clinician's words, item_kind (medication, nursing, observation, diet) and cadence (OD, BD, TDS, QID, q2h, q4h, q6h, q8h, q12h, STAT, PRN). One clause per item.",
   record_note: "record_note: write a note in the record: note_type (progress, ward_round, nursing) and text, the words dictated. Saving a handover draft you made is record_note with text null.",
   draft_handover: "draft_handover: draft a shift handover from the record for the clinician to review; nothing is written until they say to save it.",
@@ -63,7 +64,7 @@ export const WORK_TEXT: Record<Exclude<WorkKind, typeof OBSERVATION_KIND>, strin
 };
 
 // The value fields the wider gate tool adds for these kinds; the observation-only tool stays as committed.
-export const WORK_FIELDS = ["text", "title", "item_kind", "cadence", "ward_class", "admission_type", "note_type", "priority", "spo2", "to", "clinic", "date"] as const;
+export const WORK_FIELDS = ["text", "title", "item_kind", "cadence", "ward_class", "admission_type", "note_type", "priority", "spo2", "weight_kg", "to", "clinic", "date"] as const;
 export type WorkField = (typeof WORK_FIELDS)[number];
 
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
@@ -96,7 +97,7 @@ export function summariseWork(kind: string, a: Record<string, unknown>): string 
     case "request_admission": return `Request ${t(a["admission_type"])} admission, ${String(a["ward_class"]).replace(/_/g, " ")} ward: ${t(a["reason"], 60)}`;
     case "record_triage_vitals": {
       const v = [a["temp_c"] !== undefined ? `temperature ${a["temp_c"]} C` : null, a["pulse"] !== undefined ? `pulse ${a["pulse"]}` : null, a["resp_rate"] !== undefined ? `respiratory rate ${a["resp_rate"]}` : null,
-        a["bp"] !== undefined ? `blood pressure ${a["bp"]}` : null, a["spo2"] !== undefined ? `oxygen ${a["spo2"]}%` : null].filter(Boolean).join(", ");
+        a["bp"] !== undefined ? `blood pressure ${a["bp"]}` : null, a["spo2"] !== undefined ? `oxygen ${a["spo2"]}%` : null, a["weight_kg"] !== undefined ? `weight ${a["weight_kg"]} kg` : null].filter(Boolean).join(", ");
       return `Record triage: ${v}${a["priority"] ? `, priority ${a["priority"]}` : ""}`;
     }
     case "add_care_plan_item": return `Add to the care plan: ${t(a["title"], 60)} (${a["cadence"]})`;

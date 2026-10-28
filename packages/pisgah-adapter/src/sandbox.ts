@@ -13,6 +13,8 @@ export const SandboxBlock = z.strictObject({
   // The other owners whose agents serve mints, by login and clinic; their password is the sandbox's own.
   owners: z.array(z.strictObject({ login: z.string().regex(/^[a-z0-9._-]{1,40}$/), clinic: z.string().min(1).max(80).optional() })).default([]),
   sql: z.record(z.string(), z.string()),
+  // Words that mark sandbox records, removed from anything published.
+  scrub: z.array(z.string().min(1)).default([]),
   // The seed's ids for the journey, written by the platform's own seed script.
   journey_file: z.string().min(1).optional(),
   // Steps a person does in the journey, run with the person's own bearer; agents never call these.

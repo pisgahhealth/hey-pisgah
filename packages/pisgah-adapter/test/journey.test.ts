@@ -1,36 +1,16 @@
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { startEmrServe, type EmrRuntime } from "@hey-pisgah/agent";
 import { hashJson } from "@hey-pisgah/contracts";
 import { claimStatus, readCommitment, journeyDenyHits, journeyResults, loadJourney, parseClaimPredicate, sameJourney, type JourneyResults } from "@hey-pisgah/evaluator";
-import { ModelClient, type MockResponder } from "@hey-pisgah/model";
-import { FAKE, JourneyFakeHospital } from "../src/journey-fake.js";
-import { keyedGate, ledgerOf, runJourney, scriptKey } from "../src/journey.js";
+import type { MockResponder } from "@hey-pisgah/model";
+import { replayJourney } from "../src/journey-fake.js";
+import { keyedGate, scriptKey } from "../src/journey.js";
 
 const RECORDED = new URL("../../evaluator/fixtures/journey/recorded-gate.json", import.meta.url);
 const RESULTS = new URL("../../../evaluation/results/journey.json", import.meta.url);
 const C18 = (JSON.parse(readFileSync(new URL("../../../evaluation/claims.json", import.meta.url), "utf8")).claims as { claim_id: string; acceptance: { predicate: string } }[]).find((c) => c.claim_id === "C-18");
 
-// Runs the whole journey through serve over the in-memory hospital, with a mock gate.
-async function play(gate: MockResponder): Promise<{ results: JourneyResults; hospital: JourneyFakeHospital }> {
-  const script = loadJourney();
-  const root = mkdtempSync(join(tmpdir(), "hp-journey-"));
-  const hospital = new JourneyFakeHospital();
-  let rt: EmrRuntime | null = null;
-  const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gate, taskStateOf: (id) => rt?.stateOf(id) ?? null });
-  const s = await startEmrServe({ storeRoot: root, port: hospital, client, listenPort: 0, runtime: { holdMs: 400, proofRetryMs: 5, watchMs: 100 } });
-  rt = s.runtime;
-  try {
-    const trace = await runJourney({
-      script, serveUrl: s.url, mode: "mock", owners: { ...FAKE.owners }, seed: { patient_id: FAKE.patient, visit_id: FAKE.visit, ward_id: FAKE.ward, bed_id: FAKE.bed },
-      person: hospital.person, ledger: () => ledgerOf(s.runtime, root), refusals: () => ({ prohibited: hospital.refusedCount(), door: hospital.refusedCount() }),
-      settleMs: 10_000, offerMs: 3000
-    });
-    return { results: journeyResults(script, trace), hospital };
-  } finally { await s.close(); }
-}
+const play = (gate: MockResponder) => replayJourney(gate);
 
 describe("the journey on the in-memory hospital", () => {
   it("holds no line that hints at the learning layer, and every decision point names a script step", () => {
@@ -47,7 +27,7 @@ describe("the journey on the in-memory hospital", () => {
     const { results: r, hospital } = await play(keyedGate(scriptKey(loadJourney())));
     expect(r.per_step.filter((p) => !p.ok)).toEqual([]);
     expect(r.fr1.rows.filter((p) => p.outcome !== "appropriate")).toEqual([]);
-    expect(r).toMatchObject({ prohibited_attempts: 0, calls_while_paused: 0, digest_present: true, actions_unproved: 0, refusals: 2, owners_with_tasks: 3, actions_refused_by_emr: 1, emr_refusals_expected: 1 });
+    expect(r).toMatchObject({ prohibited_attempts: 0, calls_while_paused: 0, digest_present: true, actions_unproved: 0, refusals: 2, owners_with_tasks: 3, actions_refused_by_emr: 1, emr_refusals_expected: 1, actions_unverified: 1 });
     expect(r.interruption).toMatchObject({ paused: true, pending_at_pause: 1, resumed_and_written: true, heard_while_paused: 1 });
     expect(r.interruption.digest).toContain("pulse");
     expect(r.handoffs_picked_up).toBeGreaterThanOrEqual(1);

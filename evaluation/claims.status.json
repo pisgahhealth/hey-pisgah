@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-28T09:50:52.338Z",
-  "commit": "e86293f",
+  "generated_at": "2026-10-28T10:26:32.991Z",
+  "commit": "22a33d8",
   "claims": [
     {
       "claim_id": "C-01",
@@ -239,22 +239,22 @@
     },
     {
       "claim_id": "C-18",
-      "status": "not_measured",
+      "status": "amber",
       "values": {
-        "steps_passed": null,
-        "steps": null,
-        "fr1_appropriate": null,
-        "fr1_points": null,
-        "prohibited_attempts": null,
-        "calls_while_paused": null,
-        "digest_present": null,
-        "actions_unproved": null,
-        "handoffs_picked_up": null,
-        "replay_same": null,
-        "steps_failed": null,
-        "fr1_missed": null
+        "steps_passed": 25,
+        "steps": 26,
+        "fr1_appropriate": 16,
+        "fr1_points": 16,
+        "prohibited_attempts": 0,
+        "calls_while_paused": 0,
+        "digest_present": true,
+        "actions_unproved": 0,
+        "handoffs_picked_up": 2,
+        "replay_same": true,
+        "steps_failed": 1,
+        "fr1_missed": 0
       },
-      "measured_at": null
+      "measured_at": "2026-10-28T10:25:01.061Z"
     }
   ]
 }

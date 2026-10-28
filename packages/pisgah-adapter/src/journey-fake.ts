@@ -1,5 +1,10 @@
-import type { EmrCommit, EmrContext, EmrPort, EmrProof, EmrTarget, Provenance, SayableNames, WatchOffer, WatchRead, WorkArgs } from "@hey-pisgah/agent";
-import type { PersonCall } from "./journey.js";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { startEmrServe, type EmrCommit, type EmrContext, type EmrPort, type EmrProof, type EmrRuntime, type EmrTarget, type Provenance, type SayableNames, type WatchOffer, type WatchRead, type WorkArgs } from "@hey-pisgah/agent";
+import { journeyResults, loadJourney, type JourneyResults, type JourneyScript } from "@hey-pisgah/evaluator";
+import { ModelClient, type MockResponder } from "@hey-pisgah/model";
+import { ledgerOf, runJourney, type PersonCall } from "./journey.js";
 
 export const FAKE = {
   patient: "a0000000-0000-4000-8000-000000000001", visit: "a0000000-0000-4000-8000-000000000002", admission: "a0000000-0000-4000-8000-000000000003",
@@ -21,6 +26,8 @@ export class JourneyFakeHospital implements EmrPort {
   agentMayDraft = false;
   state = { requested: false, accepted: false, bed: false, stage: "awaiting_sign_off", payLink: null as string | null, cleared: false, pulse: null as number | null, temp: null as string | null, notes: [] as string[], items: [] as string[] };
   kindsFor(owner: string): readonly string[] { return KINDS[owner] ?? []; }
+  // Like the EMR, nothing reads a sent pay link back.
+  unverifiable(kind: string): string | null { return kind === "send_pay_link" ? "the bill does not show pay links" : null; }
   refusedCount(): number { return this.refused.length; }
   names(): SayableNames { return { page_targets: { lab: ["lab", "laboratory"], pharmacy: ["pharmacy", "pharmacist"], accounts: ["accounts", "billing"] }, clinics: { gopd: ["GOPD", "general outpatients", "outpatients"] } }; }
   offers(owner: string): readonly WatchOffer[] {
@@ -51,7 +58,7 @@ export class JourneyFakeHospital implements EmrPort {
     return { ok: true, record_id: id, record_version: 1, event_ids: [`${kind}:${id}`], replayed: false, ...extra };
   }
   async prove(kind: string, _a: WorkArgs, written: { record_id: string; record_version: number; event_ids: string[] }): Promise<EmrProof | null> {
-    if (kind === "send_pay_link" && !this.state.payLink) return null;
+    if (kind === "send_pay_link") return null;
     return { ...written, record_hash: "0".repeat(64), verified_at: new Date().toISOString(), read: "in-memory hospital" };
   }
   async watch(owner: string, subject: EmrTarget, _p: Provenance): Promise<WatchRead | null> {
@@ -64,7 +71,7 @@ export class JourneyFakeHospital implements EmrPort {
   person: PersonCall = async (op) => {
     const ok = (json: unknown = { ok: true }) => ({ ok: true, status: 200, json });
     switch (op) {
-      case "open_consult": return ok();
+      case "open_consult": case "sign_consult": return ok();
       case "accept": if (!this.state.requested) return { ok: false, status: 409, json: null }; this.state.accepted = true; return ok();
       case "assign_bed": if (!this.state.accepted) return { ok: false, status: 409, json: null }; this.state.bed = true; return ok();
       case "sign_off": this.state.stage = "signed_off"; return ok();
@@ -73,4 +80,22 @@ export class JourneyFakeHospital implements EmrPort {
       default: return { ok: false, status: null, json: null, note: `no fake for ${op}` };
     }
   };
+}
+
+// Plays the journey through serve over a fresh in-memory hospital with the given gate answers, as CI does for a recorded run.
+export async function replayJourney(gate: MockResponder, script: JourneyScript = loadJourney()): Promise<{ results: JourneyResults; hospital: JourneyFakeHospital }> {
+  const root = mkdtempSync(join(tmpdir(), "hp-journey-"));
+  const hospital = new JourneyFakeHospital();
+  let rt: EmrRuntime | null = null;
+  const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gate, taskStateOf: (id) => rt?.stateOf(id) ?? null });
+  const s = await startEmrServe({ storeRoot: root, port: hospital, client, listenPort: 0, runtime: { holdMs: 400, proofRetryMs: 5, watchMs: 100 } });
+  rt = s.runtime;
+  try {
+    const trace = await runJourney({
+      script, serveUrl: s.url, mode: "replay", owners: { ...FAKE.owners }, seed: { patient_id: FAKE.patient, visit_id: FAKE.visit, ward_id: FAKE.ward, bed_id: FAKE.bed },
+      person: hospital.person, ledger: () => ledgerOf(s.runtime, root), refusals: () => ({ prohibited: hospital.refusedCount(), door: hospital.refusedCount() }),
+      settleMs: 10_000, offerMs: 3000
+    });
+    return { results: journeyResults(script, trace), hospital };
+  } finally { await s.close(); }
 }
