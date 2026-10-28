@@ -15,7 +15,7 @@
   "span_words": 8
  },
  "adaptive_runs": {
-  "measured_at": "2026-10-28T12:29:02.255Z",
+  "measured_at": "2026-10-28T12:57:17.291Z",
   "arm": "adaptive",
   "provider": "modal",
   "budget_per_run": {
@@ -23,11 +23,11 @@
    "calls": 60
   },
   "k_of_n": {
-   "n": 5,
+   "n": 7,
    "dev_valid_proposal": 0,
    "honest_negative": 0,
    "insufficient_evidence": 0,
-   "no_outcome": 5
+   "no_outcome": 7
   },
   "runs": [
    {
@@ -56,6 +56,8 @@
     "hypotheses": [],
     "experiments": [],
     "notes": [],
+    "definition_unchanged_answers": 0,
+    "reading_budget_refusals": 0,
     "pair_refusals": 0,
     "say_do_mismatches": 0,
     "proposals": [],
@@ -95,6 +97,8 @@
     "hypotheses": [],
     "experiments": [],
     "notes": [],
+    "definition_unchanged_answers": 0,
+    "reading_budget_refusals": 0,
     "pair_refusals": 0,
     "say_do_mismatches": 0,
     "proposals": [],
@@ -134,6 +138,8 @@
     "hypotheses": [],
     "experiments": [],
     "notes": [],
+    "definition_unchanged_answers": 0,
+    "reading_budget_refusals": 0,
     "pair_refusals": 0,
     "say_do_mismatches": 0,
     "proposals": [],
@@ -173,6 +179,8 @@
     "hypotheses": [],
     "experiments": [],
     "notes": [],
+    "definition_unchanged_answers": 0,
+    "reading_budget_refusals": 0,
     "pair_refusals": 0,
     "say_do_mismatches": 0,
     "proposals": [],
@@ -212,6 +220,8 @@
     "hypotheses": [],
     "experiments": [],
     "notes": [],
+    "definition_unchanged_answers": 0,
+    "reading_budget_refusals": 0,
     "pair_refusals": 0,
     "say_do_mismatches": 0,
     "proposals": [],
@@ -224,6 +234,963 @@
     "prompt_tokens_max": 35377,
     "completion_tokens": 74503,
     "reasoning_tokens": 60382
+   },
+   {
+    "run_id": "run-54ff5a29",
+    "outcome": "no_outcome",
+    "stop": "budget_calls (60 calls)",
+    "note": "control against revision 2 (b317394e616d, L2.1 code at 96effde), not under the current commitment; first hypothesis at turn 42; 3 hypotheses, 2 experiments, both landed if_false; no proposal or declared result",
+    "commitment": {
+     "hash": "b317394e616d25a961601f218fca59e5b97de1548c86bcd6943b213059bd13dd",
+     "revision": 2
+    },
+    "hashes": {
+     "prompt": "c80d2791d4e3a630ac503c5a7b3d6a85537d518ffc35f461b6ade3e4e9cadd6c",
+     "tools": "5b72fa248a7fa7bdb4f5991cf4dc59a3a299458ea0363f5650e72cc34b58cd8c"
+    },
+    "effort": "xhigh",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "check_discovery": "FAIL",
+    "needs": {
+     "hypotheses": true,
+     "experiment": true,
+     "outcome": false,
+     "deny_list": true,
+     "stopped": true
+    },
+    "hypotheses": [
+     {
+      "hypothesis_id": "h-5ef88988",
+      "status": "open",
+      "statement": "Draft discharge summary preparation is artificially delayed after clinical discharge by soft edge e04, adding 20-24 min of post-signoff work and lengthening stay to departure.",
+      "competing": {
+       "none_identified_reason": "Initial hypothesis to define bottleneck; competitor will be recorded next to contrast finance vs document cause"
+      },
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-491dbab0",
+         "c-5e518c31",
+         "c-01c6ad09",
+         "c-9fe91b9e"
+        ]
+       },
+       "tolerance_min": 10
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-491dbab0",
+         "c-5e518c31",
+         "c-01c6ad09",
+         "c-9fe91b9e"
+        ]
+       },
+       "tolerance_min": 10
+      }
+     },
+     {
+      "hypothesis_id": "h-78a36c1b",
+      "status": "open",
+      "statement": "Nurse busy blocks after clearance delay hand_over steps, extending post-signoff to departure even when documents and payment are timely; document ordering creates idle nurse wait.",
+      "competing": {
+       "none_identified_reason": "Complementary bottleneck hypothesis focusing on hand_over sequencing after clearance"
+      },
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-5e518c31",
+         "c-01c6ad09"
+        ]
+       },
+       "tolerance_min": 10
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-5e518c31",
+         "c-01c6ad09"
+        ]
+       },
+       "tolerance_min": 10
+      }
+     },
+     {
+      "hypothesis_id": "h-290da2b0",
+      "status": "open",
+      "statement": "Nurse busy blocks delay discharge summary check (st08) after final preparation, extending post-signoff wait particularly when nurse is diverted to ward duties.",
+      "competing": {
+       "none_identified_reason": "Hypothesis focuses on post-preparation check bottleneck rather than document prep ordering"
+      },
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-491dbab0",
+         "c-15de451b"
+        ]
+       },
+       "tolerance_min": 10
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-491dbab0",
+         "c-15de451b"
+        ]
+       },
+       "tolerance_min": 10
+      }
+     }
+    ],
+    "experiments": [
+     {
+      "experiment_id": "x-985bb215",
+      "ops": [
+       {
+        "edge_id": "e04",
+        "op": "remove_soft_edge"
+       }
+      ],
+      "case_ids": [
+       "c-491dbab0",
+       "c-5e518c31",
+       "c-01c6ad09",
+       "c-9fe91b9e"
+      ],
+      "prediction_check": {
+       "after": {
+        "contradicted": [
+         "h-5ef88988"
+        ],
+        "per_hypothesis": {
+         "h-5ef88988": {
+          "landed": "if_false"
+         }
+        }
+       },
+       "before": {
+        "distinguishes": [],
+        "speaks_to": [
+         "h-5ef88988"
+        ]
+       }
+      },
+      "event_logs_identical_to_control": null,
+      "behaviour_note": null,
+      "median_delta": {
+       "bed_release_delay_min": 0,
+       "duplicates": 0,
+       "planned_checks": 0,
+       "post_signoff_wait_min": 0,
+       "prohibited_attempted": 0,
+       "prohibited_executed": 0,
+       "required_steps_done": 0,
+       "rework_events": 0,
+       "rework_min": 0,
+       "stale_actions": 0,
+       "unnecessary_docs": 0,
+       "unnecessary_min": 0,
+       "unplanned_interventions": 0
+      }
+     },
+     {
+      "experiment_id": "x-b13226c6",
+      "ops": [
+       {
+        "edge_id": "e05",
+        "op": "remove_soft_edge"
+       }
+      ],
+      "case_ids": [
+       "c-5e518c31",
+       "c-01c6ad09",
+       "c-15de451b",
+       "c-491dbab0"
+      ],
+      "prediction_check": {
+       "after": {
+        "contradicted": [
+         "h-5ef88988",
+         "h-78a36c1b"
+        ],
+        "per_hypothesis": {
+         "h-5ef88988": {
+          "landed": "if_false"
+         },
+         "h-78a36c1b": {
+          "landed": "if_false"
+         }
+        }
+       },
+       "before": {
+        "distinguishes": [],
+        "speaks_to": [
+         "h-5ef88988",
+         "h-78a36c1b"
+        ]
+       }
+      },
+      "event_logs_identical_to_control": null,
+      "behaviour_note": null,
+      "median_delta": {
+       "bed_release_delay_min": 0,
+       "duplicates": 0,
+       "planned_checks": 0,
+       "post_signoff_wait_min": 0,
+       "prohibited_attempted": 0,
+       "prohibited_executed": 0,
+       "required_steps_done": 0,
+       "rework_events": 0,
+       "rework_min": 0,
+       "stale_actions": 0,
+       "unnecessary_docs": 0,
+       "unnecessary_min": 0,
+       "unplanned_interventions": 0
+      }
+     }
+    ],
+    "notes": [],
+    "definition_unchanged_answers": 0,
+    "reading_budget_refusals": 0,
+    "pair_refusals": 0,
+    "say_do_mismatches": 0,
+    "proposals": [],
+    "validations": [],
+    "declared_result": null,
+    "calls": 60,
+    "cost_usd": 2.6704,
+    "prompt_tokens": 1848048,
+    "prompt_tokens_per_call": 30801,
+    "prompt_tokens_max": 43824,
+    "completion_tokens": 84785,
+    "reasoning_tokens": 72779
+   },
+   {
+    "run_id": "run-561dc2dd",
+    "outcome": "no_outcome",
+    "stop": "budget_calls (60 calls)",
+    "note": "revision 7; first hypothesis at turn 15; 21 hypotheses from 35 attempts, never called run_experiment; 10 unchanged-definition answers, 3 reading-budget refusals",
+    "commitment": {
+     "hash": "45421eeb06d7decc267ada6eae1421d66553fb492e13f726cd3ef9f80f6192c8",
+     "revision": 7
+    },
+    "hashes": {
+     "prompt": "2e6638db3a4e5e5cc8a9088d074e4aae669e0469671edf9740ddcdfcad62d2e0",
+     "tools": "4b8ea95e299ff5b5e41278d940df9d495e89883250c38f03f74fbf9b8add2f80"
+    },
+    "effort": "xhigh",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "check_discovery": "FAIL",
+    "needs": {
+     "hypotheses": true,
+     "experiment": false,
+     "outcome": false,
+     "deny_list": true,
+     "stopped": true
+    },
+    "hypotheses": [
+     {
+      "hypothesis_id": "h-105c6c6e",
+      "status": "open",
+      "statement": "Post-signoff document chain st06-st07-st08 gates st14 and thus st16, causing long post_signoff_wait_min that dominates st05→st16.",
+      "competing": {
+       "none_identified_reason": "first hypothesis, will add competitor next"
+      },
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-491dbab0",
+         "c-8c9cd194",
+         "c-ed324a69"
+        ]
+       },
+       "tolerance_min": 15
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-491dbab0",
+         "c-8c9cd194",
+         "c-ed324a69"
+        ]
+       },
+       "tolerance_min": 15
+      }
+     },
+     {
+      "hypothesis_id": "h-096385fb",
+      "status": "open",
+      "statement": "Nurse busy blocks and financial clearance timing, not document preparation gating, drive departure delay; decoupling discharge summary from st05 will not change post_signoff_wait_min.",
+      "competing": [
+       "h-105c6c6e"
+      ],
+      "if_true": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-491dbab0",
+         "c-8c9cd194",
+         "c-ed324a69"
+        ]
+       },
+       "tolerance_min": 15
+      },
+      "if_false": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-491dbab0",
+         "c-8c9cd194",
+         "c-ed324a69"
+        ]
+       },
+       "tolerance_min": 15
+      }
+     },
+     {
+      "hypothesis_id": "h-cc018898",
+      "status": "open",
+      "statement": "Preparing the discharge_summary draft (st06) before clinical discharge (st05) reduces post-signoff wait because only the final (st07) and check (st08) remain after signoff.",
+      "competing": {
+       "none_identified_reason": "Initial hypothesis; competing will be recorded next to form distinguishable pair."
+      },
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-15de451b",
+         "c-5e518c31",
+         "c-491dbab0",
+         "c-ed324a69"
+        ]
+       },
+       "tolerance_min": 5
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-15de451b",
+         "c-5e518c31",
+         "c-491dbab0",
+         "c-ed324a69"
+        ]
+       },
+       "tolerance_min": 5
+      }
+     },
+     {
+      "hypothesis_id": "h-0ff28fb5",
+      "status": "open",
+      "statement": "The handoff between st15 (hand_over_take_home) and st14 (hand_over_document) creates idle post-clearance waiting because st14 is forced to wait for pharmacy even after financial clearance.",
+      "competing": [
+       "h-cc018898"
+      ],
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-5e518c31",
+         "c-11060afa"
+        ]
+       },
+       "tolerance_min": 5
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-5e518c31",
+         "c-11060afa"
+        ]
+       },
+       "tolerance_min": 5
+      }
+     },
+     {
+      "hypothesis_id": "h-c6bb3b63",
+      "status": "open",
+      "statement": "Post-signoff waiting is dominated by fixed nurse busy blocks, not by document-handover serialization, so decoupling st15 from st14 will not shorten post_signoff_wait.",
+      "competing": [
+       "h-0ff28fb5"
+      ],
+      "if_true": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-5e518c31",
+         "c-11060afa"
+        ]
+       },
+       "tolerance_min": 5
+      },
+      "if_false": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-5e518c31",
+         "c-11060afa"
+        ]
+       },
+       "tolerance_min": 5
+      }
+     },
+     {
+      "hypothesis_id": "h-0cf2cffc",
+      "status": "open",
+      "statement": "Removing the soft edge e05 (st15>st14) lets nurses hand over the discharge summary and take-home medicines in parallel, reducing post-signoff wait until departure.",
+      "competing": [
+       "h-c6bb3b63"
+      ],
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-5e518c31",
+         "c-11060afa",
+         "c-01c6ad09",
+         "c-15de451b"
+        ]
+       },
+       "tolerance_min": 5
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-5e518c31",
+         "c-11060afa",
+         "c-01c6ad09",
+         "c-15de451b"
+        ]
+       },
+       "tolerance_min": 5
+      }
+     },
+     {
+      "hypothesis_id": "h-2e38e653",
+      "status": "open",
+      "statement": "Adding soft edge st05->st08 (gate complete) and relaxing st08 start from st07 lets check start early but complete after final draft, cutting post-signoff wait without extra rework.",
+      "competing": [
+       "h-0cf2cffc"
+      ],
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-11060afa",
+         "c-2758a627"
+        ]
+       },
+       "tolerance_min": 5
+      },
+      "if_false": {
+       "comparison": "intervention_gt_control",
+       "metric": "rework_events",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-11060afa",
+         "c-2758a627"
+        ]
+       },
+       "tolerance_min": 1
+      }
+     },
+     {
+      "hypothesis_id": "h-7cd3dbc1",
+      "status": "open",
+      "statement": "Moving st07 trigger from st05 to st06 complete still forces check to wait on final draft, offering no wait gain versus soft-edge re-gating.",
+      "competing": [
+       "h-2e38e653"
+      ],
+      "if_true": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-11060afa",
+         "c-2758a627"
+        ]
+       },
+       "tolerance_min": 5
+      },
+      "if_false": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-11060afa",
+         "c-2758a627"
+        ]
+       },
+       "tolerance_min": 5
+      }
+     },
+     {
+      "hypothesis_id": "h-396b770a",
+      "status": "open",
+      "statement": "Keeping st07 trigger on st05 causes stale-document risk after signoff; moving trigger to after st06 completion reduces stale/rework without harming release speed.",
+      "competing": [
+       "h-7cd3dbc1"
+      ],
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "rework_events",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-11060afa",
+         "c-2758a627"
+        ]
+       },
+       "tolerance_min": 0
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "rework_events",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-11060afa",
+         "c-2758a627"
+        ]
+       },
+       "tolerance_min": 0
+      }
+     },
+     {
+      "hypothesis_id": "h-e2e3c875",
+      "status": "open",
+      "statement": "Discharge summary preparation (st06 draft and st07 final) is triggered after clinical discharge (st05), forcing post-signoff prep and causing held/rework delays that extend post-signoff wait.",
+      "competing": {
+       "none_identified_reason": "Second competing hypothesis will be recorded next; this placeholder allows initial read window."
+      },
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-2758a627",
+         "c-15de451b"
+        ]
+       },
+       "tolerance_min": 5
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-2758a627",
+         "c-15de451b"
+        ]
+       },
+       "tolerance_min": 5
+      }
+     },
+     {
+      "hypothesis_id": "h-a174cba2",
+      "status": "open",
+      "statement": "Post-signoff wait is dominated by take-home medicine handover gating discharge-summary handover (edge st15->st14), not by discharge summary preparation timing, so moving summary trigger earlier will not change post-signoff wait.",
+      "competing": [
+       "h-e2e3c875"
+      ],
+      "if_true": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-2758a627",
+         "c-15de451b"
+        ]
+       },
+       "tolerance_min": 5
+      },
+      "if_false": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-2758a627",
+         "c-15de451b"
+        ]
+       },
+       "tolerance_min": 5
+      }
+     },
+     {
+      "hypothesis_id": "h-f12e1074",
+      "status": "open",
+      "statement": "Early discharge summary preparation (trigger on st01) reduces post-signoff bed release delay by overlapping documentation with pre-signoff work",
+      "competing": {
+       "none_identified_reason": "First hypothesis in pair, competing will reference it next"
+      },
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "bed_release_delay_min",
+       "scope": {
+        "cases": [
+         "c-15de451b",
+         "c-01c6ad09",
+         "c-5e518c31"
+        ]
+       },
+       "tolerance_min": 10
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "bed_release_delay_min",
+       "scope": {
+        "cases": [
+         "c-15de451b",
+         "c-01c6ad09",
+         "c-5e518c31"
+        ]
+       },
+       "tolerance_min": 10
+      }
+     },
+     {
+      "hypothesis_id": "h-0de3833d",
+      "status": "open",
+      "statement": "Post-signoff bed release delay is driven by financial clearance queue, not document prep sequence, so early doc preparation will not reduce bed_release_delay_min",
+      "competing": [
+       "h-f12e1074"
+      ],
+      "if_true": {
+       "comparison": "no_difference",
+       "metric": "bed_release_delay_min",
+       "scope": {
+        "cases": [
+         "c-15de451b",
+         "c-01c6ad09",
+         "c-5e518c31"
+        ]
+       },
+       "tolerance_min": 10
+      },
+      "if_false": {
+       "comparison": "intervention_lt_control",
+       "metric": "bed_release_delay_min",
+       "scope": {
+        "cases": [
+         "c-15de451b",
+         "c-01c6ad09",
+         "c-5e518c31"
+        ]
+       },
+       "tolerance_min": 10
+      }
+     },
+     {
+      "hypothesis_id": "h-8ffb032d",
+      "status": "open",
+      "statement": "Pipelining discharge summary from expected discharge reduces post-signoff wait without increasing rework.",
+      "competing": {
+       "none_identified_reason": "first hypothesis; will add competitor next"
+      },
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-11060afa",
+         "c-15de451b"
+        ]
+       },
+       "tolerance_min": 10
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-11060afa",
+         "c-15de451b"
+        ]
+       },
+       "tolerance_min": 10
+      }
+     },
+     {
+      "hypothesis_id": "h-a9d6925f",
+      "status": "open",
+      "statement": "Removing soft edge e05 (st15>st14) allows document handover in parallel with meds and reduces departure delay.",
+      "competing": [
+       "h-8ffb032d"
+      ],
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "bed_release_delay_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-2758a627",
+         "c-5e518c31"
+        ]
+       },
+       "tolerance_min": 10
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "bed_release_delay_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-2758a627",
+         "c-5e518c31"
+        ]
+       },
+       "tolerance_min": 10
+      }
+     },
+     {
+      "hypothesis_id": "h-ff426762",
+      "status": "open",
+      "statement": "In self_pay cases where st14 (hand_over_document) depends on st15 (hand_over_take_home) via e05 soft start, post-signoff discharge is prolonged because nurse handover work is serialized and blocked by pharmacy dispense and nurse busy periods.",
+      "competing": {
+       "none_identified_reason": "First hypothesis establishing serialization mechanism; will add competing next turn."
+      },
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-11060afa",
+         "c-5e518c31",
+         "c-491dbab0"
+        ]
+       },
+       "tolerance_min": 5
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-11060afa",
+         "c-5e518c31",
+         "c-491dbab0"
+        ]
+       },
+       "tolerance_min": 5
+      }
+     },
+     {
+      "hypothesis_id": "h-bd4dd527",
+      "status": "open",
+      "statement": "Edge e05 (st15>st14 start soft) serializes handovers and adds post-signoff wait; removing it will reduce post-signoff wait.",
+      "competing": {
+       "none_identified_reason": "First of pair; second will compete"
+      },
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-2758a627",
+         "c-11060afa"
+        ]
+       },
+       "tolerance_min": 5
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-2758a627",
+         "c-11060afa"
+        ]
+       },
+       "tolerance_min": 5
+      }
+     },
+     {
+      "hypothesis_id": "h-3efa8bb3",
+      "status": "open",
+      "statement": "Trigger st14 after st15 slows departure independent of document rework.",
+      "competing": [
+       "h-bd4dd527"
+      ],
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-2758a627",
+         "c-11060afa"
+        ]
+       },
+       "tolerance_min": 5
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-2758a627",
+         "c-11060afa"
+        ]
+       },
+       "tolerance_min": 5
+      }
+     },
+     {
+      "hypothesis_id": "h-dc52b1b9",
+      "status": "open",
+      "statement": "Preparing discharge_summary draft (st06) and final (st07) before clinical_discharge (st05) causes document.stale when signoff_record is versioned, forcing revise and extra check time.",
+      "competing": {
+       "none_identified_reason": "Initial hypothesis; second competing mechanism about pharmacy/take-home blocking will be recorded next to form pair."
+      },
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "rework_events",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-11060afa",
+         "c-15de451b"
+        ]
+       },
+       "tolerance_min": 0
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "rework_events",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-11060afa",
+         "c-15de451b"
+        ]
+       },
+       "tolerance_min": 0
+      }
+     },
+     {
+      "hypothesis_id": "h-7e435094",
+      "status": "open",
+      "statement": "Post-clinical delay driven by pharmacist backlog and st15->st14 hand-over sequencing, not document staleness; decoupling hand-overs or easing pharmacy queue reduces bed release delay.",
+      "competing": {
+       "none_identified_reason": "No second hypothesis recorded yet; will add competing document-staleness mechanism next."
+      },
+      "if_true": {
+       "comparison": "intervention_gt_control",
+       "metric": "bed_release_delay_min",
+       "scope": {
+        "cases": [
+         "c-15de451b",
+         "c-5e518c31"
+        ]
+       },
+       "tolerance_min": 5
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "bed_release_delay_min",
+       "scope": {
+        "cases": [
+         "c-15de451b",
+         "c-5e518c31"
+        ]
+       },
+       "tolerance_min": 5
+      }
+     },
+     {
+      "hypothesis_id": "h-6a932f86",
+      "status": "open",
+      "statement": "Post-clinical discharge delay is caused by hand_over_document (st14) being soft-gated behind hand_over_take_home (st15) via edge e05.",
+      "competing": {
+       "none_identified_reason": "Second hypothesis about document stale rework will be recorded next as competitor"
+      },
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-15de451b",
+         "c-5e518c31"
+        ]
+       },
+       "tolerance_min": 10
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-15de451b",
+         "c-5e518c31"
+        ]
+       },
+       "tolerance_min": 10
+      }
+     }
+    ],
+    "experiments": [],
+    "notes": [
+     "Need extra reading window to gather second case stale evidence (no hypothesis yet: Need to inspect multiple cases to identify competing mechanisms for post-clinical delay)",
+     "Attempt to get full workflow definition to see sections and stale dependencies"
+    ],
+    "definition_unchanged_answers": 10,
+    "reading_budget_refusals": 3,
+    "pair_refusals": 0,
+    "say_do_mismatches": 0,
+    "proposals": [],
+    "validations": [],
+    "declared_result": null,
+    "calls": 60,
+    "cost_usd": 2.2136,
+    "prompt_tokens": 1432367,
+    "prompt_tokens_per_call": 23873,
+    "prompt_tokens_max": 30172,
+    "completion_tokens": 99551,
+    "reasoning_tokens": 83616
    }
   ]
  }
