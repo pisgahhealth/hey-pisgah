@@ -1,16 +1,19 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { startEmrServe, type EmrRuntime } from "@hey-pisgah/agent";
 import { isTalk, journeyResults, loadJourney, type JAction, type JourneyResults, type JourneyScript, type JourneyTrace } from "@hey-pisgah/evaluator";
 import { ModelClient } from "@hey-pisgah/model";
 import { keyedGate, ledgerOf, recordedGate, runJourney, scriptKey, type PersonCall } from "./journey.js";
 import { fillTemplate, loadProfile, type DoorProfile } from "./profile.js";
+import { adoptedForEmr, type AdoptedForEmr } from "./versions.js";
 import { PisgahPort, type DoorLog } from "./port.js";
 import { SandboxBlock, mintAgentBearer, mintPersonBearer, sandboxQuery } from "./sandbox.js";
 
 type Seed = { patient: { patientId: string; aandeVisitId: string }; ward: { wardId: string; bedId: string }; owners: Record<"doctor" | "nurse" | "accounts", { facilityUserId: string; agentFacilityUserId: string; login: string }> };
-export type SandboxJourney = { results: JourneyResults; trace: JourneyTrace; requests: DoorLog[]; records: Record<string, unknown>; recorded: Record<string, Record<string, unknown>[]>; serveLog: string[]; scrub: string[] };
+// What the adopted version meant on this journey: the version, each owner's reading of it, offers made, and offers the monitor blocked.
+export type JourneyVersion = { version: number; definition_hash: string; parent_version: number | null; requirement_version: string; ward_id: string; facts_source: string; lines: string[]; readings: unknown[]; offers_made: number; offers_blocked: number; by_owner: Record<string, { offers: string[]; lines: string[]; made: number; blocked: number }> };
+export type SandboxJourney = { results: JourneyResults; trace: JourneyTrace; requests: DoorLog[]; records: Record<string, unknown>; recorded: Record<string, Record<string, unknown>[]>; serveLog: string[]; scrub: string[]; version: JourneyVersion | null };
 // Kinds whose writes the record's audit trail carries, so each must show its provenance row.
 export const AUDITED_KINDS = new Set(["record_observation", "add_care_plan_item", "record_note", "request_admission", "schedule_follow_up", "page_staff"]);
 
@@ -37,7 +40,7 @@ function personCaller(profile: DoorProfile, sb: SandboxBlock, bearers: Map<strin
 }
 
 // Runs the journey on the loopback sandbox: one agent bearer per owner, the person steps by the people's own bearers, then read-only record checks.
-export async function runSandboxJourney(o: { mode: "live" | "mock"; port: number; recordingsDir?: string; storeRoot: string; holdMs?: number; watchMs?: number; log?: (s: string) => void }): Promise<SandboxJourney> {
+export async function runSandboxJourney(o: { mode: "live" | "mock"; port: number; recordingsDir?: string; storeRoot: string; holdMs?: number; watchMs?: number; log?: (s: string) => void; versionLog?: string }): Promise<SandboxJourney> {
   const profile = loadProfile();
   const sb = SandboxBlock.parse(profile.sandbox);
   if (!sb.journey_file) throw new Error("the profile's sandbox block names no journey file");
@@ -56,12 +59,18 @@ export async function runSandboxJourney(o: { mode: "live" | "mock"; port: number
     episodeFor: async (admission) => String(sandboxQuery(sb, "episode_for_admission", { admission })[0]?.["id"] ?? "") || null
   });
   mkdirSync(o.storeRoot, { recursive: true });
+  let adopted: AdoptedForEmr | null = null;
+  if (o.versionLog) {
+    if (!profile.versions) throw new Error("a version log was given but the profile has no versions block");
+    adopted = adoptedForEmr(o.storeRoot, o.versionLog, () => loadProfile().versions!);
+    log(`version ${adopted.def.version} (${adopted.def.definition_hash.slice(0, 8)}) in force, parent ${adopted.parent?.version ?? "none"}`);
+  }
   let rt: EmrRuntime | null = null;
   const client = o.mode === "live"
     ? new ModelClient({ storeRoot: o.storeRoot, mode: "live", ...(o.recordingsDir ? { recordingsDir: o.recordingsDir } : {}), taskStateOf: (id) => rt?.stateOf(id) ?? null })
     : new ModelClient({ storeRoot: o.storeRoot, mode: "mock", mock: keyedGate(scriptKey(script)), taskStateOf: (id) => rt?.stateOf(id) ?? null });
   const serveLog: string[] = [];
-  const s = await startEmrServe({ storeRoot: o.storeRoot, port, client, listenPort: o.port, runtime: { holdMs: o.holdMs ?? 4000, proofRetryMs: 1500, watchMs: o.watchMs ?? 3000 }, log: (l) => serveLog.push(l) });
+  const s = await startEmrServe({ storeRoot: o.storeRoot, port, client, listenPort: o.port, runtime: { holdMs: o.holdMs ?? 4000, proofRetryMs: 1500, watchMs: o.watchMs ?? 3000, ...(adopted ? { versions: adopted.wiring } : {}) }, log: (l) => serveLog.push(l) });
   rt = s.runtime;
   const personBearers = new Map<string, string>();
   const startedAt = new Date(Date.now() - 2000).toISOString();
@@ -74,10 +83,33 @@ export async function runSandboxJourney(o: { mode: "live" | "mock"; port: number
     });
     const records = checkRecords(sb, script, trace, seed, startedAt);
     trace.records = records.by_step;
-    return { results: journeyResults(script, trace), trace, requests, records: records.rows, recorded: recordedGate(s.runtime, o.storeRoot, script), serveLog, scrub: sb.scrub };
+    return { results: journeyResults(script, trace), trace, requests, records: records.rows, recorded: recordedGate(s.runtime, o.storeRoot, script), serveLog, scrub: sb.scrub, version: adopted ? journeyVersion(adopted, profile, trace, o.storeRoot) : null };
   } finally {
     await s.close();
   }
+}
+
+// The adopted version's part in the journey, read from the task streams; owners are named by their journey role.
+function journeyVersion(a: AdoptedForEmr, profile: DoorProfile, t: JourneyTrace, storeRoot: string): JourneyVersion {
+  const v = profile.versions!;
+  const roleOf = Object.fromEntries(Object.entries(t.owner_of).map(([role, id]) => [id, role]));
+  const by: JourneyVersion["by_owner"] = {};
+  let made = 0, blocked = 0;
+  const lines = new Set<string>();
+  const dir = join(storeRoot, "emr");
+  for (const f of existsSync(dir) ? readdirSync(dir).filter((x) => x.endsWith(".jsonl")) : []) {
+    const rows = readFileSync(join(dir, f), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as { record_type: string; payload: Record<string, unknown> });
+    const owner = String(rows.find((r) => r.record_type === "emr.task.opened")?.payload["owner"] ?? "");
+    const rules = rows.find((r) => r.record_type === "version.rules");
+    if (!rules) continue;
+    const role = roleOf[owner] ?? "owner";
+    const mine = { offers: (rules.payload["offers"] as string[]) ?? [], lines: (rules.payload["lines"] as string[]) ?? [], made: rows.filter((r) => r.record_type === "offer.made" && r.payload["version"] !== undefined).length, blocked: rows.filter((r) => r.record_type === "version.check_failed").length };
+    const prev = by[role];
+    by[role] = prev ? { offers: [...new Set([...prev.offers, ...mine.offers])], lines: [...new Set([...prev.lines, ...mine.lines])], made: prev.made + mine.made, blocked: prev.blocked + mine.blocked } : mine;
+    made += mine.made; blocked += mine.blocked;
+    for (const l of mine.lines) lines.add(l);
+  }
+  return { version: a.def.version, definition_hash: a.def.definition_hash, parent_version: a.parent?.version ?? null, requirement_version: v.requirement_version, ward_id: v.ward_id, facts_source: v.facts_source, lines: [...lines], readings: a.wiring.rulesFor("", [])?.readings ?? [], offers_made: made, offers_blocked: blocked, by_owner: by };
 }
 
 // Read-only checks that each agent write is in the record under the owner's agent, with provenance naming the owner.
@@ -125,8 +157,10 @@ export const publicText = (v: unknown, scrub: readonly string[] = []): unknown =
 };
 
 // Writes the private trace with every id, and the public results with none.
-export function writeJourneyFiles(r: SandboxJourney, privateDir: string, resultsFile: string | null, recordedFile: string | null, scrub: readonly string[] = []): void {
+export function writeJourneyFiles(r: SandboxJourney, privateDir: string, resultsFile: string | null, recordedFile: string | null, scrub: readonly string[] = [], versionFile: string | null = null): void {
   mkdirSync(privateDir, { recursive: true });
+  if (r.version) writeFileSync(join(privateDir, "version.json"), `${JSON.stringify(r.version, null, 1)}\n`);
+  if (versionFile && r.version) writeFileSync(versionFile, `${JSON.stringify(publicText({ measured_at: r.results.measured_at, mode: r.results.mode, journey_id: r.results.journey_id, ...r.version }, scrub), null, 1)}\n`);
   writeFileSync(join(privateDir, "trace.json"), `${JSON.stringify({ trace: r.trace, requests: r.requests, records: r.records, serveLog: r.serveLog }, null, 1)}\n`);
   writeFileSync(join(privateDir, "results.json"), `${JSON.stringify(r.results, null, 1)}\n`);
   if (resultsFile) writeFileSync(resultsFile, `${JSON.stringify(publicText(r.results, scrub), null, 1)}\n`);

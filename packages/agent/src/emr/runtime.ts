@@ -10,6 +10,7 @@ import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort
 import { READ_ONLY_KINDS, WORK_ARGS, cadenceSaid, dateSaid, summariseWork, wordSaid, type WorkKind } from "./work.js";
 import { measuresIn, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareReadings, disagreementQuestion, normValue, quotedQuestion, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
+import type { VersionWiring } from "./version-offers.js";
 
 export type EmrActionState = "proposed" | "sent" | "acknowledged" | "completed" | "refused" | "cancelled" | "failed";
 export type EmrAction = {
@@ -37,6 +38,8 @@ export type EarsRecord = { action_id: string; line_id: string; session_id: strin
 // One change the agent saw in what it watches, and the page it found in its own inbox.
 export type WatchChange = { fact: string; label: string; from: string | null; to: string | null; at: string };
 export type EmrPause = { line_id: string | null; reason: string; at: string; pending: string[]; facts: Record<string, string | null> };
+// The adopted version as this task reads it: the offers it may make, what it says instead, and offers the monitor blocked.
+export type EmrVersionView = { version: number; definition_hash: string; offers: string[]; lines: string[]; blocked: { offer: string; requirement_version: string; conflict: string }[] };
 export type EmrTask = {
   task_id: string; owner: string; admission_id: string; patient_id: string | null; visit_id: string | null; run_id: string; goal: string;
   state: TaskState; reason: string | null; actions: Map<string, EmrAction>; order: string[];
@@ -45,6 +48,7 @@ export type EmrTask = {
   watch: Record<string, string | null> | null; changes: WatchChange[]; offered: string[]; pages: InboxPage[];
   pause: EmrPause | null; digests: { line_id: string | null; text: string; at: string }[];
   ears: EarsRecord[];
+  version: EmrVersionView | null;
 };
 // The strip's view of one task.
 export type EmrTaskView = {
@@ -69,6 +73,7 @@ export type EmrTaskView = {
   watching: Record<string, string | null> | null; changes: WatchChange[]; pages: InboxPage[];
   pause: EmrPause | null; digests: { line_id: string | null; text: string; at: string }[];
   calls: number; usd: number;
+  version: EmrVersionView | null;
   updated_at: string;
 };
 
@@ -88,6 +93,8 @@ export type EmrRuntimeOptions = {
   keepHeard?: boolean;
   // How long after a question a short spoken answer may settle it by rule.
   answerWindowMs?: number;
+  // The adopted version's watch and offer rules with the monitor; without it no version offer is made.
+  versions?: VersionWiring;
   wallNow?: () => Date;
   log?: (line: string) => void;
 };
@@ -106,7 +113,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       visit_id: (x["visit_id"] as string | null | undefined) ?? null,
       run_id: String(x["run_id"]), goal: "", state: "running", reason: null, actions: new Map(), order: [], lines: [], questions: [], notes: [], refusals: [],
       calls: 0, usd: 0, fallbacks: 0, created_at: e.wall_at, updated_at: e.wall_at,
-      watch: null, changes: [], offered: [], pages: [], pause: null, digests: [], ears: []
+      watch: null, changes: [], offered: [], pages: [], pause: null, digests: [], ears: [], version: null
     };
   }
   if (!t) return null;
@@ -180,6 +187,12 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       break;
     }
     case "offer.made": t.offered.push(String(x["offer"])); break;
+    case "version.rules": t.version = { version: Number(x["version"]), definition_hash: String(x["definition_hash"]), offers: (x["offers"] as string[]) ?? [], lines: (x["lines"] as string[]) ?? [], blocked: [] }; break;
+    case "version.check_failed": {
+      t.offered.push(String(x["offer"]));
+      t.version?.blocked.push({ offer: String(x["offer"]), requirement_version: String(x["requirement_version"]), conflict: String(x["conflict"]) });
+      break;
+    }
     case "page.received": t.pages.push(x["page"] as InboxPage); break;
     default: break;
   }
@@ -209,7 +222,7 @@ export function viewOf(t: EmrTask): EmrTaskView {
     notes: t.notes,
     asked: t.questions.map((q) => ({ question_id: q.question_id, text: q.text, line_id: q.line_id, answered_by: q.answered_by, at: q.at })),
     refusals: t.refusals, watching: t.watch, changes: t.changes, pages: t.pages, pause: t.pause, digests: t.digests,
-    calls: t.calls, usd: Math.round(t.usd * 1e6) / 1e6, updated_at: t.updated_at
+    calls: t.calls, usd: Math.round(t.usd * 1e6) / 1e6, version: t.version, updated_at: t.updated_at
   };
 }
 
@@ -956,6 +969,7 @@ export class EmrRuntime {
           this.ask(l, t.lines.at(-1)?.id ?? "watch", o.ask);
           this.settle(l, "offered");
         }
+        this.versionOffers(l, read.facts, kinds);
       }
       if (port.inbox) {
         for (const owner of new Set([...this.live.values()].filter((l) => !CLOSED_TASK.has(l.task.state)).map((l) => l.task.owner))) {
@@ -973,6 +987,33 @@ export class EmrRuntime {
       }
     } finally {
       this.polling = false;
+    }
+  }
+
+  // The adopted version's offers at their trigger points; the monitor re-checks the requirement data before each one, and a failed check blocks it and raises the conflict.
+  private versionOffers(l: Live, facts: Record<string, string | null>, kinds: readonly string[]): void {
+    const v = this.o.versions;
+    if (!v) return;
+    const t = l.task;
+    const rules = v.rulesFor(t.owner, kinds);
+    if (!rules) return;
+    if (!t.version || t.version.version !== rules.version) {
+      this.append(l, "version.rules", { version: rules.version, definition_hash: rules.definition_hash, parent_version: rules.parent_version, offers: rules.offers.map((o) => o.key), lines: rules.lines, readings: rules.readings });
+      for (const line of rules.lines) this.note(l, line);
+    }
+    for (const o of rules.offers) {
+      if (t.offered.includes(o.key) || !o.when.every((w) => facts[w.fact] === w.equals)) continue;
+      if (t.order.some((id) => t.actions.get(id)!.kind === o.kind && t.actions.get(id)!.state !== "cancelled")) continue;
+      const c = v.check(o);
+      if (!c.ok) {
+        this.append(l, "version.check_failed", { offer: o.key, version: o.version, step_id: o.step_id, document_id: o.document_id, stage: o.stage, requirement_version: c.requirement_version, failures: c.failures, conflict: c.conflict });
+        this.append(l, "version.revision_proposed", { version: o.version, requirement_version: c.requirement_version, ops: c.revision_ops, approval: "a person" });
+        this.note(l, c.conflict);
+        continue;
+      }
+      this.append(l, "offer.made", { offer: o.key, version: o.version, step_id: o.step_id, requirement_version: c.requirement_version });
+      this.ask(l, t.lines.at(-1)?.id ?? "watch", o.ask);
+      this.settle(l, "offered");
     }
   }
 
