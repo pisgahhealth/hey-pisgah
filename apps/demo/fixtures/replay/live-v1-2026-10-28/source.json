@@ -1,0 +1,7 @@
+{
+  "name": "live-v1-2026-10-28",
+  "recorded_run": "run-55d8de79",
+  "mode": "replay",
+  "task_id": "t-f53d4a1a",
+  "made_by": "HEY_PISGAH_MODE=replay npm run serve -- --once --recorded live-v1-2026-10-28 --store <scratch>, then this script"
+}
