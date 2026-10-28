@@ -109,3 +109,8 @@ The probe prints "no key" for both and carries on.
 $1.25 input, $0.15 cached input, $4.25 output per million tokens, the same on hosted Standard and every Spark Open route.
 Source: https://dev.meta.ai/docs/pricing-rate-limits.md, checked 28 Oct 2026.
 Effort strengths (low 8, medium 32, high 256, xhigh 512) come from Meta's Spark Open prompting guide.
+
+## Observed in the first live agent run (28 Oct)
+
+- Spark Open on Modal returned 2 or 3 tool calls in 10 of 38 turns although `parallel_tool_calls: false` was sent and accepted. The runtime runs them in call order; a serial write path cannot rely on the flag alone.
+- The model's turn text once claimed an action had succeeded when it had not. Completion rests on proofs from re-read records, never on turn text.
