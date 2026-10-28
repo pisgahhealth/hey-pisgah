@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { ModelClient, type ChatCompletion, type MockResponder } from "@hey-pisgah/model";
 import { readStream } from "@hey-pisgah/store";
 import type { LedgerRow } from "@hey-pisgah/contracts";
+import type { GateClause } from "../src/emr/gate.js";
 import { OBSERVATION_KIND, type EmrCommit, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type ObservationArgs, type Provenance } from "../src/emr/port.js";
 
 export const ADM = "11111111-2222-4333-8444-555555555555";
@@ -70,3 +71,21 @@ export const until = async (f: () => boolean, ms = 5000) => {
   const end = Date.now() + ms;
   while (!f()) { if (Date.now() > end) throw new Error("condition not reached"); await new Promise((r) => setTimeout(r, 5)); }
 };
+
+export type C = Partial<GateClause> & { class: GateClause["class"] };
+const clause = (c: C): GateClause => ({ words: "words", ...c }) as GateClause;
+// A mock model that answers each gate call from a script keyed by the clinician's words.
+export function gater(script: (said: string, user: string) => C[], seen: string[] = []): MockResponder {
+  return ({ body, hash }) => {
+    const msgs = body["messages"] as { role: string; content: string }[];
+    const user = String(msgs.find((m) => m.role === "user")?.content ?? "");
+    const said = JSON.parse(/clinician_said: (".*")$/m.exec(user)?.[1] ?? '""') as string;
+    seen.push(said);
+    const c: ChatCompletion = {
+      id: `mock-${hash.slice(0, 12)}`, object: "chat.completion", created: 0, model: String(body["model"]),
+      choices: [{ index: 0, finish_reason: "tool_calls", logprobs: null, message: { role: "assistant", content: null, refusal: null, tool_calls: [{ id: "call_1", type: "function", function: { name: "gate", arguments: JSON.stringify({ clauses: script(said, user).map((c) => clause({ words: said, ...c })) }) } }] } }],
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }
+    };
+    return c;
+  };
+}

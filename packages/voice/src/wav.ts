@@ -84,3 +84,20 @@ export function parseWav(bytes: Uint8Array): WavInfo | WavProblem {
   }
   return { ok: false, reason: "no data chunk" };
 }
+
+// Decodes a mono 16-bit PCM WAV into samples in -1 to 1, for silence checks and chunking.
+export function decodeWav(bytes: Uint8Array): { samples: Float32Array; sampleRate: number } {
+  const info = parseWav(bytes);
+  if (!info.ok) throw new RangeError(info.reason);
+  const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let at = 12;
+  while (at + 8 <= bytes.length) {
+    const size = v.getUint32(at + 4, true);
+    if (String.fromCharCode(bytes[at]!, bytes[at + 1]!, bytes[at + 2]!, bytes[at + 3]!) === "data") break;
+    at += 8 + size + (size % 2);
+  }
+  const n = Math.floor(info.dataBytes / 2);
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[i] = v.getInt16(at + 8 + i * 2, true) / 0x8000;
+  return { samples: out, sampleRate: info.sampleRate };
+}

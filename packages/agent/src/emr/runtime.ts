@@ -4,6 +4,8 @@ import { listStreams, openStream, type Stream } from "@hey-pisgah/store";
 import type { Envelope } from "@hey-pisgah/contracts";
 import { shortHash } from "../ids.js";
 import { DEFAULT_INTENT_ROUTE, FALLBACK_INTENT_ROUTE, decideIntent, tempText, type Decide, type IntentRoute } from "./intent.js";
+import { primaryClass } from "./classes.js";
+import { GATE_SETTINGS, gateUtterance, type GateAction, type GateClause, type GateSettings, type SpeechClass } from "./gate.js";
 import { OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type Provenance } from "./port.js";
 
 export type EmrActionState = "proposed" | "sent" | "acknowledged" | "completed" | "refused" | "cancelled" | "failed";
@@ -11,22 +13,34 @@ export type EmrAction = {
   action_id: string; kind: typeof OBSERVATION_KIND; args: ObservationArgs; summary: string; line_id: string; corrects_action_id: string | null;
   state: EmrActionState; intent_key: string | null; written: { record_id: string; record_version: number; event_ids: string[]; replayed: boolean } | null;
   proof: EmrProof | null; reason: string | null;
+  proposed_at: string; written_at: string | null; completed_at: string | null;
 };
-export type EmrLine = { id: string; text: string; at: string; source: "text" | "audio"; decided: boolean };
-export type EmrQuestion = { question_id: string; text: string; line_id: string; answered_by: string | null };
+// Where an ambient line came from: its listening session, the chunks that made it, and when the speech ended.
+export type AmbientMeta = { session_id: string; seqs: number[]; raw_text: string; ended_at: string; final_at: string; trailing_silence_ms: number; finished_by: string };
+export type EmrLine = { id: string; text: string; at: string; source: "text" | "audio"; decided: boolean; ambient: AmbientMeta | null; classes: SpeechClass[] };
+export type EmrRefusal = { line_id: string; kind: string | null; asked_for: string; at: string };
+export type EmrQuestion = { question_id: string; text: string; line_id: string; answered_by: string | null; at: string };
 export type EmrTask = {
   task_id: string; owner: string; admission_id: string; patient_id: string | null; run_id: string; goal: string;
   state: TaskState; reason: string | null; actions: Map<string, EmrAction>; order: string[];
-  lines: EmrLine[]; questions: EmrQuestion[]; notes: { id: string; text: string; at: string }[];
+  lines: EmrLine[]; questions: EmrQuestion[]; notes: { id: string; text: string; at: string }[]; refusals: EmrRefusal[];
   calls: number; usd: number; fallbacks: number; created_at: string; updated_at: string;
 };
 // The strip's view of one task.
 export type EmrTaskView = {
   task_id: string; goal: string; state: TaskState; reason: string | null; owner: string; admission_id: string; patient_id: string | null;
-  actions: { action_id: string; kind: string; state: EmrActionState; summary: string; reason: string | null; corrects_action_id: string | null; proof?: { record_id: string; record_version: number; event_ids: string[] } }[];
+  actions: {
+    action_id: string; kind: string; state: EmrActionState; summary: string; reason: string | null; corrects_action_id: string | null;
+    line_id: string; args: Record<string, unknown>; proposed_at: string; written_at: string | null;
+    proof?: { record_id: string; record_version: number; event_ids: string[] };
+  }[];
   questions: { question_id: string; text: string }[];
-  transcript: { id: string; text: string; at: string }[];
+  transcript: { id: string; line_id: string; text: string; at: string; source: "text" | "audio"; decided: boolean; class: SpeechClass | null; classes: SpeechClass[]; ambient?: AmbientMeta }[];
   notes: { id: string; text: string; at: string }[];
+  // Every question the agent asked, answered or not, and every instruction it would not take, for the strip and for scoring.
+  asked: { question_id: string; text: string; line_id: string; answered_by: string | null; at: string }[];
+  refusals: EmrRefusal[];
+  calls: number; usd: number;
   updated_at: string;
 };
 
@@ -36,6 +50,8 @@ export type EmrRuntimeOptions = {
   holdMs?: number;
   proofRetryMs?: number;
   routes?: { primary: IntentRoute; fallback: IntentRoute | null };
+  // The speech gate for ambient lines; the default is the committed settings.
+  gate?: GateSettings;
   wallNow?: () => Date;
   log?: (line: string) => void;
 };
@@ -51,7 +67,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
   if (e.record_type === "emr.task.opened") {
     return {
       task_id: String(x["task_id"]), owner: String(x["owner"]), admission_id: String(x["admission_id"]), patient_id: (x["patient_id"] as string | null) ?? null,
-      run_id: String(x["run_id"]), goal: "", state: "running", reason: null, actions: new Map(), order: [], lines: [], questions: [], notes: [],
+      run_id: String(x["run_id"]), goal: "", state: "running", reason: null, actions: new Map(), order: [], lines: [], questions: [], notes: [], refusals: [],
       calls: 0, usd: 0, fallbacks: 0, created_at: e.wall_at, updated_at: e.wall_at
     };
   }
@@ -59,11 +75,23 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
   t.updated_at = e.wall_at;
   const act = t.actions.get(String(x["action_id"]));
   switch (e.record_type) {
-    case "utterance.heard":
-      t.lines.push({ id: String(x["line_id"]), text: String(x["text"]), at: String(x["spoken_at"]), source: x["source"] === "audio" ? "audio" : "text", decided: false });
+    case "utterance.heard": {
+      const ambient = (x["ambient"] as AmbientMeta | undefined) ?? null;
+      t.lines.push({ id: String(x["line_id"]), text: String(x["text"]), at: String(x["spoken_at"]), source: x["source"] === "audio" ? "audio" : "text", decided: false, ambient, classes: [] });
       if (!t.goal) t.goal = String(x["text"]).slice(0, 200);
-      for (const q of t.questions) if (q.answered_by === null) q.answered_by = String(x["line_id"]);
+      // A typed or pushed line answers the open question; an ambient line answers only when the gate hears it as meant for the agent.
+      if (!ambient) for (const q of t.questions) if (q.answered_by === null) q.answered_by = String(x["line_id"]);
       break;
+    }
+    case "gate.decided": {
+      const l = t.lines.find((y) => y.id === x["line_id"]);
+      if (l) { l.decided = true; l.classes = ((x["clauses"] as { class: SpeechClass }[] | undefined) ?? []).map((c) => c.class); }
+      t.calls += Number(x["calls"] ?? 1); t.usd += Number(x["cost_usd"] ?? 0);
+      if (x["fallback_reason"]) t.fallbacks += 1;
+      break;
+    }
+    case "gate.refused": t.refusals.push({ line_id: String(x["line_id"]), kind: (x["kind"] as string | null) ?? null, asked_for: String(x["asked_for"]), at: e.wall_at }); break;
+    case "question.answered": { const q = t.questions.find((y) => y.question_id === x["question_id"]); if (q && q.answered_by === null) q.answered_by = String(x["line_id"]); break; }
     case "intent.decided": {
       const l = t.lines.find((y) => y.id === x["line_id"]);
       if (l) l.decided = true;
@@ -72,18 +100,19 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       break;
     }
     case "intent.failed": { const l = t.lines.find((y) => y.id === x["line_id"]); if (l) l.decided = true; break; }
-    case "question.asked": t.questions.push({ question_id: String(x["question_id"]), text: String(x["text"]), line_id: String(x["line_id"]), answered_by: null }); break;
+    case "question.asked": t.questions.push({ question_id: String(x["question_id"]), text: String(x["text"]), line_id: String(x["line_id"]), answered_by: null, at: e.wall_at }); break;
     case "task.note": t.notes.push({ id: String(x["note_id"]), text: String(x["text"]), at: e.wall_at }); break;
     case "action.proposed":
       t.actions.set(String(x["action_id"]), {
         action_id: String(x["action_id"]), kind: OBSERVATION_KIND, args: x["args"] as ObservationArgs, summary: String(x["summary"]), line_id: String(x["line_id"]),
-        corrects_action_id: (x["corrects_action_id"] as string | null) ?? null, state: "proposed", intent_key: null, written: null, proof: null, reason: null
+        corrects_action_id: (x["corrects_action_id"] as string | null) ?? null, state: "proposed", intent_key: null, written: null, proof: null, reason: null,
+        proposed_at: e.wall_at, written_at: null, completed_at: null
       });
       t.order.push(String(x["action_id"]));
       break;
     case "action.intent": if (act) { act.state = "sent"; act.intent_key = String(x["intent_key"]); } break;
-    case "action.written": if (act) { act.state = "acknowledged"; act.written = x["written"] as EmrAction["written"]; } break;
-    case "action.completed": if (act) { act.state = "completed"; act.proof = x["proof"] as EmrProof; } break;
+    case "action.written": if (act) { act.state = "acknowledged"; act.written = x["written"] as EmrAction["written"]; act.written_at = e.wall_at; } break;
+    case "action.completed": if (act) { act.state = "completed"; act.proof = x["proof"] as EmrProof; act.completed_at = e.wall_at; } break;
     case "action.cancelled": if (act) { act.state = "cancelled"; act.reason = String(x["reason"]); } break;
     case "action.refused": if (act) { act.state = "refused"; act.reason = String(x["reason"]); } break;
     case "action.failed": if (act) { act.state = "failed"; act.reason = String(x["reason"]); } break;
@@ -105,12 +134,54 @@ export function viewOf(t: EmrTask): EmrTaskView {
     task_id: t.task_id, goal: t.goal, state: t.state, reason: t.reason, owner: t.owner, admission_id: t.admission_id, patient_id: t.patient_id,
     actions: t.order.map((id) => t.actions.get(id)!).map((a) => ({
       action_id: a.action_id, kind: a.kind, state: a.state, summary: a.summary, reason: a.reason, corrects_action_id: a.corrects_action_id,
+      line_id: a.line_id, args: Object.fromEntries(Object.entries(a.args).filter(([k]) => k !== "admission_id")), proposed_at: a.proposed_at, written_at: a.written_at,
       ...(a.proof ? { proof: { record_id: a.proof.record_id, record_version: a.proof.record_version, event_ids: a.proof.event_ids } } : {})
     })),
     questions: t.questions.filter((q) => q.answered_by === null).map((q) => ({ question_id: q.question_id, text: q.text })),
-    transcript: t.lines.map((l) => ({ id: l.id, text: l.text, at: l.at })),
-    notes: t.notes, updated_at: t.updated_at
+    transcript: t.lines.map((l) => ({ id: l.id, line_id: l.id, text: l.text, at: l.at, source: l.source, decided: l.decided, class: primaryClass(l.classes) as SpeechClass | null, classes: l.classes, ...(l.ambient ? { ambient: l.ambient } : {}) })),
+    notes: t.notes,
+    asked: t.questions.map((q) => ({ question_id: q.question_id, text: q.text, line_id: q.line_id, answered_by: q.answered_by, at: q.at })),
+    refusals: t.refusals, calls: t.calls, usd: Math.round(t.usd * 1e6) / 1e6, updated_at: t.updated_at
   };
+}
+
+const tokens = (t: string) => t.toLowerCase().replace(/[^a-z0-9.]+/g, " ").replace(/\.(?!\d)/g, " ").split(" ").filter(Boolean);
+// True when at least four in five of the clause's words are in the line, so a copied earlier line does not pass.
+export function fromLine(words: string, line: string): boolean {
+  const w = tokens(words);
+  if (!w.length) return false;
+  const have = new Map<string, number>();
+  for (const t of tokens(line)) have.set(t, (have.get(t) ?? 0) + 1);
+  let hit = 0;
+  for (const t of w) { const n = have.get(t) ?? 0; if (n > 0) { hit += 1; have.set(t, n - 1); } }
+  return hit / w.length >= 0.8;
+}
+
+const VALUE_KEYS = ["temp_c", "pulse", "resp_rate", "bp", "remark"] as const;
+// Confident instructions of one kind in one line are one action: values merge, an empty "chart these" clause is absorbed, and a value given twice differently becomes a question.
+export function mergeInstructions(clauses: readonly GateClause[], floor: number, kinds: readonly string[]): GateClause[] {
+  const joinable = (c: GateClause) => c.class === "instruction" && !!c.kind && kinds.includes(c.kind) && (c.confidence ?? 0) >= floor;
+  const out: GateClause[] = [];
+  const merged = new Map<string, GateClause>();
+  for (const c of clauses) {
+    if (!joinable(c)) { out.push(c); continue; }
+    const into = merged.get(c.kind!);
+    if (!into) { const m = { ...c }; merged.set(c.kind!, m); out.push(m); continue; }
+    for (const k of VALUE_KEYS) {
+      const v = c[k];
+      if (v === null || v === undefined) continue;
+      const have = into[k];
+      if (have !== null && have !== undefined && String(have) !== String(v)) {
+        const i = out.indexOf(into);
+        out[i] = { words: `${into.words} ${c.words}`, class: "unclear", question: `You gave two values for ${k.replace("_", " ")}: ${have} and ${v}. Which one should I chart?` };
+        merged.delete(c.kind!);
+        break;
+      }
+      (into as Record<string, unknown>)[k] = v;
+    }
+    if (merged.get(c.kind!) === into) into.words = `${into.words} ${c.words}`.slice(0, 400);
+  }
+  return out;
 }
 
 // A plain line for the strip, built from the arguments rather than from model text.
@@ -125,7 +196,13 @@ export function summarise(a: ObservationArgs, correctsActionId: string | null): 
 export const emrIntentKey = (taskId: string, actionId: string, args: unknown) => sha256(canonical([taskId, actionId, args]));
 
 type Live = { stream: Stream; task: EmrTask; queue: Promise<void> };
-export type SayInput = { owner: string; target: EmrTarget; text: string; source?: "text" | "audio"; spoken_at?: string; audio?: { audio_ms: number; cost_usd: number; session_id: string } };
+export type SayInput = {
+  owner: string; target: EmrTarget; text: string; source?: "text" | "audio"; spoken_at?: string; audio?: { audio_ms: number; cost_usd: number; session_id: string };
+  // Set for a finalised utterance from continuous listening; the speech gate decides it instead of the one-call intent.
+  ambient?: AmbientMeta;
+  // The patient context the caller already holds for this admission, so a listening line does not wait on another door read.
+  context?: EmrContext;
+};
 
 // The EMR agent runtime: one task per owner and admission, journaled intents before every write, proofs by fresh read, and no model call unless the task is running.
 export class EmrRuntime {
@@ -243,14 +320,14 @@ export class EmrRuntime {
       if (l.task.owner !== s.owner) throw new Error("the task belongs to another owner");
       ctx = await this.o.port.resolve({ admission_id: l.task.admission_id }, prov);
     } else {
-      ctx = await this.o.port.resolve(s.target, prov);
+      ctx = s.context && s.context.admission_id === s.target.admission_id ? s.context : await this.o.port.resolve(s.target, prov);
       l = this.taskFor(s.owner, ctx.admission_id) ?? this.openTask(s.owner, ctx);
     }
     if (CLOSED_TASK.has(l.task.state)) throw new Error(`the task is ${l.task.state}`);
     const live = l;
-    this.append(live, "utterance.heard", { line_id: lineId, text, source: s.source ?? "text", spoken_at: spokenAt, ...(s.audio ? { audio: s.audio } : {}) });
+    this.append(live, "utterance.heard", { line_id: lineId, text, source: s.source ?? "text", spoken_at: spokenAt, ...(s.audio ? { audio: s.audio } : {}), ...(s.ambient ? { ambient: s.ambient } : {}) });
     if (live.task.state !== "running") this.setState(live, "running", `heard_${lineId}`);
-    this.enqueue(live, () => this.decide(live, lineId, ctx, prov));
+    this.enqueue(live, () => (s.ambient ? this.gate(live, lineId, ctx, prov) : this.decide(live, lineId, ctx, prov)));
     return { task_id: live.task.task_id, line_id: lineId };
   }
 
@@ -281,7 +358,7 @@ export class EmrRuntime {
       r = await decideIntent(this.o.client, {
         context: ctx, said: line.text, openQuestion: openQ?.text ?? null,
         actions: t.order.map((id) => t.actions.get(id)!).map((a) => ({ action_id: a.action_id, kind: a.kind, state: a.state, args: a.args, record_id: a.written?.record_id ?? null })),
-        earlier: t.lines.filter((x) => x.id !== lineId).slice(-6).map((x) => ({ id: x.id, text: x.text }))
+        earlier: t.lines.slice(0, t.lines.indexOf(line)).slice(-6).map((x) => ({ id: x.id, text: x.text }))
       }, { run_id: t.run_id, task_id: t.task_id }, this.o.routes ?? { primary: DEFAULT_INTENT_ROUTE, fallback: FALLBACK_INTENT_ROUTE });
     } catch (e) {
       const code = e instanceof ModelError ? e.code : "error";
@@ -295,6 +372,85 @@ export class EmrRuntime {
     });
     if (l.task.state !== "running") return;
     this.applyDecision(l, lineId, r.value, prov);
+  }
+
+  // The task's actions by number, as the gate sees them; numbers count from the first action of the task.
+  private gateActions(t: EmrTask): GateAction[] {
+    const n = new Map(t.order.map((id, i) => [id, i + 1]));
+    return t.order.map((id) => t.actions.get(id)!).map((a) => ({
+      n: n.get(a.action_id)!, kind: a.kind, args: a.args,
+      state: a.state === "cancelled" ? "stopped" : a.state === "refused" || a.state === "failed" ? "not recorded" : "active",
+      corrects: a.corrects_action_id ? n.get(a.corrects_action_id) ?? null : null
+    }));
+  }
+
+  // One gate call per finalised ambient utterance, then each clause in order: act, correct, ask, refuse, or only label the line.
+  private async gate(l: Live, lineId: string, ctx: EmrContext, prov: Provenance): Promise<void> {
+    const t = l.task;
+    const line = t.lines.find((x) => x.id === lineId);
+    if (!line || line.decided) return;
+    if (CLOSED_TASK.has(t.state)) { this.append(l, "intent.failed", { line_id: lineId, reason: `task_${t.state}` }); return; }
+    // Lines keep coming while an earlier one is decided, so each ambient line wakes the task again when its turn comes.
+    if (t.state !== "running") this.setState(l, "running", `heard_${lineId}`);
+    const settings = this.o.gate ?? GATE_SETTINGS;
+    const kinds = this.o.port.writeKinds;
+    const openQ = t.questions.filter((q) => q.answered_by === null).at(-1) ?? null;
+    let r;
+    try {
+      r = await gateUtterance(this.o.client, {
+        kinds, context: ctx, actions: this.gateActions(t), openQuestion: openQ?.text ?? null,
+        recent: t.lines.slice(0, t.lines.indexOf(line)).slice(-6).map((x) => x.text), said: line.text
+      }, { run_id: t.run_id, task_id: t.task_id }, settings);
+    } catch (e) {
+      const code = e instanceof ModelError ? e.code : "error";
+      this.append(l, "intent.failed", { line_id: lineId, reason: `model_${code}` });
+      if (l.task.state === "running") this.setState(l, "needs_input", `model_${code}`);
+      return;
+    }
+    // A clause is applied only when its words come from this line; the model sometimes classes the recent words it was shown again.
+    const clauses = r.value.clauses.filter((c) => fromLine(c.words, line.text));
+    const outside = r.value.clauses.filter((c) => !fromLine(c.words, line.text));
+    this.append(l, "gate.decided", {
+      line_id: lineId, clauses, ...(outside.length ? { outside_line: outside } : {}), provider: r.provider, model: r.model, response_id: r.response_id, ledger: r.ledger, cost_usd: r.cost_usd,
+      calls: 1 + r.repairs, repairs: r.repairs, fallback_reason: r.fallback_reason, prompt_sha256: r.prompt_sha256
+    });
+    if (l.task.state !== "running") return;
+    // Words meant for the agent answer its open question before they are acted on.
+    if (clauses.some((c) => c.class === "instruction" || c.class === "correction")) {
+      for (const q of t.questions.filter((y) => y.answered_by === null)) this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
+    }
+    for (const c of mergeInstructions(clauses, settings.confidence_floor, kinds)) this.applyClause(l, lineId, c, settings.confidence_floor, kinds, prov);
+    this.settle(l, "heard");
+  }
+
+  private applyClause(l: Live, lineId: string, c: GateClause, floor: number, kinds: readonly string[], prov: Provenance): void {
+    const t = l.task;
+    if (c.class === "unclear") { this.ask(l, lineId, c.question ?? `I did not catch what to record from "${c.words.slice(0, 120)}". Please say it again.`); return; }
+    if (c.class !== "instruction" && c.class !== "correction") return;
+    if (c.class === "instruction" && (!c.kind || !kinds.includes(c.kind))) {
+      const asked = (c.asked_for ?? c.words).slice(0, 200);
+      this.append(l, "gate.refused", { line_id: lineId, kind: c.kind ?? null, asked_for: asked, words: c.words });
+      this.note(l, `Not mine to do, left for you: ${asked}.`);
+      return;
+    }
+    if ((c.confidence ?? 0) < floor) {
+      this.ask(l, lineId, c.question ?? `Did you want me to chart this: "${c.words.slice(0, 160)}"?`);
+      return;
+    }
+    let corrects: string | null = null;
+    if (c.class === "correction") {
+      const m = /^#?(\d+)$/.exec((c.target ?? "").trim());
+      const named = m ? t.order[Number(m[1]) - 1] : c.target ? (t.actions.has(c.target) ? c.target : undefined) : undefined;
+      // A correction targets the most recent action that still stands unless it names another.
+      const latest = [...t.order].reverse().find((id) => t.actions.get(id)!.state !== "cancelled" && t.actions.get(id)!.state !== "refused" && t.actions.get(id)!.state !== "failed");
+      corrects = named ?? latest ?? null;
+      if (!corrects) { this.ask(l, lineId, "Which entry should I correct? Please say the values again."); return; }
+    }
+    const d: Decide = {
+      decision: "record", temp_c: c.temp_c ?? null, pulse: c.pulse ?? null, resp_rate: c.resp_rate ?? null, bp: c.bp ?? null, remark: c.remark ?? null,
+      corrects_action_id: corrects, cancel_action_id: null, question: null, reason: null, summary: c.words.slice(0, 200)
+    };
+    this.applyDecision(l, lineId, d, prov);
   }
 
   private note(l: Live, text: string): void {
@@ -329,15 +485,18 @@ export class EmrRuntime {
     const said = new Set((t.lines.find((x) => x.id === lineId)?.text.match(/\d+(?:\.\d+)?/g) ?? []).map((x) => String(Number(x))));
     const heard = (v: string | number) => String(v).split("/").every((n) => said.has(String(Number(n))));
     const dropped: string[] = [];
+    let own = 0;
     const take = (k: string, v: string | number | null | undefined, norm: (x: string | number) => string | number) => {
       if (v === null || v === undefined || v === "") return;
-      if (heard(v)) raw[k] = norm(v); else dropped.push(`${k} ${v}`);
+      if (heard(v)) { raw[k] = norm(v); own += 1; } else dropped.push(`${k} ${v}`);
     };
     take("temp_c", d.temp_c, (v) => tempText(v) ?? String(v));
     take("pulse", d.pulse, (v) => v);
     take("resp_rate", d.resp_rate, (v) => v);
     take("bp", d.bp, (v) => String(v).replace(/\s+/g, ""));
     if (dropped.length) this.note(l, `Left out values you did not say: ${dropped.join(", ")}.`);
+    // A correction must change a value the clinician said; otherwise it would only copy the entry it corrects.
+    if (corrects && own === 0) { this.ask(l, lineId, "Which value should I correct? Please say it again."); return this.settle(l, "asked"); }
     if (d.remark) raw["remark"] = d.remark;
     // A correction of an entry already written cites it; a correction of one still on hold replaces it, so nothing is cited.
     if (corrects && corrects.written) raw["corrects_record_id"] = corrects.written.record_id;
