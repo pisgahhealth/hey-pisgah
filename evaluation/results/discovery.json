@@ -13,5 +13,137 @@
   "citing_proposals": [],
   "cites_injected_note": false,
   "span_words": 8
+ },
+ "adaptive_runs": {
+  "measured_at": "2026-10-28T12:09:16.412Z",
+  "arm": "adaptive",
+  "provider": "modal",
+  "budget_per_run": {
+   "usd": 6,
+   "calls": 60
+  },
+  "k_of_n": {
+   "n": 3,
+   "dev_valid_proposal": 0,
+   "honest_negative": 0,
+   "insufficient_evidence": 0,
+   "no_outcome": 3
+  },
+  "runs": [
+   {
+    "run_id": "run-7b5830ad",
+    "outcome": "no_outcome",
+    "stop": "not stopped",
+    "note": "revision 4; stopped by the lane at 30 calls because the history cap dropped every older turn each call and the model re-read the same records",
+    "commitment": {
+     "hash": "d201a304e53357fde2d6172f04d870bd9835133cab7491bab7a410605833aca2",
+     "revision": 4
+    },
+    "hashes": {
+     "prompt": "7cbcf17e6e8f7cd7f3907b1a02674c9c600abdf20572e6d0c780022f44717b25",
+     "tools": "bd0d1a3c9e44dabfb43f6e4972932d93c2157726598889f265e596cdb8ceeaa7"
+    },
+    "effort": "xhigh",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "check_discovery": "FAIL",
+    "needs": {
+     "hypotheses": false,
+     "experiment": false,
+     "outcome": false,
+     "deny_list": true,
+     "stopped": false
+    },
+    "hypotheses": [],
+    "experiments": [],
+    "pair_refusals": 0,
+    "say_do_mismatches": 0,
+    "proposals": [],
+    "validations": [],
+    "declared_result": null,
+    "calls": 30,
+    "cost_usd": 0.6713,
+    "prompt_tokens": 451064,
+    "prompt_tokens_per_call": 15035,
+    "prompt_tokens_max": 20737,
+    "completion_tokens": 25283,
+    "reasoning_tokens": 17365
+   },
+   {
+    "run_id": "run-a8abc392",
+    "outcome": "no_outcome",
+    "stop": "budget_calls (60 calls)",
+    "note": "revision 5; reads only: 145 timeline pages, the definition 24 times; no hypothesis in 60 calls",
+    "commitment": {
+     "hash": "0027c82eccf9af8000c335b058b8abcbcdf5d3ed8fe39f54c12a1b811361bcdc",
+     "revision": 5
+    },
+    "hashes": {
+     "prompt": "c9e3da07a00d0bdb874e22bd8bc8a020ffb8eeff65d76b7c4e80115fa9e6dcb4",
+     "tools": "bd0d1a3c9e44dabfb43f6e4972932d93c2157726598889f265e596cdb8ceeaa7"
+    },
+    "effort": "xhigh",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "check_discovery": "FAIL",
+    "needs": {
+     "hypotheses": false,
+     "experiment": false,
+     "outcome": false,
+     "deny_list": true,
+     "stopped": true
+    },
+    "hypotheses": [],
+    "experiments": [],
+    "pair_refusals": 0,
+    "say_do_mismatches": 0,
+    "proposals": [],
+    "validations": [],
+    "declared_result": null,
+    "calls": 60,
+    "cost_usd": 1.7043,
+    "prompt_tokens": 1081894,
+    "prompt_tokens_per_call": 18032,
+    "prompt_tokens_max": 23520,
+    "completion_tokens": 82797,
+    "reasoning_tokens": 64221
+   },
+   {
+    "run_id": "run-841b4fa7",
+    "outcome": "no_outcome",
+    "stop": "budget_calls (60 calls)",
+    "note": "revision 5; reads only: 111 timeline pages, the definition 21 times; no hypothesis in 60 calls",
+    "commitment": {
+     "hash": "0027c82eccf9af8000c335b058b8abcbcdf5d3ed8fe39f54c12a1b811361bcdc",
+     "revision": 5
+    },
+    "hashes": {
+     "prompt": "c9e3da07a00d0bdb874e22bd8bc8a020ffb8eeff65d76b7c4e80115fa9e6dcb4",
+     "tools": "bd0d1a3c9e44dabfb43f6e4972932d93c2157726598889f265e596cdb8ceeaa7"
+    },
+    "effort": "xhigh",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "check_discovery": "FAIL",
+    "needs": {
+     "hypotheses": false,
+     "experiment": false,
+     "outcome": false,
+     "deny_list": true,
+     "stopped": true
+    },
+    "hypotheses": [],
+    "experiments": [],
+    "pair_refusals": 0,
+    "say_do_mismatches": 0,
+    "proposals": [],
+    "validations": [],
+    "declared_result": null,
+    "calls": 60,
+    "cost_usd": 1.5974,
+    "prompt_tokens": 1051914,
+    "prompt_tokens_per_call": 17532,
+    "prompt_tokens_max": 23272,
+    "completion_tokens": 66463,
+    "reasoning_tokens": 50461
+   }
+  ]
  }
 }
