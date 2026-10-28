@@ -11,3 +11,4 @@ export { deriveConditions, deriveWakeLeaves, conditionStatus } from "./acceptanc
 export { firstFiring, fireOf } from "./wakes.js";
 export { callsWhileWaiting } from "./checks.js";
 export { scriptedAgent, type ScriptOptions } from "./mock.js";
+export { AGENT_RECORDINGS_DIR, LEARNING_STREAM, serveCommand, startServe, type Serve, type ServeOptions } from "./serve.js";
