@@ -1,0 +1,192 @@
+{
+ "schema": "hey-pisgah/journey-gate/1",
+ "journey_id": "journey-1",
+ "mode": "live",
+ "by_text": {
+  "Triage observations: temperature 37.1, pulse 96, respiratory rate 20, blood pressure 118 over 76, oxygen saturation 98 percent, weight 68 kilograms. Priority urgent. Right lower abdominal pain since yesterday.": [
+   {
+    "bp": "118/76",
+    "class": "instruction",
+    "confidence": 0.98,
+    "kind": "record_triage_vitals",
+    "priority": "urgent",
+    "pulse": 96,
+    "resp_rate": 20,
+    "spo2": 98,
+    "temp_c": 37.1,
+    "text": "Right lower abdominal pain since yesterday.",
+    "weight_kg": 68,
+    "words": "Triage observations: temperature 37.1, pulse 96, respiratory rate 20, blood pressure 118 over 76, oxygen saturation 98 percent, weight 68 kilograms. Priority urgent. Right lower abdominal pain since yesterday."
+   }
+  ],
+  "Chart her observations: temperature 37.4, pulse 100, respiratory rate 20.": [
+   {
+    "class": "instruction",
+    "confidence": 0.98,
+    "kind": "record_observation",
+    "pulse": 100,
+    "resp_rate": 20,
+    "temp_c": 37.4,
+    "words": "Chart her observations: temperature 37.4, pulse 100, respiratory rate 20."
+   }
+  ],
+  "Add to her care plan: observations every four hours, and a pain score every four hours.": [
+   {
+    "cadence": "q4h",
+    "class": "instruction",
+    "confidence": 0.98,
+    "item_kind": "observation",
+    "kind": "add_care_plan_item",
+    "title": "observations",
+    "words": "Add to her care plan: observations every four hours,"
+   },
+   {
+    "cadence": "q4h",
+    "class": "instruction",
+    "confidence": 0.98,
+    "item_kind": "observation",
+    "kind": "add_care_plan_item",
+    "title": "pain score",
+    "words": "and a pain score every four hours."
+   }
+  ],
+  "Repeat observations: pulse 104, temperature 37.6.": [
+   {
+    "class": "instruction",
+    "confidence": 0.98,
+    "kind": "record_observation",
+    "pulse": 104,
+    "temp_c": 37.6,
+    "words": "Repeat observations: pulse 104, temperature 37.6."
+   }
+  ],
+  "Draft my handover for the night nurse.": [
+   {
+    "class": "instruction",
+    "confidence": 1,
+    "kind": "draft_handover",
+    "words": "Draft my handover for the night nurse."
+   }
+  ],
+  "That reads right. Save the handover.": [
+   {
+    "class": "aside",
+    "words": "That reads right."
+   },
+   {
+    "class": "instruction",
+    "confidence": 0.98,
+    "kind": "record_note",
+    "words": "Save the handover."
+   }
+  ],
+  "I have the doctor's page about her. Get her bill ready.": [
+   {
+    "class": "aside",
+    "words": "I have the doctor's page about her."
+   },
+   {
+    "class": "instruction",
+    "confidence": 0.95,
+    "kind": "prepare_bill",
+    "words": "Get her bill ready."
+   }
+  ],
+  "Send her the pay link.": [
+   {
+    "class": "instruction",
+    "confidence": 0.95,
+    "kind": "send_pay_link",
+    "words": "Send her the pay link."
+   }
+  ],
+  "And mark the bill as paid.": [
+   {
+    "asked_for": "mark bill as paid",
+    "class": "instruction",
+    "words": "And mark the bill as paid."
+   }
+  ],
+  "Write my assessment: forty year old woman with right lower abdominal pain since yesterday, worse on walking, no vomiting. Tender in the right iliac fossa, no guarding.": [
+   {
+    "class": "instruction",
+    "confidence": 0.98,
+    "kind": "draft_consult_note",
+    "text": "forty year old woman with right lower abdominal pain since yesterday, worse on walking, no vomiting. Tender in the right iliac fossa, no guarding.",
+    "words": "Write my assessment: forty year old woman with right lower abdominal pain since yesterday, worse on walking, no vomiting. Tender in the right iliac fossa, no guarding."
+   }
+  ],
+  "Let's get a full blood count, a urinalysis and an abdominal ultrasound, and start IV paracetamol one gram.": [
+   {
+    "asked_for": "full blood count, urinalysis, abdominal ultrasound",
+    "class": "instruction",
+    "confidence": 0.95,
+    "words": "Let's get a full blood count, a urinalysis and an abdominal ultrasound,"
+   },
+   {
+    "asked_for": "IV paracetamol 1g",
+    "class": "instruction",
+    "confidence": 0.95,
+    "words": "and start IV paracetamol one gram."
+   }
+  ],
+  "She needs to come in. Request an emergency admission to the general ward for observation of the abdominal pain.": [
+   {
+    "class": "aside",
+    "words": "She needs to come in."
+   },
+   {
+    "admission_type": "emergency",
+    "class": "instruction",
+    "confidence": 0.97,
+    "kind": "request_admission",
+    "text": "observation of the abdominal pain",
+    "ward_class": "general",
+    "words": "Request an emergency admission to the general ward for observation of the abdominal pain."
+   }
+  ],
+  "Progress note: seen on the ward, pain still in the right iliac fossa, abdomen soft, waiting for the scan.": [
+   {
+    "class": "instruction",
+    "confidence": 0.98,
+    "kind": "record_note",
+    "note_type": "progress",
+    "text": "seen on the ward, pain still in the right iliac fossa, abdomen soft, waiting for the scan.",
+    "words": "Progress note: seen on the ward, pain still in the right iliac fossa, abdomen soft, waiting for the scan."
+   }
+  ],
+  "Page the lab to run her full blood count urgently, and let pharmacy know she will need IV paracetamol on the ward once it is prescribed.": [
+   {
+    "class": "instruction",
+    "confidence": 0.95,
+    "kind": "page_staff",
+    "priority": "urgent",
+    "text": "run her full blood count urgently",
+    "to": "lab",
+    "words": "Page the lab to run her full blood count urgently,"
+   },
+   {
+    "class": "conditional",
+    "words": "and let pharmacy know she will need IV paracetamol on the ward once it is prescribed."
+   }
+  ],
+  "Book her a follow-up in GOPD on the 11th of November, and let accounts know she is ready for her bill.": [
+   {
+    "class": "instruction",
+    "clinic": "gopd",
+    "confidence": 0.99,
+    "date": "2026-11-11",
+    "kind": "schedule_follow_up",
+    "words": "Book her a follow-up in GOPD on the 11th of November,"
+   },
+   {
+    "class": "instruction",
+    "confidence": 0.98,
+    "kind": "page_staff",
+    "text": "she is ready for her bill",
+    "to": "accounts",
+    "words": "and let accounts know she is ready for her bill."
+   }
+  ]
+ }
+}

@@ -17,6 +17,7 @@
     "@hey-pisgah/model": "*",
     "@hey-pisgah/simulator": "*",
     "@hey-pisgah/store": "*",
+    "@hey-pisgah/voice": "*",
     "@hey-pisgah/workflow": "*",
     "zod": "^4.6.7"
   }

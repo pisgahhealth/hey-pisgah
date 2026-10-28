@@ -135,6 +135,7 @@ describe("demo steps render", () => {
     }
     let anchored = 0;
     for (const t of EVAL_TABS) anchored += count(renderEval(t.slug, claims, task), 'id="claim-C-');
-    expect(anchored).toBe(16);
+    // Each claim is anchored on its own tab, and a red or amber claim once more on the failures tab.
+    expect(anchored).toBe(18 + claims.claims.filter((c) => c.status === "red" || c.status === "amber").length);
   });
 });

@@ -1,0 +1,108 @@
+{
+ "schema": "hey-pisgah/mock-gate/1",
+ "note": "A mock gate recording for CI: the clauses a correct gate returns for each utterance of ward-talk-1.",
+ "by_utterance": {
+  "u01": [
+   {
+    "class": "aside"
+   }
+  ],
+  "u02": [
+   {
+    "class": "instruction",
+    "kind": "record_observation",
+    "temp_c": "37.9",
+    "pulse": 96,
+    "resp_rate": 20,
+    "confidence": 0.95
+   }
+  ],
+  "u03": [
+   {
+    "class": "aside"
+   }
+  ],
+  "u04": [
+   {
+    "class": "instruction",
+    "kind": "record_observation",
+    "bp": "128/76",
+    "confidence": 0.95
+   },
+   {
+    "class": "aside"
+   }
+  ],
+  "u05": [
+   {
+    "class": "aside"
+   }
+  ],
+  "u06": [
+   {
+    "class": "option"
+   }
+  ],
+  "u07": [
+   {
+    "class": "correction",
+    "kind": "record_observation",
+    "pulse": 104,
+    "target": "#1",
+    "confidence": 0.9
+   }
+  ],
+  "u08": [
+   {
+    "class": "question_to_staff"
+   }
+  ],
+  "u09": [
+   {
+    "class": "instruction",
+    "kind": null,
+    "asked_for": "stop the IV fluids",
+    "confidence": 0.9
+   }
+  ],
+  "u10": [
+   {
+    "class": "conditional"
+   }
+  ],
+  "u11": [
+   {
+    "class": "unclear",
+    "question": "Which respiratory rate should I chart, 18 or 22?"
+   }
+  ],
+  "u12": [
+   {
+    "class": "instruction",
+    "kind": "record_observation",
+    "resp_rate": 22,
+    "confidence": 0.9
+   }
+  ],
+  "u13": [
+   {
+    "class": "aside"
+   }
+  ],
+  "u14": [
+   {
+    "class": "question_to_staff"
+   }
+  ],
+  "u15": [
+   {
+    "class": "conditional"
+   }
+  ],
+  "u16": [
+   {
+    "class": "aside"
+   }
+  ]
+ }
+}

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-28T03:23:12.958Z",
-  "commit": "2c22cc7",
+  "generated_at": "2026-10-28T10:52:02.423Z",
+  "commit": "c9f4b2f",
   "claims": [
     {
       "claim_id": "C-01",
@@ -217,6 +217,44 @@
         ]
       },
       "measured_at": null
+    },
+    {
+      "claim_id": "C-17",
+      "status": "green",
+      "values": {
+        "precision": 1,
+        "recall": 1,
+        "false_actions_from_talk": 0,
+        "questions_untied": 0,
+        "ambiguities_asked": 1,
+        "ambiguities": 1,
+        "partials_acted": 0,
+        "replay_same": true,
+        "actions_matched": 4,
+        "actions_expected": 4,
+        "actions_missed": 0,
+        "wrong_actions": 0
+      },
+      "measured_at": "2026-10-28T08:51:34.681Z"
+    },
+    {
+      "claim_id": "C-18",
+      "status": "amber",
+      "values": {
+        "steps_passed": 25,
+        "steps": 26,
+        "fr1_appropriate": 16,
+        "fr1_points": 16,
+        "prohibited_attempts": 0,
+        "calls_while_paused": 0,
+        "digest_present": true,
+        "actions_unproved": 0,
+        "handoffs_picked_up": 2,
+        "replay_same": true,
+        "steps_failed": 1,
+        "fr1_missed": 0
+      },
+      "measured_at": "2026-10-28T10:48:40.724Z"
     }
   ]
 }
