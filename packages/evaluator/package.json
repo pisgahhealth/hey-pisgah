@@ -10,5 +10,14 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     }
+  },
+  "dependencies": {
+    "@hey-pisgah/cases": "*",
+    "@hey-pisgah/contracts": "*",
+    "@hey-pisgah/hospital": "*",
+    "@hey-pisgah/simulator": "*",
+    "@hey-pisgah/store": "*",
+    "@hey-pisgah/workflow": "*",
+    "zod": "^4.6.7"
   }
 }
