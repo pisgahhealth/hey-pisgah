@@ -49,6 +49,8 @@ export type ClientOptions = {
   // The projected task state wins over the caller's argument, so a stale caller cannot slip past the waiting gate.
   taskStateOf?: (taskId: string) => TaskStateValue | null;
   baseURLOverride?: Partial<Record<ProviderId, string>>;
+  // False writes no recording of live calls, for serves whose requests carry heard words.
+  record?: boolean;
   timeoutMs?: number;
   now?: () => Date;
 };
@@ -231,10 +233,12 @@ export class ModelClient {
         }
         latency = Math.round(performance.now() - t0);
         completion = res.data;
-        const secrets = Object.values(this.keys).filter((v) => v.length >= 6).concat(route.apiKey(this.keys) ?? []);
-        const kept = { provider: args.provider, response: completion, headers: pickHeaders(res.response.headers), status: res.response.status, latency_ms: latency, recorded_at: this.now().toISOString() };
-        writeRecording(this.recordingsDir, { hash, request: body, ...kept }, secrets);
-        if (runKey && args.run_id) writeRecording(this.recordingsDir, { hash: runKey.key, body_hash: hash, run_id: args.run_id, occurrence: runKey.occurrence, ...kept }, secrets);
+        if (this.opts.record !== false) {
+          const secrets = Object.values(this.keys).filter((v) => v.length >= 6).concat(route.apiKey(this.keys) ?? []);
+          const kept = { provider: args.provider, response: completion, headers: pickHeaders(res.response.headers), status: res.response.status, latency_ms: latency, recorded_at: this.now().toISOString() };
+          writeRecording(this.recordingsDir, { hash, request: body, ...kept }, secrets);
+          if (runKey && args.run_id) writeRecording(this.recordingsDir, { hash: runKey.key, body_hash: hash, run_id: args.run_id, occurrence: runKey.occurrence, ...kept }, secrets);
+        }
       }
     } finally {
       this.inflight.set(ledgerId, Math.max(0, (this.inflight.get(ledgerId) ?? 1) - 1));

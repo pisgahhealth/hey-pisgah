@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ModelClient } from "@hey-pisgah/model";
 import { cleanTranscript, encodeWav } from "@hey-pisgah/voice";
-import { MOCK_GATE_FILE, Timeline as TimelineSchema, claimStatus, feedTalk, joinedAudio, loadTalk, parseClaimPredicate, sameRun, scoreAmbient, talkChunks, type Timeline } from "@hey-pisgah/evaluator";
+import { MOCK_GATE_FILE, Timeline as TimelineSchema, claimStatus, feedTalk, joinedAudio, loadTalk, parseClaimPredicate, sameRun, scoreAmbient, talkChunks, valuesAcrossRuns, type Timeline } from "@hey-pisgah/evaluator";
 import { MemoryEmrPort, readKeptContext } from "../src/emr/memory-port.js";
 import { replayTranscriber } from "../src/emr/listen.js";
 import { startEmrServe } from "../src/emr/serve.js";
@@ -16,7 +16,9 @@ const OWNER = "owner-1";
 const talk = loadTalk();
 const mockGate = JSON.parse(readFileSync(MOCK_GATE_FILE, "utf8")).by_utterance as Record<string, Record<string, unknown>[]>;
 const byText = new Map(talk.utterances.map((u) => [cleanTranscript(u.say), u.id]));
-const C17 = (JSON.parse(readFileSync(new URL("../../../evaluation/claims.json", import.meta.url), "utf8")).claims as { claim_id: string; acceptance: { predicate: string } }[]).find((c) => c.claim_id === "C-17")!;
+const CLAIMS = JSON.parse(readFileSync(new URL("../../../evaluation/claims.json", import.meta.url), "utf8")).claims as { claim_id: string; acceptance: { predicate: string } }[];
+const C17 = CLAIMS.find((c) => c.claim_id === "C-17")!;
+const C19 = CLAIMS.find((c) => c.claim_id === "C-19")!;
 
 // A stand-in recording: a tone as long as each utterance takes to say, the talk's pauses between, and a timeline.
 function syntheticTalk(): { wav: Uint8Array; timeline: Timeline } {
@@ -65,6 +67,8 @@ describe("the labelled talk through the listen endpoint", () => {
     });
     expect(score.held_chunks).toBeGreaterThan(0);
     expect(claimStatus(parseClaimPredicate(C17.acceptance.predicate), score).status).toBe("green");
+    expect(score).toMatchObject({ values_acted: 8, value_errors: 0 });
+    expect(claimStatus(parseClaimPredicate(C19.acceptance.predicate), valuesAcrossRuns([{ run: "a", live: a.run }, { run: "b", live: b.run }])).status).toBe("green");
   });
 
   it("turns C-17 red when a conditional plan is acted on, and amber when a clear line draws a question", async () => {
@@ -72,6 +76,9 @@ describe("the labelled talk through the listen endpoint", () => {
     const red = scoreAmbient(talk, acts.run, { replay_same: true });
     expect(red.false_actions_from_talk).toBe(1);
     expect(claimStatus(parseClaimPredicate(C17.acceptance.predicate), red).status).toBe("red");
+    // The conditional's 38.5 is a wrong value acted on, so C-19 is red too.
+    expect(red.value_error_list).toEqual([{ key_id: "u10", measure: "temp_c", value: "38.5", expected: "37.9" }]);
+    expect(claimStatus(parseClaimPredicate(C19.acceptance.predicate), valuesAcrossRuns([{ run: "red", live: acts.run }])).status).toBe("red");
     const asks = await runOnce((id) => (id === "u05" ? [{ class: "unclear", question: "Should I chart the wound?" }] : mockGate[id] ?? []));
     const amber = scoreAmbient(talk, asks.run, { replay_same: true });
     expect(amber.questions_untied).toBe(1);
@@ -86,7 +93,7 @@ describe("the labelled talk through the listen endpoint", () => {
     const store = mkdtempSync(join(tmpdir(), "hp-replay-"));
     let s: Awaited<ReturnType<typeof startEmrServe>> | null = null;
     const client = new ModelClient({ storeRoot: store, mode: "replay", recordingsDir: join(dir, "rec", "model"), taskStateOf: (id) => s?.runtime.stateOf(id) ?? null });
-    s = await startEmrServe({ storeRoot: store, port: new MemoryEmrPort(readKeptContext(join(dir, "rec", "context.json")), ADM), client, listenPort: 0, transcribe: replayTranscriber(join(dir, "rec", "transcripts.json")), runtime: { holdMs: 0, proofRetryMs: 1 } });
+    s = await startEmrServe({ storeRoot: store, port: new MemoryEmrPort(readKeptContext(join(dir, "rec", "context.json")), ADM), client, listenPort: 0, transcribe: replayTranscriber(join(dir, "rec", "transcripts.json")), ears: live.ears ? "spark" : "off", runtime: { holdMs: 0, proofRetryMs: 1 } });
     const replay = await feedTalk({ serveUrl: s.url, owner: OWNER, admissionId: ADM, sessionId: "replay-1", chunks, pace: "fast", mode: "replay", talkId: talk.talk_id, gateHash: currentGateHash(), settleMs: 30_000 });
     await s.close();
     client.close();
