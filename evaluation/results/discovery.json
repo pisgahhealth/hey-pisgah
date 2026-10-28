@@ -15,7 +15,7 @@
   "span_words": 8
  },
  "adaptive_runs": {
-  "measured_at": "2026-10-28T12:57:17.291Z",
+  "measured_at": "2026-10-28T13:10:07.995Z",
   "arm": "adaptive",
   "provider": "modal",
   "budget_per_run": {
@@ -23,11 +23,11 @@
    "calls": 60
   },
   "k_of_n": {
-   "n": 7,
+   "n": 8,
    "dev_valid_proposal": 0,
    "honest_negative": 0,
    "insufficient_evidence": 0,
-   "no_outcome": 7
+   "no_outcome": 8
   },
   "runs": [
    {
@@ -58,6 +58,8 @@
     "notes": [],
     "definition_unchanged_answers": 0,
     "reading_budget_refusals": 0,
+    "experiment_budget_refusals": 0,
+    "hypothesis_schema_errors": 0,
     "pair_refusals": 0,
     "say_do_mismatches": 0,
     "proposals": [],
@@ -99,6 +101,8 @@
     "notes": [],
     "definition_unchanged_answers": 0,
     "reading_budget_refusals": 0,
+    "experiment_budget_refusals": 0,
+    "hypothesis_schema_errors": 0,
     "pair_refusals": 0,
     "say_do_mismatches": 0,
     "proposals": [],
@@ -140,6 +144,8 @@
     "notes": [],
     "definition_unchanged_answers": 0,
     "reading_budget_refusals": 0,
+    "experiment_budget_refusals": 0,
+    "hypothesis_schema_errors": 0,
     "pair_refusals": 0,
     "say_do_mismatches": 0,
     "proposals": [],
@@ -181,6 +187,8 @@
     "notes": [],
     "definition_unchanged_answers": 0,
     "reading_budget_refusals": 0,
+    "experiment_budget_refusals": 0,
+    "hypothesis_schema_errors": 0,
     "pair_refusals": 0,
     "say_do_mismatches": 0,
     "proposals": [],
@@ -222,6 +230,8 @@
     "notes": [],
     "definition_unchanged_answers": 0,
     "reading_budget_refusals": 0,
+    "experiment_budget_refusals": 0,
+    "hypothesis_schema_errors": 0,
     "pair_refusals": 0,
     "say_do_mismatches": 0,
     "proposals": [],
@@ -464,6 +474,8 @@
     "notes": [],
     "definition_unchanged_answers": 0,
     "reading_budget_refusals": 0,
+    "experiment_budget_refusals": 0,
+    "hypothesis_schema_errors": 0,
     "pair_refusals": 0,
     "say_do_mismatches": 0,
     "proposals": [],
@@ -1179,6 +1191,8 @@
     ],
     "definition_unchanged_answers": 10,
     "reading_budget_refusals": 3,
+    "experiment_budget_refusals": 0,
+    "hypothesis_schema_errors": 0,
     "pair_refusals": 0,
     "say_do_mismatches": 0,
     "proposals": [],
@@ -1191,6 +1205,242 @@
     "prompt_tokens_max": 30172,
     "completion_tokens": 99551,
     "reasoning_tokens": 83616
+   },
+   {
+    "run_id": "run-4b0db923",
+    "outcome": "no_outcome",
+    "stop": "budget_calls (60 calls)",
+    "note": "revision 8; first hypothesis at turn 12, one experiment at turn 15 (remove e05, event logs identical in 6 of 6, behaviour unchanged), one refused request; then 20 unchanged-definition answers and 15 list_ledger calls; no proposal",
+    "commitment": {
+     "hash": "72af53cf43ca899567c50b5e6a3076d72e21c1866ad3370d8bc47ec7cd13126e",
+     "revision": 8
+    },
+    "hashes": {
+     "prompt": "92127b51c2357db63a4f15491a7851f949cf950482f78a52ba64209b27f4b6c0",
+     "tools": "67d4c627b871fc0fe980d57694f0734ca070062b2643df9d64895d5e46d0242f"
+    },
+    "effort": "xhigh",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "check_discovery": "FAIL",
+    "needs": {
+     "hypotheses": true,
+     "experiment": true,
+     "outcome": false,
+     "deny_list": true,
+     "stopped": true
+    },
+    "hypotheses": [
+     {
+      "hypothesis_id": "h-67003a27",
+      "status": "rejected",
+      "statement": "Soft edge e05 (st15>st14 start soft) plus trigger st14 when after st15 forces hand_over_document to wait for hand_over_take_home, serializing two handovers.",
+      "competing": {
+       "none_identified_reason": "First hypothesis; competitor to be recorded next"
+      },
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "bed_release_delay_min",
+       "scope": {
+        "cases": [
+         "c-11060afa",
+         "c-01c6ad09",
+         "c-5e518c31",
+         "c-15de451b"
+        ]
+       },
+       "tolerance_min": 10
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "bed_release_delay_min",
+       "scope": {
+        "cases": [
+         "c-11060afa",
+         "c-01c6ad09",
+         "c-5e518c31",
+         "c-15de451b"
+        ]
+       },
+       "tolerance_min": 10
+      }
+     },
+     {
+      "hypothesis_id": "h-a965baac",
+      "status": "open",
+      "statement": "Stale revisions of discharge_summary draft/final due to late take_home_order or signoff cause extra prepare_document work and rework.",
+      "competing": [
+       "h-67003a27"
+      ],
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "rework_min",
+       "scope": {
+        "cases": [
+         "c-11060afa",
+         "c-01c6ad09"
+        ]
+       },
+       "tolerance_min": 10
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "rework_min",
+       "scope": {
+        "cases": [
+         "c-11060afa",
+         "c-01c6ad09"
+        ]
+       },
+       "tolerance_min": 10
+      }
+     },
+     {
+      "hypothesis_id": "h-54ad68a5",
+      "status": "open",
+      "statement": "Edge e05 serializes handovers: st14 cannot start until st15 completes, delaying departure after signoff.",
+      "competing": {
+       "none_identified_reason": "First hypothesis; second will compete on same metric"
+      },
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-15de451b",
+         "c-5e518c31"
+        ]
+       },
+       "tolerance_min": 5
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-01c6ad09",
+         "c-15de451b",
+         "c-5e518c31"
+        ]
+       },
+       "tolerance_min": 5
+      }
+     },
+     {
+      "hypothesis_id": "h-6a507cbe",
+      "status": "open",
+      "statement": "After clinical discharge completes, ward A requires discharge_summary draft st06 and final st07 which are gated via soft edge e04 st05>st06, but stale revisions triggered by late records cause extra prepare work that delays st08 completion and thus st14 handover",
+      "competing": {
+       "none_identified_reason": "Complementary mechanism to serialization; tests document prep path distinct from handover serialization"
+      },
+      "if_true": {
+       "comparison": "intervention_lt_control",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-11060afa",
+         "c-01c6ad09"
+        ]
+       },
+       "tolerance_min": 10
+      },
+      "if_false": {
+       "comparison": "no_difference",
+       "metric": "post_signoff_wait_min",
+       "scope": {
+        "cases": [
+         "c-11060afa",
+         "c-01c6ad09"
+        ]
+       },
+       "tolerance_min": 5
+      }
+     }
+    ],
+    "experiments": [
+     {
+      "experiment_id": "x-1f78b8b4",
+      "ops": [
+       {
+        "edge_id": "e05",
+        "op": "remove_soft_edge"
+       }
+      ],
+      "case_ids": [
+       "c-5e518c31",
+       "c-11060afa",
+       "c-01c6ad09",
+       "c-15de451b",
+       "c-9fe91b9e",
+       "c-491dbab0"
+      ],
+      "prediction_check": {
+       "after": {
+        "contradicted": [
+         "h-67003a27",
+         "h-a965baac",
+         "h-54ad68a5"
+        ],
+        "per_hypothesis": {
+         "h-54ad68a5": {
+          "landed": "if_false"
+         },
+         "h-67003a27": {
+          "landed": "if_false"
+         },
+         "h-a965baac": {
+          "landed": "if_false"
+         }
+        }
+       },
+       "before": {
+        "distinguishes": [],
+        "speaks_to": [
+         "h-67003a27",
+         "h-a965baac",
+         "h-54ad68a5"
+        ]
+       }
+      },
+      "event_logs_identical_to_control": "6 of 6 cases",
+      "behaviour_note": "behaviour unchanged: the two definitions differ, and every matched run produced an event log identical to its control",
+      "no_pair_reason": null,
+      "median_delta": {
+       "bed_release_delay_min": 0,
+       "duplicates": 0,
+       "planned_checks": 0,
+       "post_signoff_wait_min": 0,
+       "prohibited_attempted": 0,
+       "prohibited_executed": 0,
+       "required_steps_done": 0,
+       "rework_events": 0,
+       "rework_min": 0,
+       "stale_actions": 0,
+       "unnecessary_docs": 0,
+       "unnecessary_min": 0,
+       "unplanned_interventions": 0
+      }
+     }
+    ],
+    "notes": [
+     "Attempted analysis: observed delays between st13 financial_clearance and st16 record_departure (median 41.5min) driven by requirement that st14 waits for st15 (e05) and st14 waits for st08 (e19). Need to document hypotheses properly then experiment. (no experiment yet: Initial reads exhausted without proper hypothesis recording; need to reset hypothesis window)"
+    ],
+    "definition_unchanged_answers": 21,
+    "reading_budget_refusals": 2,
+    "experiment_budget_refusals": 1,
+    "hypothesis_schema_errors": 2,
+    "pair_refusals": 0,
+    "say_do_mismatches": 0,
+    "proposals": [],
+    "validations": [],
+    "declared_result": null,
+    "calls": 60,
+    "cost_usd": 2.0425,
+    "prompt_tokens": 1355644,
+    "prompt_tokens_per_call": 22594,
+    "prompt_tokens_max": 28752,
+    "completion_tokens": 81867,
+    "reasoning_tokens": 71832
    }
   ]
  }
