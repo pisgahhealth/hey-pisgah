@@ -10,21 +10,53 @@ export const SandboxBlock = z.strictObject({
   owner: z.string().min(1),
   // The mint script prints one JSON line; output names its bearer, owner and agent fields.
   mint: z.strictObject({ cwd: z.string().min(1), command: z.string().min(1), args: z.array(z.string()), node_options: z.string(), output: z.strictObject({ bearer: z.string(), owner: z.string(), agent: z.string() }) }),
-  sql: z.record(z.string(), z.string())
+  // The other owners whose agents serve mints, by login and clinic; their password is the sandbox's own.
+  owners: z.array(z.strictObject({ login: z.string().regex(/^[a-z0-9._-]{1,40}$/), clinic: z.string().min(1).max(80).optional() })).default([]),
+  sql: z.record(z.string(), z.string()),
+  // Steps a person does in the journey, run with the person's own bearer; agents never call these.
+  person_ops: z.record(z.string(), z.strictObject({ login: z.string(), method: z.enum(["GET", "POST"]), path: z.string(), body: z.record(z.string(), z.json()).optional(), query: z.record(z.string(), z.string()).optional() })).default({})
 });
 export type SandboxBlock = z.infer<typeof SandboxBlock>;
 
 const envOf = (s: SandboxBlock): Record<string, string> => parseEnvText(readFileSync(s.env_file, "utf8"));
 const loopback = (url: string) => /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(url);
 
-// Mints an agent bearer for the sandbox owner through the platform's own script; the bearer is returned and never printed.
-export function mintAgentBearer(s: SandboxBlock): { bearer: string; owner: string; agent: string | null } {
+// The mint arguments for one login: the profile's own arguments with the login and clinic swapped in, and the agent flag only for an agent.
+export function mintArgs(s: SandboxBlock, who: { login: string; clinic?: string | undefined } | null, agent: boolean): string[] {
+  const base = [...s.mint.args];
+  if (!who) return agent ? base : base.filter((a) => a !== "--agent");
+  const out: string[] = [];
+  for (let i = 0; i < base.length; i++) {
+    const a = base[i]!;
+    if (a === "--login") { out.push(a, who.login); i++; continue; }
+    if (a === "--clinic") { i++; continue; }
+    if (a === "--agent") continue;
+    out.push(a);
+  }
+  if (who.clinic) out.push("--clinic", who.clinic);
+  if (agent) out.push("--agent");
+  return out;
+}
+
+function runMint(s: SandboxBlock, args: string[]): string {
   const env = envOf(s);
   const db = env[s.db_url_var];
   if (!db || !loopback(db)) throw new Error("the sandbox database is not on loopback");
-  const out = execFileSync(s.mint.command, s.mint.args, {
+  return execFileSync(s.mint.command, args, {
     cwd: s.mint.cwd, env: { ...process.env, ...env, DATABASE_URL: db, NODE_OPTIONS: s.mint.node_options }, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 180_000
   });
+}
+
+// Mints a person's own bearer for a step the person does in the journey; it is returned and never printed.
+export function mintPersonBearer(s: SandboxBlock, who: { login: string; clinic?: string | undefined }): string {
+  const m = /^bearer: (\S+)$/m.exec(runMint(s, mintArgs(s, who, false)));
+  if (!m || m[1]!.length < 20) throw new Error("the mint script printed no bearer");
+  return m[1]!;
+}
+
+// Mints an agent bearer for the sandbox owner, or for another login, through the platform's own script; the bearer is returned and never printed.
+export function mintAgentBearer(s: SandboxBlock, who: { login: string; clinic?: string | undefined } | null = null): { bearer: string; owner: string; agent: string | null } {
+  const out = runMint(s, mintArgs(s, who, true));
   const line = out.trim().split("\n").filter((l) => l.startsWith("{")).at(-1);
   const j = z.record(z.string(), z.unknown()).parse(JSON.parse(line ?? "null"));
   const bearer = j[s.mint.output.bearer], owner = j[s.mint.output.owner], agent = j[s.mint.output.agent];

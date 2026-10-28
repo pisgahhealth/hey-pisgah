@@ -29,9 +29,11 @@ export type EmrServe = { urls: string[]; url: string; runtime: EmrRuntime; clien
 const Owner = z.string().min(1).max(80).regex(/^[A-Za-z0-9_.:-]+$/);
 const hasTarget = (b: { admissionId?: string | undefined; patientId?: string | undefined }) => b.admissionId !== undefined || b.patientId !== undefined;
 const AudioMeta = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional() }).refine(hasTarget, "admissionId or patientId is required");
-const Say = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional(), text: z.string().min(1).max(1000), spokenAt: z.iso.datetime({ offset: true }).optional() })
+const Via = z.enum(["gate", "intent"]).optional();
+const Say = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional(), text: z.string().min(1).max(1000), spokenAt: z.iso.datetime({ offset: true }).optional(), via: Via })
   .refine(hasTarget, "admissionId or patientId is required");
-const FollowUp = z.strictObject({ text: z.string().min(1).max(1000), task_id: z.string().optional(), owner: Owner.optional(), spokenAt: z.iso.datetime({ offset: true }).optional() });
+const FollowUp = z.strictObject({ text: z.string().min(1).max(1000), task_id: z.string().optional(), owner: Owner.optional(), spokenAt: z.iso.datetime({ offset: true }).optional(), via: Via });
+const Open = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional() }).refine(hasTarget, "admissionId or patientId is required");
 const ListenMeta = z.strictObject({
   owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional(),
   session_id: z.string().min(1).max(80).regex(/^[A-Za-z0-9_.:-]+$/), seq: z.coerce.number().int().min(0).max(1_000_000)
@@ -142,7 +144,12 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     if (parts.length === 2 && parts[1] === "say" && m === "POST") {
       const b = parse(Say, await json(req));
       const target = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
-      return [202, await rt.say({ owner: b.owner, target, text: b.text, ...(b.spokenAt ? { spoken_at: b.spokenAt } : {}) })];
+      return [202, await rt.say({ owner: b.owner, target, text: b.text, ...(b.spokenAt ? { spoken_at: b.spokenAt } : {}), ...(b.via ? { via: b.via } : {}) })];
+    }
+    // Opening a patient's page starts the owner's task with no words, so the agent watches that record for them.
+    if (parts.length === 2 && parts[1] === "watch" && m === "POST") {
+      const b = parse(Open, await json(req));
+      return [200, await rt.open(b.owner, { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) })];
     }
     if (parts.length === 2 && parts[1] === "say-audio" && m === "POST") return sayAudio(req);
     if (parts.length === 2 && parts[1] === "listen" && m === "POST") return listen(req);
@@ -154,7 +161,13 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       if (!task) throw new HttpError(404, "unknown task");
       if (b.task_id !== undefined && b.task_id !== id) throw new HttpError(400, "task_id does not match the path");
       if (b.owner !== undefined && b.owner !== task.owner) throw new HttpError(403, "the task belongs to another owner");
-      return [202, await rt.say({ owner: task.owner, target: { admission_id: task.admission_id }, text: b.text, ...(b.spokenAt ? { spoken_at: b.spokenAt } : {}) }, id)];
+      return [202, await rt.say({ owner: task.owner, target: task.admission_id ? { admission_id: task.admission_id } : { ...(task.patient_id ? { patient_id: task.patient_id } : {}) }, text: b.text, ...(b.spokenAt ? { spoken_at: b.spokenAt } : {}), ...(b.via ? { via: b.via } : {}) }, id)];
+    }
+    if (parts.length === 3 && parts[2] === "resume" && m === "POST") {
+      const b = parse(Interrupt, await json(req));
+      if (!task) throw new HttpError(404, "unknown task");
+      if (b.owner !== undefined && b.owner !== task.owner) throw new HttpError(403, "the task belongs to another owner");
+      return [200, { task_id: id, resumed: rt.resumeTask(id, task.owner), state: rt.stateOf(id) }];
     }
     if (parts.length === 3 && parts[2] === "interrupt" && m === "POST") {
       const b = parse(Interrupt, await json(req));

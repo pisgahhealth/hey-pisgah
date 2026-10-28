@@ -3,7 +3,8 @@ import { z } from "zod";
 // The one write kind an EMR agent holds in M1, and the shape of its arguments.
 export const OBSERVATION_KIND = "record_observation" as const;
 export const EMR_WRITE_KINDS = [OBSERVATION_KIND] as const;
-export type EmrWriteKind = (typeof EMR_WRITE_KINDS)[number];
+// Any kind of work an EMR agent can hold; see work.ts for the full list and each kind's arguments.
+export type EmrWriteKind = string;
 
 export const EmrId = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
 export const ObservationArgs = z.strictObject({
@@ -19,11 +20,13 @@ export type ObservationArgs = z.infer<typeof ObservationArgs>;
 
 export type EmrTarget = { admission_id?: string; patient_id?: string };
 // What the agent may know about the patient in context; every string came from the record, so prompts wrap it as untrusted text.
-export type EmrContext = { admission_id: string; patient_id: string | null; label: string; facts: Record<string, string | null>; keywords: string[] };
+// admission_id is empty while the patient is not yet admitted; visit_id names the arrival then.
+export type EmrContext = { admission_id: string; patient_id: string | null; visit_id?: string | null; label: string; facts: Record<string, string | null>; keywords: string[] };
 // Who the write is for and which spoken line asked for it.
 export type Provenance = { owner: string; evidence: string; spoken_at: string };
+// A read-only kind returns what it found as report; a draft is held for the owner to review before anything is written.
 export type EmrCommit =
-  | { ok: true; record_id: string; record_version: number; event_ids: string[]; replayed: boolean }
+  | { ok: true; record_id: string; record_version: number; event_ids: string[]; replayed: boolean; report?: string; draft?: string }
   | { ok: false; reason: string; status: number | null; retryable: boolean; counted: boolean };
 export type EmrProof = { record_id: string; record_version: number; event_ids: string[]; record_hash: string; verified_at: string; read: string };
 
@@ -34,11 +37,26 @@ export class EmrPortError extends Error {
   }
 }
 
-// The hospital port for a live EMR: reads for context, one journaled write kind, and a fresh read that proves each write.
+export type WorkArgs = Record<string, unknown>;
+// One read of what an agent watches for its owner, flattened to labelled facts; no model reads it.
+export type WatchRead = { facts: Record<string, string | null>; labels: Record<string, string> };
+// A question the agent puts to its owner when a watched fact reaches a value, such as a stage the owner's work waits on.
+export type WatchOffer = { fact: string; equals: string; kind: string; ask: string };
+export type InboxPage = { page_id: string; subject: string; at: string; patient_id: string | null };
+// Names the owner may say for page targets and clinics, so the gate and its guards know them.
+export type SayableNames = { page_targets: Record<string, readonly string[]>; clinics: Record<string, readonly string[]> };
+
+// The hospital port for a live EMR: reads for context, journaled writes, and a fresh read that proves each write.
 export interface EmrPort {
   readonly writeKinds: readonly EmrWriteKind[];
+  // The kinds one owner holds; without it every owner holds writeKinds.
+  kindsFor?(owner: string): readonly EmrWriteKind[];
   resolve(target: EmrTarget, prov: Provenance): Promise<EmrContext>;
-  commit(kind: EmrWriteKind, args: ObservationArgs, intentKey: string, prov: Provenance): Promise<EmrCommit>;
-  prove(kind: EmrWriteKind, args: ObservationArgs, written: { record_id: string; record_version: number; event_ids: string[] }, prov: Provenance): Promise<EmrProof | null>;
+  commit(kind: EmrWriteKind, args: WorkArgs, intentKey: string, prov: Provenance): Promise<EmrCommit>;
+  prove(kind: EmrWriteKind, args: WorkArgs, written: { record_id: string; record_version: number; event_ids: string[] }, prov: Provenance): Promise<EmrProof | null>;
   refusedCount(): number;
+  watch?(owner: string, subject: EmrTarget & { visit_id?: string | null }, prov: Provenance): Promise<WatchRead | null>;
+  offers?(owner: string): readonly WatchOffer[];
+  inbox?(owner: string, prov: Provenance): Promise<InboxPage[]>;
+  names?(): SayableNames;
 }
