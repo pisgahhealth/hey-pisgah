@@ -75,8 +75,8 @@ export class Registry {
       .map((d) => ({ version: d.version, parent_version: d.parent_version, status: d.status, definition_hash: d.definition_hash, adopted_at: d.metadata.adopted_at }));
   }
 
-  // Applies operations to a base version and stores the result as a new proposed version.
-  propose(base: number, ops: readonly unknown[], meta: ProposeMeta, opts: ApplyOptions = {}): { result: ApplyResult; version: WD | null } {
+  // Applies operations to a base version and stores the result as a new proposed version; a scoped proposal falls back to its base by default.
+  propose(base: number, ops: readonly unknown[], meta: ProposeMeta, opts: ApplyOptions & { scope?: WD["scope"]; fallback?: number | null } = {}): { result: ApplyResult; version: WD | null } {
     const parent = this.get(base);
     const result = applyOperations(parent, ops, opts);
     if (!result.ok || result.noop) return { result, version: null };
@@ -86,7 +86,8 @@ export class Registry {
       version: next,
       parent_version: base,
       status: "proposed",
-      fallback_version: parent.fallback_version,
+      scope: structuredClone(opts.scope ?? result.definition.scope),
+      fallback_version: opts.fallback !== undefined ? opts.fallback : opts.scope ? base : parent.fallback_version,
       metadata: {
         ...parent.metadata,
         ...meta,
@@ -99,6 +100,7 @@ export class Registry {
         reverted: null
       }
     };
+    def.definition_hash = definitionHash(def);
     return { result, version: this.add(def) };
   }
 
