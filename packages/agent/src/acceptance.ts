@@ -14,7 +14,7 @@ export function deriveConditions(port: HospitalPort): Condition[] {
 }
 export const conditionsHash = (cs: readonly Condition[]) => hashJson(cs);
 
-export type ConditionStatus = { condition: Condition; met: boolean; action_id: string | null; record: RecordView | null; refresh: boolean };
+export type ConditionStatus = { condition: Condition; met: boolean; action_id: string | null; record: RecordView | null; refresh: boolean; superseded_by?: string };
 
 // A condition is met when a completed action's proof still matches a fresh read of its record, or the record is complete and current again after a revision.
 export function conditionStatus(p: Projection, port: HospitalPort, c: Condition): ConditionStatus {
@@ -25,6 +25,16 @@ export function conditionStatus(p: Projection, port: HospitalPort, c: Condition)
   if (rec.hash === last.proof!.record_hash) return { condition: c, met: true, action_id: last.action_id, record: rec, refresh: false };
   const current = rec.status === "complete" && rec.source_refs.every((s) => s.version === s.current_version);
   return { condition: c, met: false, action_id: last.action_id, record: rec, refresh: current };
+}
+
+// All conditions at once: a proved draft whose own final is met counts as superseded, since the engine never revises a draft after its final begins.
+export function conditionStatuses(p: Projection, port: HospitalPort, conds: readonly Condition[]): ConditionStatus[] {
+  const st = conds.map((c) => conditionStatus(p, port, c));
+  return st.map((s) => {
+    if (s.met || s.action_id === null || !s.condition.condition_id.endsWith(".draft")) return s;
+    const fin = st.find((x) => x.condition.condition_id === s.condition.condition_id.replace(/\.draft$/, ".final"));
+    return fin?.met && fin.action_id ? { ...s, met: true, superseded_by: fin.action_id } : s;
+  });
 }
 
 const stepDone = (step_id: string): EventPredicate => ({ on: "step.completed", where: { step_id } });

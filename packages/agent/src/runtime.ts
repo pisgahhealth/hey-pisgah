@@ -2,7 +2,7 @@ import { canonical, hashJson, sha256, type EventPredicate, type Proof, type Wake
 import { ModelError, ROUTES, type ChatMessage, type EffortLevel, type ModelClient, type ProviderId } from "@hey-pisgah/model";
 import { listStreams, openStream, type Stream } from "@hey-pisgah/store";
 import type { Registry } from "@hey-pisgah/workflow";
-import { REQUIREMENTS_WAKE, conditionStatus, conditionsHash, deriveConditions, deriveWakeLeaves, type ConditionStatus } from "./acceptance.js";
+import { REQUIREMENTS_WAKE, conditionStatuses, conditionsHash, deriveConditions, deriveWakeLeaves, type ConditionStatus } from "./acceptance.js";
 import { shortHash } from "./ids.js";
 import { HospitalPort, type RecordView } from "./port.js";
 import { SYSTEM_PROMPT, toolDefs, userMessage } from "./prompt.js";
@@ -376,7 +376,7 @@ export class AgentRuntime {
   }
 
   private statuses(p: Projection, port: HospitalPort): ConditionStatus[] {
-    return p.conditions.map((c) => conditionStatus(p, port, c));
+    return conditionStatuses(p, port, p.conditions);
   }
 
   private waitUntil(w: TaskWriter, port: HospitalPort, t: TickRec, actionId: string, args: Record<string, unknown>): ToolOutcome {
@@ -402,7 +402,7 @@ export class AgentRuntime {
   }
 
   private finishTask(w: TaskWriter, port: HospitalPort): ToolOutcome {
-    const st = deriveConditions(port).map((c) => conditionStatus(w.proj, port, c));
+    const st = conditionStatuses(w.proj, port, deriveConditions(port));
     const unmet = st.filter((s) => !s.met).map((s) => s.condition.condition_id);
     if (unmet.length) {
       w.append("completion.attempt_refused", { target: "task", reason: "unmet_conditions", unmet }, port.now());
