@@ -2,5 +2,6 @@
   "name": "@hey-pisgah/cli",
   "version": "0.0.1",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": { "@hey-pisgah/contracts": "*", "zod": "^4.6.7" }
 }

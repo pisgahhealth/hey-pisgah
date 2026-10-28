@@ -1,0 +1,102 @@
+{
+  "generated_at": "2026-10-28T00:46:47.620Z",
+  "commit": "f29bb4c",
+  "claims": [
+    {
+      "claim_id": "C-01",
+      "status": "not_measured",
+      "values": {},
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-02",
+      "status": "not_measured",
+      "values": {},
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-03",
+      "status": "not_measured",
+      "values": {},
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-04",
+      "status": "not_measured",
+      "values": {},
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-05",
+      "status": "not_measured",
+      "values": {},
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-06",
+      "status": "not_measured",
+      "values": {},
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-07",
+      "status": "not_measured",
+      "values": {},
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-08",
+      "status": "not_measured",
+      "values": {},
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-09",
+      "status": "not_measured",
+      "values": {},
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-10",
+      "status": "not_measured",
+      "values": {},
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-11",
+      "status": "not_measured",
+      "values": {},
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-12",
+      "status": "not_measured",
+      "values": {},
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-13",
+      "status": "not_measured",
+      "values": {},
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-14",
+      "status": "not_measured",
+      "values": {},
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-15",
+      "status": "not_measured",
+      "values": {},
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-16",
+      "status": "not_measured",
+      "values": {},
+      "measured_at": null
+    }
+  ]
+}
