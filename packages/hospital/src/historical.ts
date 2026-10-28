@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
-import type { WorkflowDefinition } from "@hey-pisgah/contracts";
+import { SOFT_EDGE_NOTE, WorkflowDefinition, type RunResult, type WorkflowDefinition as WD } from "@hey-pisgah/contracts";
+import { entryLagKey, runDefinition, type ExternalSchedule } from "@hey-pisgah/simulator";
+import { applyOperations } from "@hey-pisgah/workflow";
 import { loadV1 } from "./definition.js";
-import { stubEngine, type DischargeEngine, type EngineRun, type Practice } from "./engine-seam.js";
-import { loadWardRequirements } from "./requirements.js";
-import { loadWorldBindings, loadWorldParameters, type Schedule } from "./world.js";
+import { worldRules } from "./world.js";
 
 // Staff profiles are hidden: only this module reads them, and no tool or the main entry re-exports them.
 const EntryHabit = z.enum(["realtime", "batch_after_round", "paper_then_type"]);
@@ -24,27 +24,34 @@ export type StaffFile = z.infer<typeof StaffFile>;
 
 export const loadStaff = (): StaffFile => StaffFile.parse(JSON.parse(readFileSync(new URL("./hidden/staff.json", import.meta.url), "utf8")));
 
-// How v1 is practised on the ward, as a function of the hidden habits; practice may drop a soft edge but never a fence.
-export function practiceFor(def: WorkflowDefinition, schedule: Schedule, staff: StaffFile): { def: WorkflowDefinition; practice: Practice } {
+// Habit lags apply to the round entry and the departure entry, the two records a ward commonly writes up later.
+const LAGGED_STEPS: readonly [string, string][] = [["st01", "doctor"], ["st16", "nurse"]];
+
+// v1 as practised: habits become a practised definition and schedule entry lags; practice adds or drops soft edges only.
+export function practiceFor(def: WD, schedule: ExternalSchedule, staff: StaffFile): { def: WD; schedule: ExternalSchedule } {
   const byId = new Map(staff.profiles.map((p) => [p.staff_id, p]));
-  const nurse = byId.get(schedule.staff.nurse ?? "");
-  const out = structuredClone(def);
-  const practice: Practice = {
-    // The folder and medicines leave with the patient once accounts clear the bill (observed flow).
-    start_after: { st14: ["st13"], st15: ["st13"] },
-    entry_lag: ({ actor_id }) => { const p = byId.get(actor_id); return p ? staff.entry_defaults[p.entry_habit] ?? null : null; }
-  };
-  if (nurse?.prep_habit === "early_draft") {
-    const soft = out.edges.find((e) => e.kind === "soft" && e.to.step === "st06");
-    if (soft) out.edges = out.edges.filter((e) => e !== soft);
-    practice.triggers = { st06: { on: "discharge.expected_recorded" } };
+  let out = structuredClone(def);
+  if (byId.get(schedule.actors["nurse"] ?? "")?.prep_habit === "early_draft") {
+    const r = applyOperations(out, [{ op: "remove_soft_edge", edge_id: "e04" }, { op: "set_prep_trigger", target: { step: "st06" }, when: { after: { step: "st01" } } }]);
+    if (!r.ok) throw new Error(`practice refused: ${r.errors.map((e) => e.message).join("; ")}`);
+    out = r.definition;
   }
-  return { def: out, practice };
+  // The folder and the medicines leave with the patient once accounts clear the bill (observed flow).
+  const soft = (edge_id: string, to: string) => ({ edge_id, from: { step: "st13" }, to: { step: to }, gate: "start" as const, kind: "soft" as const, origin: "ward_procedure" as const, immutable: false, note: SOFT_EDGE_NOTE });
+  out.edges = [...out.edges, soft("e28", "st14"), soft("e29", "st15")];
+  const sched = structuredClone(schedule);
+  for (const [step, role] of LAGGED_STEPS) {
+    const actor = sched.actors[role];
+    const habit = actor ? byId.get(actor)?.entry_habit : undefined;
+    const lag = habit ? staff.entry_defaults[habit] : undefined;
+    const key = actor ? entryLagKey("step.completed", step, actor, 1) : null;
+    if (key && lag && lag.lag_min > 0 && !(key in sched.entry_lag)) sched.entry_lag[key] = { lag_min: lag.lag_min, reason: lag.reason };
+  }
+  return { def: WorkflowDefinition.parse(out) as WD, schedule: sched };
 }
 
-// Historical executor: v1 as practised, driven by the engine; the default engine is the local stub until the simulator lands.
-export function runHistorical(schedule: Schedule, engine: DischargeEngine = stubEngine): EngineRun {
-  const { def, practice } = practiceFor(loadV1(), schedule, loadStaff());
-  const world = { bindings: loadWorldBindings(), requirements: loadWardRequirements() };
-  return engine.run(def, world, schedule, { preparer: "staff", parameters: loadWorldParameters(), practice });
+// Historical executor: v1 as practised, run by the simulator with staff preparing and the hospital world rules.
+export function runHistorical(schedule: ExternalSchedule): RunResult {
+  const p = practiceFor(loadV1(), schedule, loadStaff());
+  return runDefinition(p.def, p.schedule, { executor: "historical", use_agent: false, world: worldRules() });
 }

@@ -47,3 +47,10 @@ export function wardRequires(set: WardRequirementSet, wardId: string, documentId
   if (!row) return false;
   return row.condition === null || evalCondition(row.condition, facts, () => false);
 }
+
+// The ward_requires list a case starts with: every document the ward lists whose condition holds.
+export function wardRequiresList(set: WardRequirementSet, wardId: string, facts: Facts): string[] {
+  const ward = set.wards.find((w) => w.ward_id === wardId);
+  if (!ward) throw new Error(`unknown ward ${wardId}`);
+  return ward.required_documents.filter((r) => wardRequires(set, wardId, r.document_id, facts)).map((r) => r.document_id);
+}

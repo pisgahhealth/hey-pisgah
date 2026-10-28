@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { AGENT_ALLOWED_KINDS, ActionKind, DocumentId, SOFT_EDGE_NOTE, WorkflowDefinition, fencesHash, permissionsHash, structureHash } from "@hey-pisgah/contracts";
-import { RULES_HASH_PENDING, loadV1, stampHashes } from "./definition.js";
+import { RULES_HASH } from "@hey-pisgah/simulator";
+import { Registry, allPrecedences, deriveDataIntegrityFences, findCycle } from "@hey-pisgah/workflow";
+import { loadV1, stampHashes } from "./definition.js";
 
 const v1 = loadV1();
 const stepIds = ["st01", "st02", "st03", "st04", "st05", "st06", "st07", "st08", "st09a", "st09b", "st10", "st11", "st12a", "st12b", "st12c", "st13", "st14", "st15", "st16", "st17a", "st17b", "st17c"];
@@ -11,12 +13,12 @@ describe("discharge v1 definition", () => {
   });
   it("stores the hashes its content implies", () => {
     expect(stampHashes(v1)).toEqual(v1);
-    expect(v1.metadata.rules_hash).toBe(RULES_HASH_PENDING);
+    expect(v1.metadata.rules_hash).toBe(RULES_HASH);
   });
   it("has the split v1 step list with one kind per step", () => {
     expect(v1.steps.map((s) => s.step_id)).toEqual(stepIds);
     expect(v1.steps.filter((s) => s.alternative_group === "settlement").map((s) => s.step_id)).toEqual(["st12a", "st12b", "st12c"]);
-    expect(v1.steps.filter((s) => s.external).map((s) => s.step_id)).toEqual(["st01", "st02", "st03", "st04", "st05", "st11", "st12a", "st12b", "st12c"]);
+    expect(v1.steps.filter((s) => s.external).map((s) => s.step_id)).toEqual(["st01", "st02", "st05", "st11", "st12b", "st12c", "st16"]);
   });
   it("has e04 to e07 as the only soft edges, each with the shared note", () => {
     const soft = v1.edges.filter((e) => e.kind === "soft");
@@ -59,6 +61,14 @@ describe("discharge v1 definition", () => {
     const prep = (id: string) => v1.documents.find((d) => d.document_id === id)!.preparable_by;
     expect([prep("referral_letter"), prep("sick_note")]).toEqual([["doctor"], ["doctor"]]);
     expect(v1.documents.find((d) => d.document_id === "hmo_claim_cover")!.sections.some((s) => s.binding.record_kind === "stay_bill" && s.needed_for === "final")).toBe(true);
+  });
+  it("is accepted by the workflow registry", () => {
+    expect(new Registry().add(v1).definition_hash).toBe(v1.definition_hash);
+  });
+  it("derives the data-integrity fences from bindings with no cycle", () => {
+    const d = deriveDataIntegrityFences(v1).map((e) => `${e.from.step}>${e.to.step}`);
+    for (const x of ["st02>st06", "st05>st07", "st05>st09b", "st13>st17b"]) expect(d).toContain(x);
+    expect(findCycle(allPrecedences(v1))).toBeNull();
   });
   it("keeps the frozen hashes when only soft structure changes", () => {
     const changed = structuredClone(v1);
