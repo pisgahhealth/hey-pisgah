@@ -1,0 +1,5 @@
+# The local store holds sha256 intent keys that look like secrets; it is gitignored and never committed.
+[extend]
+useDefault = true
+[allowlist]
+paths = ['''\.hey-pisgah/''']
