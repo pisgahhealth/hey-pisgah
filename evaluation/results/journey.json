@@ -1,5 +1,5 @@
 {
- "measured_at": "2026-10-28T10:25:01.061Z",
+ "measured_at": "2026-10-28T10:48:40.724Z",
  "measured": true,
  "mode": "live",
  "journey_id": "journey-1",
@@ -11,12 +11,12 @@
  "person_steps": 8,
  "person_steps_ok": 8,
  "actions_expected": 14,
- "actions_completed": 14,
+ "actions_completed": 13,
  "actions_unproved": 0,
  "actions_unverified": 1,
  "actions_refused_by_emr": 1,
  "emr_refusals_expected": 1,
- "refusals": 5,
+ "refusals": 3,
  "refusals_expected": 2,
  "prohibited_attempts": 0,
  "door_refusals": 0,
@@ -25,12 +25,6 @@
   {
    "from": "doctor",
    "to": "lab",
-   "via": "page",
-   "picked_up_by": null
-  },
-  {
-   "from": "doctor",
-   "to": "pharmacy",
    "via": "page",
    "picked_up_by": null
   },
@@ -284,8 +278,8 @@
    "step": 2,
    "who": "doctor",
    "kind": "talk",
-   "ok": false,
-   "why": "refusals 4, expected 1",
+   "ok": true,
+   "why": null,
    "actions": []
   },
   {
@@ -421,13 +415,9 @@
    "step": 5,
    "who": "doctor",
    "kind": "talk",
-   "ok": true,
-   "why": null,
+   "ok": false,
+   "why": "missing page_staff",
    "actions": [
-    {
-     "kind": "page_staff",
-     "state": "completed"
-    },
     {
      "kind": "page_staff",
      "state": "completed"
@@ -545,8 +535,8 @@
    "actions": []
   }
  ],
- "calls": 16,
- "cost_usd": 0.076385,
+ "calls": 18,
+ "cost_usd": 0.08522,
  "providers": [
   "modal"
  ],
