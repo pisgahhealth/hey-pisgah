@@ -12,3 +12,4 @@ export { firstFiring, fireOf } from "./wakes.js";
 export { callsWhileWaiting } from "./checks.js";
 export { scriptedAgent, type ScriptOptions } from "./mock.js";
 export { AGENT_RECORDINGS_DIR, LEARNING_STREAM, RECORDED_DIR, recordedWorld, serveCommand, startServe, type Serve, type ServeOptions } from "./serve.js";
+export * from "./emr/index.js";
