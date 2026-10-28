@@ -36,6 +36,8 @@ export async function singleOperationSweep(base: WD, cases: ValidationCase[], ca
   const entries: SweepEntry[] = [];
   const opDeltas = new Map<string, Delta>();
   for (const e of entriesIn) {
+    // Yield between operations so a long sweep never starves the event loop of its host (vitest workers, serve).
+    await new Promise<void>((resolve) => setImmediate(resolve));
     let r = byDef.get(e.definition_hash);
     if (!r) { r = await validateProposal(proposalFor([e.op], base, "sweep"), { base, cases, caseFacts, baseRuns }); byDef.set(e.definition_hash, r); }
     const cuts = r.cases.map((c) => -(c.delta.post_signoff_wait_min ?? 0));
