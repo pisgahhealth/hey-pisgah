@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 // Import fences between packages; the evaluator holds reserved data and acceptance code, so the agent side may never import it.
 const root = join(import.meta.dirname, "..");
 const forbidden: Record<string, string[]> = {
-  agent: ["evaluator", "cases/fixtures/reserved"],
-  intelligence: ["evaluator", "cases/fixtures/reserved"],
+  agent: ["evaluator", "cases/fixtures/reserved", "hospital/historical", "hospital/src/hidden"],
+  intelligence: ["evaluator", "cases/fixtures/reserved", "hospital/historical", "hospital/src/hidden"],
   simulator: ["hospital", "cases", "evaluator", "agent", "intelligence"],
   contracts: ["store", "workflow", "simulator", "hospital", "cases", "model", "agent", "intelligence", "evaluator", "voice"]
 };
