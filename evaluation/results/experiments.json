@@ -1,0 +1,19 @@
+{
+ "measured_at": "2026-10-28T13:41:04.793Z",
+ "measured": true,
+ "source": "discovery_runs",
+ "current_revision": 8,
+ "k_of_n": {
+  "n": 8,
+  "current_revision_runs": 1,
+  "runs_with_hypotheses": 3,
+  "runs_with_experiments": 2
+ },
+ "n": 1,
+ "experiments": 1,
+ "sublog_hashes_equal": true,
+ "prediction_check_after_present": true,
+ "confirmed": 0,
+ "contradicted": 3,
+ "inconclusive": 0
+}

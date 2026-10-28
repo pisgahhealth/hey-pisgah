@@ -1,8 +1,50 @@
 {
- "measured_at": "2026-10-28T03:21:27.939Z",
+ "measured_at": "2026-10-28T13:41:04.839Z",
+ "measured": true,
+ "source": "cycle2_run",
  "set": "dev",
- "mode": "measured",
- "executor": "definition",
- "measured": false,
- "reason": "the second learning cycle has not run; no cycle input was given"
+ "run_id": "run-7e501502",
+ "commitment": {
+  "hash": "45421eeb06d7decc267ada6eae1421d66553fb492e13f726cd3ef9f80f6192c8",
+  "revision": 7
+ },
+ "effort": "xhigh",
+ "model": "meta-models/Muse-Spark-Open-816B-A42B",
+ "pool": {
+  "histories": 12,
+  "outcomes": 2,
+  "observed": 7
+ },
+ "read": {
+  "histories": 8,
+  "outcomes": 2,
+  "observed": 4,
+  "observed_case_ids": [
+   "c-07b1c852",
+   "c-0bf23f2b",
+   "c-4d93e936",
+   "c-b4d6187c"
+  ],
+  "outcome_case_ids": [
+   "c-110f6ad7",
+   "c-2a14921a"
+  ]
+ },
+ "cited_events": {
+  "histories": 21,
+  "outcomes": 0,
+  "observed": 0
+ },
+ "hypotheses": 13,
+ "proposals": 0,
+ "validations": [],
+ "result": "no_result",
+ "declared": null,
+ "stop": "budget_calls (60 calls)",
+ "cycle2_result_recorded": false,
+ "no_hypothesis_cited_as_evidence": true,
+ "cited_not_an_event": 0,
+ "cited_foreign_hypotheses": 0,
+ "calls": 60,
+ "cost_usd": 2.2492
 }

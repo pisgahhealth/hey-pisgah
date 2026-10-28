@@ -179,7 +179,9 @@ export async function evaluateDev(o: EvalOptions): Promise<Record<string, unknow
   const monitorFile = join(out, "monitor.json");
   const kept = existsSync(monitorFile) && (JSON.parse(readFileSync(monitorFile, "utf8")) as { source?: string }).source === "agent_monitor";
   if (!kept) write(out, "monitor.json", { ...stamp, measured: false, reason: "the monitor runs with the adopted version in the agent lane; no monitor log was given" });
-  write(out, "cycle2.json", { ...stamp, measured: false, reason: "the second learning cycle has not run; no cycle input was given" });
+  const cycleFile = join(out, "cycle2.json");
+  const cycleKept = existsSync(cycleFile) && (JSON.parse(readFileSync(cycleFile, "utf8")) as { source?: string }).source === "cycle2_run";
+  if (!cycleKept) write(out, "cycle2.json", { ...stamp, measured: false, reason: "the second learning cycle has not run; no cycle input was given" });
 
   const tables = {
     ...stamp, units: "simulated minutes", cases: cases.length, primary: arms.primary, paired: arms.paired,

@@ -53,8 +53,9 @@ describe("claims:check", () => {
   it("reads C-06 from the fields the validation summary actually writes", () => {
     const fields = parseClaimPredicate(predicateOf("C-06")).fields;
     expect(fields.every((f) => f in validationSummary([]))).toBe(true);
-    expect(planted({ "validation.json": validationSummary([]) })("C-06").status).toBe("red");
-    expect(planted({ "validation.json": { ...validationSummary([]), proposals_validated: 2 } })("C-06").status).toBe("amber");
-    expect(planted({ "validation.json": { ...validationSummary([]), dev_gate_pass: true, exception_check_pass: true, fences_unchanged: true } })("C-06").status).toBe("green");
+    const file = registry.claims.find((c) => c.claim_id === "C-06")!.acceptance.result_path.split("/").at(-1)!;
+    expect(planted({ [file]: validationSummary([]) })("C-06").status).toBe("red");
+    expect(planted({ [file]: { ...validationSummary([]), proposals_validated: 2 } })("C-06").status).toBe("amber");
+    expect(planted({ [file]: { ...validationSummary([]), dev_gate_pass: true, exception_check_pass: true, fences_unchanged: true } })("C-06").status).toBe("green");
   });
 });

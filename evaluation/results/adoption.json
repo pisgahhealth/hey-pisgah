@@ -1,0 +1,31 @@
+{
+ "measured_at": "2026-10-28T13:41:04.841Z",
+ "measured": true,
+ "source": "adopted_version_runs",
+ "set": "dev",
+ "adopted_by_person": false,
+ "approver": "Synthetic ward manager (disclosed; issued by the M4.b build lane on the coordinator's instruction)",
+ "role": "ward manager (synthetic, issued by a build lane)",
+ "ac09_pass": true,
+ "order_differs_where_diff_says": false,
+ "reason": "both fresh patients were self-pay and version 2 changes only st09a: hmo_claim_cover draft applies when payer_type is hmo; this patient has payer_type self_pay",
+ "fresh_cases": {
+  "simulator_step5": {
+   "case_id": "c-110f6ad7",
+   "payer_type": "self_pay"
+  },
+  "emr_journey": {
+   "mode": "live",
+   "offers_made": 0,
+   "lines": [
+    "Nothing to offer under version 2 for a self-pay patient."
+   ]
+  }
+ },
+ "wardB_demo": {
+  "case_id": "c-2a14921a",
+  "ac05_pass": true
+ },
+ "conflict_before_noncompliant": true,
+ "path": "adapted"
+}

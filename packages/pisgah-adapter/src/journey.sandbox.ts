@@ -156,11 +156,26 @@ export const publicText = (v: unknown, scrub: readonly string[] = []): unknown =
   return JSON.parse(s);
 };
 
+// The version's part in public words: the EMR's watched facts and values stay private, so readings keep only steps, statuses and what the patient lacks.
+export function publicVersion(v: JourneyVersion, results: { measured_at: string; mode: string; journey_id: string }): Record<string, unknown> {
+  const reading = (x: Record<string, unknown>) => ({
+    step_id: x["step_id"], document_id: x["document_id"], stage: x["stage"], changed: x["changed"], status: x["status"], unmet: x["unmet"], watched: Array.isArray(x["when"]) && (x["when"] as unknown[]).length > 0,
+    reason: x["status"] === "offer" ? `offer ${String(x["kind"])} at the watched trigger point` : x["reason"]
+  });
+  const key = (k: string) => { const p = k.split(":"); return `${p[0]}:${p[1]}:${p.at(-1)}`; };
+  return {
+    measured_at: results.measured_at, mode: results.mode, journey_id: results.journey_id, version: v.version, definition_hash: v.definition_hash, parent_version: v.parent_version,
+    requirement_version: v.requirement_version, ward_id: v.ward_id, facts_source: v.facts_source, lines: v.lines, offers_made: v.offers_made, offers_blocked: v.offers_blocked,
+    readings: (v.readings as Record<string, unknown>[]).map(reading),
+    by_owner: Object.fromEntries(Object.entries(v.by_owner).map(([role, o]) => [role, { ...o, offers: o.offers.map(key) }]))
+  };
+}
+
 // Writes the private trace with every id, and the public results with none.
 export function writeJourneyFiles(r: SandboxJourney, privateDir: string, resultsFile: string | null, recordedFile: string | null, scrub: readonly string[] = [], versionFile: string | null = null): void {
   mkdirSync(privateDir, { recursive: true });
   if (r.version) writeFileSync(join(privateDir, "version.json"), `${JSON.stringify(r.version, null, 1)}\n`);
-  if (versionFile && r.version) writeFileSync(versionFile, `${JSON.stringify(publicText({ measured_at: r.results.measured_at, mode: r.results.mode, journey_id: r.results.journey_id, ...r.version }, scrub), null, 1)}\n`);
+  if (versionFile && r.version) writeFileSync(versionFile, `${JSON.stringify(publicText(publicVersion(r.version, r.results), scrub), null, 1)}\n`);
   writeFileSync(join(privateDir, "trace.json"), `${JSON.stringify({ trace: r.trace, requests: r.requests, records: r.records, serveLog: r.serveLog }, null, 1)}\n`);
   writeFileSync(join(privateDir, "results.json"), `${JSON.stringify(r.results, null, 1)}\n`);
   if (resultsFile) writeFileSync(resultsFile, `${JSON.stringify(publicText(r.results, scrub), null, 1)}\n`);

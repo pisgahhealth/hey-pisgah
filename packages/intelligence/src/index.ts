@@ -14,3 +14,4 @@ export { MOCK_CASES, scriptedInvestigator } from "./mock.js";
 export { appendCommitment, appendOnlyProblems, commitmentFor, commitmentsPath, currentContent, readCommitments, type CommitmentsFile } from "./commitments.js";
 export { checkDiscovery, type DiscoveryCheck } from "./check.js";
 export { INTELLIGENCE_RECORDINGS_DIR, checkDiscoveryCommand, discoverCommand, type DiscoverDeps } from "./cli.js";
+export { adoptionClaims, citedEventCount, cycle2Result, discoveryClaims } from "./claims-results.js";

@@ -1,0 +1,53 @@
+{
+ "measured_at": "2026-10-28T13:41:04.793Z",
+ "measured": true,
+ "source": "discovery_runs",
+ "current_revision": 8,
+ "k_of_n": {
+  "n": 8,
+  "current_revision_runs": 1,
+  "runs_with_hypotheses": 3,
+  "runs_with_experiments": 2
+ },
+ "delay_hypotheses": 35,
+ "delay_hypotheses_on_f3": 8,
+ "recorded_clock_delay_hypotheses_on_f3": 0,
+ "n": 0,
+ "late_entries_cited": 0,
+ "f3_cases": 1,
+ "late_entry_events": 8,
+ "runs": [
+  {
+   "run_id": "run-54ff5a29",
+   "hypotheses": 3,
+   "delay_hypotheses": 3,
+   "delay_hypotheses_on_f3": 0,
+   "late_entries_cited": 0,
+   "mistaken": []
+  },
+  {
+   "run_id": "run-561dc2dd",
+   "hypotheses": 21,
+   "delay_hypotheses": 19,
+   "delay_hypotheses_on_f3": 8,
+   "late_entries_cited": 0,
+   "mistaken": []
+  },
+  {
+   "run_id": "run-4b0db923",
+   "hypotheses": 4,
+   "delay_hypotheses": 4,
+   "delay_hypotheses_on_f3": 0,
+   "late_entries_cited": 0,
+   "mistaken": []
+  },
+  {
+   "run_id": "run-7e501502",
+   "hypotheses": 13,
+   "delay_hypotheses": 9,
+   "delay_hypotheses_on_f3": 0,
+   "late_entries_cited": 0,
+   "mistaken": []
+  }
+ ]
+}

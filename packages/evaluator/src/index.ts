@@ -38,3 +38,4 @@ export { CLAIM_RULES, sumTextClaims, turnTextVsProof, type TextClaimCount } from
 export { evaluateDev, evaluateReserved, type AgentRunData, type DiscoveryInput, type EvalOptions } from "./evaluate.js";
 export * from "./ambient/index.js";
 export * from "./journey/index.js";
+export { twoClockClaim } from "./two-clock.js";

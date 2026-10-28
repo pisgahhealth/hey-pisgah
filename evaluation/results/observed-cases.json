@@ -1,7 +1,7 @@
 {
  "schema": "hey-pisgah/observed-cases/1",
  "about": "Journey runs on the EMR sandbox, read back as evidence cases. occurred_at is when the words were spoken; recorded_at is when the EMR wrote the record. Both are minutes from 00:00 Lagos on the run day; occurred_s and recorded_s in a payload are seconds from the case start. Ids are case-local; no text from the EMR is kept.",
- "exported_at": "2026-10-28T13:08:04.048Z",
+ "exported_at": "2026-10-28T13:18:57.626Z",
  "cases": [
   {
    "case_id": "c-b7a01c0a",
@@ -8910,6 +8910,1552 @@
     "mode": "live",
     "version": null,
     "events": 70
+   }
+  },
+  {
+   "case_id": "c-e5c7a476",
+   "ward_id": "A",
+   "payer_type": "self_pay",
+   "requirement_version": "r1",
+   "facts": {
+    "payer_type": "self_pay",
+    "expected_disposition": "home",
+    "has_take_home_order": "false",
+    "take_home_status": "none",
+    "ward_id": "A",
+    "ward_requires": [
+     "discharge_summary",
+     "stay_bill",
+     "clearance_slip",
+     "refund_voucher"
+    ]
+   },
+   "events": [
+    {
+     "event_id": "ev-d048b6e5",
+     "seq": 1,
+     "case_id": "c-e5c7a476",
+     "kind": "person.acted",
+     "clock": "server",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "reception_1",
+     "actor_role": "reception",
+     "subject": null,
+     "payload": {
+      "step": "p01",
+      "act": "registered",
+      "occurred_s": 0,
+      "recorded_s": 0
+     }
+    },
+    {
+     "event_id": "ev-2c673247",
+     "seq": 2,
+     "case_id": "c-e5c7a476",
+     "kind": "task.opened",
+     "clock": "server",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "for_role": "nurse",
+      "occurred_s": 0.4,
+      "recorded_s": 0.4
+     }
+    },
+    {
+     "event_id": "ev-7f76f01e",
+     "seq": 3,
+     "case_id": "c-e5c7a476",
+     "kind": "line.classed",
+     "clock": "two_clock",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 10,
+      "classes": [
+       "instruction"
+      ],
+      "kinds": [
+       "record_triage_vitals"
+      ],
+      "occurred_s": 0,
+      "recorded_s": 3.6
+     }
+    },
+    {
+     "event_id": "ev-8189eec5",
+     "seq": 4,
+     "case_id": "c-e5c7a476",
+     "kind": "record.written",
+     "clock": "two_clock",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": "rec-e0b20b05",
+     "payload": {
+      "record_kind": "record_triage_vitals",
+      "record": "rec-e0b20b05",
+      "action": 9,
+      "line": 10,
+      "recorded_clock": "emr_row",
+      "on_behalf_of": "nurse_1",
+      "occurred_s": 0,
+      "recorded_s": 7.9
+     }
+    },
+    {
+     "event_id": "ev-5340d485",
+     "seq": 5,
+     "case_id": "c-e5c7a476",
+     "kind": "record.proved",
+     "clock": "server",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "action": 9,
+      "record_kind": "record_triage_vitals",
+      "occurred_s": 8.1,
+      "recorded_s": 8.1
+     }
+    },
+    {
+     "event_id": "ev-7a35b6a1",
+     "seq": 6,
+     "case_id": "c-e5c7a476",
+     "kind": "person.acted",
+     "clock": "server",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1",
+     "actor_role": "doctor",
+     "subject": null,
+     "payload": {
+      "step": "p02",
+      "act": "open_consult",
+      "occurred_s": 8.3,
+      "recorded_s": 8.3
+     }
+    },
+    {
+     "event_id": "ev-f698b9a0",
+     "seq": 7,
+     "case_id": "c-e5c7a476",
+     "kind": "task.opened",
+     "clock": "server",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "for_role": "doctor",
+      "occurred_s": 9.7,
+      "recorded_s": 9.7
+     }
+    },
+    {
+     "event_id": "ev-8a42aba1",
+     "seq": 8,
+     "case_id": "c-e5c7a476",
+     "kind": "line.classed",
+     "clock": "two_clock",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 4,
+      "classes": [
+       "instruction"
+      ],
+      "kinds": [
+       "draft_consult_note"
+      ],
+      "occurred_s": 9.6,
+      "recorded_s": 12.3
+     }
+    },
+    {
+     "event_id": "ev-b312cad9",
+     "seq": 9,
+     "case_id": "c-e5c7a476",
+     "kind": "version.read",
+     "clock": "server",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "version": 2,
+      "offers": 0,
+      "nothing_to_offer": true,
+      "occurred_s": 12.6,
+      "recorded_s": 12.6
+     }
+    },
+    {
+     "event_id": "ev-b4de153d",
+     "seq": 10,
+     "case_id": "c-e5c7a476",
+     "kind": "write.refused",
+     "clock": "two_clock",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "action": 3,
+      "record_kind": "draft_consult_note",
+      "status": 409,
+      "occurred_s": 9.6,
+      "recorded_s": 16.4
+     }
+    },
+    {
+     "event_id": "ev-b74e801b",
+     "seq": 11,
+     "case_id": "c-e5c7a476",
+     "kind": "line.classed",
+     "clock": "two_clock",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 5,
+      "classes": [
+       "instruction",
+       "instruction"
+      ],
+      "kinds": [
+       null,
+       null
+      ],
+      "occurred_s": 16.6,
+      "recorded_s": 21.5
+     }
+    },
+    {
+     "event_id": "ev-1cd85105",
+     "seq": 12,
+     "case_id": "c-e5c7a476",
+     "kind": "instruction.refused",
+     "clock": "two_clock",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 5,
+      "record_kind": null,
+      "occurred_s": 16.6,
+      "recorded_s": 21.6
+     }
+    },
+    {
+     "event_id": "ev-b8e17cc0",
+     "seq": 13,
+     "case_id": "c-e5c7a476",
+     "kind": "instruction.refused",
+     "clock": "two_clock",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 5,
+      "record_kind": null,
+      "occurred_s": 16.6,
+      "recorded_s": 21.6
+     }
+    },
+    {
+     "event_id": "ev-8170e8d4",
+     "seq": 14,
+     "case_id": "c-e5c7a476",
+     "kind": "line.classed",
+     "clock": "two_clock",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 6,
+      "classes": [
+       "aside",
+       "instruction"
+      ],
+      "kinds": [
+       null,
+       "request_admission"
+      ],
+      "occurred_s": 21.7,
+      "recorded_s": 23.5
+     }
+    },
+    {
+     "event_id": "ev-13ff51e8",
+     "seq": 15,
+     "case_id": "c-e5c7a476",
+     "kind": "record.written",
+     "clock": "two_clock",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": "rec-550483c6",
+     "payload": {
+      "record_kind": "request_admission",
+      "record": "rec-550483c6",
+      "action": 4,
+      "line": 6,
+      "recorded_clock": "emr_audit",
+      "on_behalf_of": "doctor_1",
+      "occurred_s": 21.7,
+      "recorded_s": 27.7
+     }
+    },
+    {
+     "event_id": "ev-b686a585",
+     "seq": 16,
+     "case_id": "c-e5c7a476",
+     "kind": "record.proved",
+     "clock": "server",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "action": 4,
+      "record_kind": "request_admission",
+      "occurred_s": 27.8,
+      "recorded_s": 27.8
+     }
+    },
+    {
+     "event_id": "ev-f4900936",
+     "seq": 17,
+     "case_id": "c-e5c7a476",
+     "kind": "person.acted",
+     "clock": "server",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1",
+     "actor_role": "doctor",
+     "subject": null,
+     "payload": {
+      "step": "p08",
+      "act": "sign_consult",
+      "occurred_s": 27.8,
+      "recorded_s": 27.8
+     }
+    },
+    {
+     "event_id": "ev-b072c23d",
+     "seq": 18,
+     "case_id": "c-e5c7a476",
+     "kind": "person.acted",
+     "clock": "server",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1",
+     "actor_role": "doctor",
+     "subject": null,
+     "payload": {
+      "step": "p03",
+      "act": "accept",
+      "occurred_s": 28,
+      "recorded_s": 28
+     }
+    },
+    {
+     "event_id": "ev-6d9beff1",
+     "seq": 19,
+     "case_id": "c-e5c7a476",
+     "kind": "person.acted",
+     "clock": "server",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1",
+     "actor_role": "nurse",
+     "subject": null,
+     "payload": {
+      "step": "p04",
+      "act": "assign_bed",
+      "occurred_s": 28.2,
+      "recorded_s": 28.2
+     }
+    },
+    {
+     "event_id": "ev-7436d139",
+     "seq": 20,
+     "case_id": "c-e5c7a476",
+     "kind": "version.read",
+     "clock": "server",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "version": 2,
+      "offers": 0,
+      "nothing_to_offer": true,
+      "occurred_s": 30.8,
+      "recorded_s": 30.8
+     }
+    },
+    {
+     "event_id": "ev-c072e540",
+     "seq": 21,
+     "case_id": "c-e5c7a476",
+     "kind": "line.classed",
+     "clock": "two_clock",
+     "occurred_at": 854,
+     "recorded_at": 854,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 11,
+      "classes": [
+       "instruction"
+      ],
+      "kinds": [
+       "record_observation"
+      ],
+      "occurred_s": 30.2,
+      "recorded_s": 33.1
+     }
+    },
+    {
+     "event_id": "ev-40be81fb",
+     "seq": 22,
+     "case_id": "c-e5c7a476",
+     "kind": "record.written",
+     "clock": "two_clock",
+     "occurred_at": 854,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": "rec-3a623fa8",
+     "payload": {
+      "record_kind": "record_observation",
+      "record": "rec-3a623fa8",
+      "action": 10,
+      "line": 11,
+      "recorded_clock": "emr_row",
+      "on_behalf_of": "nurse_1",
+      "occurred_s": 30.2,
+      "recorded_s": 37.7
+     }
+    },
+    {
+     "event_id": "ev-d1ee4d61",
+     "seq": 23,
+     "case_id": "c-e5c7a476",
+     "kind": "record.proved",
+     "clock": "server",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "action": 10,
+      "record_kind": "record_observation",
+      "occurred_s": 38.8,
+      "recorded_s": 38.8
+     }
+    },
+    {
+     "event_id": "ev-b2b99b6c",
+     "seq": 24,
+     "case_id": "c-e5c7a476",
+     "kind": "line.classed",
+     "clock": "two_clock",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 12,
+      "classes": [
+       "instruction",
+       "instruction"
+      ],
+      "kinds": [
+       "add_care_plan_item",
+       "add_care_plan_item"
+      ],
+      "occurred_s": 39,
+      "recorded_s": 42.3
+     }
+    },
+    {
+     "event_id": "ev-d420784d",
+     "seq": 25,
+     "case_id": "c-e5c7a476",
+     "kind": "record.written",
+     "clock": "two_clock",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": "rec-550483c6",
+     "payload": {
+      "record_kind": "add_care_plan_item",
+      "record": "rec-550483c6",
+      "action": 11,
+      "line": 12,
+      "recorded_clock": "emr_audit",
+      "on_behalf_of": "nurse_1",
+      "occurred_s": 39,
+      "recorded_s": 47.5
+     }
+    },
+    {
+     "event_id": "ev-52472b51",
+     "seq": 26,
+     "case_id": "c-e5c7a476",
+     "kind": "record.proved",
+     "clock": "server",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "action": 11,
+      "record_kind": "add_care_plan_item",
+      "occurred_s": 49.6,
+      "recorded_s": 49.6
+     }
+    },
+    {
+     "event_id": "ev-1f81f014",
+     "seq": 27,
+     "case_id": "c-e5c7a476",
+     "kind": "record.written",
+     "clock": "two_clock",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": "rec-550483c6",
+     "payload": {
+      "record_kind": "add_care_plan_item",
+      "record": "rec-550483c6",
+      "action": 12,
+      "line": 12,
+      "recorded_clock": "emr_audit",
+      "on_behalf_of": "nurse_1",
+      "occurred_s": 39,
+      "recorded_s": 50.5
+     }
+    },
+    {
+     "event_id": "ev-2b98ded1",
+     "seq": 28,
+     "case_id": "c-e5c7a476",
+     "kind": "record.proved",
+     "clock": "server",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "action": 12,
+      "record_kind": "add_care_plan_item",
+      "occurred_s": 51.1,
+      "recorded_s": 51.1
+     }
+    },
+    {
+     "event_id": "ev-f9ad2eaa",
+     "seq": 29,
+     "case_id": "c-e5c7a476",
+     "kind": "line.classed",
+     "clock": "two_clock",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 7,
+      "classes": [
+       "instruction"
+      ],
+      "kinds": [
+       "record_note"
+      ],
+      "occurred_s": 51.2,
+      "recorded_s": 55.1
+     }
+    },
+    {
+     "event_id": "ev-2c1a9d86",
+     "seq": 30,
+     "case_id": "c-e5c7a476",
+     "kind": "task.paused",
+     "clock": "server",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "pending": 1,
+      "occurred_s": 56.2,
+      "recorded_s": 56.2
+     }
+    },
+    {
+     "event_id": "ev-e0b8242f",
+     "seq": 31,
+     "case_id": "c-e5c7a476",
+     "kind": "line.classed",
+     "clock": "two_clock",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 13,
+      "classes": [
+       "instruction"
+      ],
+      "kinds": [
+       "record_observation"
+      ],
+      "occurred_s": 56.2,
+      "recorded_s": 57.7
+     }
+    },
+    {
+     "event_id": "ev-b987e293",
+     "seq": 32,
+     "case_id": "c-e5c7a476",
+     "kind": "record.written",
+     "clock": "two_clock",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": "rec-665ed393",
+     "payload": {
+      "record_kind": "record_observation",
+      "record": "rec-665ed393",
+      "action": 13,
+      "line": 13,
+      "recorded_clock": "emr_row",
+      "on_behalf_of": "nurse_1",
+      "occurred_s": 56.2,
+      "recorded_s": 61.8
+     }
+    },
+    {
+     "event_id": "ev-ae5d0cb4",
+     "seq": 33,
+     "case_id": "c-e5c7a476",
+     "kind": "record.proved",
+     "clock": "server",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "action": 13,
+      "record_kind": "record_observation",
+      "occurred_s": 61.9,
+      "recorded_s": 61.9
+     }
+    },
+    {
+     "event_id": "ev-fc7245f8",
+     "seq": 34,
+     "case_id": "c-e5c7a476",
+     "kind": "task.resumed",
+     "clock": "server",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "pending": 1,
+      "changed": 3,
+      "occurred_s": 62.2,
+      "recorded_s": 62.2
+     }
+    },
+    {
+     "event_id": "ev-2fc7dccf",
+     "seq": 35,
+     "case_id": "c-e5c7a476",
+     "kind": "record.written",
+     "clock": "two_clock",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": "rec-7d383278",
+     "payload": {
+      "record_kind": "record_note",
+      "record": "rec-7d383278",
+      "action": 5,
+      "line": 7,
+      "recorded_clock": "emr_row",
+      "on_behalf_of": "doctor_1",
+      "occurred_s": 51.2,
+      "recorded_s": 66.4
+     }
+    },
+    {
+     "event_id": "ev-c52b0ce1",
+     "seq": 36,
+     "case_id": "c-e5c7a476",
+     "kind": "record.proved",
+     "clock": "server",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "action": 5,
+      "record_kind": "record_note",
+      "occurred_s": 66.5,
+      "recorded_s": 66.5
+     }
+    },
+    {
+     "event_id": "ev-52032f24",
+     "seq": 37,
+     "case_id": "c-e5c7a476",
+     "kind": "line.classed",
+     "clock": "two_clock",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 8,
+      "classes": [
+       "instruction",
+       "conditional"
+      ],
+      "kinds": [
+       "page_staff",
+       null
+      ],
+      "occurred_s": 66.7,
+      "recorded_s": 70.1
+     }
+    },
+    {
+     "event_id": "ev-0a893459",
+     "seq": 38,
+     "case_id": "c-e5c7a476",
+     "kind": "record.written",
+     "clock": "two_clock",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": "rec-f26f5558",
+     "payload": {
+      "record_kind": "page_staff",
+      "record": "rec-f26f5558",
+      "action": 6,
+      "line": 8,
+      "recorded_clock": "emr_row",
+      "on_behalf_of": "doctor_1",
+      "occurred_s": 66.7,
+      "recorded_s": 74.3
+     }
+    },
+    {
+     "event_id": "ev-a514197e",
+     "seq": 39,
+     "case_id": "c-e5c7a476",
+     "kind": "record.proved",
+     "clock": "server",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "action": 6,
+      "record_kind": "page_staff",
+      "occurred_s": 74.4,
+      "recorded_s": 74.4
+     }
+    },
+    {
+     "event_id": "ev-919c75da",
+     "seq": 40,
+     "case_id": "c-e5c7a476",
+     "kind": "line.classed",
+     "clock": "two_clock",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 14,
+      "classes": [
+       "instruction"
+      ],
+      "kinds": [
+       "draft_handover"
+      ],
+      "occurred_s": 74.4,
+      "recorded_s": 76.8
+     }
+    },
+    {
+     "event_id": "ev-4061f4b2",
+     "seq": 41,
+     "case_id": "c-e5c7a476",
+     "kind": "report.prepared",
+     "clock": "two_clock",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "record_kind": "draft_handover",
+      "action": 14,
+      "line": 14,
+      "occurred_s": 74.4,
+      "recorded_s": 81.1
+     }
+    },
+    {
+     "event_id": "ev-bcc48d49",
+     "seq": 42,
+     "case_id": "c-e5c7a476",
+     "kind": "record.proved",
+     "clock": "server",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "action": 14,
+      "record_kind": "draft_handover",
+      "occurred_s": 81.2,
+      "recorded_s": 81.2
+     }
+    },
+    {
+     "event_id": "ev-d464168e",
+     "seq": 43,
+     "case_id": "c-e5c7a476",
+     "kind": "question.asked",
+     "clock": "server",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "question": 2,
+      "from_watch": false,
+      "occurred_s": 81.2,
+      "recorded_s": 81.2
+     }
+    },
+    {
+     "event_id": "ev-f3bd9d54",
+     "seq": 44,
+     "case_id": "c-e5c7a476",
+     "kind": "line.classed",
+     "clock": "two_clock",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 15,
+      "classes": [
+       "aside",
+       "instruction"
+      ],
+      "kinds": [
+       null,
+       "record_note"
+      ],
+      "occurred_s": 81.4,
+      "recorded_s": 84.1
+     }
+    },
+    {
+     "event_id": "ev-05469dce",
+     "seq": 45,
+     "case_id": "c-e5c7a476",
+     "kind": "question.answered",
+     "clock": "server",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1",
+     "actor_role": "nurse",
+     "subject": null,
+     "payload": {
+      "question": 2,
+      "occurred_s": 84.1,
+      "recorded_s": 84.1
+     }
+    },
+    {
+     "event_id": "ev-a914febe",
+     "seq": 46,
+     "case_id": "c-e5c7a476",
+     "kind": "record.written",
+     "clock": "two_clock",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": "rec-e500ccc5",
+     "payload": {
+      "record_kind": "record_note",
+      "record": "rec-e500ccc5",
+      "action": 15,
+      "line": 15,
+      "recorded_clock": "emr_row",
+      "on_behalf_of": "nurse_1",
+      "occurred_s": 81.4,
+      "recorded_s": 88.2
+     }
+    },
+    {
+     "event_id": "ev-4c7c9c81",
+     "seq": 47,
+     "case_id": "c-e5c7a476",
+     "kind": "record.proved",
+     "clock": "server",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "action": 15,
+      "record_kind": "record_note",
+      "occurred_s": 88.3,
+      "recorded_s": 88.3
+     }
+    },
+    {
+     "event_id": "ev-e06126b5",
+     "seq": 48,
+     "case_id": "c-e5c7a476",
+     "kind": "person.acted",
+     "clock": "server",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1",
+     "actor_role": "doctor",
+     "subject": null,
+     "payload": {
+      "step": "p05",
+      "act": "sign_off",
+      "occurred_s": 88.4,
+      "recorded_s": 88.4
+     }
+    },
+    {
+     "event_id": "ev-cc9ce2e0",
+     "seq": 49,
+     "case_id": "c-e5c7a476",
+     "kind": "step.observed",
+     "clock": "server",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "step_id": "st05",
+      "occurred_s": 90.6,
+      "recorded_s": 90.6
+     }
+    },
+    {
+     "event_id": "ev-b3cda52a",
+     "seq": 50,
+     "case_id": "c-e5c7a476",
+     "kind": "step.observed",
+     "clock": "server",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "step_id": "st05",
+      "occurred_s": 90.9,
+      "recorded_s": 90.9
+     }
+    },
+    {
+     "event_id": "ev-24873cbc",
+     "seq": 51,
+     "case_id": "c-e5c7a476",
+     "kind": "line.classed",
+     "clock": "two_clock",
+     "occurred_at": 855,
+     "recorded_at": 855,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 9,
+      "classes": [
+       "instruction",
+       "instruction"
+      ],
+      "kinds": [
+       "schedule_follow_up",
+       "page_staff"
+      ],
+      "occurred_s": 88.6,
+      "recorded_s": 91.4
+     }
+    },
+    {
+     "event_id": "ev-2d33ba32",
+     "seq": 52,
+     "case_id": "c-e5c7a476",
+     "kind": "record.written",
+     "clock": "two_clock",
+     "occurred_at": 855,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": "rec-e0b20b05",
+     "payload": {
+      "record_kind": "schedule_follow_up",
+      "record": "rec-e0b20b05",
+      "action": 7,
+      "line": 9,
+      "recorded_clock": "emr_audit",
+      "on_behalf_of": "doctor_1",
+      "occurred_s": 88.6,
+      "recorded_s": 95.7
+     }
+    },
+    {
+     "event_id": "ev-897bef44",
+     "seq": 53,
+     "case_id": "c-e5c7a476",
+     "kind": "record.proved",
+     "clock": "server",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "action": 7,
+      "record_kind": "schedule_follow_up",
+      "occurred_s": 95.9,
+      "recorded_s": 95.9
+     }
+    },
+    {
+     "event_id": "ev-9652d639",
+     "seq": 54,
+     "case_id": "c-e5c7a476",
+     "kind": "record.written",
+     "clock": "two_clock",
+     "occurred_at": 855,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": "rec-b40046a5",
+     "payload": {
+      "record_kind": "page_staff",
+      "record": "rec-b40046a5",
+      "action": 8,
+      "line": 9,
+      "recorded_clock": "emr_row",
+      "on_behalf_of": "doctor_1",
+      "occurred_s": 88.6,
+      "recorded_s": 96
+     }
+    },
+    {
+     "event_id": "ev-bcc2521b",
+     "seq": 55,
+     "case_id": "c-e5c7a476",
+     "kind": "record.proved",
+     "clock": "server",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "action": 8,
+      "record_kind": "page_staff",
+      "occurred_s": 96.1,
+      "recorded_s": 96.1
+     }
+    },
+    {
+     "event_id": "ev-24d83474",
+     "seq": 56,
+     "case_id": "c-e5c7a476",
+     "kind": "person.acted",
+     "clock": "server",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "accounts_clerk_1",
+     "actor_role": "accounts_clerk",
+     "subject": null,
+     "payload": {
+      "step": "p06",
+      "act": "open_bill",
+      "occurred_s": 96.3,
+      "recorded_s": 96.3
+     }
+    },
+    {
+     "event_id": "ev-7a287cad",
+     "seq": 57,
+     "case_id": "c-e5c7a476",
+     "kind": "task.opened",
+     "clock": "server",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "accounts_clerk_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "for_role": "accounts_clerk",
+      "occurred_s": 96.5,
+      "recorded_s": 96.5
+     }
+    },
+    {
+     "event_id": "ev-51cfd25c",
+     "seq": 58,
+     "case_id": "c-e5c7a476",
+     "kind": "offer.made",
+     "clock": "server",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "accounts_clerk_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "record_kind": "send_pay_link",
+      "version": null,
+      "occurred_s": 97.1,
+      "recorded_s": 97.1
+     }
+    },
+    {
+     "event_id": "ev-632c2d9c",
+     "seq": 59,
+     "case_id": "c-e5c7a476",
+     "kind": "question.asked",
+     "clock": "server",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "accounts_clerk_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "question": 1,
+      "from_watch": true,
+      "occurred_s": 97.1,
+      "recorded_s": 97.1
+     }
+    },
+    {
+     "event_id": "ev-20e633b3",
+     "seq": 60,
+     "case_id": "c-e5c7a476",
+     "kind": "version.read",
+     "clock": "server",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "accounts_clerk_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "version": 2,
+      "offers": 0,
+      "nothing_to_offer": true,
+      "occurred_s": 97.1,
+      "recorded_s": 97.1
+     }
+    },
+    {
+     "event_id": "ev-d9b92d24",
+     "seq": 61,
+     "case_id": "c-e5c7a476",
+     "kind": "line.classed",
+     "clock": "two_clock",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "accounts_clerk_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 1,
+      "classes": [
+       "aside",
+       "instruction"
+      ],
+      "kinds": [
+       null,
+       "prepare_bill"
+      ],
+      "occurred_s": 97.5,
+      "recorded_s": 100.6
+     }
+    },
+    {
+     "event_id": "ev-e0dc1f82",
+     "seq": 62,
+     "case_id": "c-e5c7a476",
+     "kind": "question.answered",
+     "clock": "server",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "accounts_clerk_1",
+     "actor_role": "accounts_clerk",
+     "subject": null,
+     "payload": {
+      "question": 1,
+      "occurred_s": 100.6,
+      "recorded_s": 100.6
+     }
+    },
+    {
+     "event_id": "ev-64c44268",
+     "seq": 63,
+     "case_id": "c-e5c7a476",
+     "kind": "report.prepared",
+     "clock": "two_clock",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "accounts_clerk_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "record_kind": "prepare_bill",
+      "action": 1,
+      "line": 1,
+      "occurred_s": 97.5,
+      "recorded_s": 104.8
+     }
+    },
+    {
+     "event_id": "ev-bdfee6a7",
+     "seq": 64,
+     "case_id": "c-e5c7a476",
+     "kind": "record.proved",
+     "clock": "server",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "accounts_clerk_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "action": 1,
+      "record_kind": "prepare_bill",
+      "occurred_s": 105,
+      "recorded_s": 105
+     }
+    },
+    {
+     "event_id": "ev-c12fab72",
+     "seq": 65,
+     "case_id": "c-e5c7a476",
+     "kind": "line.classed",
+     "clock": "two_clock",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "accounts_clerk_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 2,
+      "classes": [
+       "instruction"
+      ],
+      "kinds": [
+       "send_pay_link"
+      ],
+      "occurred_s": 105,
+      "recorded_s": 107.5
+     }
+    },
+    {
+     "event_id": "ev-876ce991",
+     "seq": 66,
+     "case_id": "c-e5c7a476",
+     "kind": "record.written",
+     "clock": "two_clock",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "accounts_clerk_1_agent",
+     "actor_role": "agent",
+     "subject": "rec-48afa2f8",
+     "payload": {
+      "record_kind": "send_pay_link",
+      "record": "rec-48afa2f8",
+      "action": 2,
+      "line": 2,
+      "recorded_clock": "agent_ack",
+      "on_behalf_of": "accounts_clerk_1",
+      "occurred_s": 105,
+      "recorded_s": 113.3
+     }
+    },
+    {
+     "event_id": "ev-3bd22373",
+     "seq": 67,
+     "case_id": "c-e5c7a476",
+     "kind": "record.unverified",
+     "clock": "server",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "accounts_clerk_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "action": 2,
+      "record_kind": "send_pay_link",
+      "occurred_s": 114.8,
+      "recorded_s": 114.8
+     }
+    },
+    {
+     "event_id": "ev-306b68e4",
+     "seq": 68,
+     "case_id": "c-e5c7a476",
+     "kind": "line.classed",
+     "clock": "two_clock",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "accounts_clerk_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 3,
+      "classes": [
+       "instruction"
+      ],
+      "kinds": [
+       null
+      ],
+      "occurred_s": 114.8,
+      "recorded_s": 118.2
+     }
+    },
+    {
+     "event_id": "ev-3e0e3637",
+     "seq": 69,
+     "case_id": "c-e5c7a476",
+     "kind": "instruction.refused",
+     "clock": "two_clock",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "accounts_clerk_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "line": 3,
+      "record_kind": null,
+      "occurred_s": 114.8,
+      "recorded_s": 118.2
+     }
+    },
+    {
+     "event_id": "ev-24754fde",
+     "seq": 70,
+     "case_id": "c-e5c7a476",
+     "kind": "person.acted",
+     "clock": "server",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "accounts_clerk_1",
+     "actor_role": "accounts_clerk",
+     "subject": null,
+     "payload": {
+      "step": "p07",
+      "act": "settle",
+      "occurred_s": 118.4,
+      "recorded_s": 118.4
+     }
+    },
+    {
+     "event_id": "ev-f585c964",
+     "seq": 71,
+     "case_id": "c-e5c7a476",
+     "kind": "step.observed",
+     "clock": "server",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "accounts_clerk_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "step_id": "st13",
+      "occurred_s": 132.7,
+      "recorded_s": 132.7
+     }
+    },
+    {
+     "event_id": "ev-5ed7e391",
+     "seq": 72,
+     "case_id": "c-e5c7a476",
+     "kind": "step.observed",
+     "clock": "server",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "nurse_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "step_id": "st13",
+      "occurred_s": 135.7,
+      "recorded_s": 135.7
+     }
+    },
+    {
+     "event_id": "ev-57f2af42",
+     "seq": 73,
+     "case_id": "c-e5c7a476",
+     "kind": "step.observed",
+     "clock": "server",
+     "occurred_at": 856,
+     "recorded_at": 856,
+     "late_entry_reason": null,
+     "actor_id": "doctor_1_agent",
+     "actor_role": "agent",
+     "subject": null,
+     "payload": {
+      "step_id": "st13",
+      "occurred_s": 136.2,
+      "recorded_s": 136.2
+     }
+    }
+   ],
+   "observed": {
+    "origin": "emr_journey",
+    "mode": "live",
+    "version": 2,
+    "events": 73
    }
   }
  ]

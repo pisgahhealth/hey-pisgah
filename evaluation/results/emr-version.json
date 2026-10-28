@@ -1,0 +1,90 @@
+{
+ "measured_at": "2026-10-28T13:16:45.198Z",
+ "mode": "live",
+ "journey_id": "journey-1",
+ "version": 2,
+ "definition_hash": "42fa598d10013a6074b41d7babcd65859812252ca1ccf53fb2d5a402917b5472",
+ "parent_version": 1,
+ "requirement_version": "r1",
+ "ward_id": "A",
+ "facts_source": "Declared: the journey seed registers the patient as cash at the desk and the script orders no take-home medicines; no door read shows the payer.",
+ "lines": [
+  "Nothing to offer under version 2 for a self-pay patient."
+ ],
+ "offers_made": 0,
+ "offers_blocked": 0,
+ "readings": [
+  {
+   "step_id": "st06",
+   "document_id": "discharge_summary",
+   "stage": "draft",
+   "changed": false,
+   "status": "no_counterpart",
+   "unmet": [],
+   "watched": true,
+   "reason": "no work kind in this EMR prepares the discharge_summary draft"
+  },
+  {
+   "step_id": "st14",
+   "document_id": "discharge_summary",
+   "stage": "final",
+   "changed": false,
+   "status": "not_agent_work",
+   "unmet": [],
+   "watched": false,
+   "reason": "st14 is hand_over_document by nurse, not a preparation the agent may do"
+  },
+  {
+   "step_id": "st17a",
+   "document_id": "refund_voucher",
+   "stage": "draft",
+   "changed": false,
+   "status": "no_counterpart",
+   "unmet": [],
+   "watched": false,
+   "reason": "no watched fact in this EMR shows after st16"
+  },
+  {
+   "step_id": "st09a",
+   "document_id": "hmo_claim_cover",
+   "stage": "draft",
+   "changed": true,
+   "status": "not_applicable",
+   "unmet": [
+    {
+     "fact": "payer_type",
+     "wanted": "hmo",
+     "is": "self_pay"
+    }
+   ],
+   "watched": false,
+   "reason": "hmo_claim_cover draft applies when payer_type is hmo; this patient has payer_type self_pay"
+  }
+ ],
+ "by_owner": {
+  "accounts": {
+   "offers": [],
+   "lines": [
+    "Nothing to offer under version 2 for a self-pay patient."
+   ],
+   "made": 0,
+   "blocked": 0
+  },
+  "doctor": {
+   "offers": [],
+   "lines": [
+    "Nothing to offer under version 2 for a self-pay patient."
+   ],
+   "made": 0,
+   "blocked": 0
+  },
+  "nurse": {
+   "offers": [],
+   "lines": [
+    "Nothing to offer under version 2 for a self-pay patient."
+   ],
+   "made": 0,
+   "blocked": 0
+  }
+ }
+}

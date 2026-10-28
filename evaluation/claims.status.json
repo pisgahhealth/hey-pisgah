@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-28T12:42:58.670Z",
-  "commit": "84088d5",
+  "generated_at": "2026-10-28T13:41:05.461Z",
+  "commit": "c121876",
   "claims": [
     {
       "claim_id": "C-01",
@@ -40,76 +40,63 @@
     },
     {
       "claim_id": "C-04",
-      "status": "not_measured",
+      "status": "green",
       "values": {
-        "hypotheses": null,
-        "stated_reason": null,
-        "n": null,
-        "events": null,
-        "missing": [
-          "hypotheses"
-        ]
+        "hypotheses": 4,
+        "stated_reason": true,
+        "n": 4,
+        "events": 14
       },
-      "measured_at": null
+      "measured_at": "2026-10-28T13:41:04.793Z"
     },
     {
       "claim_id": "C-05",
-      "status": "not_measured",
+      "status": "green",
       "values": {
-        "experiments": null,
-        "sublog_hashes_equal": null,
-        "prediction_check_after_present": null,
-        "n": null,
-        "confirmed": null,
-        "contradicted": null,
-        "inconclusive": null,
-        "missing": [
-          "experiments",
-          "sublog_hashes_equal",
-          "prediction_check_after_present"
-        ]
+        "experiments": 1,
+        "sublog_hashes_equal": true,
+        "prediction_check_after_present": true,
+        "n": 1,
+        "confirmed": 0,
+        "contradicted": 3,
+        "inconclusive": 0
       },
-      "measured_at": null
+      "measured_at": "2026-10-28T13:41:04.793Z"
     },
     {
       "claim_id": "C-06",
-      "status": "not_measured",
+      "status": "red",
       "values": {
-        "dev_gate_pass": null,
+        "dev_gate_pass": false,
         "exception_check_pass": null,
         "fences_unchanged": null,
-        "proposals_validated": null,
+        "proposals_validated": 0,
         "scope": null,
-        "n": null,
-        "missing": [
-          "dev_gate_pass",
-          "exception_check_pass",
-          "fences_unchanged"
-        ]
+        "n": null
       },
-      "measured_at": null
+      "measured_at": "2026-10-28T13:41:04.793Z"
     },
     {
       "claim_id": "C-07",
-      "status": "not_measured",
+      "status": "red",
       "values": {
-        "adopted_by_person": null,
-        "ac09_pass": null,
-        "order_differs_where_diff_says": null,
-        "role": null,
-        "reason": null
+        "adopted_by_person": false,
+        "ac09_pass": true,
+        "order_differs_where_diff_says": false,
+        "role": "ward manager (synthetic, issued by a build lane)",
+        "reason": "both fresh patients were self-pay and version 2 changes only st09a: hmo_claim_cover draft applies when payer_type is hmo; this patient has payer_type self_pay"
       },
-      "measured_at": null
+      "measured_at": "2026-10-28T13:41:04.841Z"
     },
     {
       "claim_id": "C-08",
-      "status": "not_measured",
+      "status": "green",
       "values": {
-        "wardB_demo.ac05_pass": null,
-        "conflict_before_noncompliant": null,
-        "path": null
+        "wardB_demo.ac05_pass": true,
+        "conflict_before_noncompliant": true,
+        "path": "adapted"
       },
-      "measured_at": null
+      "measured_at": "2026-10-28T13:41:04.841Z"
     },
     {
       "claim_id": "C-09",
@@ -124,17 +111,14 @@
     },
     {
       "claim_id": "C-10",
-      "status": "not_measured",
+      "status": "red",
       "values": {
-        "cycle2_result_recorded": null,
-        "no_hypothesis_cited_as_evidence": null,
-        "result": null,
-        "missing": [
-          "cycle2_result_recorded",
-          "no_hypothesis_cited_as_evidence"
-        ]
+        "cycle2_result_recorded": false,
+        "no_hypothesis_cited_as_evidence": true,
+        "result": "no_result",
+        "stop": "budget_calls (60 calls)"
       },
-      "measured_at": null
+      "measured_at": "2026-10-28T13:41:04.839Z"
     },
     {
       "claim_id": "C-11",
@@ -204,15 +188,14 @@
     },
     {
       "claim_id": "C-16",
-      "status": "not_measured",
+      "status": "amber",
       "values": {
-        "recorded_clock_delay_hypotheses_on_f3": null,
-        "n": null,
-        "missing": [
-          "recorded_clock_delay_hypotheses_on_f3"
-        ]
+        "recorded_clock_delay_hypotheses_on_f3": 0,
+        "late_entries_cited": 0,
+        "delay_hypotheses_on_f3": 8,
+        "n": 0
       },
-      "measured_at": null
+      "measured_at": "2026-10-28T13:41:04.793Z"
     },
     {
       "claim_id": "C-17",

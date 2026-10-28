@@ -88,8 +88,8 @@
         "table": "hypothesis ledger"
       },
       "acceptance": {
-        "command": "check:discovery",
-        "result_path": "evaluation/results/discovery.json",
+        "command": "npx tsx apps/cli/src/learning-claims.ts (arguments in the M4.c done file), then npm run claims:check",
+        "result_path": "evaluation/results/learning.json",
         "predicate": "hypotheses >= 2 ; amber: hypotheses == 1 && stated_reason",
         "measured_on": "dev"
       },
@@ -113,8 +113,8 @@
         "table": "prediction check table"
       },
       "acceptance": {
-        "command": "check:discovery",
-        "result_path": "evaluation/results/discovery.json",
+        "command": "npx tsx apps/cli/src/learning-claims.ts (arguments in the M4.c done file), then npm run claims:check",
+        "result_path": "evaluation/results/experiments.json",
         "predicate": "experiments >= 1 && sublog_hashes_equal && prediction_check_after_present ; amber: experiments >= 1",
         "measured_on": "dev"
       },
@@ -138,8 +138,8 @@
         "table": "validation report"
       },
       "acceptance": {
-        "command": "eval --set dev",
-        "result_path": "evaluation/results/validation.json",
+        "command": "npx tsx apps/cli/src/learning-claims.ts (arguments in the M4.c done file), then npm run claims:check",
+        "result_path": "evaluation/results/proposals.json",
         "predicate": "dev_gate_pass && exception_check_pass && fences_unchanged ; amber: proposals_validated >= 1",
         "measured_on": "dev"
       },
@@ -163,10 +163,10 @@
         "table": "A2 and A2a rows"
       },
       "acceptance": {
-        "command": "eval --set reserved",
-        "result_path": "evaluation/reserved/RUN.json",
+        "command": "npx tsx apps/cli/src/learning-claims.ts (arguments in the M4.c done file), then npm run claims:check",
+        "result_path": "evaluation/results/adoption.json",
         "predicate": "adopted_by_person && ac09_pass && order_differs_where_diff_says",
-        "measured_on": "reserved"
+        "measured_on": "dev"
       },
       "wording": {
         "pass": "Adopted by {role}; the agent prepared the paperwork at the learned point on a new patient",
@@ -188,10 +188,10 @@
         "table": "A0, A1, A2 blind, A2a, A1 corrected"
       },
       "acceptance": {
-        "command": "eval --set reserved",
-        "result_path": "evaluation/reserved/RUN.json",
+        "command": "npx tsx apps/cli/src/learning-claims.ts (arguments in the M4.c done file), then npm run claims:check",
+        "result_path": "evaluation/results/adoption.json",
         "predicate": "wardB_demo.ac05_pass && conflict_before_noncompliant",
-        "measured_on": "reserved"
+        "measured_on": "dev"
       },
       "wording": {
         "pass": "Recognised the new requirement and {path}; the blind version would have failed",
@@ -238,7 +238,7 @@
         "table": "second-cycle ledger"
       },
       "acceptance": {
-        "command": "check:discovery",
+        "command": "npm run discover -- --arm adaptive --cycle 2, then npx tsx apps/cli/src/learning-claims.ts --cycle2, then npm run claims:check",
         "result_path": "evaluation/results/cycle2.json",
         "predicate": "cycle2_result_recorded && no_hypothesis_cited_as_evidence",
         "measured_on": "dev"
@@ -246,7 +246,7 @@
       "wording": {
         "pass": "A second pass over the verified outcomes concluded: {result}",
         "partial": "Second cycle ran and ended without a conclusion",
-        "fail": "Second cycle not run",
+        "fail": "Second cycle ran and reached no result; it stopped at {stop}",
         "not_measured": "Not measured yet"
       },
       "evidence_links": []
@@ -388,14 +388,14 @@
         "table": "delay hypotheses by clock"
       },
       "acceptance": {
-        "command": "check:discovery",
-        "result_path": "evaluation/results/discovery.json",
-        "predicate": "recorded_clock_delay_hypotheses_on_f3 == 0",
+        "command": "npx tsx apps/cli/src/learning-claims.ts (arguments in the M4.c done file), then npm run claims:check",
+        "result_path": "evaluation/results/two-clock.json",
+        "predicate": "recorded_clock_delay_hypotheses_on_f3 == 0 && late_entries_cited >= 1 ; amber: recorded_clock_delay_hypotheses_on_f3 == 0",
         "measured_on": "dev"
       },
       "wording": {
         "pass": "Read when work happened, not when it was typed up; no late entry was mistaken for a delay",
-        "partial": "One hypothesis cited a recorded-clock interval and was later rejected",
+        "partial": "No delay hypothesis took an entry made later for slow work, but the {delay_hypotheses_on_f3} delay hypotheses on the case with entries made later cited none of them, so reading the two clocks was not put to the test",
         "fail": "{n} hypotheses mistook late entry for delay",
         "not_measured": "Not measured yet"
       },
@@ -536,6 +536,87 @@
         "C-09": "planted_failure_detected && only_affected_blocked && approval_by_person"
       },
       "reason": "M4.b's planted run approved the suspension from the report script acting as the synthetic ward manager; green now needs a person's decision (human_decision), the scripted approval is amber"
+    },
+    {
+      "date": "2026-10-28",
+      "by": "M4.c",
+      "claims": [
+        "C-04",
+        "C-05",
+        "C-06",
+        "C-07",
+        "C-08",
+        "C-10",
+        "C-16"
+      ],
+      "previous_predicates": {
+        "C-04": "hypotheses >= 2 ; amber: hypotheses == 1 && stated_reason",
+        "C-05": "experiments >= 1 && sublog_hashes_equal && prediction_check_after_present ; amber: experiments >= 1",
+        "C-06": "dev_gate_pass && exception_check_pass && fences_unchanged ; amber: proposals_validated >= 1",
+        "C-07": "adopted_by_person && ac09_pass && order_differs_where_diff_says",
+        "C-08": "wardB_demo.ac05_pass && conflict_before_noncompliant",
+        "C-10": "cycle2_result_recorded && no_hypothesis_cited_as_evidence",
+        "C-16": "recorded_clock_delay_hypotheses_on_f3 == 0"
+      },
+      "previous_acceptance": {
+        "C-04": {
+          "command": "check:discovery",
+          "result_path": "evaluation/results/discovery.json",
+          "predicate": "hypotheses >= 2 ; amber: hypotheses == 1 && stated_reason",
+          "measured_on": "dev"
+        },
+        "C-05": {
+          "command": "check:discovery",
+          "result_path": "evaluation/results/discovery.json",
+          "predicate": "experiments >= 1 && sublog_hashes_equal && prediction_check_after_present ; amber: experiments >= 1",
+          "measured_on": "dev"
+        },
+        "C-06": {
+          "command": "eval --set dev",
+          "result_path": "evaluation/results/validation.json",
+          "predicate": "dev_gate_pass && exception_check_pass && fences_unchanged ; amber: proposals_validated >= 1",
+          "measured_on": "dev"
+        },
+        "C-07": {
+          "command": "eval --set reserved",
+          "result_path": "evaluation/reserved/RUN.json",
+          "predicate": "adopted_by_person && ac09_pass && order_differs_where_diff_says",
+          "measured_on": "reserved"
+        },
+        "C-08": {
+          "command": "eval --set reserved",
+          "result_path": "evaluation/reserved/RUN.json",
+          "predicate": "wardB_demo.ac05_pass && conflict_before_noncompliant",
+          "measured_on": "reserved"
+        },
+        "C-10": {
+          "command": "check:discovery",
+          "result_path": "evaluation/results/cycle2.json",
+          "predicate": "cycle2_result_recorded && no_hypothesis_cited_as_evidence",
+          "measured_on": "dev"
+        },
+        "C-16": {
+          "command": "check:discovery",
+          "result_path": "evaluation/results/discovery.json",
+          "predicate": "recorded_clock_delay_hypotheses_on_f3 == 0",
+          "measured_on": "dev"
+        }
+      },
+      "previous_wording": {
+        "C-10": {
+          "pass": "A second pass over the verified outcomes concluded: {result}",
+          "partial": "Second cycle ran and ended without a conclusion",
+          "fail": "Second cycle not run",
+          "not_measured": "Not measured yet"
+        },
+        "C-16": {
+          "pass": "Read when work happened, not when it was typed up; no late entry was mistaken for a delay",
+          "partial": "One hypothesis cited a recorded-clock interval and was later rejected",
+          "fail": "{n} hypotheses mistook late entry for delay",
+          "not_measured": "Not measured yet"
+        }
+      },
+      "reason": "Predicates now read the real result files. C-04, C-05 and C-06 read files the claims-results command writes from the published adaptive runs (newest commitment revision; k of n kept beside each), because discovery.json and validation.json hold the evaluator's placeholders at the top level and the three wordings share the placeholder n. C-07 and C-08 read adoption.json, built from the two demo runs on the simulator, the fresh EMR journey and the version log; they are measured on dev cases, not reserved ones, since no reserved run exists yet, so measured_on says dev. C-16 is tightened: green also needs the delay hypotheses on the late-entry case to cite at least one late entry, because a zero count over hypotheses that never touch a late entry tests nothing; the partial wording now says that, without the words the step 1 page must not show. C-10's fail wording said the cycle was not run; a cycle that ran out of calls with no result is also red under the unchanged predicate and now says so. No predicate was loosened. C-09 and C-11 are unchanged: C-11 still reads the reserved RUN.json, which does not exist yet."
     }
   ]
 }
