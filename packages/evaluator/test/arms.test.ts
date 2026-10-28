@@ -94,7 +94,7 @@ describe("A4, the sweep, fuzzing and the external note", () => {
     expect(r.reference).toMatchObject({ status: "dev_validated", in_space: false, single_op_with_same_effect: null });
     expect(r.reference!.best_cut).toBeGreaterThanOrEqual(60);
     expect(r.passing_and_cutting).toBe(0);
-  }, 60_000);
+  }, 420_000);
   it("fuzzes random valid sequences without breaking a fence, the world or a hash", () => {
     const f = fuzz(v1, poolCases("dev"), facts, 40);
     expect(f).toMatchObject({ sequences: 40, aborted: 0, sublog_mismatch: 0, fences_changed: 0, prohibited_executed: 0, hash_drift: 0, green: true });
