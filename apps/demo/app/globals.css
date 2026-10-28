@@ -279,6 +279,14 @@ h1, h2, h3, h4 { margin: 0; }
 .start button { font: 600 14px var(--sans); padding: 9px 16px; border-radius: 10px; border: 0; background: var(--green); color: #fff; cursor: pointer; margin-top: 12px; }
 .start button:disabled { opacity: 0.6; }
 .start-err { color: var(--clay-t); font-size: 13px; }
+.goal-label { display: block; margin-top: 10px; font: 600 11px/1.4 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.goal-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
+.goal-input { flex: 1 1 320px; min-width: 0; font: 15px/1.4 var(--sans); padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); }
+.goal-input:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
+.mic { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.start .mic-btn { display: inline-flex; gap: 6px; align-items: center; margin: 0; padding: 8px 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+.start .mic-btn.on { background: var(--clay-t); border-color: var(--clay-t); color: #fff; }
+.mic-note { font-size: 13px; color: var(--ink-2); }
 
 /* Evaluation view tabs. */
 .tabs ul { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }

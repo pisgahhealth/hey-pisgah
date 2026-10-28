@@ -1,7 +1,7 @@
 import { claimsOn, type ClaimsModel } from "../src/lib/claims.js";
 import type { WardBoard } from "../src/lib/discovery.js";
 import { stepOf, STEPS, type DemoStep } from "../src/lib/steps.js";
-import type { TaskPage } from "../src/lib/task-source.js";
+import { DEMO_TASK, type TaskPage } from "../src/lib/task-source.js";
 import { ClaimGroup } from "./claims";
 import { LiveRefresh, StartTask } from "./client";
 import { Frame } from "./frame";
@@ -45,7 +45,7 @@ function TaskBody({ page }: { page: TaskPage }) {
       <section className="shell">
         <p className="shell-tag">No task on serve yet</p>
         <p>serve is running with no task. Starting the case posts one task to serve, which runs it in its own mode.</p>
-        <StartTask />
+        <StartTask defaultGoal={DEMO_TASK.goal} />
       </section>
     );
   }
@@ -58,6 +58,12 @@ function TaskBody({ page }: { page: TaskPage }) {
         <p>The task below ran on workflow v{v.workflow_version}; the adopted version and its approver show here once a person adopts a change.</p>
       </section>
       <TaskViewPanel task={v} />
+      {page.source.kind === "serve" ? (
+        <section className="shell shell-thin">
+          <p className="shell-tag">New task on serve</p>
+          <StartTask defaultGoal={DEMO_TASK.goal} />
+        </section>
+      ) : null}
       {page.source.kind === "serve" && page.tasks.length > 1 ? (
         <nav className="task-pick" aria-label="Tasks on serve">
           {page.tasks.map((t) => <a key={t.task_id} href={`/step/5?task=${t.task_id}`} aria-current={t.task_id === v.task_id ? "true" : undefined}>{t.task_id} · {t.state}</a>)}

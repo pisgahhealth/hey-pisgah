@@ -93,9 +93,28 @@ describe("serve and the store", () => {
     vi.unstubAllEnvs();
   });
 
-  it("transcribe is a 501 stub", async () => {
+  it("the start route carries a typed or spoken goal and nothing else", async () => {
+    vi.stubEnv("HEY_PISGAH_SERVE_URL", url);
+    vi.resetModules();
+    const route = await import("../app/api/serve/tasks/route");
+    const send = (body: string) => route.POST(new Request("http://demo/api/serve/tasks", { method: "POST", body }));
+    const before = hits.filter((h) => h.method === "POST").length;
+    expect((await send(JSON.stringify({ goal: "  Prepare the  discharge summary for bed A-23. " }))).status).toBe(201);
+    const post = hits.filter((h) => h.method === "POST");
+    expect(JSON.parse(post[post.length - 1]!.body)).toEqual({ ...DEMO_TASK, goal: "Prepare the discharge summary for bed A-23." });
+    for (const bad of [JSON.stringify({ goal: "x", case_id: "c-other" }), JSON.stringify({ goal: "" }), JSON.stringify({ goal: "x".repeat(501) }), JSON.stringify({ goal: 3 }), "not json"]) {
+      expect((await send(bad)).status).toBe(400);
+    }
+    expect(hits.filter((h) => h.method === "POST")).toHaveLength(before + 1);
+    vi.unstubAllEnvs();
+  });
+
+  it("transcribe answers 501 outside live mode and 405 on GET", async () => {
+    vi.stubEnv("HEY_PISGAH_MODE", "replay");
+    vi.resetModules();
     const route = await import("../app/api/transcribe/route");
-    expect(route.POST().status).toBe(501);
-    expect(route.GET().status).toBe(501);
+    expect((await route.POST(new Request("http://demo/api/transcribe", { method: "POST", headers: { "content-type": "audio/wav" }, body: new Uint8Array(10) }))).status).toBe(501);
+    expect(route.GET().status).toBe(405);
+    vi.unstubAllEnvs();
   });
 });

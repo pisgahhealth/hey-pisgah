@@ -1,9 +1,20 @@
-export const dynamic = "force-dynamic";
+import { repoRoot } from "../../../src/lib/paths.js";
+import { handleTranscribe, metaKey, vocabularyKeywords } from "../../../src/lib/voice.js";
 
-// Speech to text is lane L1.6's; until it lands the route answers 501 and stores nothing.
-function notYet(): Response {
-  return Response.json({ error: "not_implemented", detail: "Speech to text is not built yet." }, { status: 501 });
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+let keywords: string[] | null = null;
+
+// Forwards one push-to-talk WAV to Voice Transcribe in live mode and answers with its finished transcript.
+export function POST(req: Request): Promise<Response> {
+  return handleTranscribe(req, {
+    mode: process.env["HEY_PISGAH_MODE"],
+    key: () => metaKey(),
+    keywords: () => (keywords ??= vocabularyKeywords(repoRoot()))
+  });
 }
 
-export function POST(): Response { return notYet(); }
-export function GET(): Response { return notYet(); }
+export function GET(): Response {
+  return Response.json({ error: "method_not_allowed", detail: "POST a WAV recording." }, { status: 405, headers: { allow: "POST" } });
+}

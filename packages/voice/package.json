@@ -9,6 +9,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./recorder": {
+      "types": "./src/recorder.ts",
+      "default": "./src/recorder.ts"
     }
   }
 }
