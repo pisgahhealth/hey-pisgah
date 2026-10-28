@@ -23,6 +23,14 @@ export function trailingSilenceMs(samples: Float32Array, rate: number, threshold
   return Math.min(n * FRAME_MS, Math.round((samples.length / rate) * 1000));
 }
 
+// How long the audio is quiet at its start, in milliseconds.
+export function leadingSilenceMs(samples: Float32Array, rate: number, threshold = SILENCE_RMS): number {
+  const rms = frameRms(samples, rate);
+  let n = 0;
+  for (let f = 0; f < rms.length && rms[f]! < threshold; f++) n += 1;
+  return Math.min(n * FRAME_MS, Math.round((samples.length / rate) * 1000));
+}
+
 export type SilenceRun = { start_ms: number; end_ms: number };
 // Every quiet stretch of at least minMs, in order.
 export function silenceRuns(samples: Float32Array, rate: number, minMs: number, threshold = SILENCE_RMS): SilenceRun[] {

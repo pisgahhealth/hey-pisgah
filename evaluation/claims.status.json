@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-28T03:23:12.958Z",
-  "commit": "2c22cc7",
+  "generated_at": "2026-10-28T08:14:52.412Z",
+  "commit": "6c72b0c",
   "claims": [
     {
       "claim_id": "C-01",
@@ -215,6 +215,25 @@
         "missing": [
           "recorded_clock_delay_hypotheses_on_f3"
         ]
+      },
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-17",
+      "status": "not_measured",
+      "values": {
+        "precision": null,
+        "recall": null,
+        "false_actions_from_talk": null,
+        "questions_untied": null,
+        "ambiguities_asked": null,
+        "ambiguities": null,
+        "partials_acted": null,
+        "replay_same": null,
+        "actions_matched": null,
+        "actions_expected": null,
+        "actions_missed": null,
+        "wrong_actions": null
       },
       "measured_at": null
     }

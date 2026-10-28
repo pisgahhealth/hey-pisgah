@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanTranscript, decodeWav, encodeWav, spokenDigits, stripChunks, trailingSilenceMs } from "../src/index.js";
+import { cleanTranscript, decodeWav, encodeWav, leadingSilenceMs, spokenDigits, stripChunks, trailingSilenceMs } from "../src/index.js";
 
 const RATE = 16_000;
 // Speech is a loud tone and a pause is digital silence, so the cuts are exact.
@@ -23,6 +23,7 @@ describe("silence and chunks", () => {
     expect(back.sampleRate).toBe(RATE);
     expect(trailingSilenceMs(back.samples, back.sampleRate)).toBeGreaterThanOrEqual(690);
     expect(trailingSilenceMs(audio([["talk", 500]]), RATE)).toBe(0);
+    expect(leadingSilenceMs(audio([["quiet", 600], ["talk", 500]]), RATE)).toBe(600);
   });
 
   it("cuts like the strip: 700 ms after speech, at the 6 s cap mid-word, and never sends a quiet-only chunk", () => {

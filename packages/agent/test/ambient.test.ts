@@ -3,32 +3,14 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { hashJson } from "@hey-pisgah/contracts";
-import { ModelClient, type ChatCompletion, type MockResponder } from "@hey-pisgah/model";
+import { ModelClient } from "@hey-pisgah/model";
 import { encodeWav, type FinalTranscript } from "@hey-pisgah/voice";
 import { EmrRuntime } from "../src/emr/runtime.js";
 import { ListenSessions, recordingTranscriber, replayTranscriber, type Transcriber } from "../src/emr/listen.js";
-import { gateCommitmentBody, gateMessage, gatePrompt, denyHits, type GateClause } from "../src/emr/gate.js";
+import { gateCommitmentBody, gateMessage, gatePrompt, denyHits } from "../src/emr/gate.js";
 import { GATE_COMMITMENT_FILE, committedGateHash } from "../src/emr/gate.commit.js";
 import { startEmrServe } from "../src/emr/serve.js";
-import { ADM, FakeEmr, OWNER, emrRoot } from "./emr-helpers.js";
-
-type C = Partial<GateClause> & { class: GateClause["class"] };
-const clause = (c: C): GateClause => ({ words: "words", ...c }) as GateClause;
-// A mock model that answers each gate call from a script keyed by the clinician's words.
-export function gater(script: (said: string, user: string) => C[], seen: string[] = []): MockResponder {
-  return ({ body, hash }) => {
-    const msgs = body["messages"] as { role: string; content: string }[];
-    const user = String(msgs.find((m) => m.role === "user")?.content ?? "");
-    const said = JSON.parse(/clinician_said: (".*")$/m.exec(user)?.[1] ?? '""') as string;
-    seen.push(said);
-    const c: ChatCompletion = {
-      id: `mock-${hash.slice(0, 12)}`, object: "chat.completion", created: 0, model: String(body["model"]),
-      choices: [{ index: 0, finish_reason: "tool_calls", logprobs: null, message: { role: "assistant", content: null, refusal: null, tool_calls: [{ id: "call_1", type: "function", function: { name: "gate", arguments: JSON.stringify({ clauses: script(said, user).map(clause) }) } }] } }],
-      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }
-    };
-    return c;
-  };
-}
+import { ADM, FakeEmr, OWNER, emrRoot, gater, type C } from "./emr-helpers.js";
 
 const RATE = 16_000;
 // A chunk the way the strip sends it: tone for speech, then an optional quiet tail.
@@ -167,6 +149,19 @@ describe("listening", () => {
     await rt.settled();
     expect(port.writes).toHaveLength(1);
     expect(rt.views(OWNER)[0]!.transcript[0]!.ambient).toMatchObject({ session_id: "s1", seqs: [0, 1], trailing_silence_ms: 700 });
+  });
+
+  it("finishes held audio alone when the cap fell in the pause after speech", async () => {
+    const sent: number[] = [];
+    const { rt, listen, seen } = boot(() => [{ class: "aside" }], earOf({ 6000: "Bring a flask tomorrow.", 2700: "Hand me the gloves." }, sent));
+    await say(listen, 0, chunkWav(5920, 80));
+    const lead = new Float32Array((2700 * RATE) / 1000);
+    for (let i = (1000 * RATE) / 1000; i < (2000 * RATE) / 1000; i++) lead[i] = 0.3 * Math.sin((2 * Math.PI * 220 * i) / RATE);
+    const next = await say(listen, 1, encodeWav(lead, RATE));
+    expect(next.outcome).toMatchObject({ why: "quiet_tail", utterance: { seqs: [1] } });
+    expect(sent).toEqual([6000, 2700]);
+    await rt.settled();
+    expect(seen).toEqual(["Bring a flask tomorrow.", "Hand me the gloves."]);
   });
 
   it("never transcribes or acts on held audio when a chunk goes missing or the talk runs on", async () => {

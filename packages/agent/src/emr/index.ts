@@ -6,3 +6,4 @@ export { EMR_SERVE_PORT, startEmrServe, voiceTranscriber, type EmrServe, type Em
 export { CONFIDENCE_FLOOR, GATE_DENY, GATE_FACTS, GATE_SETTINGS, GATE_TOOL, GateClause, GateOutput, MAX_CLAUSES, SPEECH_CLASSES, denyHits, gateCommitmentBody, gateMessage, gatePrompt, gateTool, gateUtterance, type GateAction, type GateInput, type GateResult, type GateSettings, type SpeechClass } from "./gate.js";
 export { CHUNK_CAP_MS, FINAL_SILENCE_MS, ListenError, ListenSessions, MAX_HELD_MS, recordingTranscriber, replayTranscriber, type ListenChunk, type ListenOptions, type ListenOutcome, type ListenReply, type ListenUtterance, type Transcriber } from "./listen.js";
 export { primaryClass } from "./classes.js";
+export { MemoryEmrPort, keepingContext, readKeptContext, type KeptContext } from "./memory-port.js";

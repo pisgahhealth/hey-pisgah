@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { VoiceError, buildKeywords, cleanTranscript, concat, decodeWav, encodeWav, parseWav, trailingSilenceMs, type FinalTranscript } from "@hey-pisgah/voice";
+import { VoiceError, buildKeywords, cleanTranscript, concat, decodeWav, encodeWav, leadingSilenceMs, parseWav, trailingSilenceMs, type FinalTranscript } from "@hey-pisgah/voice";
 import type { EmrRuntime } from "./runtime.js";
 import { primaryClass } from "./classes.js";
 import type { EmrContext, EmrTarget } from "./port.js";
@@ -18,13 +18,13 @@ export type ListenChunk = { owner: string; target: EmrTarget; session_id: string
 export type ListenUtterance = { id: string; line_id: string; task_id: string; text: string; seqs: number[]; class: string | null; classes: string[] };
 export type ListenOutcome = {
   seq: number; final: boolean;
-  why: "quiet_tail" | "short_chunk" | "held_for_join" | "empty" | "duplicate" | "late" | "held_dropped_gap" | "held_too_long" | "failed";
+  why: "quiet_tail" | "short_chunk" | "pause_after_cap" | "held_for_join" | "empty" | "duplicate" | "late" | "held_dropped_gap" | "held_too_long" | "failed";
   trailing_silence_ms: number; audio_ms: number; transcript: string | null; raw_transcript: string | null; cost_usd: number; keywords_dropped: boolean;
   utterance: ListenUtterance | null; error?: string;
 };
 // What POST /tasks/listen answers: the utterances finished since the last answer, and, when the caller waited, this chunk's outcome.
 export type ListenReply = { session_id: string; seq: number; accepted: true; utterances: ListenUtterance[]; partial: null; outcome?: ListenOutcome; errors?: string[] };
-type Held = { samples: Float32Array[]; seqs: number[]; audio_ms: number; rate: number };
+type Held = { samples: Float32Array[]; seqs: number[]; audio_ms: number; rate: number; trailing_ms: number; arrived: number };
 type Session = {
   owner: string; ctx: EmrContext; next: number; held: Held | null; outcomes: Map<number, ListenOutcome>;
   chain: Promise<unknown>; dropped: number; unreported: ListenUtterance[]; errors: string[];
@@ -94,21 +94,36 @@ export class ListenSessions {
     if (c.seq > s.next && s.held) { s.held = null; s.dropped += 1; gap = true; }
     s.next = c.seq + 1;
     if (s.held && s.held.rate !== sampleRate) { s.held = null; s.dropped += 1; }
+    // A cap that fell in the quiet after speech left a whole utterance on hold; when the pause runs on into this chunk, that utterance is finished alone.
+    if (s.held) {
+      const pause = s.held.trailing_ms + leadingSilenceMs(samples, sampleRate) + Math.max(0, arrived - s.held.arrived - audioMs);
+      if (pause >= (this.o.finalSilenceMs ?? FINAL_SILENCE_MS)) {
+        const h = s.held;
+        s.held = null;
+        await this.finish(s, c.session_id, h.samples, h.seqs, h.rate, h.trailing_ms, h.arrived, "pause_after_cap");
+      }
+    }
     const capped = audioMs >= (this.o.capMs ?? CHUNK_CAP_MS) - 50 && silence < (this.o.finalSilenceMs ?? FINAL_SILENCE_MS);
     if (capped) {
-      const h = s.held ?? { samples: [], seqs: [], audio_ms: 0, rate: sampleRate };
-      h.samples.push(samples); h.seqs.push(c.seq); h.audio_ms += audioMs;
+      const h = s.held ?? { samples: [], seqs: [], audio_ms: 0, rate: sampleRate, trailing_ms: 0, arrived };
+      h.samples.push(samples); h.seqs.push(c.seq); h.audio_ms += audioMs; h.trailing_ms = silence; h.arrived = arrived;
       s.held = h;
       if (h.audio_ms > (this.o.maxHeldMs ?? MAX_HELD_MS)) { s.held = null; s.dropped += 1; return done({ ...base, final: false, why: "held_too_long" }); }
       return done({ ...base, final: false, why: gap ? "held_dropped_gap" : "held_for_join" });
     }
     const h = s.held;
     s.held = null;
-    const joined = h ? encodeWav(concat([...h.samples, samples]), sampleRate) : c.wav;
-    const seqs = [...(h?.seqs ?? []), c.seq];
-    const totalMs = audioMs + (h?.audio_ms ?? 0);
+    const why = gap ? "held_dropped_gap" : silence >= (this.o.finalSilenceMs ?? FINAL_SILENCE_MS) ? "quiet_tail" : "short_chunk";
+    const f = await this.finish(s, c.session_id, [...(h?.samples ?? []), samples], [...(h?.seqs ?? []), c.seq], sampleRate, silence, arrived, why);
+    return done({ ...base, ...f, seq: c.seq, trailing_silence_ms: silence });
+  }
+
+  // Transcribes one finished utterance's audio and hands its words to the runtime as an ambient line.
+  private async finish(s: Session, sessionId: string, parts: Float32Array[], seqs: number[], rate: number, silence: number, arrived: number, why: ListenOutcome["why"]): Promise<Omit<ListenOutcome, "seq" | "trailing_silence_ms">> {
+    const joined = encodeWav(concat(parts), rate);
+    const totalMs = Math.round((parts.reduce((n, p) => n + p.length, 0) / rate) * 1000);
     const keywords = buildKeywords({ wards: [], documents: s.ctx.keywords, staff: [], beds: [] });
-    const asrId = `${c.session_id}-${c.seq}`.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 64);
+    const asrId = `${sessionId}-${seqs.at(-1)}`.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 64);
     let heard: FinalTranscript;
     let dropped = false;
     try {
@@ -121,17 +136,16 @@ export class ListenSessions {
       heard = await this.o.transcribe(joined, [], `${asrId}-nk`.slice(0, 64));
     }
     const text = cleanTranscript(heard.text);
-    const why = gap ? "held_dropped_gap" : silence >= (this.o.finalSilenceMs ?? FINAL_SILENCE_MS) ? "quiet_tail" : "short_chunk";
-    const heardOut = { ...base, audio_ms: totalMs, transcript: text, raw_transcript: heard.text, cost_usd: heard.cost_usd, keywords_dropped: dropped };
-    if (!text) return done({ ...heardOut, final: true, why: "empty" });
+    const out = { final: true, audio_ms: totalMs, transcript: text, raw_transcript: heard.text, cost_usd: heard.cost_usd, keywords_dropped: dropped };
+    if (!text) return { ...out, why: "empty", utterance: null };
     const r = await this.rt.say({
       owner: s.owner, target: { admission_id: s.ctx.admission_id }, text, source: "audio", spoken_at: new Date(arrived - totalMs).toISOString(),
-      audio: { audio_ms: totalMs, cost_usd: heard.cost_usd, session_id: c.session_id },
-      ambient: { session_id: c.session_id, seqs, raw_text: heard.text.slice(0, 2000), ended_at: new Date(arrived - silence).toISOString(), final_at: new Date(arrived).toISOString(), trailing_silence_ms: silence }
+      audio: { audio_ms: totalMs, cost_usd: heard.cost_usd, session_id: sessionId },
+      ambient: { session_id: sessionId, seqs, raw_text: heard.text.slice(0, 2000), ended_at: new Date(arrived - silence).toISOString(), final_at: new Date(arrived).toISOString(), trailing_silence_ms: silence }
     });
     const u: ListenUtterance = { id: r.line_id, line_id: r.line_id, task_id: r.task_id, text, seqs, class: null, classes: [] };
     s.unreported.push(u);
-    return done({ ...heardOut, final: true, why, utterance: u });
+    return { ...out, why, utterance: u };
   }
 }
 

@@ -400,6 +400,31 @@
         "not_measured": "Not measured yet"
       },
       "evidence_links": []
+    },
+    {
+      "claim_id": "C-17",
+      "question": "Did it act on what the clinician said in passing, and only on what was meant as an instruction?",
+      "demo_surface": {
+        "step": "results",
+        "component": "results tile; live in the EMR listening strip: each heard line with its class, actions with the line they came from, and questions"
+      },
+      "evaluation_view": {
+        "tab": "Decision points",
+        "table": "labelled talk: intent key against actions and questions"
+      },
+      "acceptance": {
+        "command": "talk --live then talk --replay",
+        "result_path": "evaluation/results/ambient.json",
+        "predicate": "precision == 1 && recall == 1 && false_actions_from_talk == 0 && questions_untied == 0 && ambiguities_asked == ambiguities && partials_acted == 0 && replay_same == true ; amber: false_actions_from_talk == 0 && partials_acted == 0",
+        "measured_on": "dev"
+      },
+      "wording": {
+        "pass": "Acts on talk, not on commands: in a two-minute talk nobody addressed to it, it acted on {actions_matched} of {actions_expected} instructions, took no action from an aside, option or plan, asked only about the unclear line, and the replay matched",
+        "partial": "No action from an aside, option or plan; {actions_missed} instructions missed, {wrong_actions} wrong, {questions_untied} questions about clear lines",
+        "fail": "{false_actions_from_talk} actions came from talk that was not an instruction",
+        "not_measured": "Not measured yet"
+      },
+      "evidence_links": []
     }
   ],
   "revisions": [
@@ -423,6 +448,15 @@
         "C-13": "off_diagonal == 0"
       },
       "reason": "claims:check now evaluates predicates. Each partial wording gets an amber clause after a semicolon. C-04 green needs two hypotheses, because one hypothesis with a stated reason is the partial wording. C-13 green also needs premature attempts counted. C-06 amber reads proposals_validated, which the validation summary writes."
+    },
+    {
+      "date": "2026-10-28",
+      "by": "M2.b",
+      "claims": [
+        "C-17"
+      ],
+      "previous_predicates": {},
+      "reason": "C-17 added for ambient intent: the labelled talk is scored for precision and recall of actions, actions from talk that was not an instruction, questions against labelled unclear lines, partial text acted on, and a replay from the recording. Green needs every action right and the replay equal; amber needs only no action from talk that was not an instruction and none from partial text."
     }
   ]
 }

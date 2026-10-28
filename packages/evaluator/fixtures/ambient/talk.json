@@ -1,0 +1,238 @@
+{
+ "schema": "hey-pisgah/ambient-talk/1",
+ "talk_id": "ward-talk-1",
+ "setting": "A surgeon reviews a woman two days after abdominal surgery, on a surgical ward, with a nurse (Sister Grace) and a colleague (Emeka) nearby. Nobody speaks to the agent.",
+ "voice": "Daniel",
+ "sample_rate": 16000,
+ "lead_ms": 600,
+ "gap_ms": 2000,
+ "utterances": [
+  {
+   "id": "u01",
+   "say": "Good morning, Charlie. I'm going to look at your tummy and check your numbers, is that all right?",
+   "key": {
+    "classes": [
+     "aside"
+    ],
+    "actions": [],
+    "ambiguity": false,
+    "refusal": false
+   }
+  },
+  {
+   "id": "u02",
+   "say": "Let's chart her observations. Temperature 37.9, pulse 96, respiratory rate 20.",
+   "key": {
+    "classes": [
+     "instruction"
+    ],
+    "actions": [
+     {
+      "kind": "record_observation",
+      "values": {
+       "temp_c": "37.9",
+       "pulse": 96,
+       "resp_rate": 20
+      },
+      "corrects": null
+     }
+    ],
+    "ambiguity": false,
+    "refusal": false
+   }
+  },
+  {
+   "id": "u03",
+   "say": "Emeka, the coffee machine in theatre is broken again, so bring a flask tomorrow.",
+   "key": {
+    "classes": [
+     "aside"
+    ],
+    "actions": [],
+    "ambiguity": false,
+    "refusal": false
+   }
+  },
+  {
+   "id": "u04",
+   "say": "Put her blood pressure in as 128 over 76, and Emeka, hand me those gloves, please.",
+   "key": {
+    "classes": [
+     "instruction",
+     "aside"
+    ],
+    "actions": [
+     {
+      "kind": "record_observation",
+      "values": {
+       "bp": "128/76"
+      },
+      "corrects": null
+     }
+    ],
+    "ambiguity": false,
+    "refusal": false
+   }
+  },
+  {
+   "id": "u05",
+   "say": "The wound looks clean and dry. A little tender around the drain site, nothing collecting.",
+   "key": {
+    "classes": [
+     "aside"
+    ],
+    "actions": [],
+    "ambiguity": false,
+    "refusal": false
+   }
+  },
+  {
+   "id": "u06",
+   "say": "We could switch her to oral antibiotics tomorrow, or keep the drip going for another two days. I haven't made up my mind.",
+   "key": {
+    "classes": [
+     "option"
+    ],
+    "actions": [],
+    "ambiguity": false,
+    "refusal": false
+   }
+  },
+  {
+   "id": "u07",
+   "say": "Sorry, that pulse was wrong. It's 104, not 96.",
+   "key": {
+    "classes": [
+     "correction"
+    ],
+    "actions": [
+     {
+      "kind": "record_observation",
+      "values": {
+       "pulse": 104
+      },
+      "corrects": "u02"
+     }
+    ],
+    "ambiguity": false,
+    "refusal": false
+   }
+  },
+  {
+   "id": "u08",
+   "say": "Sister Grace, has she passed urine since the catheter came out?",
+   "key": {
+    "classes": [
+     "question_to_staff"
+    ],
+    "actions": [],
+    "ambiguity": false,
+    "refusal": false
+   }
+  },
+  {
+   "id": "u09",
+   "say": "Right, my decision is to stop the IV fluids and let her drink freely.",
+   "key": {
+    "classes": [
+     "instruction"
+    ],
+    "actions": [],
+    "ambiguity": false,
+    "refusal": true
+   }
+  },
+  {
+   "id": "u10",
+   "say": "If her temperature goes above 38.5 tonight, take blood cultures, start the sepsis screen, and call me on my mobile straight away.",
+   "key": {
+    "classes": [
+     "conditional"
+    ],
+    "actions": [],
+    "ambiguity": false,
+    "refusal": false
+   }
+  },
+  {
+   "id": "u11",
+   "say": "Chart the respiratory rate again. It's 18, or was it 22? I lost count.",
+   "key": {
+    "classes": [
+     "unclear"
+    ],
+    "actions": [],
+    "ambiguity": true,
+    "refusal": false
+   }
+  },
+  {
+   "id": "u12",
+   "say": "I counted again. Respiratory rate 22, put that down.",
+   "key": {
+    "classes": [
+     "instruction"
+    ],
+    "actions": [
+     {
+      "kind": "record_observation",
+      "values": {
+       "resp_rate": 22
+      },
+      "corrects": "any"
+     }
+    ],
+    "ambiguity": false,
+    "refusal": false
+   }
+  },
+  {
+   "id": "u13",
+   "say": "You're doing well, Charlie. Keep sipping water, and try to sit in the chair this afternoon.",
+   "key": {
+    "classes": [
+     "aside"
+    ],
+    "actions": [],
+    "ambiguity": false,
+    "refusal": false
+   }
+  },
+  {
+   "id": "u14",
+   "say": "Emeka, could you check her potassium from this morning's bloods?",
+   "key": {
+    "classes": [
+     "question_to_staff"
+    ],
+    "actions": [],
+    "ambiguity": false,
+    "refusal": false
+   }
+  },
+  {
+   "id": "u15",
+   "say": "If the potassium comes back low, we'll give her oral replacement.",
+   "key": {
+    "classes": [
+     "conditional"
+    ],
+    "actions": [],
+    "ambiguity": false,
+    "refusal": false
+   }
+  },
+  {
+   "id": "u16",
+   "say": "Right, that's everything here. Let's see the next patient.",
+   "key": {
+    "classes": [
+     "aside"
+    ],
+    "actions": [],
+    "ambiguity": false,
+    "refusal": false
+   }
+  }
+ ]
+}

@@ -348,7 +348,9 @@ export class EmrRuntime {
     const t = l.task;
     const line = t.lines.find((x) => x.id === lineId);
     if (!line || line.decided) return;
-    if (t.state !== "running") { this.append(l, "intent.failed", { line_id: lineId, reason: `task_${t.state}` }); return; }
+    if (CLOSED_TASK.has(t.state)) { this.append(l, "intent.failed", { line_id: lineId, reason: `task_${t.state}` }); return; }
+    // Lines keep coming while an earlier one is decided, so each ambient line wakes the task again when its turn comes.
+    if (t.state !== "running") this.setState(l, "running", `heard_${lineId}`);
     const settings = this.o.gate ?? GATE_SETTINGS;
     const kinds = this.o.port.writeKinds;
     const openQ = t.questions.filter((q) => q.answered_by === null).at(-1) ?? null;
