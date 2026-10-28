@@ -1,0 +1,215 @@
+{
+ "artifact": "a4",
+ "revisions": [
+  {
+   "revision": 1,
+   "hash": "c1c262ce83809aba5e69305d13f384effda4e8d46a04d88e577dc2e9c17e8c5d",
+   "reason": "D3 commitment before the first model run",
+   "body": {
+    "artifact": "a4",
+    "seed": "a4-order-1",
+    "space_rule": [
+     "remove_soft_edge: every soft edge",
+     "add_soft_edge and move_step_after: every non-external preparing step as the target, every other step as the source, gate start and complete",
+     "set_prep_trigger: every non-external preparing step, after any other step",
+     "add_condition: on the requirement of every non-external preparing step, on every trigger of such a step, and on the scope, one eq atom per fact value; ward values come from the pool's facts",
+     "rebind_section: every section of a document such a step prepares, to every record kind some step produces, keeping the field path",
+     "an operation counts only if it applies alone without an error under the pool's single-case rule"
+    ],
+    "space_hash": "ad0584fc85a0dcbfe295ae9607ea761eab69be5d46d0ffd764be4b99b7ff27bb",
+    "base_definition_hash": "173c977f5c68754a062e4399deb69b2d3a9d53df4860e51e0bffc33e74bd8805",
+    "order_hash": "5edf6cd7ad7c464f1e07d9fe1d793592591c002425472576645f5db622db9f72",
+    "experiments": [
+     {
+      "index": 0,
+      "ops": [
+       {
+        "op": "move_step_after",
+        "step": {
+         "step": "st09b"
+        },
+        "after": {
+         "step": "st05"
+        },
+        "gate": "complete"
+       }
+      ],
+      "case_ids": [
+       "c-15de451b",
+       "c-178cad1d",
+       "c-2758a627",
+       "c-491dbab0",
+       "c-5e518c31",
+       "c-8c9cd194"
+      ]
+     },
+     {
+      "index": 1,
+      "ops": [
+       {
+        "op": "move_step_after",
+        "step": {
+         "step": "st09a"
+        },
+        "after": {
+         "step": "st03"
+        },
+        "gate": "start"
+       }
+      ],
+      "case_ids": [
+       "c-11060afa",
+       "c-2758a627",
+       "c-4441cca1",
+       "c-47f5064f",
+       "c-491dbab0",
+       "c-8c9cd194"
+      ]
+     },
+     {
+      "index": 2,
+      "ops": [
+       {
+        "op": "add_condition",
+        "target": {
+         "trigger": {
+          "step": "st09a"
+         }
+        },
+        "condition": {
+         "fact": "has_take_home_order",
+         "eq": "false"
+        }
+       }
+      ],
+      "case_ids": [
+       "c-01c6ad09",
+       "c-11060afa",
+       "c-15de451b",
+       "c-8c9cd194",
+       "c-9fe91b9e",
+       "c-ed324a69"
+      ]
+     },
+     {
+      "index": 3,
+      "ops": [
+       {
+        "op": "add_condition",
+        "target": {
+         "step": {
+          "step": "st17b"
+         }
+        },
+        "condition": {
+         "fact": "take_home_status",
+         "eq": "reviewed"
+        }
+       }
+      ],
+      "case_ids": [
+       "c-01c6ad09",
+       "c-15de451b",
+       "c-4441cca1",
+       "c-47f5064f",
+       "c-5e518c31",
+       "c-8c9cd194"
+      ]
+     },
+     {
+      "index": 4,
+      "ops": [
+       {
+        "op": "move_step_after",
+        "step": {
+         "step": "st09a"
+        },
+        "after": {
+         "step": "st06"
+        },
+        "gate": "complete"
+       }
+      ],
+      "case_ids": [
+       "c-11060afa",
+       "c-15de451b",
+       "c-178cad1d",
+       "c-47f5064f",
+       "c-5e518c31",
+       "c-ed324a69"
+      ]
+     },
+     {
+      "index": 5,
+      "ops": [
+       {
+        "op": "rebind_section",
+        "document_id": "hmo_claim_cover",
+        "section_id": "patient",
+        "source": {
+         "record_kind": "expected_discharge",
+         "field_path": "patient",
+         "version_policy": "current"
+        }
+       }
+      ],
+      "case_ids": [
+       "c-01c6ad09",
+       "c-11060afa",
+       "c-15de451b",
+       "c-178cad1d",
+       "c-2758a627",
+       "c-8c9cd194"
+      ]
+     },
+     {
+      "index": 6,
+      "ops": [
+       {
+        "op": "add_soft_edge",
+        "from": {
+         "step": "st12c"
+        },
+        "to": {
+         "step": "st17b"
+        },
+        "gate": "start"
+       }
+      ],
+      "case_ids": [
+       "c-01c6ad09",
+       "c-11060afa",
+       "c-15de451b",
+       "c-47f5064f",
+       "c-8c9cd194",
+       "c-9fe91b9e"
+      ]
+     },
+     {
+      "index": 7,
+      "ops": [
+       {
+        "op": "move_step_after",
+        "step": {
+         "step": "st09a"
+        },
+        "after": {
+         "step": "st15"
+        },
+        "gate": "complete"
+       }
+      ],
+      "case_ids": [
+       "c-01c6ad09",
+       "c-15de451b",
+       "c-178cad1d",
+       "c-4441cca1",
+       "c-491dbab0",
+       "c-ed324a69"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

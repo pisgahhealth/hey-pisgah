@@ -20,3 +20,13 @@ export {
 export { TranscriptLeak, assertNoReservedLeak, scanFile, scanTranscripts, scanValue, type Channel, type Hit, type Tokens } from "./scan.js";
 export { checkG, runGChecks, type GLine, type GStatus } from "./gchecks.js";
 export { PredicateError, claimStatus, evaluate, fieldAt, identifiers, parseClaimPredicate, parsePredicate, type ClaimPredicate, type ClaimStatus, type Expr } from "./predicate.js";
+export { A1_RULE, earliestPermitted, type A1Result } from "./arms/a1.js";
+export { SPACE_RULE, candidateOperations, opKey, singleOperationSpace, type SpaceEntry } from "./arms/space.js";
+export { A4_EXPERIMENTS, A4_SEED, a4Order, fuzz, oracleNote, randomExperiments, randomValidSequences, runMatched, type DrawnExperiment, type FuzzReport, type MatchedCase, type OracleNote } from "./arms/experiments.js";
+export { PROPOSAL_ARMS, ProposalInput, armVersion, loadProposalInput, type ArmVersion, type ProposalArm } from "./arms/proposals.js";
+export { poolCases, runArm, type ArmCase, type ArmResult, type ArmRow } from "./arms/run.js";
+export { proposalFor, singleOperationSweep, type SweepEntry, type SweepResult } from "./arms/sweep.js";
+export { CommitmentFile, commit, commitmentsDir, committedHash, readCommitment } from "./commitments.js";
+export { artifactBodies, staleCommitments } from "./commit-artifacts.js";
+export { disjoint, interval, predictionAfter, predictionBefore, summariseChecks, type CaseResult, type CheckHypothesis, type CheckedExperiment, type PredictionSummary } from "./prediction.js";
+export type { BaseRuns } from "./pipeline.js";

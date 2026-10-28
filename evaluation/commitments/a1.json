@@ -1,0 +1,20 @@
+{
+ "artifact": "a1",
+ "revisions": [
+  {
+   "revision": 1,
+   "hash": "67cc17cb75eaa4240eba0f03d0dd3cfa366a762b261c6662225d753f1a443ec6",
+   "reason": "D3 commitment before the first model run",
+   "body": {
+    "artifact": "a1",
+    "rule": [
+     "remove every soft edge whose target is a non-external document-preparing step",
+     "remove every trigger on such a step, so each stage starts as soon as its requirement holds and its start fences allow",
+     "keep every fence, permission, step, section binding and every soft edge into any other step",
+     "redrafting on a source change is the engine's own revision path and is not altered"
+    ],
+    "source_sha256": "6bcb920a28c3b2980673df2067c1c4c7b6feb46fd713565adb14cdec07ab22a6"
+   }
+  }
+ ]
+}
