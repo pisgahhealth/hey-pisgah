@@ -1,0 +1,66 @@
+{
+  "hash": "969c0a72e5492a0d7d97c7f689e2d7f09ddf72109e258fff6394fe812bffb1d7",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 2,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "611ed0e0cb5746438a18e562bb414ed1",
+    "object": "chat.completion",
+    "created": 1793189384,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Opening your discharge file and checking what paperwork is still pending.",
+          "reasoning_content": "Need to understand requirements.",
+          "tool_calls": [
+            {
+              "id": "call_27f4504c46d8457f99a2d907",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_case_state",
+                "arguments": "{\"case_id\": \"c-110f6ad7\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 3043,
+      "total_tokens": 3126,
+      "completion_tokens": 83,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 9
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 83
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:09:45 GMT"
+  },
+  "status": 200,
+  "latency_ms": 2574,
+  "recorded_at": "2026-10-28T12:09:44.594Z"
+}

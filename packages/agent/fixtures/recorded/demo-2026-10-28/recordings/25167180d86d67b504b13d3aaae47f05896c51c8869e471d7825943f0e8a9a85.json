@@ -1,0 +1,66 @@
+{
+  "hash": "25167180d86d67b504b13d3aaae47f05896c51c8869e471d7825943f0e8a9a85",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 4,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "1cae54166ab7496e8ddf3a181433b046",
+    "object": "chat.completion",
+    "created": 1793189517,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Your discharge summary is done \u2014 now I'll generate the remaining refund vouchers.",
+          "reasoning_content": "We need to understand acceptance conditions: refund_voucher draft and final not met. Need to prepare them. Documents show ready=true for draft (rec-0cd6933d) with step st17a not_started. Need to trigger prepare_document for refund_voucher draft then final.\n\nWorkflow version? Need to check workflow definition requirements.\n\nBut we are at minute 752, steps show payment done, clearance done, st16 completed. Refund voucher steps are still not started. As agent, we can prepare document stages the workflow lets the agent prepare.\n\nCheck documents entry: refund_voucher draft waiting_for [] and ready true. So we can prepare.\n\nNeed to also check if any prerequisites: likely need financial clearance done which is done.\n\nSo prepare draft.",
+          "tool_calls": [
+            {
+              "id": "call_98594b3b2e094949a47654a5",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "prepare_document",
+                "arguments": "{\"case_id\": \"c-2a14921a\", \"document_id\": \"refund_voucher\", \"stage\": \"draft\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 5688,
+      "total_tokens": 5951,
+      "completion_tokens": 263,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 156
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 263
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:57 GMT"
+  },
+  "status": 200,
+  "latency_ms": 1183,
+  "recorded_at": "2026-10-28T12:11:57.251Z"
+}

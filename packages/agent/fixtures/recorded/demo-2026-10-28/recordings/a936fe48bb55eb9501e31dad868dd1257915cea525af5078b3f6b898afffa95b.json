@@ -1,0 +1,66 @@
+{
+  "hash": "a936fe48bb55eb9501e31dad868dd1257915cea525af5078b3f6b898afffa95b",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 13,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "16dc92a73d0f43cc8d5c2b0222c8784f",
+    "object": "chat.completion",
+    "created": 1793189493,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "I've pinpointed the paperwork mismatch \u2014 now I'll file an exception to fix the medicine list source.",
+          "reasoning_content": "Need to check schema: apply_case_exception expects note as separate field? Actually earlier doc: apply_case_exception (document_id, section_id, source?, note) inside op? Let's look: parameters: case_id, op: {document_id, section_id, source, note}, reason, confirm_by_role. Wait definition: op has document_id, section_id, source, note? The tool description: apply_case_exception params: case_id, op: {document_id, section_id, source, note}, reason, confirm_by_role. Actually listed: op.properties document_id, section_id, source, note?? Let's see example: It says op: {document_id, section_id, source: {record_kind, field_path}, required ... note? Let's examine initial error: op.note expected string but undefined, $ unrecognized key \"note\" \u2014 meaning note should be inside op, not top level.\n\nSo provide op.note.",
+          "tool_calls": [
+            {
+              "id": "call_f14cc1d4f19b45babee47ecc",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "apply_case_exception",
+                "arguments": "{\"case_id\": \"c-2a14921a\", \"op\": {\"document_id\": \"discharge_summary\", \"note\": \"use dispensed list per ward procedure r2\", \"section_id\": \"medicines\", \"source\": {\"field_path\": \"items\", \"record_kind\": \"dispense_record\"}}, \"reason\": \"Ward r2 requires medicines exactly as dispensed including substitution Calvasc\", \"confirm_by_role\": \"doctor\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 9435,
+      "total_tokens": 9814,
+      "completion_tokens": 379,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 191
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 379
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:33 GMT"
+  },
+  "status": 200,
+  "latency_ms": 1318,
+  "recorded_at": "2026-10-28T12:11:33.392Z"
+}

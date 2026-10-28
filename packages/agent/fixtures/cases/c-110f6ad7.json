@@ -1,0 +1,179 @@
+{
+  "case_id": "c-110f6ad7",
+  "opened_at": 480,
+  "schedule": {
+    "schedule_version": 1,
+    "case_id": "c-110f6ad7",
+    "facts": {
+      "expected_discharge_recorded": "false",
+      "expected_disposition": "home",
+      "final_bill_issued": "false",
+      "has_take_home_order": "true",
+      "insurer_status": "none",
+      "payer_type": "self_pay",
+      "payment_status": "unpaid",
+      "signoff_recorded": "false",
+      "take_home_status": "ordered",
+      "ward_id": "A",
+      "ward_requires": [
+        "discharge_summary",
+        "stay_bill",
+        "clearance_slip",
+        "refund_voucher"
+      ]
+    },
+    "actors": {
+      "accounts_clerk": "ac_01",
+      "authoriser": "au_01",
+      "claims_clerk": "cc_01",
+      "doctor": "d_a1",
+      "insurer": "ins_01",
+      "nurse": "n_a3",
+      "pharmacist": "p_01"
+    },
+    "steps": {
+      "st01": {
+        "due": {
+          "at": 519
+        },
+        "payload": {
+          "expected_disposition": "home",
+          "expected_time": "11:23"
+        },
+        "sets_facts": {
+          "expected_discharge_recorded": "true"
+        }
+      },
+      "st02": {
+        "due": {
+          "at": 537
+        },
+        "payload": {
+          "items": [
+            "Omeprazole 20 mg capsules, 14",
+            "Nifedipine 20 mg tablets, 28",
+            "Ciprofloxacin 500 mg tablets, 10"
+          ]
+        }
+      },
+      "st04": {
+        "payload": {
+          "items": [
+            "Omeprazole 20 mg capsules, 14",
+            "Nifedipine 20 mg tablets, 28",
+            "Ciprofloxacin 500 mg tablets, 10"
+          ]
+        },
+        "sets_facts": {
+          "take_home_status": "dispensed"
+        }
+      },
+      "st05": {
+        "due": {
+          "at": 683
+        },
+        "payload": {
+          "disposition": "home",
+          "follow_up": "Surgical outpatient clinic in one week for wound review."
+        },
+        "sets_facts": {
+          "final_bill_issued": "true",
+          "signoff_recorded": "true"
+        }
+      },
+      "st12a": {
+        "not_before": 716,
+        "sets_facts": {
+          "payment_status": "paid"
+        }
+      },
+      "st16": {
+        "due": {
+          "after": "st13",
+          "delay_min": 0
+        }
+      }
+    },
+    "alternatives": {
+      "settlement": "st12a"
+    },
+    "resources": {
+      "accounts_clerk": {
+        "kind": "fifo",
+        "busy_blocks": [],
+        "backlog": []
+      },
+      "claims_clerk": {
+        "kind": "fifo",
+        "busy_blocks": [],
+        "backlog": []
+      },
+      "nurse": {
+        "kind": "single",
+        "busy_blocks": [
+          {
+            "from": 707,
+            "to": 824
+          }
+        ],
+        "backlog": []
+      },
+      "pharmacist": {
+        "kind": "fifo",
+        "busy_blocks": [],
+        "backlog": []
+      }
+    },
+    "record_updates": [],
+    "service_min": {
+      "dispense|-|-|1": 12,
+      "pharmacy_review|-|-|1": 10,
+      "prepare_document|discharge_summary|draft|1": 28,
+      "prepare_document|discharge_summary|final|1": 7,
+      "prepare_document|hmo_claim_cover|draft|1": 12,
+      "prepare_document|hmo_claim_cover|final|1": 5,
+      "prepare_document|refund_voucher|draft|1": 10,
+      "prepare_document|refund_voucher|final|1": 5,
+      "receive_payment|-|-|1": 19
+    },
+    "service_default_min": {
+      "check_document": 5,
+      "dispense": 12,
+      "financial_clearance": 5,
+      "hand_over_document": 5,
+      "hand_over_take_home": 5,
+      "pharmacy_review": 15,
+      "prepare_document": 25,
+      "receive_payment": 15,
+      "record_departure": 2,
+      "refund_deposit": 5,
+      "revise_document": 6,
+      "submit_claim": 5
+    },
+    "entry_lag": {},
+    "draws": {}
+  },
+  "requirements": [
+    {
+      "at": 0,
+      "set": "r1"
+    }
+  ],
+  "notes": [
+    {
+      "note_id": "n01",
+      "author_role": "nurse",
+      "occurred_at": 546,
+      "recorded_at": 546,
+      "text": "Observations stable on the morning check."
+    },
+    {
+      "note_id": "n02",
+      "author_role": "nurse",
+      "occurred_at": 675,
+      "recorded_at": 675,
+      "text": "Patient comfortable, eating and walking on the ward."
+    }
+  ],
+  "exception_confirm_after_min": 10
+}

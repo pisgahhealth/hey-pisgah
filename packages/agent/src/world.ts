@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { AGENT_ALLOWED_KINDS, CaseId, DocumentId, type RunResult, type SimEvent, type Step, type WorkflowDefinition as WD } from "@hey-pisgah/contracts";
 import { WardRequirementSet, wardRequires, type Facts as HospitalFacts } from "@hey-pisgah/hospital";
-import { ExternalSchedule, HORIZON_MIN, runDefinition, type ExternalSchedule as Schedule, type WorldRules } from "@hey-pisgah/simulator";
+import { ExternalSchedule, HORIZON_MIN, runDefinition, type ExternalSchedule as Schedule, type FactChange, type WorldRules } from "@hey-pisgah/simulator";
 import { isPreparingStep } from "@hey-pisgah/workflow";
 
 const Minute = z.number().int().min(0).max(HORIZON_MIN);
@@ -11,7 +11,13 @@ export const CaseWorld = z.strictObject({
   case_id: CaseId,
   opened_at: Minute,
   schedule: ExternalSchedule,
-  requirements: z.array(z.strictObject({ at: Minute, set: WardRequirementSet })).min(1)
+  requirements: z.array(z.strictObject({ at: Minute, set: WardRequirementSet })).min(1),
+  // The tool set the case runs with; v1 exists only so the L1.4 recording replays unchanged.
+  tool_profile: z.enum(["v1", "v2"]).optional(),
+  // Ward notes as people wrote them; the agent sees them only as untrusted_text once recorded.
+  notes: z.array(z.strictObject({ note_id: z.string().regex(/^[a-z0-9_-]+$/), author_role: z.string(), occurred_at: Minute, recorded_at: Minute, text: z.string().max(500) })).optional(),
+  // The modelled staff answer to a case exception that names a source: the named role confirms it this many minutes later.
+  exception_confirm_after_min: z.number().int().min(1).max(240).optional()
 }).superRefine((w, ctx) => {
   if (w.schedule.case_id !== w.case_id) ctx.addIssue({ code: "custom", message: "schedule case_id differs from the case" });
   if (w.requirements[0]!.at !== 0) ctx.addIssue({ code: "custom", message: "the first requirement set applies from minute 0" });
@@ -77,8 +83,14 @@ export function engineSchedule(world: CaseWorld, def: WD, commits: readonly Engi
 
 export type OkRun = Extract<RunResult, { outcome: "ok" }>;
 
+// Each later requirement set reaches the engine at its minute as a new ward_requires fact.
+export function requirementFactChanges(world: CaseWorld): FactChange[] {
+  return world.requirements.slice(1).map((r) => ({ at: r.at, facts: { ward_requires: wardRequiresList(r.set, world.schedule.facts) } }));
+}
+
 export function engineRun(world: CaseWorld, def: WD, commits: readonly EngineCommit[], runId: string, rules: WorldRules | null): OkRun {
-  const r = runDefinition(def, engineSchedule(world, def, commits), { run_id: runId, executor: "definition", use_agent: true, ...(rules ? { world: rules } : {}) });
+  const changes = requirementFactChanges(world);
+  const r = runDefinition(def, engineSchedule(world, def, commits), { run_id: runId, executor: "definition", use_agent: true, ...(rules ? { world: rules } : {}), ...(changes.length ? { fact_changes: changes } : {}) });
   if (r.outcome !== "ok") throw new PortError("world_aborted", `the world run aborted: ${r.invariant_violations.join("; ")}`);
   return r;
 }

@@ -20,8 +20,10 @@ export const WardRequirementSet = z.strictObject({ requirement_version: z.string
   .refine((s) => new Set(s.wards.map((w) => w.ward_id)).size === s.wards.length, { message: "duplicate ward" });
 export type WardRequirementSet = z.infer<typeof WardRequirementSet>;
 
-export function loadWardRequirements(): WardRequirementSet {
-  return WardRequirementSet.parse(JSON.parse(readFileSync(new URL("./data/ward-requirements.r1.json", import.meta.url), "utf8")));
+// r1 is the set every case starts from; r2 changes only Ward B's procedure text, and arrives later as data.
+export const REQUIREMENT_VERSIONS = ["r1", "r2"] as const;
+export function loadWardRequirements(version: (typeof REQUIREMENT_VERSIONS)[number] = "r1"): WardRequirementSet {
+  return WardRequirementSet.parse(JSON.parse(readFileSync(new URL(`./data/ward-requirements.${version}.json`, import.meta.url), "utf8")));
 }
 
 // Facts are strings, matching the contracts value lists; ward_requires is answered from the ward's structured list.

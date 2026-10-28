@@ -2,12 +2,13 @@ import { canonical, hashJson, sha256, type EventPredicate, type Proof, type Wake
 import { ModelError, ROUTES, type ChatMessage, type EffortLevel, type ModelClient, type ProviderId } from "@hey-pisgah/model";
 import { listStreams, openStream, type Stream } from "@hey-pisgah/store";
 import type { WorldRules } from "@hey-pisgah/simulator";
-import type { Registry } from "@hey-pisgah/workflow";
+import type { Facts, Registry } from "@hey-pisgah/workflow";
 import { REQUIREMENTS_WAKE, conditionStatuses, conditionsHash, deriveConditions, deriveWakeLeaves, type ConditionStatus } from "./acceptance.js";
 import { shortHash } from "./ids.js";
+import { bindingFailures, checksInForce, revisionOps, type CheckFailure } from "./monitor.js";
 import { HospitalPort, type RecordView } from "./port.js";
-import { SYSTEM_PROMPT, toolDefs, userMessage } from "./prompt.js";
-import { ARGS, isWriteTool, type ToolName } from "./schemas.js";
+import { systemPrompt, toolDefs, userMessage } from "./prompt.js";
+import { argsFor, isWriteTool, type ToolName } from "./schemas.js";
 import {
   SETTLED, TaskWriter, TickConflict, guardCompletion, openTick, openWakes, project, toAgentTask,
   type ActionRec, type Projection, type TickReason, type TickRec, type TurnRec
@@ -41,6 +42,24 @@ export type RuntimeOptions = {
 type Live = { id: string; stream: Stream; port: HospitalPort; queue: Promise<void>; queued: number; cache: { seq: number; proj: Projection } | null };
 type ToolOutcome = { content: string; invalid: boolean; ok: boolean };
 type LoopOutcome = "model_ended" | "control" | "turn_cap" | "invalid_tool_calls" | "budget" | "provider_error";
+
+// Steps reachable from the given ones through edges or after-triggers, including the given ones.
+export function downstreamSteps(def: { edges: readonly { from: { step: string }; to: { step: string } }[]; triggers: readonly { target: { step: string }; when: unknown }[] }, from: readonly { step_id: string }[]): Set<string> {
+  const seen = new Set(from.map((x) => x.step_id));
+  const queue = [...seen];
+  const afterSteps = (p: unknown): string[] => {
+    const x = p as Record<string, unknown>;
+    if (x["after"]) return [String((x["after"] as { step: string }).step)];
+    const list = (x["all_of"] ?? x["any_of"]) as unknown[] | undefined;
+    return list ? list.flatMap(afterSteps) : [];
+  };
+  while (queue.length) {
+    const s = queue.shift()!;
+    const next = [...def.edges.filter((e) => e.from.step === s).map((e) => e.to.step), ...def.triggers.filter((t) => afterSteps(t.when).includes(s)).map((t) => t.target.step)];
+    for (const n of next) if (!seen.has(n)) { seen.add(n); queue.push(n); }
+  }
+  return seen;
+}
 
 // Tool results are canonical JSON, so a reloaded record and a live one render to the same bytes.
 const json = (v: unknown) => canonical(JSON.parse(JSON.stringify(v)));
@@ -183,8 +202,8 @@ export class AgentRuntime {
     this.evaluate(w, port, outcome);
   }
 
-  private messages(t: TickRec): ChatMessage[] {
-    const m: ChatMessage[] = [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: t.user }];
+  private messages(t: TickRec, port: HospitalPort): ChatMessage[] {
+    const m: ChatMessage[] = [{ role: "system", content: systemPrompt(port.profile) }, { role: "user", content: t.user }];
     t.turns.forEach((turn, i) => {
       m.push(turn.tool_calls.length
         ? { role: "assistant", content: turn.content, tool_calls: turn.tool_calls.map((c) => ({ id: c.id, type: "function" as const, function: { name: c.name, arguments: c.arguments } })) }
@@ -223,7 +242,7 @@ export class AgentRuntime {
       let res;
       try {
         res = await this.o.client.call({
-          provider: this.provider, model: this.model, effort: this.effort, messages: this.messages(t), tools: toolDefs(), parallel_tool_calls: false,
+          provider: this.provider, model: this.model, effort: this.effort, messages: this.messages(t, port), tools: toolDefs(port.profile), parallel_tool_calls: false,
           purpose: "agent.execute", run_id: p.run_id, task_id: p.task_id, task_state: p.state, thread: "main", affinity_key: p.task_id
         });
       } catch (e) {
@@ -262,15 +281,16 @@ export class AgentRuntime {
     // A journaled intent wins over whatever the model sends now, so a regenerated argument cannot change the key.
     const journaled = p.actions.get(actionId);
     if (journaled) return this.executeWrite(w, port, journaled, true);
-    if (!(call.name in ARGS)) {
+    const schemas = argsFor(port.profile);
+    if (!(call.name in schemas)) {
       w.append("agent.refused", { tool_name: call.name, reason: "no_such_tool", attempt: p.counts.agent_refused + 1, at: now }, now);
       return err("unknown_tool", { tool_name: call.name, note: "no tool exists for this; work of this kind belongs to people" });
     }
     const name = call.name as ToolName;
     let raw: unknown;
     try { raw = JSON.parse(call.arguments || "{}"); } catch { return err("invalid_arguments", { issues: ["arguments are not valid JSON"] }, true); }
-    const parsed = ARGS[name].safeParse(raw);
-    if (!parsed.success) return err("invalid_arguments", { issues: parsed.error.issues.map((i) => `${i.path.join(".") || "$"}: ${i.message}`).slice(0, 6) }, true);
+    const parsed = schemas[name]!.safeParse(raw);
+    if (!parsed.success) return err("invalid_arguments", { issues: parsed.error.issues.map((i: { path: PropertyKey[]; message: string }) => `${i.path.join(".") || "$"}: ${i.message}`).slice(0, 6) }, true);
     const args = parsed.data as Record<string, unknown>;
     if ("case_id" in args && args["case_id"] !== port.caseId) return err("unknown_id");
     switch (name) {
@@ -310,6 +330,11 @@ export class AgentRuntime {
         if (!r.ok) {
           if (r.counted) w.append("agent.refused", { tool_name: a0.action_kind, reason: r.reason, attempt: w.proj.counts.agent_refused + 1, at: now, layer: "port" }, now);
           w.append("action.refused", { action_id: a0.action_id, reason: r.reason, detail: r.detail }, now);
+          if (r.reason === "requirement_check_failed") {
+            const m = r.detail["monitor"] as { failures: CheckFailure[]; requirement_version: string; evidence_event_ids: string[] };
+            const doc = String(a0.args["document_id"]), stage = String(a0.args["stage"]);
+            this.checkFailed(w, port, { check: "commit", status: "requirement_failed", action_id: a0.action_id, action_kind: a0.action_kind, record_id: port.stageRecordId(doc, stage), document_id: doc, stage, ...m, report_key: `commit:${a0.action_id}` });
+          }
           return this.actionResult(w.proj.actions.get(a0.action_id)!, r.detail);
         }
         const x = r.write;
@@ -430,7 +455,10 @@ export class AgentRuntime {
       w.append("proof.refreshed", { action_id: a.action_id, proof: this.buildProof(a, s.record, now) }, now);
     }
     st = this.statuses(w.proj, port);
-    const unmet = st.filter((s) => !s.met);
+    this.outcomeChecks(w, port);
+    const blocked = this.blockedNow(port, st);
+    for (const id of [...w.proj.monitor.blocked.keys()]) if (!blocked.has(id)) w.append("version.check_cleared", { record_id: id }, now);
+    const unmet = st.filter((s) => !s.met || blocked.has(s.condition.record_id));
     if (!unmet.length) {
       if (!w.proj.closed) w.append("run.closed", this.runSummary(w.proj, port), now);
       w.append("task.state_changed", { from: "running", to: "done", reason: "every_condition_proved" }, now);
@@ -438,7 +466,12 @@ export class AgentRuntime {
       return;
     }
     const ids = unmet.map((s) => s.condition.condition_id);
-    const d = deriveWakeLeaves(w.proj, port, unmet.map((s) => s.condition));
+    const open = unmet.filter((s) => !blocked.has(s.condition.record_id));
+    const d0 = deriveWakeLeaves(w.proj, port, open.map((s) => s.condition));
+    // Work downstream of a blocked stage cannot happen, so its wakes are dropped; everything else continues.
+    const after = downstreamSteps(port.caseDef, [...blocked.values()]);
+    const d = { ...d0, leaves: d0.leaves.filter((l) => !("on" in l && l.on === "step.completed" && after.has(String(l.where?.["step_id"])))) };
+    const fixPending = blocked.size > 0 && port.confirmationPending();
     const modelWakes = openWakes(w.proj).filter((x) => x.registered_by === "model" && x.tick_id === t.tick_id);
     const toNeedsInput = (reason: string) => { w.append("task.state_changed", { from: "running", to: "needs_input", reason, unmet: ids }, now); end(); };
     if (now >= port.horizon) return toNeedsInput("horizon_reached");
@@ -451,6 +484,12 @@ export class AgentRuntime {
       }
       return toNeedsInput("work_left_undone");
     }
+    if (blocked.size && !fixPending && !d.leaves.length && !modelWakes.length) {
+      w.append("task.state_changed", { from: "running", to: "needs_input", reason: "version_check_failed", unmet: ids, blocked: [...blocked.keys()] }, now);
+      end();
+      return;
+    }
+    if (fixPending) d.leaves.push({ on: "case_exception.confirmed" });
     if (!d.leaves.length && !modelWakes.length) return toNeedsInput("no_wake");
     if (d.leaves.length) {
       const predicate: EventPredicate = d.leaves.length === 1 ? d.leaves[0]! : { any_of: d.leaves };
@@ -460,6 +499,85 @@ export class AgentRuntime {
     w.append("task.state_changed", { from: "running", to: "waiting", reason: "awaiting_recorded_events", unmet: ids }, now);
     this.boundary("after_waiting", { task_id: w.proj.task_id });
     end();
+  }
+
+  // The version monitor's record of one failed check, and the proposals it raises once per version and check for a person to approve.
+  private checkFailed(w: TaskWriter, port: HospitalPort, f: {
+    check: "commit" | "outcome"; status: string; action_id: string; action_kind: string; record_id: string; document_id: string; stage: string;
+    failures: CheckFailure[]; requirement_version: string; evidence_event_ids: string[]; report_key: string;
+  }): void {
+    if (w.proj.monitor.reported.has(f.report_key)) return;
+    const now = port.now();
+    const ward = String(port.facts()["ward_id"]);
+    const def = port.def;
+    const env = w.append("version.check_failed", {
+      version: def.version, definition_hash: def.definition_hash, check: f.check, status: f.status, requirement_version: f.requirement_version,
+      action: { action_id: f.action_id, action_kind: f.action_kind, record_id: f.record_id, document_id: f.document_id, stage: f.stage },
+      failures: f.failures, evidence_event_ids: f.evidence_event_ids, ward_id: ward, report_key: f.report_key
+    }, now);
+    const ids = f.failures.length ? f.failures.map((x) => x.check_id).sort().join(",") : f.status;
+    const sKey = `suspension:${def.version}:${ward}:${ids}`;
+    if (!w.proj.monitor.reported.has(sKey)) {
+      const fb = def.fallback_version;
+      let fallbackPasses: boolean | null = null;
+      if (fb !== null && f.failures.length) {
+        const checks = checksInForce(port.checks, ward, f.requirement_version, port.facts() as unknown as Facts);
+        fallbackPasses = bindingFailures(this.o.registry.get(fb), f.document_id, f.stage, checks).length === 0;
+      }
+      w.append("version.suspension_proposed", {
+        proposal_id: `vs-${shortHash(w.proj.task_id, sKey)}`, version: def.version, ward_id: ward, requirement_version: f.requirement_version,
+        reason: `the ${f.check} check failed for ${f.document_id} ${f.stage} under version ${def.version}`, evidence_event_ids: f.evidence_event_ids,
+        check_failed_seq: env.seq, fallback_version: fb, fallback_passes: fallbackPasses, approval: "person_only", report_key: sKey
+      }, now);
+    }
+    const ops = revisionOps(f.failures);
+    const rKey = `revision:${def.version}:${ward}:${ids}`;
+    if (ops.length && !w.proj.monitor.reported.has(rKey)) {
+      w.append("version.revision_proposed", {
+        proposal_id: `vr-${shortHash(w.proj.task_id, rKey)}`, version: def.version, base_version: def.version, ops, scope: { wards: [ward], condition: null },
+        rationale: `ward ${ward} requirements ${f.requirement_version} name another source for ${f.failures.map((x) => `${x.document_id}.${x.section_id}`).join(", ")}`,
+        evidence_event_ids: f.evidence_event_ids, check_failed_seq: env.seq, approval: "person_only", report_key: rKey
+      }, now);
+    }
+  }
+
+  // Conditions the monitor blocks right now: a ready stage whose commit-time check fails, or a proved stage whose outcome check fails.
+  private blockedNow(port: HospitalPort, st: readonly ConditionStatus[]): Map<string, { step_id: string }> {
+    const out = new Map<string, { step_id: string }>();
+    for (const s of st) {
+      const c = s.condition;
+      const step = port.def.steps.find((x) => x.step_id === c.step_id)!;
+      const ref = step.document_ref!;
+      if (s.met) {
+        if (s.superseded_by) continue;
+        if (!port.outcomeCheck(c.record_id).ok) out.set(c.record_id, { step_id: c.step_id });
+        continue;
+      }
+      const rec = s.record;
+      if (rec && rec.status !== "not_started") continue;
+      // A stage still waiting on its prerequisites is not blocked yet; the monitor speaks only once the work could start.
+      if (port.waitingFor(step).length) continue;
+      if (!port.monitorVerdict(ref.document_id, ref.stage).ok) out.set(c.record_id, { step_id: c.step_id });
+    }
+    return out;
+  }
+
+  // The outcome check: each proved document stage is re-read against the record as it stands and the requirements in force now.
+  private outcomeChecks(w: TaskWriter, port: HospitalPort): boolean {
+    let failed = false;
+    for (const id of w.proj.order) {
+      const a = w.proj.actions.get(id)!;
+      if (a.state !== "completed" || a.action_kind !== "prepare_document" || !a.proof) continue;
+      const o = port.outcomeCheck(a.proof.record_id);
+      if (o.ok) continue;
+      failed = true;
+      const key = `outcome:${a.proof.record_id}:${o.status}:${o.failures.map((x) => x.check_id).sort().join(",")}:${o.evidence_event_ids.join(",")}`;
+      this.checkFailed(w, port, {
+        check: "outcome", status: o.status, action_id: a.action_id, action_kind: a.action_kind, record_id: a.proof.record_id,
+        document_id: String(a.args["document_id"]), stage: String(a.args["stage"]), failures: o.failures, requirement_version: o.requirement_version, evidence_event_ids: o.evidence_event_ids, report_key: key
+      });
+    }
+    return failed;
   }
 
   // The run's effect identity and counts, written once when the task closes.
@@ -492,6 +610,16 @@ export class AgentRuntime {
     const p = this.projection(id);
     if (p.state !== "waiting") return;
     const port = live.port;
+    if (p.order.some((aid) => p.actions.get(aid)!.state === "completed")) {
+      const w = this.writer(id);
+      const before = w.proj.monitor.checks_failed;
+      this.outcomeChecks(w, port);
+      if (w.proj.monitor.checks_failed > before) {
+        const blocked = [...w.proj.monitor.blocked.values()].filter((b) => b.check === "outcome").map((b) => b.record_id);
+        w.append("task.state_changed", { from: "waiting", to: "needs_input", reason: "version_check_failed", unmet: w.proj.conditions.filter((c) => blocked.includes(c.record_id)).map((c) => c.condition_id), blocked }, port.now());
+        return;
+      }
+    }
     const f = firstFiring(openWakes(p), port.events(), port.now(), port.horizon);
     if (!f) {
       if (p.cursor.world_seq !== port.headSeq()) this.writer(id).append("resumer.cursor", { world_seq: port.headSeq(), now: port.now() }, port.now());

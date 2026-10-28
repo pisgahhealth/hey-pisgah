@@ -1,0 +1,66 @@
+{
+  "hash": "f468960e54c0b89687bb0028c099a48396be15109adb13be1ca9d1f526e7d8be",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 19,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "1a5a7b8a934e4b0f84b70c5517ec6aa8",
+    "object": "chat.completion",
+    "created": 1793189496,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "The summary draft was held up by the medicine source error \u2014 I'll pause briefly while the ward lead confirms the correction.",
+          "reasoning_content": "Refused due to medicine binding still pointing to take_home_order. Exception pending confirmation by doctor. Need to wait for confirmation. Acceptance requires refund_voucher as well but not yet ready (needs departure). But discharge_summary final also needed. For now we cannot prepare draft until exception confirmed.\n\nWe should wait until confirmation event.\n\nWe should explain we are waiting.",
+          "tool_calls": [
+            {
+              "id": "call_8577ce2be5ef40238b65d130",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "wait_until",
+                "arguments": "{\"deadline_simulated_min\": 800}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 12474,
+      "total_tokens": 12630,
+      "completion_tokens": 156,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 75
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 156
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:36 GMT"
+  },
+  "status": 200,
+  "latency_ms": 950,
+  "recorded_at": "2026-10-28T12:11:36.144Z"
+}

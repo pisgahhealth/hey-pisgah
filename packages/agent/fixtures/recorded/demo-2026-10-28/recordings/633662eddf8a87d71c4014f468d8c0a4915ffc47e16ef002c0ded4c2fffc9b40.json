@@ -1,0 +1,66 @@
+{
+  "hash": "633662eddf8a87d71c4014f468d8c0a4915ffc47e16ef002c0ded4c2fffc9b40",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 9,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "aeb13f12998a41d09e1236fb52ef6ea2",
+    "object": "chat.completion",
+    "created": 1793189425,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": null,
+          "tool_calls": [
+            {
+              "id": "call_045d7f82d9944b49b25d48cf",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_case_state",
+                "arguments": "{\"case_id\": \"c-110f6ad7\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8213,
+      "total_tokens": 8265,
+      "completion_tokens": 52,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 52
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 52
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:10:25 GMT"
+  },
+  "status": 200,
+  "latency_ms": 546,
+  "recorded_at": "2026-10-28T12:10:25.154Z"
+}

@@ -1,0 +1,459 @@
+{
+ "measured_at": "2026-10-28T12:20:58.203319Z",
+ "measured": true,
+ "source": "agent_demo_runs",
+ "provider": "modal",
+ "model": "meta-models/Muse-Spark-Open-816B-A42B",
+ "effort": "low",
+ "adopted_version": {
+  "version": 2,
+  "definition_hash": "42fa598d10013a6074b41d7babcd65859812252ca1ccf53fb2d5a402917b5472",
+  "from": "the A-prior proposal p-8f0e4fe7, dev_validated on 15 dev cases, adopted by the synthetic ward manager (disclosed)",
+  "fallback_version": 1
+ },
+ "runs": [
+  {
+   "step": "5",
+   "case_id": "c-110f6ad7",
+   "task_id": "t-e9687333",
+   "version": 2,
+   "state": "done",
+   "reason": "every_condition_proved",
+   "effect_set_hash": "b34fc0d75005cb147b82ab764670f0bb9b18313a7defc745e226e901ef7aae79",
+   "case_exception_applied": false,
+   "actions": [
+    {
+     "at": 480,
+     "action": "ask_staff",
+     "args": {
+      "question": "Please record expected discharge, take-home order and clinical discharge so discharge summary can be prepared.",
+      "role": "doctor"
+     },
+     "state": "refused",
+     "refusal": "not_a_question",
+     "proof": null
+    },
+    {
+     "at": 480,
+     "action": "ask_staff",
+     "args": {
+      "question": "When will clinical discharge and take-home order be completed for this patient?",
+      "role": "doctor"
+     },
+     "state": "completed",
+     "refusal": null,
+     "proof": {
+      "record_id": "rec-7873f653",
+      "record_version": 1,
+      "verified_at_min": 480,
+      "produced_events": 1
+     }
+    },
+    {
+     "at": 683,
+     "action": "prepare_document",
+     "args": {
+      "document_id": "discharge_summary",
+      "stage": "draft"
+     },
+     "state": "completed",
+     "refusal": null,
+     "proof": {
+      "record_id": "rec-72a24207",
+      "record_version": 1,
+      "verified_at_min": 689,
+      "produced_events": 2
+     }
+    },
+    {
+     "at": 689,
+     "action": "prepare_document",
+     "args": {
+      "document_id": "discharge_summary",
+      "stage": "final"
+     },
+     "state": "completed",
+     "refusal": null,
+     "proof": {
+      "record_id": "rec-b2d860c2",
+      "record_version": 1,
+      "verified_at_min": 691,
+      "produced_events": 2
+     }
+    },
+    {
+     "at": 740,
+     "action": "raise_workflow_conflict",
+     "args": {
+      "definition_element": {
+       "id": "e07",
+       "kind": "edge"
+      },
+      "evidence": [
+       "ev-927fd809",
+       "ev-5f371e8d"
+      ],
+      "explanation": "Ward requires refund_voucher for this case (r1) but workflow v2 defers refund_voucher (st17a) until after departure st16 via e07 and trigger, making required discharge paperwork unavailable before departure.",
+      "requirement_version": "r1",
+      "version": 2
+     },
+     "state": "completed",
+     "refusal": null,
+     "proof": {
+      "record_id": "rec-003e78e6",
+      "record_version": 1,
+      "verified_at_min": 740,
+      "produced_events": 1
+     }
+    },
+    {
+     "at": 740,
+     "action": "prepare_document",
+     "args": {
+      "document_id": "refund_voucher",
+      "stage": "draft"
+     },
+     "state": "refused",
+     "refusal": "prerequisite_unmet",
+     "proof": null
+    },
+    {
+     "at": 849,
+     "action": "prepare_document",
+     "args": {
+      "document_id": "refund_voucher",
+      "stage": "draft"
+     },
+     "state": "completed",
+     "refusal": null,
+     "proof": {
+      "record_id": "rec-096f91d0",
+      "record_version": 1,
+      "verified_at_min": 851,
+      "produced_events": 2
+     }
+    },
+    {
+     "at": 851,
+     "action": "prepare_document",
+     "args": {
+      "document_id": "refund_voucher",
+      "stage": "final"
+     },
+     "state": "completed",
+     "refusal": null,
+     "proof": {
+      "record_id": "rec-0cc17c55",
+      "record_version": 1,
+      "verified_at_min": 853,
+      "produced_events": 2
+     }
+    }
+   ],
+   "agent_refused": [
+    {
+     "at": 480,
+     "tool": "ask_staff",
+     "reason": "not_a_question"
+    }
+   ],
+   "completion_refused": 0,
+   "check_failed": [],
+   "summary_final_sources": [
+    "admission_record",
+    "signoff_record",
+    "take_home_order",
+    "ward_settings"
+   ],
+   "acceptance_checks": {
+    "passed": 12,
+    "total": 12,
+    "failed": []
+   },
+   "calls": 38,
+   "cost_usd": 0.3309,
+   "prompt_tokens": 238081,
+   "completion_tokens": 7826,
+   "reasoning_tokens": 4060,
+   "latency_p50_ms": 902,
+   "calls_while_waiting": 0,
+   "replay": "packages/agent/test/demo-replay.test.ts"
+  },
+  {
+   "step": "6",
+   "case_id": "c-2a14921a",
+   "task_id": "t-84aa48a0",
+   "version": 2,
+   "state": "done",
+   "reason": "every_condition_proved",
+   "effect_set_hash": "9c44d5c75c43c3ffaaad243e3b4e5088e592f307cab4f9e240bece78943fe37c",
+   "case_exception_applied": true,
+   "actions": [
+    {
+     "at": 540,
+     "action": "ask_staff",
+     "args": {
+      "question": "Please record expected discharge and complete clinical discharge steps so discharge summary can be prepared?",
+      "role": "doctor"
+     },
+     "state": "completed",
+     "refusal": null,
+     "proof": {
+      "record_id": "rec-4e2ba074",
+      "record_version": 1,
+      "verified_at_min": 540,
+      "produced_events": 1
+     }
+    },
+    {
+     "at": 541,
+     "action": "ask_staff",
+     "args": {
+      "question": "Please complete order_take_home (st02) and clinical discharge (st05) so nurse can prepare discharge summary?",
+      "role": "doctor"
+     },
+     "state": "completed",
+     "refusal": null,
+     "proof": {
+      "record_id": "rec-67157c41",
+      "record_version": 1,
+      "verified_at_min": 541,
+      "produced_events": 1
+     }
+    },
+    {
+     "at": 541,
+     "action": "ask_staff",
+     "args": {
+      "question": "Pharmacy review (st03) and dispense (st04) are pending; can you proceed once take-home order is recorded?",
+      "role": "pharmacist"
+     },
+     "state": "completed",
+     "refusal": null,
+     "proof": {
+      "record_id": "rec-d977b90b",
+      "record_version": 1,
+      "verified_at_min": 541,
+      "produced_events": 1
+     }
+    },
+    {
+     "at": 600,
+     "action": "raise_workflow_conflict",
+     "args": {
+      "definition_element": {
+       "id": "discharge_summary.medicines",
+       "kind": "section"
+      },
+      "evidence": [
+       "ev-08e0dcaa",
+       "ev-a1c3f1e4"
+      ],
+      "explanation": "Ward procedure requires discharge summary medicines to match dispensed record exactly (strength, quantity, substitution), but workflow defines discharge_summary.medicines source as take_home_order instead of dispense_record.",
+      "requirement_version": "r2",
+      "version": 2
+     },
+     "state": "completed",
+     "refusal": null,
+     "proof": {
+      "record_id": "rec-85238c34",
+      "record_version": 1,
+      "verified_at_min": 600,
+      "produced_events": 1
+     }
+    },
+    {
+     "at": 600,
+     "action": "ask_staff",
+     "args": {
+      "question": "Clinical discharge (st05) is still pending; please complete it so discharge summary can be prepared?",
+      "role": "doctor"
+     },
+     "state": "refused",
+     "refusal": "ask_limit_reached",
+     "proof": null
+    },
+    {
+     "at": 661,
+     "action": "apply_case_exception",
+     "args": {
+      "confirm_by_role": "doctor",
+      "op": {
+       "document_id": "discharge_summary",
+       "note": "use dispensed list per ward procedure r2",
+       "section_id": "medicines",
+       "source": {
+        "field_path": "items",
+        "record_kind": "dispense_record"
+       }
+      },
+      "reason": "Ward r2 requires medicines exactly as dispensed including substitution Calvasc"
+     },
+     "state": "completed",
+     "refusal": null,
+     "proof": {
+      "record_id": "rec-4d5ce6d0",
+      "record_version": 1,
+      "verified_at_min": 661,
+      "produced_events": 1
+     }
+    },
+    {
+     "at": 661,
+     "action": "prepare_document",
+     "args": {
+      "document_id": "discharge_summary",
+      "stage": "draft"
+     },
+     "state": "refused",
+     "refusal": "requirement_check_failed",
+     "proof": null
+    },
+    {
+     "at": 671,
+     "action": "prepare_document",
+     "args": {
+      "document_id": "discharge_summary",
+      "stage": "draft"
+     },
+     "state": "completed",
+     "refusal": null,
+     "proof": {
+      "record_id": "rec-0e03af77",
+      "record_version": 1,
+      "verified_at_min": 677,
+      "produced_events": 2
+     }
+    },
+    {
+     "at": 677,
+     "action": "prepare_document",
+     "args": {
+      "document_id": "discharge_summary",
+      "stage": "final"
+     },
+     "state": "completed",
+     "refusal": null,
+     "proof": {
+      "record_id": "rec-e751dd90",
+      "record_version": 1,
+      "verified_at_min": 679,
+      "produced_events": 2
+     }
+    },
+    {
+     "at": 750,
+     "action": "send_staff_message",
+     "args": {
+      "role": "nurse",
+      "template_id": "status_request"
+     },
+     "state": "completed",
+     "refusal": null,
+     "proof": {
+      "record_id": "rec-0e383296",
+      "record_version": 1,
+      "verified_at_min": 750,
+      "produced_events": 1
+     }
+    },
+    {
+     "at": 752,
+     "action": "prepare_document",
+     "args": {
+      "document_id": "refund_voucher",
+      "stage": "draft"
+     },
+     "state": "completed",
+     "refusal": null,
+     "proof": {
+      "record_id": "rec-0cd6933d",
+      "record_version": 1,
+      "verified_at_min": 754,
+      "produced_events": 2
+     }
+    },
+    {
+     "at": 754,
+     "action": "prepare_document",
+     "args": {
+      "document_id": "refund_voucher",
+      "stage": "final"
+     },
+     "state": "completed",
+     "refusal": null,
+     "proof": {
+      "record_id": "rec-192e03b1",
+      "record_version": 1,
+      "verified_at_min": 756,
+      "produced_events": 2
+     }
+    }
+   ],
+   "agent_refused": [
+    {
+     "at": 600,
+     "tool": "ask_staff",
+     "reason": "ask_limit_reached"
+    }
+   ],
+   "completion_refused": 0,
+   "check_failed": [
+    {
+     "at": 661,
+     "check": "commit",
+     "status": "requirement_failed",
+     "stage": "discharge_summary.draft"
+    }
+   ],
+   "summary_final_sources": [
+    "admission_record",
+    "dispense_record",
+    "signoff_record",
+    "ward_settings"
+   ],
+   "acceptance_checks": {
+    "passed": 12,
+    "total": 12,
+    "failed": []
+   },
+   "calls": 50,
+   "cost_usd": 0.4722,
+   "prompt_tokens": 340082,
+   "completion_tokens": 11074,
+   "reasoning_tokens": 5211,
+   "latency_p50_ms": 946,
+   "calls_while_waiting": 0,
+   "replay": "packages/agent/test/demo-replay.test.ts",
+   "path": "adapt",
+   "requirement_change": {
+    "from": "r1",
+    "to": "r2",
+    "at_min": 600
+   },
+   "reported_flags": {
+    "conflict_before_first_non_compliant_action": true,
+    "case_note_generalised_to_ward_change": false
+   },
+   "staff_confirmations": [
+    {
+     "at": 671,
+     "by": {
+      "kind": "person",
+      "role": "doctor",
+      "staff_id": "d_b1"
+     }
+    }
+   ],
+   "monitor_proposals": {
+    "suspension": 1,
+    "revision": 1,
+    "approved": 0
+   }
+  }
+ ],
+ "total": {
+  "calls": 88,
+  "cost_usd": 0.8031
+ }
+}

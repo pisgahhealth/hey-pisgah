@@ -1,0 +1,66 @@
+{
+  "hash": "41bcc0e460a56dcb6927a1d4702c5c67a782e6fc8508804d1e9ccf6ad040b48a",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 9,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "6c7a44359fff47e0afa652870eda5245",
+    "object": "chat.completion",
+    "created": 1793189501,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": "Need to wait for discharge summary draft to be prepared, then proceed to final.",
+          "tool_calls": [
+            {
+              "id": "call_02ccf916c1e74d84a0995076",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "wait_until",
+                "arguments": "{\"deadline_simulated_min\": 690, \"record_kind\": \"signoff_record\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8910,
+      "total_tokens": 8997,
+      "completion_tokens": 87,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 20
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 87
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:41 GMT"
+  },
+  "status": 200,
+  "latency_ms": 623,
+  "recorded_at": "2026-10-28T12:11:40.904Z"
+}

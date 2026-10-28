@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { AGENT_ALLOWED_KINDS, ActionKind } from "@hey-pisgah/contracts";
-import { ModelError } from "@hey-pisgah/model";
+import { readFileSync } from "node:fs";
+import { hashJson } from "@hey-pisgah/contracts";
+import { ModelError, ROUTES } from "@hey-pisgah/model";
 import { scriptedAgent } from "../src/mock.js";
-import { SYSTEM_PROMPT, TOOL_TEXT, toolDefs } from "../src/prompt.js";
+import { SYSTEM_PROMPT, TOOL_TEXT, systemPrompt, toolDefs } from "../src/prompt.js";
 import { GOAL, OWNER, harness, ofType, tempRoot } from "./helpers.js";
 
 // The same leakage list the hospital package scans its own files with; prompts and tool text must stay clean too.
@@ -15,10 +17,20 @@ const DENY = [
 describe("execution tools and prompts", () => {
   it("exposes no tool for any prohibited kind", () => {
     const names = toolDefs().map((t) => (t.type === "function" ? t.function.name : ""));
-    expect(names).toEqual(["get_case_state", "get_ward_requirements", "get_workflow_definition", "get_record", "prepare_document", "revise_document", "request_check", "send_staff_message", "ask_staff", "apply_case_exception", "raise_workflow_conflict", "wait_until", "finish_task"]);
+    expect(names).toEqual(["get_case_state", "get_ward_requirements", "get_workflow_definition", "get_record", "prepare_document", "send_staff_message", "ask_staff", "apply_case_exception", "raise_workflow_conflict", "wait_until", "finish_task"]);
     const kinds = names.filter((n) => (ActionKind.options as readonly string[]).includes(n));
     expect(kinds.every((k) => AGENT_ALLOWED_KINDS.has(k as never))).toBe(true);
-    expect(kinds.length).toBe(AGENT_ALLOWED_KINDS.size);
+    // The engine revises and checks stages itself, so the current tool set drops the two tools that changed nothing.
+    expect([...AGENT_ALLOWED_KINDS].filter((k) => !kinds.includes(k)).sort()).toEqual(["request_check", "revise_document"]);
+    const v1 = toolDefs("v1").map((t) => (t.type === "function" ? t.function.name : ""));
+    expect(v1.filter((n) => (ActionKind.options as readonly string[]).includes(n)).length).toBe(AGENT_ALLOWED_KINDS.size);
+  });
+
+  it("runs only the prompt and tools committed last in evaluation/commitments/agent-execute.json", () => {
+    const file = JSON.parse(readFileSync(new URL("../../../evaluation/commitments/agent-execute.json", import.meta.url), "utf8")) as { revisions: { hash: string; reason: string }[] };
+    const body = { artifact: "agent-execute", tool_profile: "v2", system_prompt: systemPrompt("v2"), tools: toolDefs("v2"), settings: { provider: "modal", model: ROUTES.modal.models[0], effort: "low", parallel_tool_calls: false, max_turns_per_tick: 12 } };
+    expect(file.revisions.at(-1)!.hash).toBe(hashJson(body));
+    expect(file.revisions.every((r) => r.reason.length > 20)).toBe(true);
   });
 
   it("opens the system prompt with the untrusted-text rule and the authority rule", () => {

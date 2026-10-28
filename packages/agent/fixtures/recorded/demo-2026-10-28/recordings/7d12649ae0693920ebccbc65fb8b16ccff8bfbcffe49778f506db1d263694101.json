@@ -1,0 +1,66 @@
+{
+  "hash": "7d12649ae0693920ebccbc65fb8b16ccff8bfbcffe49778f506db1d263694101",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 2,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "2ffda53742aa43d5baf5edb1653fb8d1",
+    "object": "chat.completion",
+    "created": 1793189520,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Paperwork in progress \u2014 I'll verify what remains to complete discharge.",
+          "reasoning_content": "Need get_case_state etc.",
+          "tool_calls": [
+            {
+              "id": "call_124256ea6f4b4eb1b9d51008",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_case_state",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 3290,
+      "total_tokens": 3375,
+      "completion_tokens": 85,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 10
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 85
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:12:00 GMT"
+  },
+  "status": 200,
+  "latency_ms": 1005,
+  "recorded_at": "2026-10-28T12:12:00.080Z"
+}

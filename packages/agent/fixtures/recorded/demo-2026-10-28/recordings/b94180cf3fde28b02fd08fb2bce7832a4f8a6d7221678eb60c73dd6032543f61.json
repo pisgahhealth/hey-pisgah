@@ -1,0 +1,66 @@
+{
+  "hash": "b94180cf3fde28b02fd08fb2bce7832a4f8a6d7221678eb60c73dd6032543f61",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 6,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "edfa4d4608754c3a8334561bb844fd2b",
+    "object": "chat.completion",
+    "created": 1793189508,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Completed your discharge summary. Next up is the refund voucher \u2014 I'll keep monitoring for its requirements.",
+          "reasoning_content": "We need to analyze state. Discharge summary draft/final done. Remaining: refund_voucher draft and final. Condition: refund_voucher required always per ward requirements. Workflow says st17a trigger after st16. So soft_edge e07 from st16 to st17a. Also trigger wait. So need st16 record_departure to happen first, which requires st13 financial_clearance, which requires st12a/b/c etc.\n\nFacts: payment_status unpaid, payer_type self_pay, final_bill_issued true. So need receive_payment st12a -> financial clearance st13.\n\nWe should check current steps statuses: st12a not_started, st13 not_started, st14 not_started, st15 done, st16 not_started, st17a not_started.\n\nWe need to wait for accounts clerk to do st12a and st13, then nurse hand over etc.\n\nWe as agent can prepare refund_voucher draft after st16, but currently waiting.\n\nWe should ask about status? Could send message or wait.\n\nWe have ask limit reached? Previously ask limit reached for doctor, but we can ask other roles? Limit is 3 per task total? We already used 3 asks. So can't ask more.\n\nWe can wait until st16 etc. Need to monitor.\n\nWe should wait_until deadline.\n\nWe need to provide short sentence? But we should call wait_until with filters.\n\nWe need to wait for st16 or st13.\n\nLet's wait until st16 completes or deadline.\n\n",
+          "tool_calls": [
+            {
+              "id": "call_3eeb5fcec0ba405fbefaf8e2",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "wait_until",
+                "arguments": "{\"deadline_simulated_min\": 800, \"event_kind\": \"step.completed\", \"step_id\": \"st16\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8600,
+      "total_tokens": 9014,
+      "completion_tokens": 414,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 305
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 414
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:48 GMT"
+  },
+  "status": 200,
+  "latency_ms": 2020,
+  "recorded_at": "2026-10-28T12:11:48.307Z"
+}

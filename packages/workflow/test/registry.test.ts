@@ -1,6 +1,6 @@
-import { type Clocks } from "@hey-pisgah/contracts";
+import { definitionHash, type Clocks } from "@hey-pisgah/contracts";
 import { describe, expect, it } from "vitest";
-import { Registry, RegistryError, hashDefinition, type PersonApprover } from "../src/index.js";
+import { Registry, RegistryError, applyOperations, hashDefinition, type PersonApprover } from "../src/index.js";
 import { fixtureDefinition } from "./fixture.js";
 
 const at: Clocks = { occurred_at: 100, recorded_at: 100, wall_at: "2026-10-28T09:00:00Z" };
@@ -56,5 +56,19 @@ describe("registry", () => {
     r.adopt(2, manager, { ...at, occurred_at: 200, recorded_at: 200 });
     expect(r.current({ ward_id: "A" }).version).toBe(2);
     expect(r.current({ ward_id: "B" }).version).toBe(1);
+  });
+
+  it("a scoped proposal stores its scope, falls back to its base and hashes like the evaluator's build of it", () => {
+    const r = Registry.load([fixtureDefinition()]);
+    const ops = [{ op: "remove_soft_edge", edge_id: "e04" }];
+    const scope = { wards: ["B"], condition: null };
+    const v = r.propose(1, ops, meta, { scope }).version!;
+    expect([v.scope, v.fallback_version]).toEqual([scope, 1]);
+    const applied = applyOperations(fixtureDefinition(), ops);
+    if (!applied.ok) throw new Error("ops refused");
+    const expected = definitionHash({ ...applied.definition, version: 2, parent_version: 1, status: "proposed", scope, fallback_version: 1 });
+    expect(v.definition_hash).toBe(expected);
+    expect(hashDefinition(r.get(2)).definition_hash).toBe(expected);
+    expect(r.propose(1, ops, meta, { scope: { wards: "all", condition: null }, fallback: null }).version!.fallback_version).toBeNull();
   });
 });

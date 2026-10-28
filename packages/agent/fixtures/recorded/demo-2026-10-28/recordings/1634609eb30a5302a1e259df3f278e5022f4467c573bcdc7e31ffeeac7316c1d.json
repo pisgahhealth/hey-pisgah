@@ -1,0 +1,75 @@
+{
+  "hash": "1634609eb30a5302a1e259df3f278e5022f4467c573bcdc7e31ffeeac7316c1d",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 6,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "6679c99a6e1040499eeb122e706930b3",
+    "object": "chat.completion",
+    "created": 1793189489,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Core discharge steps are now done \u2014 I'll prepare the summary documents to keep things moving.",
+          "reasoning_content": "Current minute 661. signoff_record versioned, clinical_discharge done, so discharge_summary draft ready true. Acceptance requires discharge_summary draft/final and refund_voucher draft/final.\n\nPer case_state: discharge_summary draft waiting_for [] ready true, so can prepare. refund_voucher draft waiting_for soft_edge st16 + trigger after st16 - not ready yet. Means st16 record_departure not done. But need to handle discharge_summary first.\n\nHowever previous workflow conflict raised: discharge_summary.medicines source take_home_order vs requirement says dispensed record exactly. Need to apply case exception to fix. The conflict already raised at minute 600, but still need to apply exception? The check would fail if we prepare with wrong source.\n\nWe have permission apply_case_exception. Let's apply case exception for discharge_summary.medicines to source dispense_record.\n\nNeed to check definitions: section medicines needed_for draft record_kind take_home_order. Requirement says use dispensed exactly. So exception source dispense_record field_path? Probably dispensed medicines. Look at records? Need get_record for dispense vs take_home.\n\n",
+          "tool_calls": [
+            {
+              "id": "call_0ad6801eacb34ccb809afbd3",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_record",
+                "arguments": "{\"record_id\": \"rec-3f2e1af1\"}"
+              }
+            },
+            {
+              "id": "call_7b705fa34b274f1d9bc1bb3a",
+              "index": 1,
+              "type": "function",
+              "function": {
+                "name": "get_record",
+                "arguments": "{\"record_id\": \"rec-297b8651\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8478,
+      "total_tokens": 8836,
+      "completion_tokens": 358,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 228
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 358
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:29 GMT"
+  },
+  "status": 200,
+  "latency_ms": 1696,
+  "recorded_at": "2026-10-28T12:11:29.176Z"
+}

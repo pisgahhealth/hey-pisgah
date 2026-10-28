@@ -1,0 +1,66 @@
+{
+  "hash": "f383c6addb9be28b84adba75a13f95fc02582b34f011353d6b3bd2c418d28322",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 2,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "97fbcbf57b1e4114a09a8743feaf5b58",
+    "object": "chat.completion",
+    "created": 1793189524,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "All core paperwork is prepared \u2014 I'll do a final verification to wrap up discharge.",
+          "reasoning_content": "Need to check case state.",
+          "tool_calls": [
+            {
+              "id": "call_c180f824b1db44d398473d4d",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_case_state",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 3346,
+      "total_tokens": 3434,
+      "completion_tokens": 88,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 10
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 88
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:12:04 GMT"
+  },
+  "status": 200,
+  "latency_ms": 565,
+  "recorded_at": "2026-10-28T12:12:03.896Z"
+}

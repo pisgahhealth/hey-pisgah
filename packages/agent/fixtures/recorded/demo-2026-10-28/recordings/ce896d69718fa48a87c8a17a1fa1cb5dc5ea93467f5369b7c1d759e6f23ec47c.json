@@ -1,0 +1,66 @@
+{
+  "hash": "ce896d69718fa48a87c8a17a1fa1cb5dc5ea93467f5369b7c1d759e6f23ec47c",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 8,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "74a0f6e9c24f44e1b713ff575b4f93f8",
+    "object": "chat.completion",
+    "created": 1793189505,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": "We need to wait for discharge_summary final to complete, then check_document st08, then handover etc, and refund voucher. However currently refund_voucher waiting for st16 departure. So discharge_summary flow continues. Need to observe.",
+          "tool_calls": [
+            {
+              "id": "call_ade364921b6543de9e7e7676",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "wait_until",
+                "arguments": "{\"deadline_simulated_min\": 720}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8542,
+      "total_tokens": 8643,
+      "completion_tokens": 101,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 51
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 101
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:45 GMT"
+  },
+  "status": 200,
+  "latency_ms": 706,
+  "recorded_at": "2026-10-28T12:11:44.660Z"
+}

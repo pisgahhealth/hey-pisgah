@@ -11,6 +11,7 @@ import { Registry } from "@hey-pisgah/workflow";
 import { FIXTURE_CASES_DIR, loadCases } from "./cases.js";
 import { scriptedAgent } from "./mock.js";
 import { AgentRuntime } from "./runtime.js";
+import { VersionDesk, VersionError } from "./versions.js";
 
 export const AGENT_RECORDINGS_DIR = new URL("../fixtures/recordings/", import.meta.url).pathname;
 export const RECORDED_DIR = new URL("../fixtures/recorded/", import.meta.url).pathname;
@@ -40,12 +41,16 @@ export type ServeOptions = {
   world?: WorldRules | null;
   log?: (line: string) => void;
 };
-export type Serve = { url: string; runtime: AgentRuntime; client: ModelClient; learning: Stream; close: () => Promise<void> };
+export type Serve = { url: string; runtime: AgentRuntime; client: ModelClient; learning: Stream; versions: VersionDesk; close: () => Promise<void> };
 
 const OpenTask = z.strictObject({ case_id: CaseId, goal: z.string().min(1).max(500), owner: z.string().min(1).max(80), budget: z.strictObject({ max_calls: z.number().int().min(1).max(500), max_usd: z.number().min(0).max(5) }).optional() });
 const Input = z.strictObject({ text: z.string().min(1).max(500), by: z.string().min(1).max(80) });
 const Cancel = z.strictObject({ by: z.string().min(1).max(80) });
 const Clock = z.strictObject({ to: z.number().int().min(0).max(2880) });
+const Person = z.strictObject({ kind: z.string().min(1).max(40), staff_id: z.string().min(1).max(80), role: z.string().min(1).max(40), display_name: z.string().min(1).max(120) });
+const Adopt = z.strictObject({ proposal_id: z.string().min(1).max(80), approver: Person, at_minute: z.number().int().min(0).max(2880).optional() });
+const Standing = z.strictObject({ by: Person, reason: z.string().min(1).max(300), at_minute: z.number().int().min(0).max(2880).optional(), proposal: z.strictObject({ task_id: z.string().min(1).max(80), proposal_id: z.string().min(1).max(80) }).optional() });
+const Confirm = z.strictObject({ by: z.strictObject({ kind: z.string().min(1).max(40), staff_id: z.string().min(1).max(80), role: z.string().min(1).max(40) }) });
 const Learning = z.strictObject({ record_type: z.string().regex(/^[a-z_]+(\.[a-z_]+)+$/), payload: z.json() });
 
 async function body(req: IncomingMessage): Promise<unknown> {
@@ -76,8 +81,9 @@ export async function startServe(o: ServeOptions): Promise<Serve> {
     storeRoot: o.storeRoot, ...(o.mode ? { mode: o.mode } : {}), recordingsDir: o.recordingsDir ?? AGENT_RECORDINGS_DIR, mock: scriptedAgent(),
     taskStateOf: (id) => runtime?.stateOf(id) ?? null
   });
+  const versions = new VersionDesk(o.storeRoot, o.registry ?? Registry.load([loadV1()]));
   const rt = new AgentRuntime({
-    storeRoot: o.storeRoot, client, cases, registry: o.registry ?? Registry.load([loadV1()]), world: o.world === undefined ? worldRules() : o.world, clock: o.clock ?? "auto", pollMs: o.pollMs ?? 250,
+    storeRoot: o.storeRoot, client, cases, registry: versions.registry, world: o.world === undefined ? worldRules() : o.world, clock: o.clock ?? "auto", pollMs: o.pollMs ?? 250,
     ...(o.provider ? { provider: o.provider } : {}), ...(o.model ? { model: o.model } : {}), ...(o.effort ? { effort: o.effort } : {}), ...(o.log ? { log: o.log } : {})
   });
   runtime = rt;
@@ -113,6 +119,39 @@ export async function startServe(o: ServeOptions): Promise<Serve> {
         return [200, { now: p.now() }];
       }
     }
+    if (parts[0] === "versions") {
+      // Standing changes are a person's decision: the route refuses and counts any other requester; no agent tool reaches it.
+      const standing = async (f: () => unknown, okStatus = 200): Promise<[number, unknown]> => {
+        try { return [okStatus, f()]; } catch (e) {
+          if (!(e instanceof VersionError)) throw e;
+          const status = e.code === "requires_person" ? 403 : e.code === "unknown_proposal" || e.code === "unknown_version" ? 404 : 409;
+          return [status, { error: e.code, message: e.message.slice(0, 300) }];
+        }
+      };
+      if (parts.length === 1 && m === "GET") return [200, { versions: versions.registry.list(), log: versions.records(), refused: versions.refusedCount() }];
+      if (parts.length === 2 && parts[1] === "adopt" && m === "POST") {
+        const b = parse(Adopt, await body(req));
+        return standing(() => { const d = versions.adopt(b.proposal_id, b.approver, b.at_minute ?? 0); return { version: d.version, status: d.status, definition_hash: d.definition_hash, scope: d.scope, fallback_version: d.fallback_version }; }, 201);
+      }
+      if (parts.length === 3 && (parts[2] === "suspend" || parts[2] === "revert") && m === "POST") {
+        const v = Number(parts[1]);
+        if (!Number.isInteger(v) || v < 1) throw new HttpError(404, "unknown version");
+        const b = parse(Standing, await body(req));
+        if (parts[2] === "suspend" && b.proposal) {
+          const t = task(b.proposal.task_id);
+          if (!rt.projection(t).monitor.proposals.some((x) => x.proposal_id === b.proposal!.proposal_id && x.kind === "suspension" && x.version === v)) throw new HttpError(404, "no such suspension proposal on that task");
+        }
+        return standing(() => {
+          const d = parts[2] === "suspend" ? versions.suspend(v, b.by, b.reason, b.at_minute ?? 0, b.proposal ?? null) : versions.revert(v, b.by, b.reason, b.at_minute ?? 0);
+          return { version: d.version, status: d.status };
+        });
+      }
+    }
+    if (parts[0] === "cases" && parts.length === 5 && parts[2] === "exceptions" && parts[4] === "confirm" && m === "POST") {
+      const b = parse(Confirm, await body(req));
+      const r = kase(parts[1]!).confirmException(parts[3]!, b.by);
+      return r.ok ? [200, { ok: true }] : [r.reason === "confirmation_requires_person" ? 403 : r.reason === "unknown_id" ? 404 : 409, { error: r.reason }];
+    }
     if (m === "POST" && url.pathname === "/learning") {
       const b = parse(Learning, await body(req));
       if (STORE_RECORD_TYPES.includes(b.record_type)) throw new HttpError(400, "that record type belongs to the store");
@@ -132,12 +171,13 @@ export async function startServe(o: ServeOptions): Promise<Serve> {
   const addr = server.address();
   const url = typeof addr === "object" && addr ? `http://${o.host ?? "127.0.0.1"}:${addr.port}` : "";
   return {
-    url, runtime: rt, client, learning,
+    url, runtime: rt, client, learning, versions,
     close: async () => {
       await new Promise<void>((r) => server.close(() => r()));
       await rt.stop();
       client.close();
       learning.close();
+      versions.close();
     }
   };
 }
@@ -162,7 +202,8 @@ export async function serveCommand(repoRoot: string, args: string[]): Promise<nu
     ...(recorded ? recordedWorld(recorded) : {}),
     storeRoot, clock, port: Number(flag(args, "port") ?? (once ? 0 : process.env["HEY_PISGAH_SERVE_PORT"] ?? 4317)),
     pollMs: Number(flag(args, "poll-ms") ?? 250), log: (l) => process.stderr.write(`${l}\n`),
-    ...(flag(args, "cases") ? { casesDir: flag(args, "cases")! } : {})
+    ...(flag(args, "cases") ? { casesDir: flag(args, "cases")! } : {}),
+    ...(flag(args, "recordings") ? { recordingsDir: flag(args, "recordings")! } : {})
   });
   if (!once) {
     process.stdout.write(`serve listening on ${s.url} (mode ${s.client.mode}, store ${storeRoot})\n`);

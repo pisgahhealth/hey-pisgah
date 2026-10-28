@@ -1,0 +1,66 @@
+{
+  "hash": "6e54dd44428189329ed1af4db471f4cef4e7838ad7fe51c2e70513c395bc9169",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 7,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "577fffae68674079a8dc4b2eb2ce288e",
+    "object": "chat.completion",
+    "created": 1793189477,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "The core discharge documents are waiting on clinical sign-off \u2014 I'll pause briefly and re-check progress.",
+          "reasoning_content": "Need to understand needs. Discharge summary requires clinical discharge st05. Not done yet. Refund voucher requires departure st16 which requires many prerequisites including financial clearance. So current cannot prepare either. Must wait for progress.\n\nAsk doctor to do clinical discharge? Already pharmacy review in progress. Could ask staff about clinical discharge.\n\nBut limits 3 asks already used. We have used 3 asks. No more asks allowed? At most 3 per task. So cannot ask further.\n\nWe can only wait.\n\nWe should wait_until for steps.\n\nNeed to wait for st05 completion maybe.",
+          "tool_calls": [
+            {
+              "id": "call_49ec71046a4848f1a8dea774",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "wait_until",
+                "arguments": "{\"deadline_simulated_min\": 650, \"step_id\": \"st05\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8371,
+      "total_tokens": 8584,
+      "completion_tokens": 213,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 120
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 213
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:17 GMT"
+  },
+  "status": 200,
+  "latency_ms": 1148,
+  "recorded_at": "2026-10-28T12:11:17.406Z"
+}

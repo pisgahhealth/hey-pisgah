@@ -1,8 +1,267 @@
 {
- "measured_at": "2026-10-28T03:21:27.939Z",
- "set": "dev",
- "mode": "measured",
- "executor": "definition",
- "measured": false,
- "reason": "the monitor runs with the adopted version in the agent lane; no monitor log was given"
+ "measured_at": "2026-10-28T12:18:57.708Z",
+ "measured": true,
+ "source": "agent_monitor",
+ "mode": "mock planted run, plus the live step 6 run when given",
+ "planted_failure_detected": true,
+ "only_affected_blocked": true,
+ "approval_by_person": true,
+ "planted": {
+  "planted": {
+   "case_id": "c-830e004c",
+   "ward": "B",
+   "payer": "hmo",
+   "requirement_version": "r2",
+   "version": 2,
+   "note": "the adopted version still copies the medicines section from the take-home order, and Ward B r2 names the dispense record"
+  },
+  "agent": "scripted mock agent (deterministic), not a model",
+  "planted_failure_detected": true,
+  "check_failed": [
+   {
+    "at": 597,
+    "check": "commit",
+    "status": "requirement_failed",
+    "version": 2,
+    "requirement_version": "r2",
+    "action": {
+     "action_id": "a-db5f9677",
+     "action_kind": "prepare_document",
+     "document_id": "discharge_summary",
+     "record_id": "rec-c92d3b81",
+     "stage": "draft"
+    },
+    "evidence_event_ids": [
+     "ev-38a44784",
+     "ev-c7bf0f59"
+    ]
+   },
+   {
+    "at": 599,
+    "check": "commit",
+    "status": "requirement_failed",
+    "version": 2,
+    "requirement_version": "r2",
+    "action": {
+     "action_id": "a-fe7639c2",
+     "action_kind": "prepare_document",
+     "document_id": "discharge_summary",
+     "record_id": "rec-c92d3b81",
+     "stage": "draft"
+    },
+    "evidence_event_ids": [
+     "ev-38a44784",
+     "ev-c7bf0f59"
+    ]
+   },
+   {
+    "at": 601,
+    "check": "commit",
+    "status": "requirement_failed",
+    "version": 2,
+    "requirement_version": "r2",
+    "action": {
+     "action_id": "a-6cc39458",
+     "action_kind": "prepare_document",
+     "document_id": "discharge_summary",
+     "record_id": "rec-c92d3b81",
+     "stage": "draft"
+    },
+    "evidence_event_ids": [
+     "ev-38a44784",
+     "ev-c7bf0f59"
+    ]
+   },
+   {
+    "at": 671,
+    "check": "commit",
+    "status": "requirement_failed",
+    "version": 2,
+    "requirement_version": "r2",
+    "action": {
+     "action_id": "a-14c9fdf3",
+     "action_kind": "prepare_document",
+     "document_id": "discharge_summary",
+     "record_id": "rec-c92d3b81",
+     "stage": "draft"
+    },
+    "evidence_event_ids": [
+     "ev-38a44784",
+     "ev-c7bf0f59"
+    ]
+   }
+  ],
+  "blocked": {
+   "task_state": "needs_input",
+   "reason": "version_check_failed",
+   "failed_stage_records": [
+    "rec-c92d3b81"
+   ],
+   "unmet_conditions": [
+    "discharge_summary.draft",
+    "discharge_summary.final",
+    "refund_voucher.draft",
+    "refund_voucher.final"
+   ],
+   "note": "the refund voucher waits on departure, which waits on the summary hand-over, so it is downstream of the failed stage"
+  },
+  "continued": {
+   "completed_in_blocked_task": [
+    "hmo_claim_cover.draft",
+    "hmo_claim_cover.final"
+   ],
+   "other_case": {
+    "case_id": "c-agent001",
+    "version": 2,
+    "state": "done"
+   }
+  },
+  "only_affected_blocked": true,
+  "suspension_proposal": {
+   "at": 597,
+   "approval": "person_only",
+   "check_failed_seq": 35,
+   "evidence_event_ids": [
+    "ev-38a44784",
+    "ev-c7bf0f59"
+   ],
+   "fallback_passes": false,
+   "fallback_version": 1,
+   "proposal_id": "vs-14851d7c",
+   "reason": "the commit check failed for discharge_summary draft under version 2",
+   "report_key": "suspension:2:B:ward_b_r2_medicines_as_dispensed",
+   "requirement_version": "r2",
+   "version": 2,
+   "ward_id": "B"
+  },
+  "revision_proposal": {
+   "at": 597,
+   "approval": "person_only",
+   "base_version": 2,
+   "check_failed_seq": 35,
+   "evidence_event_ids": [
+    "ev-38a44784",
+    "ev-c7bf0f59"
+   ],
+   "ops": [
+    {
+     "document_id": "discharge_summary",
+     "op": "rebind_section",
+     "section_id": "medicines",
+     "source": {
+      "field_path": "items",
+      "record_kind": "dispense_record",
+      "version_policy": "current"
+     }
+    }
+   ],
+   "proposal_id": "vr-e9aa4634",
+   "rationale": "ward B requirements r2 name another source for discharge_summary.medicines",
+   "report_key": "revision:2:B:ward_b_r2_medicines_as_dispensed",
+   "scope": {
+    "condition": null,
+    "wards": [
+     "B"
+    ]
+   },
+   "version": 2
+  },
+  "approval": {
+   "route": "POST /versions/2/suspend (person only)",
+   "non_person_attempt_status": 403,
+   "refused_count": 1,
+   "status": 200,
+   "result": {
+    "version": 2,
+    "status": "suspended"
+   },
+   "by": {
+    "kind": "person",
+    "staff_id": "wm_synthetic",
+    "role": "ward_manager",
+    "display_name": "Synthetic ward manager (scripted in the monitor report, disclosed)"
+   },
+   "wall_at": "2026-10-28T12:18:56.561Z",
+   "proposal": {
+    "task_id": "t-fe8ba155",
+    "proposal_id": "vs-14851d7c"
+   },
+   "human_decision": false,
+   "disclosure": "the person-only route was called by this report as the synthetic ward manager; no human made this decision"
+  },
+  "approval_by_person": true,
+  "after_suspension": {
+   "case_id": "c-agent002",
+   "version": 1,
+   "state": "done"
+  }
+ },
+ "live_step6": {
+  "case_id": "c-2a14921a",
+  "task_state": "done",
+  "reason": "every_condition_proved",
+  "model_calls": 50,
+  "path": "adapt",
+  "conflict": [
+   {
+    "at": 600,
+    "requirement_version": "r2",
+    "definition_element": {
+     "id": "discharge_summary.medicines",
+     "kind": "section"
+    }
+   }
+  ],
+  "case_exception": [
+   {
+    "at": 661,
+    "op": {
+     "document_id": "discharge_summary",
+     "note": "use dispensed list per ward procedure r2",
+     "section_id": "medicines",
+     "source": {
+      "field_path": "items",
+      "record_kind": "dispense_record"
+     }
+    },
+    "confirm_by_role": "doctor"
+   }
+  ],
+  "confirmations": [
+   {
+    "at": 671,
+    "by": {
+     "kind": "person",
+     "role": "doctor",
+     "staff_id": "d_b1"
+    }
+   }
+  ],
+  "check_failed": [
+   {
+    "at": 661,
+    "check": "commit",
+    "status": "requirement_failed",
+    "action": {
+     "action_id": "a-9f53ed8e",
+     "action_kind": "prepare_document",
+     "document_id": "discharge_summary",
+     "record_id": "rec-0e03af77",
+     "stage": "draft"
+    }
+   }
+  ],
+  "proposals": {
+   "suspension": 1,
+   "revision": 1,
+   "approved": 0
+  },
+  "conflict_before_first_non_compliant_action": true,
+  "case_note_generalised_to_ward_change": false,
+  "non_compliant_attempts_blocked": 1
+ },
+ "demo_worlds": [
+  "c-110f6ad7",
+  "c-2a14921a"
+ ]
 }

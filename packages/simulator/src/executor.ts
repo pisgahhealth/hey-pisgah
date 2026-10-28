@@ -17,7 +17,10 @@ export type RunOptions = {
   use_agent?: boolean;
   // A world-decided service time, consulted before the schedule; its rules_hash is folded into the run's rules_hash.
   world?: WorldRules;
+  // Facts the world changes at a minute, such as ward_requires when a new requirement set takes effect; the event it emits is outside the trigger vocabulary.
+  fact_changes?: readonly FactChange[];
 };
+export type FactChange = { at: number; facts: Readonly<Record<string, FactValue>> };
 
 export type ServiceQuery = { action_kind: string; document_id: string | null; stage: string | null; attempt: number; now: number; events: readonly SimEvent[] };
 export type WorldRules = { rules_hash: string; service_min: (q: ServiceQuery) => number | undefined };
@@ -441,6 +444,14 @@ export function runDefinition(defIn: WD, scheduleIn: Schedule, opts: RunOptions 
       requestDecide();
     });
   }
+  (opts.fact_changes ?? []).forEach((c, i) => {
+    eng.at(c.at, Phase.external, `facts:${i}`, 0, () => {
+      const keys = Object.keys(c.facts).sort(cmp);
+      for (const k of keys) facts[k] = structuredClone(c.facts[k]) as FactValue;
+      eng.emit({ kind: "world.facts_changed", actor_id: null, actor_role: null, subject: null, payload: { keys } });
+      requestDecide();
+    });
+  });
   for (const s of steps) {
     const due = draw(s.step_id)?.due;
     if (s.external && due !== undefined && due !== "never" && "at" in due) {

@@ -1,0 +1,85 @@
+{
+  "source": {
+    "kind": "model_run",
+    "arm": "prior",
+    "note": "One of the three A-prior proposals from the intelligence lane (28 Oct, Modal, effort xhigh); all three made this change and passed the dev gate.",
+    "recording": "packages/intelligence/fixtures/recordings/74572813e103c38f6a9fcfef4331f543f067de5bc729d5e94d7e4a4008e48ed0.json",
+    "tool_call_id": "call_1e5f2c053ae04f1db55f7029"
+  },
+  "proposal": {
+    "parent_proposal_id": null,
+    "base_version": 1,
+    "ops": [
+      {
+        "op": "remove_soft_edge",
+        "edge_id": "e06"
+      },
+      {
+        "op": "set_prep_trigger",
+        "target": {
+          "step": "st09a"
+        },
+        "when": {
+          "after": {
+            "step": "st05"
+          }
+        }
+      }
+    ],
+    "scope": {
+      "wards": "all",
+      "condition": null
+    },
+    "rationale": "Ward r1 requires hmo_claim_cover if payer_type=hmo, discharge_summary if not transfer_out (A/B). No dependency between them. v1 has soft e06 st07->st09a and trigger st09a after st07 serializing hmo draft behind discharge_summary final after st05. hmo draft needs admission_record, final needs stay_bill from st05, no summary data. Serializing delays st10->st11->st13 (e15)->st16, increasing post-signoff wait. Removing e06 and retargeting trigger to after st05 allows parallel after stay_bill, preserving fences, no rework.",
+    "evidence": {
+      "hypothesis_ids": [],
+      "experiment_ids": [],
+      "event_ids": []
+    },
+    "expected_effects": [
+      {
+        "metric": "bed_release_delay_min",
+        "direction": "down",
+        "subgroup_condition": {
+          "fact": "payer_type",
+          "eq": "hmo"
+        }
+      },
+      {
+        "metric": "post_signoff_wait_min",
+        "direction": "down",
+        "subgroup_condition": {
+          "fact": "payer_type",
+          "eq": "hmo"
+        }
+      },
+      {
+        "metric": "rework_events",
+        "direction": "same",
+        "subgroup_condition": null
+      },
+      {
+        "metric": "rework_min",
+        "direction": "same",
+        "subgroup_condition": null
+      },
+      {
+        "metric": "required_steps_done",
+        "direction": "same",
+        "subgroup_condition": null
+      }
+    ],
+    "known_exceptions": [
+      {
+        "condition": {
+          "fact": "payer_type",
+          "in": [
+            "self_pay",
+            "corporate"
+          ]
+        },
+        "behaviour": "not_applied"
+      }
+    ]
+  }
+}

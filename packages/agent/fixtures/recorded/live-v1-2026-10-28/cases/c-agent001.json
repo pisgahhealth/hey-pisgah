@@ -1,6 +1,7 @@
 {
   "case_id": "c-agent001",
   "opened_at": 480,
+  "tool_profile": "v1",
   "requirements": [{ "at": 0, "set": "r1" }],
   "schedule": {
     "schedule_version": 1,

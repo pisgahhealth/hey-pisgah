@@ -1,0 +1,66 @@
+{
+  "hash": "349ea4a79bb9b4e2ba47bd90b5f41682b3206196fe79e881ac4f3bff8408269c",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 7,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "f831db434ac34da291a2d81b64778237",
+    "object": "chat.completion",
+    "created": 1793189424,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": "State shows departure already done (st16 849), refund_voucher draft ready=true, final still waiting_for st17a fence. Need to prepare refund_voucher draft then final. The workflow triggered st17a after st16, and record shows ready true even though previously prerequisite_unmet. Now should succeed.\n\nWe should prepare document draft.",
+          "tool_calls": [
+            {
+              "id": "call_d73b87acf92d424a9521bfb3",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "prepare_document",
+                "arguments": "{\"case_id\": \"c-110f6ad7\", \"document_id\": \"refund_voucher\", \"stage\": \"draft\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8050,
+      "total_tokens": 8207,
+      "completion_tokens": 157,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 73
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 157
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:10:24 GMT"
+  },
+  "status": 200,
+  "latency_ms": 818,
+  "recorded_at": "2026-10-28T12:10:24.493Z"
+}

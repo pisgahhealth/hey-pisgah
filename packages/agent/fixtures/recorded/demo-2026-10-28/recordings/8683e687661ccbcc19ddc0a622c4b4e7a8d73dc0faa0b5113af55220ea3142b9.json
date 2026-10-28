@@ -1,0 +1,66 @@
+{
+  "hash": "8683e687661ccbcc19ddc0a622c4b4e7a8d73dc0faa0b5113af55220ea3142b9",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 2,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "873562ef3d9e4248ab08079692ad11c7",
+    "object": "chat.completion",
+    "created": 1793189395,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Your discharge paperwork is pending \u2014 I'll verify the case status and requirements to get it completed.",
+          "reasoning_content": "Need case state, ward req, workflow def.",
+          "tool_calls": [
+            {
+              "id": "call_89db7a14e2674f62a1ee540d",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_case_state",
+                "arguments": "{\"case_id\": \"c-110f6ad7\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 3110,
+      "total_tokens": 3204,
+      "completion_tokens": 94,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 14
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 94
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:09:55 GMT"
+  },
+  "status": 200,
+  "latency_ms": 645,
+  "recorded_at": "2026-10-28T12:09:55.010Z"
+}

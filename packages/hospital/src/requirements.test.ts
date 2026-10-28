@@ -20,3 +20,20 @@ describe("ward requirements r1", () => {
     expect(wardRequires(set, "A", "hmo_claim_cover", { payer_type: "self_pay" })).toBe(false);
   });
 });
+
+describe("ward requirements r2", () => {
+  const r1 = loadWardRequirements("r1");
+  const r2 = loadWardRequirements("r2");
+  it("changes only Ward B: a new version, approver and start date, the same required documents", () => {
+    expect(r2.requirement_version).toBe("r2");
+    const b = r2.wards.find((w) => w.ward_id === "B")!;
+    expect([b.version, b.effective_from, b.approver.role, b.approver.staff_id]).toEqual(["r2", "2026-10-31", "ward_manager", "wm_b"]);
+    expect(b.required_documents).toEqual(r1.wards.find((w) => w.ward_id === "B")!.required_documents);
+    expect(r2.wards.filter((w) => w.ward_id !== "B")).toEqual(r1.wards.filter((w) => w.ward_id !== "B"));
+  });
+  it("carries the new procedure text and says nothing about when to finalise", () => {
+    const text = r2.wards.find((w) => w.ward_id === "B")!.procedure_text;
+    expect(text).toBe("The discharge summary given to the patient lists the take-home medicines exactly as dispensed by pharmacy, including strength, quantity and any substitution.");
+    expect(/final|after|before|wait/i.test(text)).toBe(false);
+  });
+});

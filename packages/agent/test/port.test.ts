@@ -48,9 +48,14 @@ describe("hospital port over the definition executor", () => {
     const ok = port.commit("prepare_document", doc("discharge_summary", "draft"), "k5");
     expect(ok.ok && ok.write.effect_at).toBe(601);
     expect(port.commit("prepare_document", doc("discharge_summary", "draft"), "k6")).toMatchObject({ reason: "already_prepared" });
-    expect(port.commit("revise_document", doc("discharge_summary", "draft"), "k7")).toMatchObject({ reason: "not_stale" });
-    expect(port.commit("request_check", doc("discharge_summary", "final"), "k8")).toMatchObject({ reason: "prerequisite_unmet" });
+    expect(port.commit("revise_document", doc("discharge_summary", "draft"), "k7")).toMatchObject({ reason: "invalid_arguments" });
+    expect(port.commit("request_check", doc("discharge_summary", "final"), "k8")).toMatchObject({ reason: "invalid_arguments" });
     expect(port.allWrites().length).toBe(1);
+    const v1 = open(tempRoot(), { ...baseCase(), tool_profile: "v1" });
+    v1.advanceTo(600);
+    expect(v1.commit("prepare_document", doc("discharge_summary", "draft"), "k5").ok).toBe(true);
+    expect(v1.commit("revise_document", doc("discharge_summary", "draft"), "k7")).toMatchObject({ reason: "not_stale" });
+    expect(v1.commit("request_check", doc("discharge_summary", "final"), "k8")).toMatchObject({ reason: "prerequisite_unmet" });
   });
 
   it("an accepted preparation always starts in the engine at its effect minute", async () => {

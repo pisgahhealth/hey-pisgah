@@ -1,0 +1,75 @@
+{
+  "hash": "3fc2078d90793f383f4d383c3e3d325e5c5b06cf57d8b5a9ae5785a112c649cb",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 4,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "cfcfcc30b6084433b1dd803d070109c1",
+    "object": "chat.completion",
+    "created": 1793189385,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "I see which documents are blocked \u2014 now I'll check the ward rules to confirm what we can prepare.",
+          "reasoning_content": "Need ward req, workflow def.",
+          "tool_calls": [
+            {
+              "id": "call_b86222b312aa4bd3bfc23eed",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_ward_requirements",
+                "arguments": "{\"case_id\": \"c-110f6ad7\"}"
+              }
+            },
+            {
+              "id": "call_bb7b2b30a7434601a6b31600",
+              "index": 1,
+              "type": "function",
+              "function": {
+                "name": "get_workflow_definition",
+                "arguments": "{\"case_id\": \"c-110f6ad7\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 4738,
+      "total_tokens": 4891,
+      "completion_tokens": 153,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 11
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 153
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:09:45 GMT"
+  },
+  "status": 200,
+  "latency_ms": 878,
+  "recorded_at": "2026-10-28T12:09:45.542Z"
+}

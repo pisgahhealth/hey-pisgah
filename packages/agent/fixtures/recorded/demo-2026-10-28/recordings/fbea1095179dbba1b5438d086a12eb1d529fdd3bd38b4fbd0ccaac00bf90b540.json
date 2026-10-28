@@ -1,0 +1,66 @@
+{
+  "hash": "fbea1095179dbba1b5438d086a12eb1d529fdd3bd38b4fbd0ccaac00bf90b540",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 2,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "95c1b862eba144f8bb320402357e1e5e",
+    "object": "chat.completion",
+    "created": 1793189410,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Completing your discharge paperwork \u2014 checking the pending refund voucher next.",
+          "reasoning_content": "Need to get case state etc.",
+          "tool_calls": [
+            {
+              "id": "call_fd56fad6c0f74c369f5b0fe6",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_case_state",
+                "arguments": "{\"case_id\": \"c-110f6ad7\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 3177,
+      "total_tokens": 3263,
+      "completion_tokens": 86,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 11
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 86
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:10:10 GMT"
+  },
+  "status": 200,
+  "latency_ms": 764,
+  "recorded_at": "2026-10-28T12:10:10.446Z"
+}

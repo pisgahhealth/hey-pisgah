@@ -1,0 +1,84 @@
+{
+  "hash": "23a05ed589ec6e6269fe0d677752c08f81190049f3c3a99ac640597f3ff438ea",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 2,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "d3c7308f37c64f1bac1e46cfbf7dddc8",
+    "object": "chat.completion",
+    "created": 1793189487,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Woke at minute 661 \u2014 paperwork status shifted, so I'll review what discharge forms are ready now.",
+          "reasoning_content": "Get case state etc.",
+          "tool_calls": [
+            {
+              "id": "call_7855ef9fe30f43918425e415",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_case_state",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            },
+            {
+              "id": "call_2c1e8c1e4c654e149408d4df",
+              "index": 1,
+              "type": "function",
+              "function": {
+                "name": "get_ward_requirements",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            },
+            {
+              "id": "call_3707f4935dd34745b1951381",
+              "index": 2,
+              "type": "function",
+              "function": {
+                "name": "get_workflow_definition",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 3163,
+      "total_tokens": 3369,
+      "completion_tokens": 206,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 9
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 206
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:27 GMT"
+  },
+  "status": 200,
+  "latency_ms": 786,
+  "recorded_at": "2026-10-28T12:11:27.336Z"
+}

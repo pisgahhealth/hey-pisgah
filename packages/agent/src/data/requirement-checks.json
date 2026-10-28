@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "checks": [
+    {
+      "check_id": "ward_b_r2_medicines_as_dispensed",
+      "ward_id": "B",
+      "from_requirement_version": "r2",
+      "document_id": "discharge_summary",
+      "section_id": "medicines",
+      "source": { "record_kind": "dispense_record", "field_path": "items" },
+      "applies_when": { "fact": "has_take_home_order", "eq": "true" },
+      "source_exists_before": "final"
+    }
+  ]
+}

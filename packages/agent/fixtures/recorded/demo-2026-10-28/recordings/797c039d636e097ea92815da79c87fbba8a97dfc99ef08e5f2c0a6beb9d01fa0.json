@@ -1,0 +1,66 @@
+{
+  "hash": "797c039d636e097ea92815da79c87fbba8a97dfc99ef08e5f2c0a6beb9d01fa0",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 11,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "6edb8a7c4db049619e02ef1079c44649",
+    "object": "chat.completion",
+    "created": 1793189492,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": "Need correct param naming: apply_case_exception expects op.document_id, section_id, source, note etc? Check description: parameters case_id, op (document_id, section_id, source...), note, reason, confirm_by_role . So note is top-level not inside op.",
+          "tool_calls": [
+            {
+              "id": "call_e7d43207ad0e4cfe8edbec71",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "apply_case_exception",
+                "arguments": "{\"case_id\": \"c-2a14921a\", \"op\": {\"document_id\": \"discharge_summary\", \"section_id\": \"medicines\", \"source\": {\"record_kind\": \"dispense_record\", \"field_path\": \"items\"}}, \"reason\": \"Ward requires medicines exactly as dispensed including substitution, so align with requirement version r2\", \"confirm_by_role\": \"doctor\", \"note\": \"use dispensed list per ward procedure\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 9209,
+      "total_tokens": 9439,
+      "completion_tokens": 230,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 60
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 230
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:32 GMT"
+  },
+  "status": 200,
+  "latency_ms": 872,
+  "recorded_at": "2026-10-28T12:11:31.996Z"
+}

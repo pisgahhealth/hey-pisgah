@@ -1,0 +1,75 @@
+{
+  "hash": "b6a4c611598984dd803784ca4138c6776e75c2dd52466520a79ab5e120e74b05",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 4,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "d7cb907807cb478685c9ce0c83324eaa",
+    "object": "chat.completion",
+    "created": 1793189476,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "I've charted the key hold-ups \u2014 now I'll verify the requirements to prepare the next phase.",
+          "reasoning_content": "Need to check ward requirements and workflow definition. Also case state shows pending. Need to understand what we should do. Acceptance conditions require discharge_summary draft/final and refund_voucher draft/final. Now minute 546, st02 done, st03 in_progress. Discharge summary waits for st05 clinical_discharge. Refund voucher waits for st16 record_departure. That's far future. Can't prepare yet. Need to wait.\n\nWe should fetch ward requirements and workflow definition.",
+          "tool_calls": [
+            {
+              "id": "call_0ebd4283781c4dfdb6d88125",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_ward_requirements",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            },
+            {
+              "id": "call_9d16dac5fc634e6296b2927e",
+              "index": 1,
+              "type": "function",
+              "function": {
+                "name": "get_workflow_definition",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 5377,
+      "total_tokens": 5617,
+      "completion_tokens": 240,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 99
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 240
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:16 GMT"
+  },
+  "status": 200,
+  "latency_ms": 953,
+  "recorded_at": "2026-10-28T12:11:16.136Z"
+}

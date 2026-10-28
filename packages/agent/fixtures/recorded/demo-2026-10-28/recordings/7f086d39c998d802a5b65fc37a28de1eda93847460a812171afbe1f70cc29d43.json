@@ -1,0 +1,66 @@
+{
+  "hash": "7f086d39c998d802a5b65fc37a28de1eda93847460a812171afbe1f70cc29d43",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 2,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "a29570a07bd740ce8a1951b32eb2129d",
+    "object": "chat.completion",
+    "created": 1793189427,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Discharge paperwork in progress \u2014 checking what's ready to finalize.",
+          "reasoning_content": "Need to read case state.",
+          "tool_calls": [
+            {
+              "id": "call_392f58404523416bb61c67da",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_case_state",
+                "arguments": "{\"case_id\": \"c-110f6ad7\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 3225,
+      "total_tokens": 3309,
+      "completion_tokens": 84,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 10
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 84
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:10:27 GMT"
+  },
+  "status": 200,
+  "latency_ms": 637,
+  "recorded_at": "2026-10-28T12:10:27.183Z"
+}

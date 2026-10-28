@@ -1,0 +1,66 @@
+{
+  "hash": "42dfb85a9bf6606027910e7c1576d3980d41e77119c2e9952241af2e8f4fd522",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 10,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "86f42569acd94d209182d5bf1edded28",
+    "object": "chat.completion",
+    "created": 1793189522,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Refund voucher submission is underway \u2014 I'll wait for confirmation.",
+          "reasoning_content": "We need to wait for step completed.",
+          "tool_calls": [
+            {
+              "id": "call_80c9e8b85a114c35b2d7fd29",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "wait_until",
+                "arguments": "{\"deadline_simulated_min\": 770}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 10979,
+      "total_tokens": 11060,
+      "completion_tokens": 81,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 12
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 81
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:12:03 GMT"
+  },
+  "status": 200,
+  "latency_ms": 599,
+  "recorded_at": "2026-10-28T12:12:02.592Z"
+}

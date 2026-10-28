@@ -1,0 +1,66 @@
+{
+  "hash": "664f8134e5e911c2eb277c6b08351ff755bc802fedf2c462a667a91eb4a1f63b",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 11,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "76f1654209a5469ebf973c8a9c959754",
+    "object": "chat.completion",
+    "created": 1793189391,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": "Checks: Need to figure acceptance: discharge_summary draft+final, refund_voucher draft+final. Both waiting.\n\nDischarge summary draft waiting for soft edge st05 clinical_discharge, and data st02 take_home_order, and trigger after st05. Has_take_home_order true, but take_home_order not recorded? Signoff not recorded.\n\nRefund voucher waiting for st16 departure. st16 requires financial clearance etc which requires payment etc. So refund cannot be done before departure per workflow.\n\nBut ward requirements require refund_voucher (always). And ward requires stay_bill, clearance_slip but workflow adopted version? Let's see ward_requires includes refund_voucher, but workflow makes refund after departure (st16 -> st17a). That's possibly conflict? However we need to examine.\n\nCurrently now 480, no steps done. We need to wait for clinical steps.\n\nAgent cannot do anything because prerequisites not met. We should ask staff status or wait.\n\nWe can prepare refund_voucher draft? It waits for st16, which not done. So can't prepare.\n\nWe can prepare discharge_summary draft? It waits for st05. So can't.\n\nWe should send status_request to doctor to prompt clinical discharge.\n\nWe can send up to 3 ask_staff etc. Let's ask.\n\n",
+          "tool_calls": [
+            {
+              "id": "call_0fa83eb87f3a4f85ba4967e4",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "ask_staff",
+                "arguments": "{\"case_id\": \"c-110f6ad7\", \"role\": \"doctor\", \"question\": \"Please record expected discharge, take-home order and clinical discharge so discharge summary can be prepared.\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8007,
+      "total_tokens": 8361,
+      "completion_tokens": 354,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 257
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 354
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:09:51 GMT"
+  },
+  "status": 200,
+  "latency_ms": 1710,
+  "recorded_at": "2026-10-28T12:09:51.099Z"
+}
