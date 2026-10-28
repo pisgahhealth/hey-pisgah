@@ -1,0 +1,24 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: |
+          set -euo pipefail
+          tag=$(curl -sSf https://api.github.com/repos/gitleaks/gitleaks/releases/latest | python3 -c 'import json,sys;print(json.load(sys.stdin)["tag_name"])')
+          ver=${tag#v}
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/${tag}/gitleaks_${ver}_linux_x64.tar.gz" | tar -xz gitleaks
+          ./gitleaks git --redact --exit-code 1 .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run ci

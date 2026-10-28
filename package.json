@@ -1,0 +1,39 @@
+{
+  "name": "hey-pisgah",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Hey Pisgah: a personal agent for hospital discharge administration that learns a better workflow from evidence, built on Meta Muse models for the Meta Global AI Developer Hackathon 2026.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "ci": "npm run typecheck && npm run test",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "probe": "tsx apps/cli/src/index.ts probe",
+    "sim": "tsx apps/cli/src/index.ts sim",
+    "discover": "tsx apps/cli/src/index.ts discover",
+    "eval": "tsx apps/cli/src/index.ts eval",
+    "replay": "tsx apps/cli/src/index.ts replay",
+    "serve": "tsx apps/cli/src/index.ts serve",
+    "claims:check": "tsx apps/cli/src/index.ts claims:check",
+    "video:script": "tsx apps/cli/src/index.ts video:script",
+    "check:discovery": "tsx apps/cli/src/index.ts check:discovery"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "openai": "^6.49.0",
+    "zod": "^4.6.7"
+  }
+}

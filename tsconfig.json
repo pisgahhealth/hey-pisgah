@@ -1,0 +1,19 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/contracts" },
+    { "path": "packages/store" },
+    { "path": "packages/workflow" },
+    { "path": "packages/simulator" },
+    { "path": "packages/hospital" },
+    { "path": "packages/cases" },
+    { "path": "packages/model" },
+    { "path": "packages/agent" },
+    { "path": "packages/intelligence" },
+    { "path": "packages/evaluator" },
+    { "path": "packages/voice" },
+    { "path": "packages/pisgah-adapter" },
+    { "path": "apps/cli" },
+    { "path": "apps/demo" }
+  ]
+}
