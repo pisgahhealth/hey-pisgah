@@ -15,6 +15,8 @@ The investigator: it reads recorded discharges, records hypotheses, runs matched
 | Notes | `record_note` saves a note of up to 600 characters (20 at most). Notes are logged, scanned with the deny list, and shown as a numbered list after the kickoff on every later call. |
 | Re-reads | A second `get_workflow_definition` in a session answers "unchanged" with the turn and hash of the first read and no body; these answers are counted. |
 | Reading budget | Until a hypothesis is recorded, `get_case_timeline` and `get_record` share a window of 25 timeline pages or 12 model calls. Past it they refuse (counted, no experiment used); a `record_note` with a `no_hypothesis_reason` opens a new window. |
+| Hypothesis window | Once 3 active hypotheses have been recorded since the last experiment, `record_hypothesis` and the case reads refuse (counted, no experiment used) until `run_experiment` or a `record_note` with a `no_experiment_reason`. Adaptive arm only. |
+| Schema errors | A `record_hypothesis` schema error lists each failing field with its expected type and an example (refund voucher steps, edge e99). Counted per run. |
 | Prediction check | Computed by the app before and after each run, never shown to the model. Inconclusive is a normal outcome. |
 | Status rules | Retained needs a matching `if_true` result. Rejected needs `if_false`, a contradiction, or cited events. A refusal counts as a say-do mismatch. |
 | Proposals | Appended to `learning/proposals`; the evaluator writes `learning/validations`. 3 per run, 1 for the prior arm. |

@@ -69,7 +69,7 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
   say(`stop ${String(stopped?.stop ?? "not stopped")}  calls ${rows.length}  cost $${usd.toFixed(4)}  prompt ${promptTokens} (${promptPerCall} a call, max ${promptMax})  completion ${rows.reduce((s, r) => s + r.completion_tokens, 0)}  reasoning ${rows.reduce((s, r) => s + (r.reasoning_tokens ?? 0), 0)}  latency p50 ${lat.length ? lat[Math.floor(lat.length / 2)] : 0} ms`);
   const counters = (stopped?.counters ?? {}) as Row;
   const failed = tools.filter((t) => t.ok === false).length;
-  say(`definition unchanged answers ${Number(counters.definition_unchanged ?? 0)}  reading-budget refusals ${Number(counters.read_refusals ?? 0)}  timeline pages ${Number(counters.timeline_pages ?? 0)}`);
+  say(`definition unchanged answers ${Number(counters.definition_unchanged ?? 0)}  reading-budget refusals ${Number(counters.read_refusals ?? 0)}  experiment-budget refusals ${Number(counters.experiment_budget_refusals ?? 0)}  hypothesis schema errors ${Number(counters.hypothesis_schema_errors ?? 0)}  timeline pages ${Number(counters.timeline_pages ?? 0)}`);
   say(`repairs ${Number(counters.repairs ?? 0)}  tool calls ${tools.length}  refused tool calls ${failed}  efforts ${[...new Set(rows.map((r) => r.effort))].join(",") || "-"}`);
 
   const notes = log.filter((e) => e.record_type === "note.recorded").map((e) => e.payload as Row);
@@ -94,5 +94,5 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
   };
   const pass = Object.values(needs).every(Boolean);
   say(`check: ${Object.entries(needs).map(([k, v]) => `${k} ${v ? "pass" : "FAIL"}`).join("  ")}  => ${pass ? "PASS" : "FAIL"}`);
-  return { pass, lines, summary: { run_id: runId, arm, needs, calls: rows.length, usd, prompt_tokens: promptTokens, prompt_tokens_per_call: promptPerCall, prompt_tokens_max: promptMax, hypotheses: hyps.length, experiments: done.length, aborted, invalid, pair_refusals: pairRefused, no_pair_reasons: reasons.length, say_do_mismatches: refused.length, notes: notes.length, definition_unchanged: Number(counters.definition_unchanged ?? 0), read_refusals: Number(counters.read_refusals ?? 0), proposals: props.map((p) => p.proposal_id), validations: reports.map((r) => r.status), stop: stopped?.stop ?? null, deny_hits: hits.length } };
+  return { pass, lines, summary: { run_id: runId, arm, needs, calls: rows.length, usd, prompt_tokens: promptTokens, prompt_tokens_per_call: promptPerCall, prompt_tokens_max: promptMax, hypotheses: hyps.length, experiments: done.length, aborted, invalid, pair_refusals: pairRefused, no_pair_reasons: reasons.length, say_do_mismatches: refused.length, notes: notes.length, definition_unchanged: Number(counters.definition_unchanged ?? 0), read_refusals: Number(counters.read_refusals ?? 0), experiment_budget_refusals: Number(counters.experiment_budget_refusals ?? 0), hypothesis_schema_errors: Number(counters.hypothesis_schema_errors ?? 0), proposals: props.map((p) => p.proposal_id), validations: reports.map((r) => r.status), stop: stopped?.stop ?? null, deny_hits: hits.length } };
 }

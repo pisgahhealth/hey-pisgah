@@ -53,7 +53,7 @@ export const TOOL_ARGS = {
   }),
   get_validation_report: z.object({ proposal_id: z.string() }),
   list_ledger: z.object({}),
-  record_note: z.object({ note: z.string(), no_hypothesis_reason: z.string().optional() }),
+  record_note: z.object({ note: z.string(), no_hypothesis_reason: z.string().optional(), no_experiment_reason: z.string().optional() }),
   end_session: z.object({ result: z.enum(["no_change_warranted"]), note: z.string(), evidence_event_ids: z.array(z.string()) })
 } as const;
 export type ToolName = keyof typeof TOOL_ARGS;
@@ -68,7 +68,7 @@ export const DESCRIPTIONS: Record<ToolName, string> = {
   get_staff_activity: "Every job one role did on a case, per staff member, with queue, start and completion minutes, and that role's busy blocks.",
   get_ward_requirements: "The ward requirements in force: required documents with their conditions, the approver, and each ward's procedure text, for one ward or all.",
   get_workflow_definition: "The current workflow definition (steps, edges, triggers, documents, permissions), the full action-kind and event-kind registries, the condition facts and their values, the record kinds a section may bind to, the rules the engine applies when it runs a definition, and the operation vocabulary with its limits.",
-  record_hypothesis: "Record a hypothesis: statement, mechanism, subject refs, competing hypothesis ids or the reason none were identified, at least 3 evidence events from at least 2 cases with a stance each, if_true and if_false predictions (metric, comparison of intervention to control, tolerance, and cases or a condition) that differ, and what would refute it. Tolerance is capped at 60 for minute metrics and 3 for counts. A record never changes; set revises to replace an older one. Returns the id and hash.",
+  record_hypothesis: "Record a hypothesis: statement, mechanism, subject refs, competing hypothesis ids or the reason none were identified, at least 3 evidence events from at least 2 cases with a stance each, if_true and if_false predictions (metric, comparison of intervention to control, tolerance, and cases or a condition) that differ, and what would refute it. Tolerance is capped at 60 for minute metrics and 3 for counts. A record never changes; set revises to replace an older one. Returns the id and hash; a schema error lists each failing field with its expected type and an example. In this session, once 3 active hypotheses have been recorded since the last experiment, record_hypothesis and the case reads (timeline, record, intervals, queue, staff) wait for run_experiment or a record_note with a no_experiment_reason.",
   set_hypothesis_status: "Set a hypothesis status. retained needs a cited experiment whose result matches its if_true prediction. rejected needs a cited experiment whose result matches its if_false prediction or contradicts its if_true prediction, or recorded events when no experiment is cited. A refused change is counted.",
   run_experiment: "Run the base version and a changed version (1 to 3 operations) on the same recorded world for 1 to 6 pool cases. Returns per-case metrics for both versions, their deltas, step time differences, action differences, warnings, the median deltas and the budget left. When a case's event log is identical in both versions, the result says so and lists the edges, derived gates and triggers on each step the operations target. Checks run in order: schema, ids, two recorded hypotheses or one with a stated reason, from the second experiment on a distinguishable pair (two active hypotheses whose if_true predictions do not overlap on one metric for a shared pool case) or a no_pair_reason, definition rules, schedule hashes. A refused request is counted, and the third ends access; a request refused for want of a pair is counted apart and uses no experiment.",
   get_experiment: "Read a stored experiment result by id.",
@@ -76,7 +76,7 @@ export const DESCRIPTIONS: Record<ToolName, string> = {
   submit_proposal: "Submit a workflow change: base version, 1 to 3 operations, scope (wards and an optional condition), rationale, evidence (hypothesis, experiment and event ids), expected effects and known exceptions. The server adds the id, the cases viewed and a hash. Validation runs on cases outside the pool; the reply says whether the report is ready.",
   get_validation_report: "Read the validation report for a proposal: status, pass or fail per case on both versions with failing check ids, deltas, and the gate result.",
   list_ledger: "List this session's hypotheses, experiments, proposals and the budget left.",
-  record_note: "Save a short free-text note, up to 600 characters, for later turns. Saved notes are shown as a numbered list at the top of every later turn; at most 20 notes are kept. A no_hypothesis_reason, given while no hypothesis is recorded, opens a new reading window.",
+  record_note: "Save a short free-text note, up to 600 characters, for later turns. Saved notes are shown as a numbered list at the top of every later turn; at most 20 notes are kept. A no_hypothesis_reason, given while no hypothesis is recorded, opens a new reading window; a no_experiment_reason opens a new hypothesis window.",
   end_session: "End the session with a result, a note and the recorded event ids inspected. no_change_warranted is a valid result."
 };
 
@@ -115,7 +115,7 @@ export async function dispatch(s: Session, name: string, argText: string, o: { p
   let args: unknown;
   try { args = argText.trim() ? JSON.parse(argText) : {}; } catch { s.counters.repairs += 1; return { ok: false, error: "invalid_arguments", message: "The arguments are not valid JSON." }; }
   const loose = argsFor(name as ToolName, { insufficientEvidence: s.o.insufficientEvidence }).safeParse(args);
-  if (!loose.success && name !== "run_experiment") {
+  if (!loose.success && name !== "run_experiment" && name !== "record_hypothesis") {
     s.counters.repairs += 1;
     return { ok: false, error: "invalid_arguments", message: "The arguments do not match the schema.", issues: loose.error.issues.slice(0, 8).map((i) => `${i.path.join(".") || "$"}: ${i.message}`) };
   }

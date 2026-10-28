@@ -252,6 +252,43 @@
         "insufficient_evidence_default": false
       },
       "hash": "45421eeb06d7decc267ada6eae1421d66553fb492e13f726cd3ef9f80f6192c8"
+    },
+    {
+      "revision": 8,
+      "at": "2026-10-28T13:03:49.483Z",
+      "reason": "Budget hypotheses before an experiment and show the hypothesis shape on a schema error, in the tool layer, keeping all of revision 7: in the adaptive arm, once 3 active hypotheses have been recorded since the last experiment, record_hypothesis and the case reads (timeline, record, intervals, queue, staff) refuse, counted and using no experiment, until run_experiment runs or a record_note carries a no_experiment_reason, and the window resets after each experiment; a record_hypothesis schema error now lists each failing field with its expected type and an example that uses the refund voucher steps and the edge e99, and schema errors are counted per run. Reason: revision 7 run run-561dc2dd recorded 21 hypotheses from 35 attempts (10 schema errors) and never called run_experiment, so the stall moved from reading to recording.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "92127b51c2357db63a4f15491a7851f949cf950482f78a52ba64209b27f4b6c0",
+            "tools": "67d4c627b871fc0fe980d57694f0734ca070062b2643df9d64895d5e46d0242f"
+          },
+          "a3": {
+            "prompt": "d346b5439ba1d644d4b098da7db5ed0456919d27b71fce640aaf76243390bf98",
+            "tools": "479a23f449cc7335990f4b306646bfd426a36565a6169883cce3ffcaf7101e75"
+          },
+          "a4": {
+            "prompt": "cb7650f71bc6c17b921934e1737d8d784e44fda2b4d1fb44ebab27a60ff34dc1",
+            "tools": "dfe76233dbf57cc2ab11b5ecd36553be0eb6a5f593970b7f15e2ba62f4b64ff3"
+          },
+          "prior": {
+            "prompt": "d0a1a9c5bbc7b4c135bc09535a3462273565a49e375c2eb55d51f98d4febd70b",
+            "tools": "2fd590e02488a003e8deb611346c1209fc6a604d9cb9138f4867447bb975b514"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 30000,
+          "history_chars": 70000,
+          "turn_result_chars": 20000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "72af53cf43ca899567c50b5e6a3076d72e21c1866ad3370d8bc47ec7cd13126e"
     }
   ]
 }
