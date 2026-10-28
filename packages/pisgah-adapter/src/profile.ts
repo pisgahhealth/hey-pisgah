@@ -45,6 +45,19 @@ export const OwnerSpec = z.strictObject({
 });
 export type OwnerSpec = z.infer<typeof OwnerSpec>;
 
+const WatchCond = z.strictObject({ fact: z.string().min(1).max(80), equals: z.string().min(1).max(80) });
+// How the workflow reads in this EMR (watched facts for steps and events, work kinds for document stages), the ward and requirement version it stands for, and the patient facts no door read shows.
+export const VersionsSpec = z.strictObject({
+  ward_id: z.string().regex(/^[A-Z][A-Za-z0-9_]*$/),
+  requirement_version: z.enum(["r1", "r2"]),
+  facts: z.record(z.string(), z.string()),
+  facts_source: z.string().min(1).max(200),
+  steps: z.record(z.string(), WatchCond).default({}),
+  events: z.record(z.string(), WatchCond).default({}),
+  documents: z.record(z.string(), z.strictObject({ kind: z.string().min(1), ask: z.string().min(1).max(300) })).default({})
+});
+export type VersionsSpec = z.infer<typeof VersionsSpec>;
+
 export const DoorProfile = z.strictObject({
   base_url: z.url(),
   timeout_ms: z.number().int().min(1000).max(900_000).default(300_000),
@@ -72,7 +85,8 @@ export const DoorProfile = z.strictObject({
   targets: z.strictObject({ admission_by_patient: z.record(EmrId, EmrId), episode_by_admission: z.record(EmrId, EmrId) }),
   vocabulary: z.array(z.string().min(1).max(60)).max(60).default([]),
   // Only the sandbox integration test reads this block.
-  sandbox: z.record(z.string(), z.json()).optional()
+  sandbox: z.record(z.string(), z.json()).optional(),
+  versions: VersionsSpec.optional()
 });
 export type DoorProfile = z.infer<typeof DoorProfile>;
 

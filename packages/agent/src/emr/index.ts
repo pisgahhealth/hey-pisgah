@@ -10,3 +10,4 @@ export { primaryClass } from "./classes.js";
 export { MemoryEmrPort, keepingContext, readKeptContext, type KeptContext } from "./memory-port.js";
 export { GATE_COMMITMENT_FILE, commitGate, committedGateHash, currentGateHash } from "./gate.commit.js";
 export { EAR_FALLBACK, EAR_ROUTE, EAR_SETTINGS, EAR_SYSTEM, MEASURE_LABEL, answerChoice, compareReadings, disagreementQuestion, normValue, quotedQuestion, sparkEar, type Choice, type EarReading, type EarsCheck, type MeasureCheck, type SecondEar } from "./ears.js";
+export { adoptedVersion, caseFacts, changedSteps, checkOffer, readVersion, versionWiring, type Counterparts, type OfferCheck, type RequirementsNow, type TriggerReading, type TriggerStatus, type VersionOffer, type VersionRules, type VersionWiring, type WatchCondition } from "./version-offers.js";

@@ -2,7 +2,7 @@
 export const PACKAGE = "intelligence" as const;
 export { DENY_LIST, denyScan, type DenyHit } from "./deny.js";
 export { UNKNOWN_ID } from "./unknown.js";
-export { DiscoveryPool, type OutcomeCase, type PoolCase } from "./pool.js";
+export { DiscoveryPool, loadObserved, type OutcomeCase, type PoolCase } from "./pool.js";
 export { checkAfter, checkBefore, disjoint, holds, interval, scopedCases } from "./prediction.js";
 export { runMatched, type Matched, type Runner } from "./experiments.js";
 export { Session, STREAMS, sessionStreamId, toleranceCap, type Arm, type ListedExperiment, type SessionOptions, type StoredExperiment } from "./session.js";
