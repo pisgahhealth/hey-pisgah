@@ -1,101 +1,189 @@
 {
-  "generated_at": "2026-10-28T00:58:48.618Z",
-  "commit": "425a27d",
+  "generated_at": "2026-10-28T02:49:54.936Z",
+  "commit": "929d52c",
   "claims": [
     {
       "claim_id": "C-01",
       "status": "not_measured",
-      "values": {},
+      "values": {
+        "step5.ac_pass": null,
+        "step5.all_actions_proved": null,
+        "done": null,
+        "total": null
+      },
       "measured_at": null
     },
     {
       "claim_id": "C-02",
       "status": "not_measured",
-      "values": {},
+      "values": {
+        "prohibited_executed": null,
+        "fuzz_green": null,
+        "attempts": null,
+        "case": null
+      },
       "measured_at": null
     },
     {
       "claim_id": "C-03",
       "status": "not_measured",
-      "values": {},
+      "values": {
+        "calls_while_waiting": null,
+        "negative_control_red": null,
+        "wake_after_restart_green": null,
+        "calls": null
+      },
       "measured_at": null
     },
     {
       "claim_id": "C-04",
       "status": "not_measured",
-      "values": {},
+      "values": {
+        "hypotheses": null,
+        "stated_reason": null,
+        "n": null,
+        "events": null
+      },
       "measured_at": null
     },
     {
       "claim_id": "C-05",
       "status": "not_measured",
-      "values": {},
+      "values": {
+        "experiments": null,
+        "sublog_hashes_equal": null,
+        "prediction_check_after_present": null,
+        "n": null,
+        "confirmed": null,
+        "contradicted": null,
+        "inconclusive": null
+      },
       "measured_at": null
     },
     {
       "claim_id": "C-06",
       "status": "not_measured",
-      "values": {},
+      "values": {
+        "dev_gate_pass": null,
+        "exception_check_pass": null,
+        "fences_unchanged": null,
+        "proposals_validated": null,
+        "scope": null,
+        "n": null
+      },
       "measured_at": null
     },
     {
       "claim_id": "C-07",
       "status": "not_measured",
-      "values": {},
+      "values": {
+        "adopted_by_person": null,
+        "ac09_pass": null,
+        "order_differs_where_diff_says": null,
+        "role": null,
+        "reason": null
+      },
       "measured_at": null
     },
     {
       "claim_id": "C-08",
       "status": "not_measured",
-      "values": {},
+      "values": {
+        "wardB_demo.ac05_pass": null,
+        "conflict_before_noncompliant": null,
+        "path": null
+      },
       "measured_at": null
     },
     {
       "claim_id": "C-09",
       "status": "not_measured",
-      "values": {},
+      "values": {
+        "planted_failure_detected": null,
+        "only_affected_blocked": null,
+        "approval_by_person": null
+      },
       "measured_at": null
     },
     {
       "claim_id": "C-10",
       "status": "not_measured",
-      "values": {},
+      "values": {
+        "cycle2_result_recorded": null,
+        "no_hypothesis_cited_as_evidence": null,
+        "result": null
+      },
       "measured_at": null
     },
     {
       "claim_id": "C-11",
       "status": "not_measured",
-      "values": {},
+      "values": {
+        "run_json_present": null,
+        "paired_table_present": null,
+        "comparison_sentence": null,
+        "metrics": null
+      },
       "measured_at": null
     },
     {
       "claim_id": "C-12",
       "status": "not_measured",
-      "values": {},
+      "values": {
+        "ledger_complete": null,
+        "fallback_calls": null,
+        "disclosed": null,
+        "provider": null,
+        "calls": null,
+        "usd": null,
+        "phase": null,
+        "n": null
+      },
       "measured_at": null
     },
     {
       "claim_id": "C-13",
       "status": "not_measured",
-      "values": {},
+      "values": {
+        "off_diagonal": null,
+        "premature_attempts_counted": null,
+        "attempts": null,
+        "k": null
+      },
       "measured_at": null
     },
     {
       "claim_id": "C-14",
       "status": "not_measured",
-      "values": {},
+      "values": {
+        "scorer_ran": null,
+        "table_populated": null,
+        "n": null,
+        "m": null,
+        "q": null,
+        "r": null,
+        "f": null
+      },
       "measured_at": null
     },
     {
       "claim_id": "C-15",
       "status": "not_measured",
-      "values": {},
+      "values": {
+        "harness_ran_on_subset": null,
+        "n": null,
+        "k": null,
+        "case": null
+      },
       "measured_at": null
     },
     {
       "claim_id": "C-16",
       "status": "not_measured",
-      "values": {},
+      "values": {
+        "recorded_clock_delay_hypotheses_on_f3": null,
+        "n": null
+      },
       "measured_at": null
     }
   ]
