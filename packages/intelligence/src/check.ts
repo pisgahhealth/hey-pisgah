@@ -50,6 +50,7 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
     say(`    before: speaks to ${pc.before.speaks_to.join(", ") || "none"}; distinguishes ${pc.before.distinguishes.map((p) => p.join(" vs ")).join(", ") || "no pair"}`);
     const per = Object.entries(pc.after?.per_hypothesis ?? {}).map(([h, v]) => `${h} ${v.landed}`).join(", ");
     say(`    after: ${per || "nothing landed"}; contradicted ${pc.after?.contradicted.join(", ") || "none"}`);
+    if (x.behaviour) say(`    behaviour: event logs identical to control in ${x.behaviour.event_logs_identical_to_control}${x.behaviour.note ? "; behaviour unchanged" : ""}`);
   }
   say(`say-do mismatches ${refused.length}`);
   for (const p of props) {

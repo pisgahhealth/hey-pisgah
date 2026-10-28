@@ -7,7 +7,7 @@ import { readStream, openStream, type Stream } from "@hey-pisgah/store";
 import type { WorldRules } from "@hey-pisgah/simulator";
 import { applyOperations, evalCondition } from "@hey-pisgah/workflow";
 import { z } from "zod";
-import { runMatched, summarise, type CaseResult, type Runner } from "./experiments.js";
+import { runMatched, summarise, type Behaviour, type CaseResult, type Runner } from "./experiments.js";
 import { DiscoveryPool } from "./pool.js";
 import { checkAfter, checkBefore, type Deltas } from "./prediction.js";
 import { UNKNOWN_ID } from "./unknown.js";
@@ -90,6 +90,7 @@ export type StoredExperiment = {
   deltas: Deltas;
   prediction_check: PredictionCheck;
   abort_reason: string | null;
+  behaviour: Behaviour | null;
 };
 
 export type StopReason = "dev_valid_proposal" | "declared_negative" | "lockout" | "proposals_exhausted" | "prior_proposal_submitted";
@@ -345,7 +346,7 @@ export class Session {
     const after = m.aborted ? null : checkAfter(act, before, caseIds, m.deltas, this.factsOf);
     const stored: StoredExperiment = {
       experiment_id: xid, session_id: this.o.runId, source, request, status: m.aborted ? "aborted" : "completed", base_hash: m.base_hash, intervention_hash: m.intervention_hash,
-      hypothesis_hashes: hashes, warnings: m.warnings, cases: m.cases, summary: summarise(m.cases), deltas: m.deltas, prediction_check: { before, after }, abort_reason: m.aborted ? `${m.aborted.case_id}: ${m.aborted.reason}` : null
+      hypothesis_hashes: hashes, warnings: m.warnings, cases: m.cases, summary: summarise(m.cases), deltas: m.deltas, prediction_check: { before, after }, abort_reason: m.aborted ? `${m.aborted.case_id}: ${m.aborted.reason}` : null, behaviour: m.behaviour
     };
     this.experiments.set(xid, stored);
     this.streams.experiments.append(m.aborted ? "experiment.aborted" : "experiment.completed", stored, { recorded_at: 0, occurred_at: 0 });
@@ -355,7 +356,7 @@ export class Session {
   // What the model sees of an experiment: never the prediction check, never a verdict.
   experimentView(x: StoredExperiment): Result {
     if (x.status === "aborted") return { ok: false, error: "experiment_aborted", experiment_id: x.experiment_id, message: x.abort_reason, budget: this.budgetView() };
-    return { ok: true, experiment_id: x.experiment_id, request: x.request, base_hash: x.base_hash, intervention_hash: x.intervention_hash, warnings: x.warnings, cases: x.cases, median_delta: x.summary, budget: this.budgetView() };
+    return { ok: true, experiment_id: x.experiment_id, request: x.request, base_hash: x.base_hash, intervention_hash: x.intervention_hash, warnings: x.warnings, behaviour: x.behaviour, cases: x.cases, median_delta: x.summary, budget: this.budgetView() };
   }
 
   getExperiment(a: { experiment_id: string }): Result {
