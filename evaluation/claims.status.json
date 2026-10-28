@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-28T12:13:18.721Z",
-  "commit": "d42609e",
+  "generated_at": "2026-10-28T12:42:58.670Z",
+  "commit": "84088d5",
   "claims": [
     {
       "claim_id": "C-01",
@@ -113,18 +113,14 @@
     },
     {
       "claim_id": "C-09",
-      "status": "not_measured",
+      "status": "amber",
       "values": {
-        "planted_failure_detected": null,
-        "only_affected_blocked": null,
-        "approval_by_person": null,
-        "missing": [
-          "planted_failure_detected",
-          "only_affected_blocked",
-          "approval_by_person"
-        ]
+        "planted_failure_detected": true,
+        "only_affected_blocked": true,
+        "approval_by_person": true,
+        "human_decision": false
       },
-      "measured_at": null
+      "measured_at": "2026-10-28T12:18:57.708Z"
     },
     {
       "claim_id": "C-10",
