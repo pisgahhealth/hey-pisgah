@@ -1,0 +1,35 @@
+{
+  "engine": "local stub (engine seam), historical executor",
+  "runs": {
+    "c-hand0001": {
+      "fixture": "hand/f1.json",
+      "events_hash": "a3cfaaf46e0a0f151658af00da93c02060a9a90a0d8b9a5f2d438b6d3cf4382c",
+      "post_signoff_wait_min": 175,
+      "terminal_state": "departed"
+    },
+    "c-gold0002": {
+      "fixture": "golden/c-gold0002.json",
+      "events_hash": "1ac0a1e635a5cdf246b823fb5da6eaba110873b4b26c8bcb2f0d59674ac73bc9",
+      "post_signoff_wait_min": 75,
+      "terminal_state": "departed"
+    },
+    "c-gold0003": {
+      "fixture": "golden/c-gold0003.json",
+      "events_hash": "3f23e51126b031aa29d880251d713770113f2f11bc5521116608a4fe361cc8b6",
+      "post_signoff_wait_min": 220,
+      "terminal_state": "departed"
+    },
+    "c-gold0004": {
+      "fixture": "golden/c-gold0004.json",
+      "events_hash": "da86cf3eccd16d5c892affd33dca9d2253648ca3718b1d964f79b9f15033fe0d",
+      "post_signoff_wait_min": 245,
+      "terminal_state": "departed"
+    },
+    "c-gold0005": {
+      "fixture": "golden/c-gold0005.json",
+      "events_hash": "4ce16c2d7b327244a2c687f81b28818c0b412f38bf74b5c1264c8f8c8509fea5",
+      "post_signoff_wait_min": 75,
+      "terminal_state": "departed"
+    }
+  }
+}

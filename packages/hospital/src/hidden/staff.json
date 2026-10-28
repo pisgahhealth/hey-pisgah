@@ -1,0 +1,20 @@
+{
+  "profiles": [
+    { "staff_id": "n_a1", "role": "nurse", "ward_id": "A", "prep_habit": "after_signoff", "entry_habit": "realtime" },
+    { "staff_id": "n_a2", "role": "nurse", "ward_id": "A", "prep_habit": "early_draft", "entry_habit": "realtime" },
+    { "staff_id": "n_a3", "role": "nurse", "ward_id": "A", "prep_habit": "after_signoff", "entry_habit": "batch_after_round" },
+    { "staff_id": "n_a4", "role": "nurse", "ward_id": "A", "prep_habit": "after_signoff", "entry_habit": "paper_then_type" },
+    { "staff_id": "n_b1", "role": "nurse", "ward_id": "B", "prep_habit": "after_signoff", "entry_habit": "paper_then_type" },
+    { "staff_id": "n_b2", "role": "nurse", "ward_id": "B", "prep_habit": "early_draft", "entry_habit": "batch_after_round" },
+    { "staff_id": "n_c1", "role": "nurse", "ward_id": "C", "prep_habit": "after_signoff", "entry_habit": "realtime" },
+    { "staff_id": "n_c2", "role": "nurse", "ward_id": "C", "prep_habit": "early_draft", "entry_habit": "paper_then_type" },
+    { "staff_id": "d_a1", "role": "doctor", "ward_id": "A", "prep_habit": null, "entry_habit": "realtime" },
+    { "staff_id": "d_b1", "role": "doctor", "ward_id": "B", "prep_habit": null, "entry_habit": "batch_after_round" },
+    { "staff_id": "d_c1", "role": "doctor", "ward_id": "C", "prep_habit": null, "entry_habit": "realtime" }
+  ],
+  "entry_defaults": {
+    "realtime": { "lag_min": 0, "reason": null },
+    "batch_after_round": { "lag_min": 30, "reason": "Entered with the other notes after the round." },
+    "paper_then_type": { "lag_min": 240, "reason": "Typed in from the paper record." }
+  }
+}

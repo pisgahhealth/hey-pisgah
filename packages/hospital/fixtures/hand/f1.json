@@ -1,0 +1,111 @@
+{
+  "note": "Hand-written case. The ward nurse is called away 10 minutes after the clinical discharge and is busy for 120 minutes.",
+  "schedule": {
+    "case_id": "c-hand0001",
+    "ward_id": "A",
+    "payer_type": "self_pay",
+    "staff": {
+      "doctor": "d_a1",
+      "nurse": "n_a1",
+      "pharmacist": "p_01",
+      "accounts_clerk": "ac_01",
+      "claims_clerk": "cc_01",
+      "authoriser": "au_01",
+      "insurer": "ins_01"
+    },
+    "doctor": {
+      "round_at": 480,
+      "expected_discharge_at": 600,
+      "expected_disposition": "home",
+      "signoff_at": 600,
+      "signoff_disposition": "home",
+      "follow_up": "Medical outpatient clinic in two weeks.",
+      "take_home_orders": [
+        {
+          "item": "Amlodipine 5 mg tablets",
+          "qty": 28
+        },
+        {
+          "item": "Paracetamol 500 mg tablets",
+          "qty": 24
+        }
+      ],
+      "amendments": []
+    },
+    "pharmacy": {
+      "backlog": [
+        15,
+        15
+      ],
+      "review_min": 15,
+      "dispense_min": 12,
+      "screen_block": null,
+      "substitution": null
+    },
+    "accounts": {
+      "backlog": [
+        10
+      ],
+      "sponsor_arrival_at": 640,
+      "payment_min": 15,
+      "waiver": null,
+      "on_account": null
+    },
+    "insurer": null,
+    "nurses": [
+      {
+        "nurse_id": "n_a1",
+        "shift": {
+          "start": 420,
+          "end": 1140
+        },
+        "busy_blocks": [
+          {
+            "start": 610,
+            "end": 730
+          }
+        ]
+      }
+    ],
+    "service_min": {
+      "prepare_document:discharge_summary:draft:1": 25,
+      "prepare_document:discharge_summary:final:1": 5,
+      "check_document:discharge_summary:final:1": 5,
+      "hand_over_document:discharge_summary:final:1": 5,
+      "hand_over_take_home:1": 5,
+      "financial_clearance:1": 5,
+      "prepare_document:hmo_claim_cover:draft:1": 15,
+      "prepare_document:hmo_claim_cover:final:1": 5,
+      "submit_claim:1": 5,
+      "prepare_document:refund_voucher:draft:1": 10,
+      "prepare_document:refund_voucher:final:1": 5,
+      "refund_deposit:1": 5
+    },
+    "entry_lag": {}
+  },
+  "g2": {
+    "executor": "definition",
+    "preparer": "staff",
+    "ops": [
+      {
+        "op": "remove_soft_edge",
+        "edge_id": "e04"
+      },
+      {
+        "op": "set_prep_trigger",
+        "target": {
+          "step": "st06"
+        },
+        "when": {
+          "on": "discharge.expected_recorded"
+        }
+      }
+    ],
+    "expected": {
+      "v1_wait_min": 170,
+      "changed_wait_min": 135,
+      "cut_min": 35,
+      "min_cut": 30
+    }
+  }
+}

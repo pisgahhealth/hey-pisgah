@@ -1,0 +1,52 @@
+{
+  "requirement_version": "r1",
+  "wards": [
+    {
+      "ward_id": "A",
+      "display_name": "Ward A",
+      "version": "r1",
+      "effective_from": "2026-09-01",
+      "approver": { "staff_id": "wm_a", "role": "ward_manager", "display_name": "Ward A manager" },
+      "required_documents": [
+        { "document_id": "discharge_summary", "condition": { "not": { "fact": "expected_disposition", "eq": "transfer_out" } } },
+        { "document_id": "stay_bill", "condition": null },
+        { "document_id": "payment_receipt", "condition": { "fact": "payment_status", "eq": "paid" } },
+        { "document_id": "clearance_slip", "condition": null },
+        { "document_id": "hmo_claim_cover", "condition": { "fact": "payer_type", "eq": "hmo" } },
+        { "document_id": "refund_voucher", "condition": null }
+      ],
+      "procedure_text": "The doctor signs the clinical discharge. A nurse writes the discharge summary, checks it and gives it to the patient with any take-home medicines. Accounts settle the bill and issue the clearance slip. The patient leaves once cleared. A summary is not needed for a transfer out."
+    },
+    {
+      "ward_id": "B",
+      "display_name": "Ward B",
+      "version": "r1",
+      "effective_from": "2026-09-01",
+      "approver": { "staff_id": "wm_b", "role": "ward_manager", "display_name": "Ward B manager" },
+      "required_documents": [
+        { "document_id": "discharge_summary", "condition": { "not": { "fact": "expected_disposition", "eq": "transfer_out" } } },
+        { "document_id": "stay_bill", "condition": null },
+        { "document_id": "payment_receipt", "condition": { "fact": "payment_status", "eq": "paid" } },
+        { "document_id": "clearance_slip", "condition": null },
+        { "document_id": "hmo_claim_cover", "condition": { "fact": "payer_type", "eq": "hmo" } },
+        { "document_id": "refund_voucher", "condition": null }
+      ],
+      "procedure_text": "The doctor signs the clinical discharge. A nurse writes the discharge summary, checks it and gives it to the patient with any take-home medicines. Accounts settle the bill and issue the clearance slip. The patient leaves once cleared. A summary is not needed for a transfer out."
+    },
+    {
+      "ward_id": "C",
+      "display_name": "Ward C",
+      "version": "r1",
+      "effective_from": "2026-09-01",
+      "approver": { "staff_id": "wm_c", "role": "ward_manager", "display_name": "Ward C manager" },
+      "required_documents": [
+        { "document_id": "stay_bill", "condition": null },
+        { "document_id": "payment_receipt", "condition": { "fact": "payment_status", "eq": "paid" } },
+        { "document_id": "clearance_slip", "condition": null },
+        { "document_id": "hmo_claim_cover", "condition": { "fact": "payer_type", "eq": "hmo" } },
+        { "document_id": "refund_voucher", "condition": null }
+      ],
+      "procedure_text": "The doctor signs the clinical discharge. Ward C does not issue a discharge summary. A nurse gives the patient any take-home medicines. Accounts settle the bill and issue the clearance slip. The patient leaves once cleared."
+    }
+  ]
+}
