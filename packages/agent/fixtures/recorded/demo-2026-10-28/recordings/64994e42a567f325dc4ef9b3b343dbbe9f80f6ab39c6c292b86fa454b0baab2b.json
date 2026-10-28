@@ -1,0 +1,66 @@
+{
+  "hash": "64994e42a567f325dc4ef9b3b343dbbe9f80f6ab39c6c292b86fa454b0baab2b",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 8,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "6a0d6f144e974e35bc724a6e31ef7acb",
+    "object": "chat.completion",
+    "created": 1793189522,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": "Need to complete refund_voucher final. It is ready=true, not_started, can prepare. Previous draft done. So now prepare final.",
+          "tool_calls": [
+            {
+              "id": "call_719e5c3137e14dc2a6d06e02",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "prepare_document",
+                "arguments": "{\"case_id\": \"c-2a14921a\", \"document_id\": \"refund_voucher\", \"stage\": \"final\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 10813,
+      "total_tokens": 10929,
+      "completion_tokens": 116,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 32
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 116
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:12:02 GMT"
+  },
+  "status": 200,
+  "latency_ms": 723,
+  "recorded_at": "2026-10-28T12:12:01.932Z"
+}

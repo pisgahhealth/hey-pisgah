@@ -1,0 +1,66 @@
+{
+  "hash": "1713d81b4510029ab427eb217fb0846d967d139791514a62f40afc48fe42f543",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 11,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "8ef5c9c78572407c81c5abc6e0d50e1c",
+    "object": "chat.completion",
+    "created": 1793189486,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": "Ask limit reached. Need to wait for st05 clinical discharge to allow discharge_summary preparation. Also refund voucher waits for departure st16. We raised conflict, now need to progress.\n\nWe should wait_until for st05 completion.",
+          "tool_calls": [
+            {
+              "id": "call_2e99a295f1684e4db3416a15",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "wait_until",
+                "arguments": "{\"deadline_simulated_min\": 900, \"step_id\": \"st05\", \"event_kind\": \"step.completed\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8802,
+      "total_tokens": 8933,
+      "completion_tokens": 131,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 49
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 131
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:26 GMT"
+  },
+  "status": 200,
+  "latency_ms": 810,
+  "recorded_at": "2026-10-28T12:11:26.013Z"
+}

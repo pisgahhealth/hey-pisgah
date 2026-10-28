@@ -1,0 +1,66 @@
+{
+  "hash": "2c85beac093fa2361e5ab33d9a1fb51987d11189f32648b9f889471506ebe7be",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 7,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "fc4910bb0fce41af8518afb6658a42be",
+    "object": "chat.completion",
+    "created": 1793189400,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "I've mapped your paperwork timeline \u2014 now I'll wait for the next clinical milestones to proceed.",
+          "reasoning_content": "Workflow requires clinical discharge before discharge summary, and departure before refund voucher. Need to analyze conflict? Ward requirements say ward_requires includes discharge_summary, stay_bill, refund_voucher, clearance_slip. Procedure text says summary checks and gives it with take-home, accounts settle bill, patient leaves once cleared. That matches workflow triggers: st06 after st05, st14 after st15, st17a after st16. No conflict apparent.\n\nBut acceptance conditions include discharge_summary draft/final and refund_voucher draft/final. Both waiting for clinical discharge and departure respectively. Currently st05 not done. Need to wait for st05. Also need st03 st04 done.\n\nWe as agent can prepare documents when triggers satisfied. At minute 537, st05 not done. So we need to wait.\n\nCheck ask_staff? We already asked doctor. Now should wait until st05 etc.\n\nWe should wait_until with deadline.\n\n",
+          "tool_calls": [
+            {
+              "id": "call_51715de8847c42e1aacbf1cf",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "wait_until",
+                "arguments": "{\"deadline_simulated_min\": 900, \"event_kind\": \"step.completed\", \"step_id\": \"st05\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8159,
+      "total_tokens": 8455,
+      "completion_tokens": 296,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 189
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 296
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:10:00 GMT"
+  },
+  "status": 200,
+  "latency_ms": 1314,
+  "recorded_at": "2026-10-28T12:10:00.548Z"
+}

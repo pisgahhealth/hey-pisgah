@@ -1,0 +1,66 @@
+{
+  "hash": "c3dc0d2369098b0f52563295b714e45ad484c5be5cbce5bcdf85af4419ecc23b",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 10,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "5f1154eebe984faab075a0ed1ea68930",
+    "object": "chat.completion",
+    "created": 1793189463,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Your summary and refund documents are queued behind pending clinical steps \u2014 I'll keep monitoring for updates.",
+          "reasoning_content": "Need to understand why acceptance requires refund voucher draft/final. Records show not started but waiting for st16 soft edge. Workflow has trigger after st16 for st17a. Ward requirements say refund_voucher required unconditionally. So must go through workflow.\n\nDischarge summary draft waiting for st05 soft edge e04, and data st02, trigger after st05. Need st05 clinical discharge and st02 order.\n\nWe need to wait for clinical steps. Agent can prepare? Not yet prerequisites.\n\nWe should ask staff or send messages? Check workflow: need to ask.\n\nWe should wait.\n\n",
+          "tool_calls": [
+            {
+              "id": "call_6dfb487f68a84fb8bd5c822d",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "wait_until",
+                "arguments": "{\"deadline_simulated_min\": 540}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 7966,
+      "total_tokens": 8165,
+      "completion_tokens": 199,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 123
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 199
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:03 GMT"
+  },
+  "status": 200,
+  "latency_ms": 1240,
+  "recorded_at": "2026-10-28T12:11:03.079Z"
+}

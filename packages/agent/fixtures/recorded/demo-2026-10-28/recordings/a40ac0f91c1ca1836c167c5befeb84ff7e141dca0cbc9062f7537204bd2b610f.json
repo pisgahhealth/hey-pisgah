@@ -1,0 +1,55 @@
+{
+  "hash": "a40ac0f91c1ca1836c167c5befeb84ff7e141dca0cbc9062f7537204bd2b610f",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 10,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "ee935ffdc009494dbde45adf8d66ae13",
+    "object": "chat.completion",
+    "created": 1793189421,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "No further document can be prepared until the blocking departure step is recorded.",
+          "reasoning_content": "No further agent action possible until departure. Need to wait."
+        },
+        "logprobs": null,
+        "finish_reason": "stop",
+        "matched_stop": 200008
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8729,
+      "total_tokens": 8765,
+      "completion_tokens": 36,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 16
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 36
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:10:21 GMT"
+  },
+  "status": 200,
+  "latency_ms": 574,
+  "recorded_at": "2026-10-28T12:10:20.796Z"
+}

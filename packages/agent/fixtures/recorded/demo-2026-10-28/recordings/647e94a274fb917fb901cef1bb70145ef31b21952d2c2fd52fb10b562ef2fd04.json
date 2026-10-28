@@ -1,0 +1,66 @@
+{
+  "hash": "647e94a274fb917fb901cef1bb70145ef31b21952d2c2fd52fb10b562ef2fd04",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 8,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "ae30a8b9c83345ccaba100a46872e18d",
+    "object": "chat.completion",
+    "created": 1793189409,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": "After st06 complete, need st07 final. Also refund voucher after departure. But we must wait for st07 to complete.",
+          "tool_calls": [
+            {
+              "id": "call_0a85841f7a9f4da9a55db3c4",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "wait_until",
+                "arguments": "{\"deadline_simulated_min\": 1200, \"event_kind\": \"step.completed\", \"step_id\": \"st07\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8349,
+      "total_tokens": 8462,
+      "completion_tokens": 113,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 30
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 113
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:10:09 GMT"
+  },
+  "status": 200,
+  "latency_ms": 906,
+  "recorded_at": "2026-10-28T12:10:08.997Z"
+}

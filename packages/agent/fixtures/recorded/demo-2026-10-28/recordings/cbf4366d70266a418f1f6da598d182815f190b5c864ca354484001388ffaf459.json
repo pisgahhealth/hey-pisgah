@@ -1,0 +1,84 @@
+{
+  "hash": "cbf4366d70266a418f1f6da598d182815f190b5c864ca354484001388ffaf459",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 6,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "3d62a3e5b2974724962a002f494029e7",
+    "object": "chat.completion",
+    "created": 1793189462,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "I've mapped the outstanding paperwork \u2014 now I'll dig into the supporting details.",
+          "reasoning_content": "Need to analyze acceptance conditions. We have 4 drafts/finals required.\n\nWard requires refund_voucher unconditionally according to ward_requirements. Workflow defines refund_voucher steps st17a,b,c. But note workflow conflict? Check required_for_this_case true.\n\nDocuments waiting_for includes soft_edge from st16 to st17a. That means refund voucher can only start after departure recorded. However acceptance conditions require them. We need to see if workflow is adopted version 2.\n\nWe also have discharge_summary waiting for st05 and st02 data. St05 is clinical discharge not yet done.\n\nWe cannot prepare discharge_summary draft until st05 completed? Soft edge from st05 to st06. But also waiting_for trigger after st05 and st02 data. The discharge_summary draft status not_started but waiting_for includes edge e04 soft from st05. Soft edge can be overridden by agent? But we can request preparation? The hospital checks permission and prerequisites when request arrives. Soft edge means agent can perhaps prepare early? Need to attempt prepare_document.\n\nWe need to fetch records to understand data availability.",
+          "tool_calls": [
+            {
+              "id": "call_e305178cb9a948adb9fd2f54",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_record",
+                "arguments": "{\"record_id\": \"rec-297b8651\"}"
+              }
+            },
+            {
+              "id": "call_a0b8d6af408545d8981cb41e",
+              "index": 1,
+              "type": "function",
+              "function": {
+                "name": "get_record",
+                "arguments": "{\"record_id\": \"rec-2dceca45\"}"
+              }
+            },
+            {
+              "id": "call_cfc975cb97f14b49b91f91b4",
+              "index": 2,
+              "type": "function",
+              "function": {
+                "name": "get_record",
+                "arguments": "{\"record_id\": \"rec-edef57a7\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 7698,
+      "total_tokens": 8096,
+      "completion_tokens": 398,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 223
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 398
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:02 GMT"
+  },
+  "status": 200,
+  "latency_ms": 2181,
+  "recorded_at": "2026-10-28T12:11:01.742Z"
+}

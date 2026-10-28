@@ -1,0 +1,84 @@
+{
+  "hash": "41f34cbcaf180be1562535372ab0ad1830eaf2a9d9f68b25b84cf705e4137e74",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 7,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "ffbde8b76b664d96bee851c107991fe7",
+    "object": "chat.completion",
+    "created": 1793189466,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "I\u2019ve got your case overview \u2014 now I\u2019ll check the records to set up the discharge documents.",
+          "reasoning_content": "Need to understand acceptance: discharge_summary draft+final, refund_voucher draft+final. Ward requires discharge_summary and refund_voucher etc. But facts show take_home_order exists etc. Steps waiting: discharge_summary draft waits for st05 and st02. st01 not started, st02 not started, st05 not started. So nothing can start? However workflow has trigger after st05 for st06. But agent permissions include prepare_document. But documents status not_started waiting_for edges. However we need to check records to see if data exists?\n\nWe have records but versions 0: take_home_order version 0, etc. Need get_case details? Let's check records.",
+          "tool_calls": [
+            {
+              "id": "call_7bc2d924815d4927b08977e0",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_record",
+                "arguments": "{\"record_id\": \"rec-297b8651\"}"
+              }
+            },
+            {
+              "id": "call_d2f214fe2ca641da9d1fe7a4",
+              "index": 1,
+              "type": "function",
+              "function": {
+                "name": "get_record",
+                "arguments": "{\"record_id\": \"rec-edef57a7\"}"
+              }
+            },
+            {
+              "id": "call_1cf200e6ee9c4e79becdce7d",
+              "index": 2,
+              "type": "function",
+              "function": {
+                "name": "get_record",
+                "arguments": "{\"record_id\": \"rec-9585bada\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 7714,
+      "total_tokens": 8035,
+      "completion_tokens": 321,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 140
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 321
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:06 GMT"
+  },
+  "status": 200,
+  "latency_ms": 1314,
+  "recorded_at": "2026-10-28T12:11:06.295Z"
+}

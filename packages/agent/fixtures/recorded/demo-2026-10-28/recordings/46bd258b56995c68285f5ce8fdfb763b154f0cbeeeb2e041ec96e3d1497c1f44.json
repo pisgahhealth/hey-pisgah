@@ -1,0 +1,66 @@
+{
+  "hash": "46bd258b56995c68285f5ce8fdfb763b154f0cbeeeb2e041ec96e3d1497c1f44",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 7,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "416b24fd3a1e48d9a034fc0f5c914862",
+    "object": "chat.completion",
+    "created": 1793189514,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "I notice your refund is waiting on the final departure sign-off \u2014 I'll notify the team to complete that step.",
+          "reasoning_content": "We need to look at refund_voucher. Acceptance requires draft and final. Documents show waiting_for: draft waiting for st16 (record_departure) via soft edge e07 and trigger after st16. So draft cannot be prepared before st16 done. However check case state: st16 not started, st13 done, st14 done, st15 done. Requirements for st16: edges e20 from st14, e16 from st13, e21 from st15. All those should be done: st14 done at 704, st13 done 750, st15 done 593. So st16 is now eligible (should be queued). But not yet started/recorded. Need nurse to record departure.\n\nWe should ask staff? Ask staff nurse to record departure. We have ask_limit? We used 3 already but limit is per task? We have reached limit for doctor but maybe nurse still allowed? We have asked doctor twice, pharmacist once = 3 total. So we cannot ask more? The tool says at most 3 per task. We already did 3 asks. So cannot ask_staff.\n\nWe can send staff message status_request.\n\nWe need to get refund_voucher done. But prerequisite is st16. We should notify nurse.\n\nAlso we have to consider we are agent, we can prepare refund_voucher draft once st16 completes.\n\nWe should wait until st16 completes. But we can send message.\n\n",
+          "tool_calls": [
+            {
+              "id": "call_8d60d1d7b3c84facb6e7b5a0",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "send_staff_message",
+                "arguments": "{\"case_id\": \"c-2a14921a\", \"role\": \"nurse\", \"template_id\": \"status_request\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8739,
+      "total_tokens": 9149,
+      "completion_tokens": 410,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 294
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 410
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:54 GMT"
+  },
+  "status": 200,
+  "latency_ms": 1578,
+  "recorded_at": "2026-10-28T12:11:53.632Z"
+}

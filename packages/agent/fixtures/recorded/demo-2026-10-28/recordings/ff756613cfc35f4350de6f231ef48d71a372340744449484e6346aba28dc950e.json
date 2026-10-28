@@ -1,0 +1,75 @@
+{
+  "hash": "ff756613cfc35f4350de6f231ef48d71a372340744449484e6346aba28dc950e",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 4,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "39c8a91a5d0644b5a9c82bdda680debf",
+    "object": "chat.completion",
+    "created": 1793189423,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "The last set of documents is ready to go \u2014 I'll prepare the refund paperwork now.",
+          "reasoning_content": "Need to understand refund_voucher prerequisites. It's required per ward requirements. Currently st17a ready true, st17b waiting for fence e27 st17a. So should be able to prepare draft now.\n\nPrior attempt at 740? was refused prerequisite_unmet, but now financial clearance done, payment done, likely ready.\n\nWe have completed departure st16, but workflow conflict says refund after departure - but now departure done, so we can do refund.\n\nAlso discharge_summary already done.\n\nSo next prepare refund_voucher draft.",
+          "tool_calls": [
+            {
+              "id": "call_22ac3de99c6246b4960df698",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_workflow_definition",
+                "arguments": "{\"case_id\": \"c-110f6ad7\"}"
+              }
+            },
+            {
+              "id": "call_8ba71ba54ab74144a2a5aa7a",
+              "index": 1,
+              "type": "function",
+              "function": {
+                "name": "get_ward_requirements",
+                "arguments": "{\"case_id\": \"c-110f6ad7\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 5058,
+      "total_tokens": 5307,
+      "completion_tokens": 249,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 110
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 249
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:10:24 GMT"
+  },
+  "status": 200,
+  "latency_ms": 1116,
+  "recorded_at": "2026-10-28T12:10:23.589Z"
+}

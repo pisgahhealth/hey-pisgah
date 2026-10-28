@@ -1,0 +1,66 @@
+{
+  "hash": "493f02903b5e345a587c0c0fc4c735fc96d57e979f3a8179cb685751abc53c38",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 6,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "a640b09015e7416481c355e904194faf",
+    "object": "chat.completion",
+    "created": 1793189504,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "The draft summary is verified \u2014 now I'll prepare the final version.",
+          "reasoning_content": "Need complete discharge paperwork. Acceptance: discharge_summary.draft met, discharge_summary.final not met, refund_voucher draft/final not met.\n\nFrom case_state:\ndischarge_summary draft complete version1.\ndischarge_summary final not_started st07 requires st06 fence e23 done -> so can prepare final now.\nRefund voucher draft waiting_for soft_edge st16 and trigger after st16 . Need departure recorded. Check steps: st13 financial_clearance not done, st16 requires st13 and st14 etc.\n\nWe should now prepare discharge_summary final.\n\nAlso need to look at records to ensure prerequisites.\n\nWorkflow shows discharge_summary sections: follow_up and discharge_details needed from signoff_record.\n\nWe have signoff_recorded true.\n\nSo we can prepare discharge_summary final.",
+          "tool_calls": [
+            {
+              "id": "call_0cd8a0e18cf8431aa85df13a",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "prepare_document",
+                "arguments": "{\"case_id\": \"c-2a14921a\", \"document_id\": \"discharge_summary\", \"stage\": \"final\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8358,
+      "total_tokens": 8620,
+      "completion_tokens": 262,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 157
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 262
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:44 GMT"
+  },
+  "status": 200,
+  "latency_ms": 1295,
+  "recorded_at": "2026-10-28T12:11:43.813Z"
+}

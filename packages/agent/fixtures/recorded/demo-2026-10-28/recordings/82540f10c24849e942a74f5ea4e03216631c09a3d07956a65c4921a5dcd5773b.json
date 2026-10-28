@@ -1,0 +1,84 @@
+{
+  "hash": "82540f10c24849e942a74f5ea4e03216631c09a3d07956a65c4921a5dcd5773b",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 2,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "9b15327cfc8a4c0a9a0e12ab4eed568c",
+    "object": "chat.completion",
+    "created": 1793189459,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Pulling your discharge packet together \u2014 I'll check what's still needed.",
+          "reasoning_content": "Need to get case state, ward requirements, workflow definition.",
+          "tool_calls": [
+            {
+              "id": "call_566e0047350040308b561d7b",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_case_state",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            },
+            {
+              "id": "call_4b1a2f0be20741b5aab826d7",
+              "index": 1,
+              "type": "function",
+              "function": {
+                "name": "get_ward_requirements",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            },
+            {
+              "id": "call_c41c544c5b754619a58e6d8a",
+              "index": 2,
+              "type": "function",
+              "function": {
+                "name": "get_workflow_definition",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 3044,
+      "total_tokens": 3249,
+      "completion_tokens": 205,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 16
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 205
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:10:59 GMT"
+  },
+  "status": 200,
+  "latency_ms": 2038,
+  "recorded_at": "2026-10-28T12:10:59.415Z"
+}

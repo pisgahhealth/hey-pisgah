@@ -1,0 +1,66 @@
+{
+  "hash": "a5d4eb1dcb49c9a018aac56a867392ae88feb8e60fb566a0e568c3c09100c8a3",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 7,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "3796ffe9bd6948f181b019f71c594970",
+    "object": "chat.completion",
+    "created": 1793189397,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "I've mapped what's blocking the paperwork \u2014 I'll hold until the clinical steps are ready.",
+          "reasoning_content": "Need to understand current blockers. Discharge summary draft waiting for st05 clinical discharge and take_home_order data. Refund voucher draft waiting for st16 departure. So both blocked initially. We should ask staff? But we have ask limit. However we can prepare documents when waiting_for includes trigger \"after st05\" etc but status not_started but trigger not yet. Actually st05 not done, so can't prepare discharge_summary draft yet. Refund voucher needs after st16. So need to wait for clinical discharge.\n\nWe should ask doctor about clinical discharge timing? Could send status request.\n\nWe will wait.",
+          "tool_calls": [
+            {
+              "id": "call_4503f3740d3e4abcbbac09eb",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "wait_until",
+                "arguments": "{\"deadline_simulated_min\": 800, \"record_kind\": \"take_home_order\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 7977,
+      "total_tokens": 8193,
+      "completion_tokens": 216,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 125
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 216
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:09:57 GMT"
+  },
+  "status": 200,
+  "latency_ms": 1319,
+  "recorded_at": "2026-10-28T12:09:57.136Z"
+}

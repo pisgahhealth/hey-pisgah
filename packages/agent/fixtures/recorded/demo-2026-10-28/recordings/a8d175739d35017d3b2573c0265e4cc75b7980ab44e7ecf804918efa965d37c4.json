@@ -1,0 +1,66 @@
+{
+  "hash": "a8d175739d35017d3b2573c0265e4cc75b7980ab44e7ecf804918efa965d37c4",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 8,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "d8901fe1f6f64d4bb28050d9b59219c4",
+    "object": "chat.completion",
+    "created": 1793189405,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": "Discharge summary draft requested, will complete next minute. Need to wait for it then prepare final, and handle refund voucher conflict. The refund voucher draft is required per ward requirements but workflow triggers it after departure st16, so will need conflict raise after checking status.",
+          "tool_calls": [
+            {
+              "id": "call_73eedb8c5abe469c9d19c7de",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "wait_until",
+                "arguments": "{\"deadline_simulated_min\": 690}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8248,
+      "total_tokens": 8355,
+      "completion_tokens": 107,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 57
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 107
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:10:05 GMT"
+  },
+  "status": 200,
+  "latency_ms": 748,
+  "recorded_at": "2026-10-28T12:10:04.662Z"
+}

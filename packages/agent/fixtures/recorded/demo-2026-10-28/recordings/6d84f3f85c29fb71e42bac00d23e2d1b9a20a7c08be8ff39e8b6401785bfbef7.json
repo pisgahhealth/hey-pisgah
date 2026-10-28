@@ -1,0 +1,66 @@
+{
+  "hash": "6d84f3f85c29fb71e42bac00d23e2d1b9a20a7c08be8ff39e8b6401785bfbef7",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 17,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "08ea2bc650444098831e4ac3627f48e1",
+    "object": "chat.completion",
+    "created": 1793189495,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": "Need to wait for confirmation, then prepare discharge_summary draft. Currently discharge_summary draft ready true. So can prepare.\n\nBut also need to ask staff? Ask limit reached but we already applied exception pending doctor.\n\nWe should prepare document now; it will wait for exception confirmation? Maybe hospital will hold.\n\nLet's prepare discharge_summary draft.",
+          "tool_calls": [
+            {
+              "id": "call_d1daf5c8a08b443a8dc47fd9",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "prepare_document",
+                "arguments": "{\"case_id\": \"c-2a14921a\", \"document_id\": \"discharge_summary\", \"stage\": \"draft\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 12215,
+      "total_tokens": 12368,
+      "completion_tokens": 153,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 69
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 153
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:35 GMT"
+  },
+  "status": 200,
+  "latency_ms": 822,
+  "recorded_at": "2026-10-28T12:11:35.056Z"
+}

@@ -1,0 +1,66 @@
+{
+  "hash": "667bea08cb75ad91f7d30426ef177bc238fc45df1b7ff543ede5936bf10b3b0b",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 9,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "bb104c3cd11248e8ada4b892d77080fe",
+    "object": "chat.completion",
+    "created": 1793189474,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": "need to wait for steps st02, st05 etc. But we can maybe prepare discharge summary draft? It waits for st02 data and st05 trigger. st01 done, st02 not yet. So cannot. Need wait.",
+          "tool_calls": [
+            {
+              "id": "call_851d7e17ba4e4be8920b9e3a",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "wait_until",
+                "arguments": "{\"deadline_simulated_min\": 700, \"event_kind\": \"step.completed\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8380,
+      "total_tokens": 8497,
+      "completion_tokens": 117,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 51
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 117
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:14 GMT"
+  },
+  "status": 200,
+  "latency_ms": 753,
+  "recorded_at": "2026-10-28T12:11:14.039Z"
+}

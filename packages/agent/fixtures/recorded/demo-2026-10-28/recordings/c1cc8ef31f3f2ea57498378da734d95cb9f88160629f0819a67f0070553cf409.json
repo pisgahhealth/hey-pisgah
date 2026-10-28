@@ -1,0 +1,66 @@
+{
+  "hash": "c1cc8ef31f3f2ea57498378da734d95cb9f88160629f0819a67f0070553cf409",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 9,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "13ffd0acd3a8400d966b87797a3e56c8",
+    "object": "chat.completion",
+    "created": 1793189430,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": "Need to wait for step completed. Remaining not met is refund_voucher.final st17b. We've requested prepare. Wait.",
+          "tool_calls": [
+            {
+              "id": "call_b77e395b8c6d46d28accd1a3",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "wait_until",
+                "arguments": "{\"deadline_simulated_min\": 900, \"event_kind\": \"step.completed\", \"step_id\": \"st17b\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8339,
+      "total_tokens": 8451,
+      "completion_tokens": 112,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 29
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 112
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:10:30 GMT"
+  },
+  "status": 200,
+  "latency_ms": 711,
+  "recorded_at": "2026-10-28T12:10:30.537Z"
+}

@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { hashJson, sha256, type HypothesisRecord, type Operation, type PredictionCheck, type WorkflowDefinition as WD } from "@hey-pisgah/contracts";
 import { loadSubsets, type GeneratedCase } from "@hey-pisgah/cases";
@@ -174,7 +174,10 @@ export async function evaluateDev(o: EvalOptions): Promise<Record<string, unknow
   const reliability = { ...stamp, measured: false, reason: "the FR-4 claim is about the model agent; these reruns are on the deterministic definition executor", definition_executor: fr4Def, subset: fr4Ids };
   write(out, "reliability.json", reliability);
   write(out, "discovery.json", o.discovery ? { ...stamp, ...discoverySummary(o.discovery), citations } : { ...stamp, measured: false, reason: "no discovery input yet", citations });
-  write(out, "monitor.json", { ...stamp, measured: false, reason: "the monitor runs with the adopted version in the agent lane; no monitor log was given" });
+  // The monitor's result comes from the agent lane's report; eval keeps it and writes a placeholder only when there is none.
+  const monitorFile = join(out, "monitor.json");
+  const kept = existsSync(monitorFile) && (JSON.parse(readFileSync(monitorFile, "utf8")) as { source?: string }).source === "agent_monitor";
+  if (!kept) write(out, "monitor.json", { ...stamp, measured: false, reason: "the monitor runs with the adopted version in the agent lane; no monitor log was given" });
   write(out, "cycle2.json", { ...stamp, measured: false, reason: "the second learning cycle has not run; no cycle input was given" });
 
   const tables = {

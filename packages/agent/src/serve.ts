@@ -202,7 +202,8 @@ export async function serveCommand(repoRoot: string, args: string[]): Promise<nu
     ...(recorded ? recordedWorld(recorded) : {}),
     storeRoot, clock, port: Number(flag(args, "port") ?? (once ? 0 : process.env["HEY_PISGAH_SERVE_PORT"] ?? 4317)),
     pollMs: Number(flag(args, "poll-ms") ?? 250), log: (l) => process.stderr.write(`${l}\n`),
-    ...(flag(args, "cases") ? { casesDir: flag(args, "cases")! } : {})
+    ...(flag(args, "cases") ? { casesDir: flag(args, "cases")! } : {}),
+    ...(flag(args, "recordings") ? { recordingsDir: flag(args, "recordings")! } : {})
   });
   if (!once) {
     process.stdout.write(`serve listening on ${s.url} (mode ${s.client.mode}, store ${storeRoot})\n`);

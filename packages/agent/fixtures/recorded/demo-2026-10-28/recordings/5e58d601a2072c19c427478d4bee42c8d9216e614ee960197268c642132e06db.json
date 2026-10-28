@@ -1,0 +1,75 @@
+{
+  "hash": "5e58d601a2072c19c427478d4bee42c8d9216e614ee960197268c642132e06db",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 4,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "c029df04297e4b329ea873af259cd075",
+    "object": "chat.completion",
+    "created": 1793189512,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Your core discharge documents are confirmed \u2014 now I'll sort the remaining refund paperwork.",
+          "reasoning_content": "Need get requirements, workflow.",
+          "tool_calls": [
+            {
+              "id": "call_82168f50f67d4e05819e5d29",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_ward_requirements",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            },
+            {
+              "id": "call_1daaa4ac3c594776960c49f2",
+              "index": 1,
+              "type": "function",
+              "function": {
+                "name": "get_workflow_definition",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 5760,
+      "total_tokens": 5907,
+      "completion_tokens": 147,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 10
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 147
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:52 GMT"
+  },
+  "status": 200,
+  "latency_ms": 819,
+  "recorded_at": "2026-10-28T12:11:51.971Z"
+}

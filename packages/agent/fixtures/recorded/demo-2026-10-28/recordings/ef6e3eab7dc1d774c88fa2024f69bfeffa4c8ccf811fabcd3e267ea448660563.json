@@ -1,0 +1,66 @@
+{
+  "hash": "ef6e3eab7dc1d774c88fa2024f69bfeffa4c8ccf811fabcd3e267ea448660563",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 9,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "0091d3aa076e41348a45c721a133b83a",
+    "object": "chat.completion",
+    "created": 1793189485,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Conflict logged. Now I'll prompt the care team to complete the pending clearance steps.",
+          "reasoning_content": "We raised conflict. Now acceptance conditions still need to complete paperwork. For case: discharge_summary draft/final and refund_voucher draft/final. But we have conflict; still need to do tasks? The instructions: workflow conflict names requirement version in force and one definition element that conflicts. We did. But acceptance conditions derived from adopted version and ward requirements in force still require those docs. However conflict prevents? We should still attempt to prepare? But discharge_summary draft waits for st05 (clinical_discharge) not done. Need to ask staff to complete that. refund_voucher draft waits for st16 (record_departure). That's gated by many steps: financial clearance etc. Need to check what can be done.\n\nWe should ask staff about clinical discharge.",
+          "tool_calls": [
+            {
+              "id": "call_c38972895bfc4e35bbed65d1",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "ask_staff",
+                "arguments": "{\"case_id\": \"c-2a14921a\", \"role\": \"doctor\", \"question\": \"Clinical discharge (st05) is still pending; please complete it so discharge summary can be prepared?\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8615,
+      "total_tokens": 8893,
+      "completion_tokens": 278,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 155
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 278
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:25 GMT"
+  },
+  "status": 200,
+  "latency_ms": 1312,
+  "recorded_at": "2026-10-28T12:11:25.029Z"
+}

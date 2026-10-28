@@ -1,0 +1,66 @@
+{
+  "hash": "eacdb681e4a58ecc9d74d5d3bc19119dfd13293099d494290b87176312143780",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 6,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "e23cc298a53a43b3a30a5ee2908707f1",
+    "object": "chat.completion",
+    "created": 1793189404,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "I've checked the requirements \u2014 now I'll prepare your discharge summary.",
+          "reasoning_content": "Need to check case state: st06 discharge_summary draft is ready to prepare (ward_requires includes it, trigger st05 done). It is required. Also refund_voucher is required per ward_requirements but workflow defines it as always required? Actually ward requires refund_voucher always. Workflow has st17a required_when null (always) but with triggers after st16. However st16 requires clearance etc. Need to do discharge_summary first.\n\nWe have 4 acceptance conditions: discharge_summary draft/final, refund_voucher draft/final.\n\nCurrently st06 ready. Prepare it.",
+          "tool_calls": [
+            {
+              "id": "call_031c1dbe2d4a489bbdb1db94",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "prepare_document",
+                "arguments": "{\"case_id\": \"c-110f6ad7\", \"document_id\": \"discharge_summary\", \"stage\": \"draft\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8064,
+      "total_tokens": 8288,
+      "completion_tokens": 224,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 120
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 224
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:10:04 GMT"
+  },
+  "status": 200,
+  "latency_ms": 1096,
+  "recorded_at": "2026-10-28T12:10:03.774Z"
+}

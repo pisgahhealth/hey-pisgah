@@ -1,0 +1,75 @@
+{
+  "hash": "6cf66feadffb930c4954e14edcef7c8191cf81417d7e080af5be0cad5cb5bef9",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 4,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "9497a48549f54506b20c16ab3d1c75cf",
+    "object": "chat.completion",
+    "created": 1793189433,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Your core discharge documents are verified \u2014 now I'll confirm the remaining requirements.",
+          "reasoning_content": "We need to check acceptance conditions. Listed: discharge_summary draft/final met, refund_voucher draft/final met. But also need to ensure everything? The ward requires discharge_summary, stay_bill, payment_receipt, refund_voucher, clearance_slip. Workflow version 2 includes those? Check states: Documents shown include discharge_summary, hmo_claim_cover, refund_voucher. But we need to know about other documents: stay_bill, payment_receipt, clearance_slip etc. They may be already done via human steps? Let's get requirements and workflow definition.",
+          "tool_calls": [
+            {
+              "id": "call_1d758bd70d7a4ac48152a0c7",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_ward_requirements",
+                "arguments": "{\"case_id\": \"c-110f6ad7\"}"
+              }
+            },
+            {
+              "id": "call_7ead474850454879b54adfc6",
+              "index": 1,
+              "type": "function",
+              "function": {
+                "name": "get_workflow_definition",
+                "arguments": "{\"case_id\": \"c-110f6ad7\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 5434,
+      "total_tokens": 5688,
+      "completion_tokens": 254,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 118
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 254
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:10:33 GMT"
+  },
+  "status": 200,
+  "latency_ms": 1027,
+  "recorded_at": "2026-10-28T12:10:32.939Z"
+}

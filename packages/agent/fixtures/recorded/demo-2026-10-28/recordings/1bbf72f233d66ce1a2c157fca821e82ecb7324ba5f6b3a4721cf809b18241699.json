@@ -1,0 +1,75 @@
+{
+  "hash": "1bbf72f233d66ce1a2c157fca821e82ecb7324ba5f6b3a4721cf809b18241699",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 4,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "2a4a453dfb0142e5a4fd495816059085",
+    "object": "chat.completion",
+    "created": 1793189499,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": "Discharge summary draft now ready? The get_case_state shows documents: discharge_summary ready true for draft rec-0e03af77 with waiting_for [] but status not_started. Means prerequisite done. The exception confirmed now allows prepare. Also refund voucher waiting for st16 and payment? Let's check requirements, workflow.\n\nNeed to prepare discharge_summary draft first, then final. Refund voucher steps st17a,b require st16? Actually refund voucher draft waiting for st16 (record_departure). That step not done yet. But acceptance requires refund_voucher draft and final. Need to progress discharge paperwork: maybe st16 requires prior docs? Let's fetch ward requirements and workflow.",
+          "tool_calls": [
+            {
+              "id": "call_ebda9c59697e4cbeb30fde14",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_ward_requirements",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            },
+            {
+              "id": "call_4c366ff9f66b4b4ca27bcdf2",
+              "index": 1,
+              "type": "function",
+              "function": {
+                "name": "get_workflow_definition",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 5767,
+      "total_tokens": 6020,
+      "completion_tokens": 253,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 139
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 253
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:39 GMT"
+  },
+  "status": 200,
+  "latency_ms": 2032,
+  "recorded_at": "2026-10-28T12:11:39.244Z"
+}

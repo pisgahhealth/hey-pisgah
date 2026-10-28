@@ -1,0 +1,66 @@
+{
+  "hash": "83f268afcc212e84e33c099601befd1b5194100a7acd68bba81cac80b8e3627e",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 7,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "40c48ac26bb947cfa05bf47e5eb8312f",
+    "object": "chat.completion",
+    "created": 1793189500,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "The updates are now confirmed \u2014 I'll get your discharge summary ready.",
+          "reasoning_content": "Case exception confirmed, so medicines source is now dispense_record. Discharge summary draft now ready (waiting empty). Need to prepare it.",
+          "tool_calls": [
+            {
+              "id": "call_a90f1f4a98b8451b80cc85ba",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "prepare_document",
+                "arguments": "{\"case_id\": \"c-2a14921a\", \"document_id\": \"discharge_summary\", \"stage\": \"draft\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8723,
+      "total_tokens": 8859,
+      "completion_tokens": 136,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 31
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 136
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:40 GMT"
+  },
+  "status": 200,
+  "latency_ms": 789,
+  "recorded_at": "2026-10-28T12:11:40.120Z"
+}

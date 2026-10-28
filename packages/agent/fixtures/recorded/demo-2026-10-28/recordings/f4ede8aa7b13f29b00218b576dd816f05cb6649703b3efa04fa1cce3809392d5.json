@@ -1,0 +1,66 @@
+{
+  "hash": "f4ede8aa7b13f29b00218b576dd816f05cb6649703b3efa04fa1cce3809392d5",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 9,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "d4109b10492d4a48a429e033bad6a22e",
+    "object": "chat.completion",
+    "created": 1793189515,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": "Refund voucher still waiting for st16 departure. Need st16 done first. Can wait.",
+          "tool_calls": [
+            {
+              "id": "call_ce403810511448108ede6ba0",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "wait_until",
+                "arguments": "{\"deadline_simulated_min\": 810, \"event_kind\": \"step.completed\", \"step_id\": \"st16\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 8926,
+      "total_tokens": 9030,
+      "completion_tokens": 104,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 22
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 104
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:55 GMT"
+  },
+  "status": 200,
+  "latency_ms": 664,
+  "recorded_at": "2026-10-28T12:11:54.640Z"
+}

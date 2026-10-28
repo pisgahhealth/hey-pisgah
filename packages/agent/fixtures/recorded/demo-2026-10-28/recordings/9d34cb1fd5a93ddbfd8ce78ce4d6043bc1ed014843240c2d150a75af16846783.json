@@ -1,0 +1,75 @@
+{
+  "hash": "9d34cb1fd5a93ddbfd8ce78ce4d6043bc1ed014843240c2d150a75af16846783",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 4,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "36aa756e67c64ca88d4b7cce264cf960",
+    "object": "chat.completion",
+    "created": 1793189481,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Your file is waiting on clinical clearance and refund documents \u2014 I'll verify what needs to happen next.",
+          "reasoning_content": "Need to check requirements and workflow. Acceptance includes discharge_summary draft/final and refund_voucher draft/final. Documents show waiting for st05 for discharge_summary, and st16 for refund_voucher. Clinical discharge not started, signoff false. Need facts. Also ward requirements changed at 600 to r2 requiring stay_bill, refund_voucher, clearance_slip etc.\n\nNeed get_ward_requirements and get_workflow_definition.",
+          "tool_calls": [
+            {
+              "id": "call_58b15ba604dc45e6a0ad999d",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_ward_requirements",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            },
+            {
+              "id": "call_cdee77708fab44709f1e3dcc",
+              "index": 1,
+              "type": "function",
+              "function": {
+                "name": "get_workflow_definition",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 5335,
+      "total_tokens": 5567,
+      "completion_tokens": 232,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 91
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 232
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:11:21 GMT"
+  },
+  "status": 200,
+  "latency_ms": 946,
+  "recorded_at": "2026-10-28T12:11:20.623Z"
+}

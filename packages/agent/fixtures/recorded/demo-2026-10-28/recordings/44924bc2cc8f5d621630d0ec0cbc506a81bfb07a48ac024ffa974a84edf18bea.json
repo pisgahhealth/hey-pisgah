@@ -1,0 +1,84 @@
+{
+  "hash": "44924bc2cc8f5d621630d0ec0cbc506a81bfb07a48ac024ffa974a84edf18bea",
+  "provider": "modal",
+  "request": {
+    "elided": "the full request is kept in the private run folder; replay looks recordings up by hash",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": 4,
+    "tools": 11,
+    "reasoning_effort": "low",
+    "parallel_tool_calls": false
+  },
+  "response": {
+    "id": "d2f76c5788d74cbe89cce33de6d3f445",
+    "object": "chat.completion",
+    "created": 1793189521,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Your discharge summary is complete \u2014 now I'll finalize the remaining refund voucher.",
+          "reasoning_content": "We need to understand remaining task: refund_voucher.final not met. Document record rec-192e03b1, step st17b. Need to prepare it. Check status: not_started, waiting_for [] . Should be ready to prepare.\n\nBut need to check workflow definition and requirements.\n\nWe should prepare_document refund_voucher final.",
+          "tool_calls": [
+            {
+              "id": "call_2b7fe3b75361401c96f6c2e3",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_workflow_definition",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            },
+            {
+              "id": "call_4cd837fba6c34c678a971ef7",
+              "index": 1,
+              "type": "function",
+              "function": {
+                "name": "get_ward_requirements",
+                "arguments": "{\"case_id\": \"c-2a14921a\"}"
+              }
+            },
+            {
+              "id": "call_5dc08be15631435c9f71648e",
+              "index": 2,
+              "type": "function",
+              "function": {
+                "name": "get_case_state",
+                "arguments": "{\"case_id\": \"c-2a14921a\", \"page\": 1}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 5303,
+      "total_tokens": 5579,
+      "completion_tokens": 276,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 72
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 276
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 12:12:01 GMT"
+  },
+  "status": 200,
+  "latency_ms": 980,
+  "recorded_at": "2026-10-28T12:12:01.124Z"
+}
