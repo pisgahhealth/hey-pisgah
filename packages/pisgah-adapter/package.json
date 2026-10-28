@@ -14,6 +14,8 @@
   "dependencies": {
     "@hey-pisgah/agent": "*",
     "@hey-pisgah/contracts": "*",
+    "@hey-pisgah/model": "*",
+    "@hey-pisgah/voice": "*",
     "zod": "^4.6.7"
   }
 }

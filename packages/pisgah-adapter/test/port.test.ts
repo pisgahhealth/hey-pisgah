@@ -1,5 +1,9 @@
 import { createServer, type IncomingMessage } from "node:http";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { EmrRuntime, ModelClientLike } from "./runtime-shim.js";
 import { DoorProfile, fillPath, fillTemplate, pathPattern } from "../src/profile.js";
 import { PisgahPort, type DoorLog } from "../src/port.js";
 
@@ -124,6 +128,26 @@ describe("PisgahPort", () => {
     await door.close();
     const gone = await port.commit("record_observation", { admission_id: ADM, pulse: 60 }, "key-3", PROV);
     expect(gone).toMatchObject({ ok: false, retryable: true, reason: "unreachable" });
+  });
+
+  it("runs end to end under the runtime: one spoken line, one write after a lost reply, proved by a fresh read", async () => {
+    const door = await fakeDoor({ loseFirstReply: true });
+    const root = mkdtempSync(join(tmpdir(), "hp-adapter-"));
+    const port = new PisgahPort(profile(door.base), { bearers: { [OWNER]: "t" } });
+    let rt: EmrRuntime | null = null;
+    rt = new EmrRuntime({ storeRoot: root, client: ModelClientLike(root, () => rt), port, proofRetryMs: 1 });
+    rt.start();
+    const r = await rt.say({ owner: OWNER, target: { patient_id: PAT }, text: "Chart pulse 92 and blood pressure 120/80" });
+    await rt.settled();
+    const v = rt.view(r.task_id)!;
+    expect(v.actions[0]).toMatchObject({ state: "completed", proof: { record_id: "55555555-6666-4777-8888-000000000001" } });
+    expect(door.stored.size).toBe(1);
+    const posts = door.seen.filter((s) => s.method === "POST");
+    expect(posts).toHaveLength(2);
+    expect(new Set(posts.map((p) => p.headers["x-door-key"])).size).toBe(1);
+    expect(door.seen.every((s) => s.headers["x-door-evidence"] === `transcript:${r.line_id}`)).toBe(true);
+    await rt.stop();
+    await door.close();
   });
 });
 
