@@ -4,9 +4,10 @@ import {
 } from "@hey-pisgah/contracts";
 import { scheduleHash, type WorldRules } from "@hey-pisgah/simulator";
 import { STORE_RECORD_TYPES, openStream, streamPaths, type Stream } from "@hey-pisgah/store";
-import { boundRecordKinds, deriveDataIntegrityFences, evalCondition, type Facts, type Registry } from "@hey-pisgah/workflow";
+import { applyOperations, boundRecordKinds, deriveDataIntegrityFences, evalCondition, type Facts, type Registry } from "@hey-pisgah/workflow";
 import { eventIdFor, recordIdFor, shortHash } from "./ids.js";
-import { ARGS, TEMPLATES } from "./schemas.js";
+import { bindingFailures, checksInForce, loadRequirementChecks, type CheckFailure, type RequirementCheck } from "./monitor.js";
+import { TEMPLATES, argsFor, type ToolProfile } from "./schemas.js";
 import {
   HORIZON, PortError, agentSteps, engineRun, isAgentStep, requirementsAt, wardRequiresList,
   type CaseWorld, type EngineCommit, type OkRun, type ViewEvent
@@ -26,6 +27,8 @@ export type CommitResult =
   | { ok: true; write: PortWrite }
   | { ok: false; reason: string; counted: boolean; detail: Record<string, unknown> };
 
+export type Confirmation = { record_id: string; by: { kind: "person"; staff_id: string; role: string }; at: number };
+export type MonitorVerdict = { ok: true } | { ok: false; failures: CheckFailure[]; requirement_version: string; evidence_event_ids: string[] };
 export const PORT_STREAM = (caseId: string) => `world/${caseId}`;
 const PAGE = 15;
 const RANK: Record<ViewEvent["source"], number> = { requirements: 0, engine: 1, port: 2 };
@@ -52,12 +55,19 @@ export class HospitalPort {
   private refused = 0;
   private clock: number;
   private cache: { n: number; run: OkRun } | null = null;
+  private readonly confirmations: Confirmation[] = [];
+  private caseDefCache: { n: number; def: WD } | null = null;
+  readonly profile: ToolProfile;
+  readonly checks: readonly RequirementCheck[] = loadRequirementChecks();
 
   private constructor(readonly world: CaseWorld, private readonly stream: Stream, def: WD, clock: number, private readonly rules: WorldRules | null) {
     this.caseId = world.case_id;
     this.def = def;
     this.clock = clock;
-    this.engineRunId = `run-${shortHash(world.case_id, def.definition_hash, scheduleHash(world.schedule), "model_agent", ...(rules ? [rules.rules_hash] : []))}`;
+    this.profile = world.tool_profile ?? "v2";
+    // A requirement timeline beyond the first set changes the engine run, so it is part of the run id.
+    const timeline = world.requirements.length > 1 ? [hashJson(world.requirements.map((r) => [r.at, r.set]))] : [];
+    this.engineRunId = `run-${shortHash(world.case_id, def.definition_hash, scheduleHash(world.schedule), "model_agent", ...(rules ? [rules.rules_hash] : []), ...timeline)}`;
   }
 
   // Opens or reopens the case's world stream; a reopen must see the same world and world rules, and keeps the version it started with.
@@ -84,6 +94,7 @@ export class HospitalPort {
         if (e.record_type === "clock.advanced") port.clock = (e.payload as { to: number }).to;
         else if (e.record_type === "port.write") port.writes.push(e.payload as PortWrite);
         else if (e.record_type === "agent.refused") port.refused += 1;
+        else if (e.record_type === "case_exception.confirmed") port.confirmations.push(e.payload as Confirmation);
       }
       return port;
     } catch (e) {
@@ -103,6 +114,49 @@ export class HospitalPort {
   allWrites(): readonly PortWrite[] { return this.writes; }
   writesFor(intentKey: string): PortWrite[] { return this.writes.filter((w) => w.intent_key === intentKey); }
   findWrite(intentKey: string): PortWrite | null { return this.writesFor(intentKey)[0] ?? null; }
+
+  // The adopted version with this case's confirmed exceptions applied; it never changes the version for other cases.
+  get caseDef(): WD {
+    const n = this.confirmations.length;
+    if (this.caseDefCache?.n === n) return this.caseDefCache.def;
+    const ops = this.exceptionOps(this.confirmations.map((c) => c.record_id));
+    let def = this.def;
+    if (ops.length) {
+      const r = applyOperations(this.def, ops);
+      if (r.ok) def = r.definition;
+    }
+    this.caseDefCache = { n, def };
+    return def;
+  }
+  private exceptionOps(recordIds: readonly string[]): unknown[] {
+    return recordIds.map((id) => this.writes.find((w) => w.record_id === id)!).map((w) => {
+      const op = w.args["op"] as { document_id: string; section_id: string; source: { record_kind: string; field_path: string } };
+      return { op: "rebind_section", document_id: op.document_id, section_id: op.section_id, source: { ...op.source, version_policy: "current" } };
+    });
+  }
+  exceptions(): { record_id: string; args: Record<string, unknown>; at: number; status: "pending_confirmation" | "confirmed" | "note_only"; confirmed: Confirmation | null }[] {
+    return this.writes.filter((w) => w.action_kind === "apply_case_exception" && w.at <= this.clock).map((w) => {
+      const c = this.confirmations.find((x) => x.record_id === w.record_id) ?? null;
+      const source = (w.args["op"] as { source?: unknown }).source;
+      return { record_id: w.record_id, args: w.args, at: w.at, status: c ? "confirmed" : source ? "pending_confirmation" : "note_only", confirmed: c };
+    });
+  }
+
+  // A person in the named role confirms a pending case exception; the rebinding then applies to this case from now on.
+  confirmException(recordId: string, by: { kind: string; staff_id: string; role: string }): { ok: true } | { ok: false; reason: string } {
+    if (by.kind !== "person") return { ok: false, reason: "confirmation_requires_person" };
+    const x = this.exceptions().find((e) => e.record_id === recordId);
+    if (!x) return { ok: false, reason: "unknown_id" };
+    if (x.status !== "pending_confirmation") return { ok: false, reason: `exception_${x.status}` };
+    if (x.args["confirm_by_role"] !== by.role) return { ok: false, reason: "wrong_role" };
+    const ops = this.exceptionOps([...this.confirmations.map((c) => c.record_id), recordId]);
+    const r = applyOperations(this.def, ops);
+    if (!r.ok) return { ok: false, reason: `exception_invalid: ${r.errors.map((e) => e.message).join("; ").slice(0, 200)}` };
+    const c: Confirmation = { record_id: recordId, by: { kind: "person", staff_id: by.staff_id, role: by.role }, at: this.clock };
+    this.stream.append("case_exception.confirmed", c, { recorded_at: this.clock, occurred_at: this.clock });
+    this.confirmations.push(c);
+    return { ok: true };
+  }
 
   private commits(): EngineCommit[] {
     return this.writes.filter((w) => w.action_kind === "prepare_document" && w.step_id !== null).map((w) => ({ step_id: w.step_id!, effect_at: w.effect_at }));
@@ -130,10 +184,18 @@ export class HospitalPort {
     }));
   }
 
+  private confirmationEvents(upTo: number): ViewEvent[] {
+    return this.confirmations.filter((c) => c.at <= upTo).map((c, i) => ({
+      event_id: eventIdFor(this.engineRunId, "confirm", i + 1), seq: this.writes.length + i + 1, case_id: this.caseId, kind: "case_exception.confirmed", clock: "server" as const,
+      occurred_at: c.at, recorded_at: c.at, late_entry_reason: null, actor_id: c.by.staff_id, actor_role: c.by.role, subject: c.record_id, source: "port" as const,
+      payload: { record_id: c.record_id }
+    }));
+  }
+
   // Every event recorded by minute t, in recording order; nothing recorded later is ever included.
   events(t = this.clock): ViewEvent[] {
     const engine: ViewEvent[] = this.run().events.filter((e) => e.recorded_at <= t).map((e) => ({ ...e, source: "engine" as const }));
-    const port = this.writes.filter((w) => w.at <= t).map((w) => this.portEvent(w));
+    const port = [...this.writes.filter((w) => w.at <= t).map((w) => this.portEvent(w)), ...this.confirmationEvents(t)];
     return [...this.requirementEvents(t), ...engine, ...port].sort((a, b) => a.recorded_at - b.recorded_at || RANK[a.source] - RANK[b.source] || a.seq - b.seq);
   }
   private engineEvents(t = this.clock): SimEvent[] {
@@ -202,7 +264,7 @@ export class HospitalPort {
       if (e.to.step !== s.step_id || this.fromSatisfied(e.from.step, done, facts)) continue;
       out.push({ kind: e.kind === "fence" ? "fence" : "soft_edge", step_id: e.from.step, edge_id: e.edge_id, when: null });
     }
-    for (const d of deriveDataIntegrityFences(this.def)) {
+    for (const d of deriveDataIntegrityFences(this.caseDef)) {
       if (d.to.step !== s.step_id || this.fromSatisfied(d.from.step, done, facts)) continue;
       if (out.some((o) => o.step_id === d.from.step)) continue;
       out.push({ kind: "data", step_id: d.from.step, edge_id: null, when: null });
@@ -243,7 +305,7 @@ export class HospitalPort {
     const completed = events.find((e) => e.kind === "step.completed" && mine(e));
     const revisions = events.filter((e) => e.kind === "document.revised" && e.subject === s.step_id);
     const point = revisions.at(-1) ?? started;
-    const kinds = boundRecordKinds(this.def, s);
+    const kinds = boundRecordKinds(this.caseDef, s);
     const captured = point ? this.versionsAt(point.seq + 1, events) : new Map<string, number>();
     const current = this.versionsAt(Number.MAX_SAFE_INTEGER, events);
     const sources: SourceView[] = kinds.map((k) => ({ record_id: this.recordKindId(k), record_kind: k, version: this.versionOf(k, captured), current_version: this.versionOf(k, current) }))
@@ -276,7 +338,7 @@ export class HospitalPort {
     return { record_id, kind: "record", version, status: "recorded", content, source_refs: [], produced_event_ids: produced, hash: hashJson({ record_id, version, content, produced }) };
   }
   private writeView(w: PortWrite): RecordView {
-    const status = w.action_kind === "apply_case_exception" ? "pending_confirmation" : "recorded";
+    const status = w.action_kind === "apply_case_exception" ? (this.confirmations.some((c) => c.record_id === w.record_id) ? "confirmed" : "pending_confirmation") : "recorded";
     const content = { action_kind: w.action_kind, args: w.args, target_record_id: w.target_record_id };
     return { record_id: w.record_id, kind: "agent_write", version: 1, status, content, source_refs: [], produced_event_ids: [w.event_id], hash: hashJson({ record_id: w.record_id, content, event_id: w.event_id }) };
   }
@@ -319,9 +381,12 @@ export class HospitalPort {
     const pages = Math.max(1, Math.ceil(events.length / PAGE));
     const p = Math.min(Math.max(1, page ?? pages), pages);
     const items = events.slice((p - 1) * PAGE, p * PAGE).map((e) => ({ event_id: e.event_id, at: e.recorded_at, occurred_at: e.occurred_at, kind: e.kind, subject: e.subject, by: e.actor_role, ...(e.late_entry_reason ? { late_entry_reason: { untrusted_text: e.late_entry_reason.slice(0, 500) } } : {}) }));
+    const notes = this.world.notes?.filter((n) => n.recorded_at <= this.clock).map((n) => ({ note_id: n.note_id, by: n.author_role, at: n.recorded_at, occurred_at: n.occurred_at, untrusted_text: n.text.slice(0, 500) }));
+    const exceptions = this.exceptions().filter((x) => x.status !== "note_only").map((x) => ({ record_id: x.record_id, status: x.status, at: x.at }));
     return {
       case_id: this.caseId, now: this.clock, horizon: HORIZON, workflow_version: this.def.version, requirement_version: req.set.requirement_version,
-      facts, steps, documents, records, agent_writes: writes, events: { page: p, pages, page_size: PAGE, total: events.length, items }
+      facts, steps, documents, records, agent_writes: writes, events: { page: p, pages, page_size: PAGE, total: events.length, items },
+      ...(notes ? { notes } : {}), ...(exceptions.length ? { case_exceptions: exceptions } : {})
     };
   }
 
@@ -339,14 +404,15 @@ export class HospitalPort {
   }
 
   workflowDefinition(): Record<string, unknown> {
-    const d = this.def;
+    const d = this.caseDef;
     return {
       case_id: this.caseId, workflow_id: d.workflow_id, version: d.version, status: d.status, scope: d.scope,
       steps: d.steps.map((s) => ({ step_id: s.step_id, action_kind: s.action_kind, roles: s.actor_roles, external: s.external, document: s.document_ref, required_when: s.required_when, alternative_group: s.alternative_group })),
       edges: d.edges.map((e) => ({ edge_id: e.edge_id, from: e.from.step, to: e.to.step, gate: e.gate, kind: e.kind, origin: e.origin })),
       triggers: d.triggers,
       documents: d.documents.map((x) => ({ document_id: x.document_id, preparable_by: x.preparable_by, check: x.check, sections: x.sections.map((s) => ({ section_id: s.section_id, record_kind: s.binding.record_kind, needed_for: s.needed_for })) })),
-      agent_permissions: Object.entries(d.permissions).filter(([, r]) => r?.includes("agent")).map(([k]) => k).sort()
+      agent_permissions: Object.entries(d.permissions).filter(([, r]) => r?.includes("agent")).map(([k]) => k).sort(),
+      ...(d !== this.def ? { case_exceptions_applied: this.confirmations.map((c) => c.record_id) } : {})
     };
   }
 
@@ -363,7 +429,7 @@ export class HospitalPort {
   commit(kind: string, rawArgs: unknown, intentKey: string): CommitResult {
     if (!AGENT_ALLOWED_KINDS.has(kind as ActionKind)) return this.refuse(kind, "person_only", intentKey);
     if (!(this.def.permissions[kind as ActionKind] ?? []).includes("agent")) return this.refuse(kind, "not_permitted", intentKey);
-    const schema = (ARGS as Record<string, (typeof ARGS)[keyof typeof ARGS]>)[kind];
+    const schema = argsFor(this.profile)[kind];
     const parsed = schema?.safeParse(rawArgs);
     if (!parsed || !parsed.success) return this.decline("invalid_arguments");
     const args = parsed.data as Record<string, unknown>;
@@ -382,6 +448,8 @@ export class HospitalPort {
         if (this.writes.some((w) => w.step_id === step.step_id) || view.status !== "not_started") return this.decline("already_prepared", { record_id: target });
         const waiting = this.waitingFor(step);
         if (waiting.length) return this.decline("prerequisite_unmet", { waiting_for: waiting });
+        const verdict = this.monitorVerdict(docId, stage);
+        if (!verdict.ok) return this.decline("requirement_check_failed", { document_id: docId, stage, monitor: verdict });
         return this.accept({ ...base, step_id: step.step_id, effect_at: at + 1 }, target, target);
       }
       if (kind === "revise_document") {
@@ -398,7 +466,77 @@ export class HospitalPort {
       if (tpl !== "status_request" && (args["document_id"] === undefined || args["stage"] === undefined)) return this.decline("invalid_arguments", { need: ["document_id", "stage"] });
     }
     if (kind === "raise_workflow_conflict" && args["version"] !== this.def.version) return this.decline("unknown_id", { version: args["version"] });
+    if (this.profile === "v2") {
+      const guard = kind === "raise_workflow_conflict" ? this.conflictGuard(args) : kind === "ask_staff" ? this.askGuard(args) : kind === "apply_case_exception" ? this.exceptionGuard(args) : null;
+      if (guard) return this.refuse(kind, guard.reason, intentKey, guard.detail);
+    }
     return this.accept(base, null, null);
+  }
+
+  // A conflict must cite the requirement version in force and one element of this case's definition, else it is refused and counted.
+  private conflictGuard(args: Record<string, unknown>): { reason: string; detail: Record<string, unknown> } | null {
+    const inForce = requirementsAt(this.world, this.clock).set.requirement_version;
+    if (args["requirement_version"] !== inForce) return { reason: "conflict_uncited", detail: { cited_requirement_version: args["requirement_version"], in_force: inForce } };
+    const el = args["definition_element"] as { kind: string; id: string };
+    const d = this.caseDef;
+    const exists = el.kind === "step" ? d.steps.some((s) => s.step_id === el.id)
+      : el.kind === "edge" ? d.edges.some((e) => e.edge_id === el.id)
+      : el.kind === "trigger" ? d.triggers.some((t) => t.target.step === el.id)
+      : d.documents.some((x) => x.sections.some((sec) => `${x.document_id}.${sec.section_id}` === el.id));
+    return exists ? null : { reason: "conflict_uncited", detail: { definition_element: el, note: "no such element in the adopted version" } };
+  }
+  // A question goes to a named role and reads as a question.
+  private askGuard(args: Record<string, unknown>): { reason: string; detail: Record<string, unknown> } | null {
+    const q = String(args["question"]).trim();
+    if (!q.includes("?") || q.split(/\s+/).length < 3) return { reason: "not_a_question", detail: {} };
+    return null;
+  }
+  // A case exception that names a source must name one the hospital records.
+  private exceptionGuard(args: Record<string, unknown>): { reason: string; detail: Record<string, unknown> } | null {
+    const op = args["op"] as { document_id: string; section_id: string; source?: { record_kind: string; field_path: string } };
+    const doc = this.def.documents.find((d) => d.document_id === op.document_id);
+    if (!doc?.sections.some((x) => x.section_id === op.section_id)) return { reason: "unknown_section", detail: { document_id: op.document_id, section_id: op.section_id } };
+    if (op.source && !this.producedKinds().has(op.source.record_kind)) return { reason: "unknown_source", detail: { record_kind: op.source.record_kind } };
+    return null;
+  }
+
+  // The monitor's commit-time check: the ward requirements in force now, read fresh, against the version this case runs.
+  monitorVerdict(documentId: string, stage: string): MonitorVerdict {
+    const facts = this.facts() as Facts;
+    const req = requirementsAt(this.world, this.clock);
+    const checks = checksInForce(this.checks, String(facts["ward_id"]), req.set.requirement_version, facts);
+    const failures = bindingFailures(this.caseDef, documentId, stage, checks);
+    if (!failures.length) return { ok: true };
+    return { ok: false, failures, requirement_version: req.set.requirement_version, evidence_event_ids: this.checkEvidence(failures) };
+  }
+  private checkEvidence(fs: readonly CheckFailure[]): string[] {
+    const kinds = new Set(fs.flatMap((f) => [f.expected.record_kind, f.found?.record_kind ?? ""]));
+    return this.events().filter((e) => e.kind === "requirements.changed" || (e.kind === "record.versioned" && kinds.has(String(str(e.payload, "record_kind"))))).map((e) => e.event_id).slice(-10);
+  }
+
+  // True once a hand-over step citing this document stage has completed.
+  handedOver(recordId: string): boolean {
+    const s = this.def.steps.find((x) => x.action_kind === "prepare_document" && x.document_ref && this.stageRecordId(x.document_ref.document_id, x.document_ref.stage) === recordId);
+    if (!s) return false;
+    const ref = s.document_ref!;
+    const hands = this.def.steps.filter((x) => x.action_kind === "hand_over_document" && x.document_ref?.document_id === ref.document_id && x.document_ref.stage === ref.stage).map((x) => x.step_id);
+    return this.engineEvents().some((e) => e.kind === "step.completed" && hands.includes(String(str(e.payload, "step_id"))));
+  }
+
+  // The monitor's outcome check on one prepared stage, against the record as it stands now.
+  outcomeCheck(recordId: string): { ok: boolean; status: "current" | "revising" | "stale_after_handover" | "requirement_failed" | "absent"; failures: CheckFailure[]; requirement_version: string; evidence_event_ids: string[] } {
+    const req = requirementsAt(this.world, this.clock).set.requirement_version;
+    const rec = this.record(recordId);
+    if (!rec || rec.kind !== "document_stage") return { ok: false, status: "absent", failures: [], requirement_version: req, evidence_event_ids: [] };
+    const doc = String(rec.content["document_id"]), stage = String(rec.content["stage"]);
+    const v = this.monitorVerdict(doc, stage);
+    if (!v.ok) return { ok: false, status: "requirement_failed", failures: v.failures, requirement_version: req, evidence_event_ids: v.evidence_event_ids };
+    const stale = rec.source_refs.filter((x) => x.version !== x.current_version);
+    if (!stale.length) return { ok: true, status: "current", failures: [], requirement_version: req, evidence_event_ids: [] };
+    const kinds = new Set(stale.map((x) => x.record_kind));
+    const evidence = this.engineEvents().filter((e) => e.kind === "record.versioned" && kinds.has(String(str(e.payload, "record_kind")))).map((e) => e.event_id).slice(-10);
+    if (this.handedOver(recordId)) return { ok: false, status: "stale_after_handover", failures: [], requirement_version: req, evidence_event_ids: evidence };
+    return { ok: true, status: "revising", failures: [], requirement_version: req, evidence_event_ids: evidence };
   }
 
   private accept(w: Omit<PortWrite, "ordinal" | "record_id" | "target_record_id" | "event_id">, recordId: string | null, target: string | null): CommitResult {
