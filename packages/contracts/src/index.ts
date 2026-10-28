@@ -1,5 +1,5 @@
-// Contracts v0: the frozen trio (ids, canonical, envelope, workflow) and the draft records every package builds against.
-export const CONTRACTS_SCHEMA_VERSION = 0;
+// Contracts v1 (frozen at tag day-2): the frozen trio (ids, canonical, envelope, workflow) and the draft records every package builds against.
+export const CONTRACTS_SCHEMA_VERSION = 1;
 export * from "./ids.js";
 export * from "./canonical.js";
 export * from "./envelope.js";

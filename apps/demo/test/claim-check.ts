@@ -53,7 +53,7 @@ export function expectedWording(reg: Registry, st: StatusFile, id: string): stri
   if (!c || !s) return null;
   const key = KEY[s.status];
   if (!key) return null;
-  return c.wording[key].replace(/\{([a-z0-9_]+)\}/g, (_, k: string) => (s.values[k] === undefined ? `[${k} missing]` : String(s.values[k])));
+  return c.wording[key].replace(/\{([a-z0-9_]+)\}/g, (_, k: string) => (s.values[k] === undefined || s.values[k] === null ? `[${k} missing]` : String(s.values[k])));
 }
 
 // Every fixed piece of claim text: the questions and each wording split at its value slots.

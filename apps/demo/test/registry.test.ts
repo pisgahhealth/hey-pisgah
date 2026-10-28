@@ -52,11 +52,13 @@ describe("claims registry render rule", () => {
     Object.assign(c01, { status: "amber", values: { done: 7, total: 9 } });
     const c12 = st.claims.find((c) => c.claim_id === "C-12")!;
     Object.assign(c12, { status: "green", values: { provider: "modal", calls: 38, usd: "0.34", p50: "1.17" } });
+    Object.assign(st.claims.find((c) => c.claim_id === "C-16")!, { status: "red", values: { n: null } });
     const claims = buildClaims(registry, { ...st, generated_at: "2026-10-28T00:00:00.000Z", commit: "x" });
     const html = renderStep(5, claims, await fixturePage());
     expect(checkHtml(html, registry, st)).toEqual([]);
     expect(html).toContain("Completed 7 of 9 items");
     expect(html).toContain("Muse Spark Open on modal: 38 calls, $0.34, p50 1.17s");
+    expect(html).toContain("[n missing] hypotheses mistook late entry for delay");
     expect(checkHtml(html, registry, status).length).toBeGreaterThan(0);
   });
 

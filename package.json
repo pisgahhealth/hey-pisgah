@@ -24,7 +24,9 @@
     "serve": "tsx apps/cli/src/index.ts serve",
     "claims:check": "tsx apps/cli/src/index.ts claims:check",
     "video:script": "tsx apps/cli/src/index.ts video:script",
-    "check:discovery": "tsx apps/cli/src/index.ts check:discovery"
+    "check:discovery": "tsx apps/cli/src/index.ts check:discovery",
+    "check:g": "tsx apps/cli/src/index.ts check:g",
+    "describe": "tsx apps/cli/src/index.ts describe"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
