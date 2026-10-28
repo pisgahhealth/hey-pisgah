@@ -1,0 +1,8 @@
+{
+ "measured_at": "2026-10-28T03:21:27.939Z",
+ "set": "dev",
+ "mode": "measured",
+ "executor": "definition",
+ "measured": false,
+ "reason": "the monitor runs with the adopted version in the agent lane; no monitor log was given"
+}

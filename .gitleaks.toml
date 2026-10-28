@@ -2,4 +2,4 @@
 [extend]
 useDefault = true
 [allowlist]
-paths = ['''\.hey-pisgah/''']
+paths = ['''\.hey-pisgah/''', '''\.next/''']

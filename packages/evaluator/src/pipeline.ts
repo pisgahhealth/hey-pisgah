@@ -69,7 +69,9 @@ export type ValidationReport = {
 };
 
 export type RepairHook = (raw: unknown, issues: string[], attempt: number) => unknown | Promise<unknown>;
-export type PipelineOptions = { base?: WD; cases?: ValidationCase[]; caseFacts?: readonly Facts[]; repair?: RepairHook; r2Effective?: boolean };
+// baseRuns lets a caller that validates many proposals on one base run each base case once.
+export type BaseRuns = Map<string, { run: RunResult; ac: AcReport }>;
+export type PipelineOptions = { base?: WD; cases?: ValidationCase[]; caseFacts?: readonly Facts[]; repair?: RepairHook; r2Effective?: boolean; baseRuns?: BaseRuns };
 
 // Hashes whatever arrived, after a JSON round trip, so a malformed proposal still gets a stable id.
 const rawHash = (raw: unknown): string => hashJson(JSON.parse(JSON.stringify(raw ?? null)) as unknown);
@@ -129,7 +131,8 @@ export async function validateProposal(raw: unknown, opts: PipelineOptions = {})
     const excepted = p.known_exceptions.some((k) => evalCondition(k.condition, facts));
     const scoped = inScope(def, facts);
     const ran = scoped ? def : base;
-    const b = runCase(base, s);
+    const cached = opts.baseRuns?.get(c.file.case_id);
+    const b = cached?.run ?? runCase(base, s);
     const q = runCase(ran, s);
     const rules = expectedRulesHash(s);
     for (const r of [b, q]) {
@@ -140,7 +143,8 @@ export async function validateProposal(raw: unknown, opts: PipelineOptions = {})
     const baseCtx: VersionContext = { status: "adopted", version_hash: baseHash, in_scope: true, fallback_hash: null, adopted_at_min: null };
     const propCtx: VersionContext = { status: "under_validation", version_hash: defHash, in_scope: scoped, fallback_hash: baseHash, adopted_at_min: null };
     const common = { manifest: c.manifest, requirement_version: c.manifest.requirement_version, schedule: s };
-    const ab = runAcceptance({ ...common, run: b, definition: base, version: baseCtx });
+    const ab = cached?.ac ?? runAcceptance({ ...common, run: b, definition: base, version: baseCtx });
+    if (opts.baseRuns && !cached) opts.baseRuns.set(c.file.case_id, { run: b, ac: ab });
     const aq = runAcceptance({ ...common, run: q, definition: ran, version: propCtx });
     const mb = metrics(b), mq = metrics(q);
     if (q.outcome !== "ok") aborted = true;

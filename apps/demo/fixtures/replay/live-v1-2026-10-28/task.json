@@ -1,0 +1,3261 @@
+[
+ {
+  "seq": 1,
+  "record_type": "task.opened",
+  "occurred_at": 480,
+  "recorded_at": 480,
+  "payload": {
+   "budget": {
+    "max_calls": 60,
+    "max_usd": 1
+   },
+   "case_id": "c-agent001",
+   "engine_run_id": "run-f0fc0839",
+   "goal": "Complete the discharge paperwork for this patient.",
+   "owner": "nurse n-a1",
+   "requirement_version": "r1",
+   "run_id": "run-55d8de79",
+   "task_id": "t-f53d4a1a",
+   "workflow_version": 1
+  }
+ },
+ {
+  "seq": 2,
+  "record_type": "acceptance.derived",
+  "occurred_at": 480,
+  "recorded_at": 480,
+  "payload": {
+   "conditions": [
+    {
+     "condition_id": "discharge_summary.draft",
+     "description": "discharge_summary draft prepared, verified and current",
+     "record_id": "rec-63cc390c",
+     "step_id": "st06"
+    },
+    {
+     "condition_id": "discharge_summary.final",
+     "description": "discharge_summary final prepared, verified and current",
+     "record_id": "rec-d722a158",
+     "step_id": "st07"
+    },
+    {
+     "condition_id": "refund_voucher.draft",
+     "description": "refund_voucher draft prepared, verified and current",
+     "record_id": "rec-18fd4e1b",
+     "step_id": "st17a"
+    },
+    {
+     "condition_id": "refund_voucher.final",
+     "description": "refund_voucher final prepared, verified and current",
+     "record_id": "rec-5b9fc130",
+     "step_id": "st17b"
+    }
+   ],
+   "requirement_version": "r1"
+  }
+ },
+ {
+  "seq": 3,
+  "record_type": "tick.started",
+  "occurred_at": 480,
+  "recorded_at": 480,
+  "payload": {
+   "now": 480,
+   "reason": {
+    "kind": "opened"
+   },
+   "tick_id": "k-b6a63a6b"
+  }
+ },
+ {
+  "seq": 4,
+  "record_type": "model.turn",
+  "occurred_at": 480,
+  "recorded_at": 480,
+  "payload": {
+   "cost_usd": 0.004179,
+   "ledger": {
+    "seq": 1,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "a8e55b5a40424cc3aee8d1c76eba043f",
+   "tick_id": "k-b6a63a6b",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_0381a0182c5741d687a943b4",
+     "name": "get_case_state"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 6,
+  "record_type": "model.turn",
+  "occurred_at": 480,
+  "recorded_at": 480,
+  "payload": {
+   "cost_usd": 0.0068845,
+   "ledger": {
+    "seq": 2,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "4a9e7e3e8cc94bc19aa788288ec3e69c",
+   "tick_id": "k-b6a63a6b",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_e310a52ea8e84152b8b7d629",
+     "name": "get_workflow_definition"
+    },
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_bca50e40f6ba4761b6d573ad",
+     "name": "get_ward_requirements"
+    },
+    {
+     "arguments": "{\"record_id\": \"rec-ae07cf7d\"}",
+     "id": "call_211519ecef544a9a8e323bbf",
+     "name": "get_record"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 10,
+  "record_type": "model.turn",
+  "occurred_at": 480,
+  "recorded_at": 480,
+  "payload": {
+   "cost_usd": 0.011339,
+   "ledger": {
+    "seq": 3,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "65e669fd727f4660bb700433b3d491e5",
+   "tick_id": "k-b6a63a6b",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\", \"role\": \"doctor\", \"question\": \"Please record take-home order and clinical discharge when ready so discharge paperwork can proceed.\"}",
+     "id": "call_1c2b7ebbe0454171aec2c869",
+     "name": "ask_staff"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 11,
+  "record_type": "action.intent",
+  "occurred_at": 480,
+  "recorded_at": 480,
+  "payload": {
+   "action_id": "a-52fcece9",
+   "action_kind": "ask_staff",
+   "args": {
+    "case_id": "c-agent001",
+    "question": "Please record take-home order and clinical discharge when ready so discharge paperwork can proceed.",
+    "role": "doctor"
+   },
+   "model_response_id": "65e669fd727f4660bb700433b3d491e5",
+   "tick_id": "k-b6a63a6b",
+   "tool_call_id": "call_1c2b7ebbe0454171aec2c869"
+  }
+ },
+ {
+  "seq": 12,
+  "record_type": "action.written",
+  "occurred_at": 480,
+  "recorded_at": 480,
+  "payload": {
+   "action_id": "a-52fcece9",
+   "written": {
+    "base_version": null,
+    "effect_at": 480,
+    "event_id": "ev-94f416b5",
+    "reconciled": false,
+    "record_id": "rec-c893ec37",
+    "target_record_id": "rec-c893ec37"
+   }
+  }
+ },
+ {
+  "seq": 13,
+  "record_type": "action.completed",
+  "occurred_at": 480,
+  "recorded_at": 480,
+  "payload": {
+   "action_id": "a-52fcece9",
+   "proof": {
+    "model_response_id": "65e669fd727f4660bb700433b3d491e5",
+    "produced_event_ids": [
+     "ev-94f416b5"
+    ],
+    "record_hash": "c2a95c8f88aa364fb04150191068c5a391d195d07cb13f88c8a68695bcb21708",
+    "record_id": "rec-c893ec37",
+    "record_version": 1,
+    "source_refs": [],
+    "tool_call_ids": [
+     "call_1c2b7ebbe0454171aec2c869"
+    ],
+    "verified_at": {
+     "occurred_at": 480,
+     "recorded_at": 480,
+     "wall_at": "2026-10-28T02:38:40.353Z"
+    }
+   }
+  }
+ },
+ {
+  "seq": 15,
+  "record_type": "model.turn",
+  "occurred_at": 480,
+  "recorded_at": 480,
+  "payload": {
+   "cost_usd": 0.01071775,
+   "ledger": {
+    "seq": 4,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "780de2e9ebab4ecfa70e24c56f538cad",
+   "tick_id": "k-b6a63a6b",
+   "tool_calls": [
+    {
+     "arguments": "{\"deadline_simulated_min\": 900}",
+     "id": "call_5b143ee75c414a949fc06043",
+     "name": "wait_until"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 16,
+  "record_type": "wake.registered",
+  "occurred_at": 480,
+  "recorded_at": 480,
+  "payload": {
+   "after": {
+    "minute": 480,
+    "port_writes": 1
+   },
+   "tick_id": "k-b6a63a6b",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": 900,
+    "predicate": {
+     "on": "step.completed"
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 480,
+     "recorded_at": 480,
+     "wall_at": "2026-10-28T02:38:40.373Z"
+    },
+    "registered_by": "model",
+    "wake_id": "w-612c1426"
+   }
+  }
+ },
+ {
+  "seq": 18,
+  "record_type": "wake.registered",
+  "occurred_at": 480,
+  "recorded_at": 480,
+  "payload": {
+   "after": {
+    "minute": 480,
+    "port_writes": 1
+   },
+   "tick_id": "k-b6a63a6b",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "any_of": [
+      {
+       "on": "step.completed",
+       "where": {
+        "step_id": "st05"
+       }
+      },
+      {
+       "on": "step.completed",
+       "where": {
+        "step_id": "st02"
+       }
+      },
+      {
+       "on": "step.completed",
+       "where": {
+        "step_id": "st16"
+       }
+      },
+      {
+       "on": "step.completed",
+       "where": {
+        "step_id": "st13"
+       }
+      }
+     ]
+    },
+    "record_ids": [
+     "rec-63cc390c",
+     "rec-d722a158",
+     "rec-18fd4e1b",
+     "rec-5b9fc130"
+    ],
+    "registered_at": {
+     "occurred_at": 480,
+     "recorded_at": 480,
+     "wall_at": "2026-10-28T02:38:40.386Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-a8db4292"
+   }
+  }
+ },
+ {
+  "seq": 19,
+  "record_type": "wake.registered",
+  "occurred_at": 480,
+  "recorded_at": 480,
+  "payload": {
+   "after": {
+    "minute": 480,
+    "port_writes": 1
+   },
+   "tick_id": "k-b6a63a6b",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "on": "requirements.changed"
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 480,
+     "recorded_at": 480,
+     "wall_at": "2026-10-28T02:38:40.390Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-27511aba"
+   }
+  }
+ },
+ {
+  "seq": 20,
+  "record_type": "task.state_changed",
+  "occurred_at": 480,
+  "recorded_at": 480,
+  "payload": {
+   "from": "running",
+   "reason": "awaiting_recorded_events",
+   "to": "waiting",
+   "unmet": [
+    "discharge_summary.draft",
+    "discharge_summary.final",
+    "refund_voucher.draft",
+    "refund_voucher.final"
+   ]
+  }
+ },
+ {
+  "seq": 21,
+  "record_type": "tick.ended",
+  "occurred_at": 480,
+  "recorded_at": 480,
+  "payload": {
+   "outcome": "control",
+   "tick_id": "k-b6a63a6b"
+  }
+ },
+ {
+  "seq": 22,
+  "record_type": "resumer.cursor",
+  "occurred_at": 480,
+  "recorded_at": 480,
+  "payload": {
+   "now": 480,
+   "world_seq": 2
+  }
+ },
+ {
+  "seq": 23,
+  "record_type": "task.resumed",
+  "occurred_at": 490,
+  "recorded_at": 490,
+  "payload": {
+   "now": 490,
+   "trigger": "ev-795a1d52",
+   "wake_id": "w-612c1426",
+   "world_seq": 3
+  }
+ },
+ {
+  "seq": 24,
+  "record_type": "tick.started",
+  "occurred_at": 490,
+  "recorded_at": 490,
+  "payload": {
+   "now": 490,
+   "reason": {
+    "kind": "resumed",
+    "trigger": "ev-795a1d52",
+    "wake_id": "w-612c1426"
+   },
+   "tick_id": "k-060e1f66"
+  }
+ },
+ {
+  "seq": 25,
+  "record_type": "model.turn",
+  "occurred_at": 490,
+  "recorded_at": 490,
+  "payload": {
+   "cost_usd": 0.004701,
+   "ledger": {
+    "seq": 5,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "6eb331003a3441bbbd4a2f0101544d26",
+   "tick_id": "k-060e1f66",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_dce5f60c781f4e5cbeafc2e5",
+     "name": "get_case_state"
+    },
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_9eb37b8613404203a9d21546",
+     "name": "get_ward_requirements"
+    },
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_799db1d144ad43efa134976d",
+     "name": "get_workflow_definition"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 29,
+  "record_type": "model.turn",
+  "occurred_at": 490,
+  "recorded_at": 490,
+  "payload": {
+   "cost_usd": 0.01085675,
+   "ledger": {
+    "seq": 6,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "cf00517b18ae4baab78e43326927ca72",
+   "tick_id": "k-060e1f66",
+   "tool_calls": [
+    {
+     "arguments": "{\"deadline_simulated_min\": 600, \"step_id\": \"st05\"}",
+     "id": "call_80c1e80ffd374b55bef8d8df",
+     "name": "wait_until"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 30,
+  "record_type": "wake.registered",
+  "occurred_at": 490,
+  "recorded_at": 490,
+  "payload": {
+   "after": {
+    "minute": 490,
+    "port_writes": 1
+   },
+   "tick_id": "k-060e1f66",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": 600,
+    "predicate": {
+     "on": "step.completed",
+     "where": {
+      "step_id": "st05"
+     }
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 490,
+     "recorded_at": 490,
+     "wall_at": "2026-10-28T02:38:40.777Z"
+    },
+    "registered_by": "model",
+    "wake_id": "w-3b9c8322"
+   }
+  }
+ },
+ {
+  "seq": 32,
+  "record_type": "wake.registered",
+  "occurred_at": 490,
+  "recorded_at": 490,
+  "payload": {
+   "after": {
+    "minute": 490,
+    "port_writes": 1
+   },
+   "tick_id": "k-060e1f66",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "any_of": [
+      {
+       "on": "step.completed",
+       "where": {
+        "step_id": "st05"
+       }
+      },
+      {
+       "on": "step.completed",
+       "where": {
+        "step_id": "st16"
+       }
+      },
+      {
+       "on": "step.completed",
+       "where": {
+        "step_id": "st13"
+       }
+      }
+     ]
+    },
+    "record_ids": [
+     "rec-63cc390c",
+     "rec-d722a158",
+     "rec-18fd4e1b",
+     "rec-5b9fc130"
+    ],
+    "registered_at": {
+     "occurred_at": 490,
+     "recorded_at": 490,
+     "wall_at": "2026-10-28T02:38:40.786Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-a51a177a"
+   }
+  }
+ },
+ {
+  "seq": 33,
+  "record_type": "wake.registered",
+  "occurred_at": 490,
+  "recorded_at": 490,
+  "payload": {
+   "after": {
+    "minute": 490,
+    "port_writes": 1
+   },
+   "tick_id": "k-060e1f66",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "on": "requirements.changed"
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 490,
+     "recorded_at": 490,
+     "wall_at": "2026-10-28T02:38:40.790Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-a9a04122"
+   }
+  }
+ },
+ {
+  "seq": 34,
+  "record_type": "task.state_changed",
+  "occurred_at": 490,
+  "recorded_at": 490,
+  "payload": {
+   "from": "running",
+   "reason": "awaiting_recorded_events",
+   "to": "waiting",
+   "unmet": [
+    "discharge_summary.draft",
+    "discharge_summary.final",
+    "refund_voucher.draft",
+    "refund_voucher.final"
+   ]
+  }
+ },
+ {
+  "seq": 35,
+  "record_type": "tick.ended",
+  "occurred_at": 490,
+  "recorded_at": 490,
+  "payload": {
+   "outcome": "control",
+   "tick_id": "k-060e1f66"
+  }
+ },
+ {
+  "seq": 36,
+  "record_type": "resumer.cursor",
+  "occurred_at": 520,
+  "recorded_at": 520,
+  "payload": {
+   "now": 520,
+   "world_seq": 4
+  }
+ },
+ {
+  "seq": 37,
+  "record_type": "resumer.cursor",
+  "occurred_at": 535,
+  "recorded_at": 535,
+  "payload": {
+   "now": 535,
+   "world_seq": 5
+  }
+ },
+ {
+  "seq": 38,
+  "record_type": "resumer.cursor",
+  "occurred_at": 540,
+  "recorded_at": 540,
+  "payload": {
+   "now": 540,
+   "world_seq": 6
+  }
+ },
+ {
+  "seq": 39,
+  "record_type": "task.resumed",
+  "occurred_at": 600,
+  "recorded_at": 600,
+  "payload": {
+   "now": 600,
+   "trigger": "ev-09e6c07a",
+   "wake_id": "w-3b9c8322",
+   "world_seq": 7
+  }
+ },
+ {
+  "seq": 40,
+  "record_type": "tick.started",
+  "occurred_at": 600,
+  "recorded_at": 600,
+  "payload": {
+   "now": 600,
+   "reason": {
+    "kind": "resumed",
+    "trigger": "ev-09e6c07a",
+    "wake_id": "w-3b9c8322"
+   },
+   "tick_id": "k-5a9f7db8"
+  }
+ },
+ {
+  "seq": 41,
+  "record_type": "model.turn",
+  "occurred_at": 600,
+  "recorded_at": 600,
+  "payload": {
+   "cost_usd": 0.00432175,
+   "ledger": {
+    "seq": 7,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "0fd474885937485281dfc5eec755db53",
+   "tick_id": "k-5a9f7db8",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_b3e79a26a38e461cbdd39775",
+     "name": "get_case_state"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 43,
+  "record_type": "model.turn",
+  "occurred_at": 600,
+  "recorded_at": 600,
+  "payload": {
+   "cost_usd": 0.00713075,
+   "ledger": {
+    "seq": 8,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "0e7c1a50b0cc4781a6213b2537527504",
+   "tick_id": "k-5a9f7db8",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_77e6ec9013dd48b4b95e87b4",
+     "name": "get_ward_requirements"
+    },
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_ea9fdacd60ef482e97e7677d",
+     "name": "get_workflow_definition"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 46,
+  "record_type": "model.turn",
+  "occurred_at": 600,
+  "recorded_at": 600,
+  "payload": {
+   "cost_usd": 0.01062025,
+   "ledger": {
+    "seq": 9,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "5bc8caf64383481ebfd3aa9847050f2d",
+   "tick_id": "k-5a9f7db8",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\", \"document_id\": \"discharge_summary\", \"stage\": \"draft\"}",
+     "id": "call_39c2333cebdb48ea9702957b",
+     "name": "prepare_document"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 47,
+  "record_type": "action.intent",
+  "occurred_at": 600,
+  "recorded_at": 600,
+  "payload": {
+   "action_id": "a-99a97ce5",
+   "action_kind": "prepare_document",
+   "args": {
+    "case_id": "c-agent001",
+    "document_id": "discharge_summary",
+    "stage": "draft"
+   },
+   "model_response_id": "5bc8caf64383481ebfd3aa9847050f2d",
+   "tick_id": "k-5a9f7db8",
+   "tool_call_id": "call_39c2333cebdb48ea9702957b"
+  }
+ },
+ {
+  "seq": 48,
+  "record_type": "action.written",
+  "occurred_at": 600,
+  "recorded_at": 600,
+  "payload": {
+   "action_id": "a-99a97ce5",
+   "written": {
+    "base_version": null,
+    "effect_at": 601,
+    "event_id": "ev-d51e93b8",
+    "reconciled": false,
+    "record_id": "rec-63cc390c",
+    "target_record_id": "rec-63cc390c"
+   }
+  }
+ },
+ {
+  "seq": 50,
+  "record_type": "model.turn",
+  "occurred_at": 600,
+  "recorded_at": 600,
+  "payload": {
+   "cost_usd": 0.010282,
+   "ledger": {
+    "seq": 10,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "0dd548f9cf414e03898ce7775a229ef4",
+   "tick_id": "k-5a9f7db8",
+   "tool_calls": [
+    {
+     "arguments": "{\"deadline_simulated_min\": 620}",
+     "id": "call_f3f2fa705210428a99ec2756",
+     "name": "wait_until"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 51,
+  "record_type": "wake.registered",
+  "occurred_at": 600,
+  "recorded_at": 600,
+  "payload": {
+   "after": {
+    "minute": 600,
+    "port_writes": 2
+   },
+   "tick_id": "k-5a9f7db8",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": 620,
+    "predicate": {
+     "on": "step.completed"
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 600,
+     "recorded_at": 600,
+     "wall_at": "2026-10-28T02:38:42.078Z"
+    },
+    "registered_by": "model",
+    "wake_id": "w-05f6797b"
+   }
+  }
+ },
+ {
+  "seq": 53,
+  "record_type": "wake.registered",
+  "occurred_at": 600,
+  "recorded_at": 600,
+  "payload": {
+   "after": {
+    "minute": 600,
+    "port_writes": 2
+   },
+   "tick_id": "k-5a9f7db8",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "any_of": [
+      {
+       "on": "step.completed",
+       "where": {
+        "step_id": "st06"
+       }
+      },
+      {
+       "on": "step.completed",
+       "where": {
+        "step_id": "st16"
+       }
+      },
+      {
+       "on": "step.completed",
+       "where": {
+        "step_id": "st13"
+       }
+      }
+     ]
+    },
+    "record_ids": [
+     "rec-63cc390c",
+     "rec-d722a158",
+     "rec-18fd4e1b",
+     "rec-5b9fc130"
+    ],
+    "registered_at": {
+     "occurred_at": 600,
+     "recorded_at": 600,
+     "wall_at": "2026-10-28T02:38:42.087Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-643ac10a"
+   }
+  }
+ },
+ {
+  "seq": 54,
+  "record_type": "wake.registered",
+  "occurred_at": 600,
+  "recorded_at": 600,
+  "payload": {
+   "after": {
+    "minute": 600,
+    "port_writes": 2
+   },
+   "tick_id": "k-5a9f7db8",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "on": "requirements.changed"
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 600,
+     "recorded_at": 600,
+     "wall_at": "2026-10-28T02:38:42.091Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-5c8bd09c"
+   }
+  }
+ },
+ {
+  "seq": 55,
+  "record_type": "task.state_changed",
+  "occurred_at": 600,
+  "recorded_at": 600,
+  "payload": {
+   "from": "running",
+   "reason": "awaiting_recorded_events",
+   "to": "waiting",
+   "unmet": [
+    "discharge_summary.draft",
+    "discharge_summary.final",
+    "refund_voucher.draft",
+    "refund_voucher.final"
+   ]
+  }
+ },
+ {
+  "seq": 56,
+  "record_type": "tick.ended",
+  "occurred_at": 600,
+  "recorded_at": 600,
+  "payload": {
+   "outcome": "control",
+   "tick_id": "k-5a9f7db8"
+  }
+ },
+ {
+  "seq": 57,
+  "record_type": "resumer.cursor",
+  "occurred_at": 600,
+  "recorded_at": 600,
+  "payload": {
+   "now": 600,
+   "world_seq": 8
+  }
+ },
+ {
+  "seq": 58,
+  "record_type": "resumer.cursor",
+  "occurred_at": 601,
+  "recorded_at": 601,
+  "payload": {
+   "now": 601,
+   "world_seq": 9
+  }
+ },
+ {
+  "seq": 59,
+  "record_type": "task.resumed",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "now": 606,
+   "trigger": "ev-4b326c0f",
+   "wake_id": "w-05f6797b",
+   "world_seq": 10
+  }
+ },
+ {
+  "seq": 60,
+  "record_type": "action.completed",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "action_id": "a-99a97ce5",
+   "proof": {
+    "model_response_id": "5bc8caf64383481ebfd3aa9847050f2d",
+    "produced_event_ids": [
+     "ev-4cfe1ef1",
+     "ev-4b326c0f"
+    ],
+    "record_hash": "94388f1e69039db995f772fdffcf948ec9a168d8d57d57c9e42591ab64f4ac33",
+    "record_id": "rec-63cc390c",
+    "record_version": 1,
+    "source_refs": [
+     {
+      "record_id": "rec-760692f0",
+      "version": 1
+     },
+     {
+      "record_id": "rec-e769c244",
+      "version": 1
+     },
+     {
+      "record_id": "rec-c3c7d416",
+      "version": 1
+     }
+    ],
+    "tool_call_ids": [
+     "call_39c2333cebdb48ea9702957b"
+    ],
+    "verified_at": {
+     "occurred_at": 606,
+     "recorded_at": 606,
+     "wall_at": "2026-10-28T02:38:42.749Z"
+    }
+   }
+  }
+ },
+ {
+  "seq": 61,
+  "record_type": "tick.started",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "now": 606,
+   "reason": {
+    "kind": "resumed",
+    "trigger": "ev-4b326c0f",
+    "wake_id": "w-05f6797b"
+   },
+   "tick_id": "k-35f1c959"
+  }
+ },
+ {
+  "seq": 62,
+  "record_type": "model.turn",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "cost_usd": 0.004697,
+   "ledger": {
+    "seq": 11,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "4437d9a4ca3743fab67f4c3f1d0fde60",
+   "tick_id": "k-35f1c959",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_d106316edf1e45aebb19d3aa",
+     "name": "get_case_state"
+    },
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_5f5c2109397f41e7acfe12f9",
+     "name": "get_ward_requirements"
+    },
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_91f3cd2089654d3f9cf26df5",
+     "name": "get_workflow_definition"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 66,
+  "record_type": "model.turn",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "cost_usd": 0.01172725,
+   "ledger": {
+    "seq": 12,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "9c79d54fadd54138bd4f704db56d641d",
+   "tick_id": "k-35f1c959",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\", \"document_id\": \"discharge_summary\", \"stage\": \"final\"}",
+     "id": "call_b6fbd157eeff4b5a813b21bb",
+     "name": "prepare_document"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 67,
+  "record_type": "action.intent",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "action_id": "a-d9b5ae01",
+   "action_kind": "prepare_document",
+   "args": {
+    "case_id": "c-agent001",
+    "document_id": "discharge_summary",
+    "stage": "final"
+   },
+   "model_response_id": "9c79d54fadd54138bd4f704db56d641d",
+   "tick_id": "k-35f1c959",
+   "tool_call_id": "call_b6fbd157eeff4b5a813b21bb"
+  }
+ },
+ {
+  "seq": 68,
+  "record_type": "action.written",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "action_id": "a-d9b5ae01",
+   "written": {
+    "base_version": null,
+    "effect_at": 607,
+    "event_id": "ev-64c8a82a",
+    "reconciled": false,
+    "record_id": "rec-d722a158",
+    "target_record_id": "rec-d722a158"
+   }
+  }
+ },
+ {
+  "seq": 70,
+  "record_type": "model.turn",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "cost_usd": 0.010896,
+   "ledger": {
+    "seq": 13,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "c32b43b1ace24fe3a2e89cecbf919479",
+   "tick_id": "k-35f1c959",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\", \"role\": \"accounts_clerk\", \"question\": \"Payment is unpaid for self_pay case. Please record payment/waiver/on-account so financial clearance can proceed.\"}",
+     "id": "call_14db2ea7266742999dc36af4",
+     "name": "ask_staff"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 71,
+  "record_type": "action.intent",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "action_id": "a-89ee852a",
+   "action_kind": "ask_staff",
+   "args": {
+    "case_id": "c-agent001",
+    "question": "Payment is unpaid for self_pay case. Please record payment/waiver/on-account so financial clearance can proceed.",
+    "role": "accounts_clerk"
+   },
+   "model_response_id": "c32b43b1ace24fe3a2e89cecbf919479",
+   "tick_id": "k-35f1c959",
+   "tool_call_id": "call_14db2ea7266742999dc36af4"
+  }
+ },
+ {
+  "seq": 72,
+  "record_type": "action.written",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "action_id": "a-89ee852a",
+   "written": {
+    "base_version": null,
+    "effect_at": 606,
+    "event_id": "ev-70fba611",
+    "reconciled": false,
+    "record_id": "rec-59ce1e6c",
+    "target_record_id": "rec-59ce1e6c"
+   }
+  }
+ },
+ {
+  "seq": 73,
+  "record_type": "action.completed",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "action_id": "a-89ee852a",
+   "proof": {
+    "model_response_id": "c32b43b1ace24fe3a2e89cecbf919479",
+    "produced_event_ids": [
+     "ev-70fba611"
+    ],
+    "record_hash": "d0c8f03cbdb5e38d4c68fc661d8faa6efd9d96f5f10d1c1cddf456a30843d9d7",
+    "record_id": "rec-59ce1e6c",
+    "record_version": 1,
+    "source_refs": [],
+    "tool_call_ids": [
+     "call_14db2ea7266742999dc36af4"
+    ],
+    "verified_at": {
+     "occurred_at": 606,
+     "recorded_at": 606,
+     "wall_at": "2026-10-28T02:38:42.848Z"
+    }
+   }
+  }
+ },
+ {
+  "seq": 75,
+  "record_type": "model.turn",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "cost_usd": 0.01060025,
+   "ledger": {
+    "seq": 14,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "21d264dd43fb4bc794ce5fe486762a10",
+   "tick_id": "k-35f1c959",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_f9ec37410c8241309e47c34e",
+     "name": "get_case_state"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 77,
+  "record_type": "model.turn",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "cost_usd": 0.01336875,
+   "ledger": {
+    "seq": 15,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "e56e2a146df34a4b9286067dc5d6399c",
+   "tick_id": "k-35f1c959",
+   "tool_calls": [
+    {
+     "arguments": "{\"deadline_simulated_min\": 700}",
+     "id": "call_47291091202b423d99419e9d",
+     "name": "wait_until"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 78,
+  "record_type": "wake.registered",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "after": {
+    "minute": 606,
+    "port_writes": 4
+   },
+   "tick_id": "k-35f1c959",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": 700,
+    "predicate": {
+     "on": "step.completed"
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 606,
+     "recorded_at": 606,
+     "wall_at": "2026-10-28T02:38:42.893Z"
+    },
+    "registered_by": "model",
+    "wake_id": "w-bac9b0b9"
+   }
+  }
+ },
+ {
+  "seq": 80,
+  "record_type": "wake.registered",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "after": {
+    "minute": 606,
+    "port_writes": 4
+   },
+   "tick_id": "k-35f1c959",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "any_of": [
+      {
+       "on": "step.completed",
+       "where": {
+        "step_id": "st07"
+       }
+      },
+      {
+       "on": "step.completed",
+       "where": {
+        "step_id": "st16"
+       }
+      },
+      {
+       "on": "step.completed",
+       "where": {
+        "step_id": "st13"
+       }
+      }
+     ]
+    },
+    "record_ids": [
+     "rec-d722a158",
+     "rec-18fd4e1b",
+     "rec-5b9fc130"
+    ],
+    "registered_at": {
+     "occurred_at": 606,
+     "recorded_at": 606,
+     "wall_at": "2026-10-28T02:38:42.903Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-9dc4f5a1"
+   }
+  }
+ },
+ {
+  "seq": 81,
+  "record_type": "wake.registered",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "after": {
+    "minute": 606,
+    "port_writes": 4
+   },
+   "tick_id": "k-35f1c959",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "on": "requirements.changed"
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 606,
+     "recorded_at": 606,
+     "wall_at": "2026-10-28T02:38:42.907Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-76725a92"
+   }
+  }
+ },
+ {
+  "seq": 82,
+  "record_type": "task.state_changed",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "from": "running",
+   "reason": "awaiting_recorded_events",
+   "to": "waiting",
+   "unmet": [
+    "discharge_summary.final",
+    "refund_voucher.draft",
+    "refund_voucher.final"
+   ]
+  }
+ },
+ {
+  "seq": 83,
+  "record_type": "tick.ended",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "outcome": "control",
+   "tick_id": "k-35f1c959"
+  }
+ },
+ {
+  "seq": 84,
+  "record_type": "resumer.cursor",
+  "occurred_at": 606,
+  "recorded_at": 606,
+  "payload": {
+   "now": 606,
+   "world_seq": 12
+  }
+ },
+ {
+  "seq": 85,
+  "record_type": "resumer.cursor",
+  "occurred_at": 607,
+  "recorded_at": 607,
+  "payload": {
+   "now": 607,
+   "world_seq": 13
+  }
+ },
+ {
+  "seq": 86,
+  "record_type": "task.resumed",
+  "occurred_at": 608,
+  "recorded_at": 608,
+  "payload": {
+   "now": 608,
+   "trigger": "ev-c8d3f53b",
+   "wake_id": "w-9dc4f5a1",
+   "world_seq": 14
+  }
+ },
+ {
+  "seq": 87,
+  "record_type": "action.completed",
+  "occurred_at": 608,
+  "recorded_at": 608,
+  "payload": {
+   "action_id": "a-d9b5ae01",
+   "proof": {
+    "model_response_id": "9c79d54fadd54138bd4f704db56d641d",
+    "produced_event_ids": [
+     "ev-ec7a401b",
+     "ev-c8d3f53b"
+    ],
+    "record_hash": "20480ed1e2b67f2d8ef7d3eaa48062790b87ab2bf4b9242f142079e114c5a924",
+    "record_id": "rec-d722a158",
+    "record_version": 1,
+    "source_refs": [
+     {
+      "record_id": "rec-760692f0",
+      "version": 1
+     },
+     {
+      "record_id": "rec-52de3e4e",
+      "version": 1
+     },
+     {
+      "record_id": "rec-e769c244",
+      "version": 1
+     },
+     {
+      "record_id": "rec-c3c7d416",
+      "version": 1
+     }
+    ],
+    "tool_call_ids": [
+     "call_b6fbd157eeff4b5a813b21bb"
+    ],
+    "verified_at": {
+     "occurred_at": 608,
+     "recorded_at": 608,
+     "wall_at": "2026-10-28T02:38:43.503Z"
+    }
+   }
+  }
+ },
+ {
+  "seq": 88,
+  "record_type": "tick.started",
+  "occurred_at": 608,
+  "recorded_at": 608,
+  "payload": {
+   "now": 608,
+   "reason": {
+    "kind": "resumed",
+    "trigger": "ev-c8d3f53b",
+    "wake_id": "w-9dc4f5a1"
+   },
+   "tick_id": "k-0940722a"
+  }
+ },
+ {
+  "seq": 89,
+  "record_type": "model.turn",
+  "occurred_at": 608,
+  "recorded_at": 608,
+  "payload": {
+   "cost_usd": 0.00432875,
+   "ledger": {
+    "seq": 16,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "e402e8f9c37f4544b93ddf71aac0a548",
+   "tick_id": "k-0940722a",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_545fcdf6ac26470f863aca75",
+     "name": "get_case_state"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 91,
+  "record_type": "model.turn",
+  "occurred_at": 608,
+  "recorded_at": 608,
+  "payload": {
+   "cost_usd": 0.0079995,
+   "ledger": {
+    "seq": 17,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "319258d1bf944d779cedc9adcf1e1d1a",
+   "tick_id": "k-0940722a",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_626285ec291348e69108a512",
+     "name": "get_ward_requirements"
+    },
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_31ef8cf05a95469597ebd1b0",
+     "name": "get_workflow_definition"
+    },
+    {
+     "arguments": "{\"record_id\": \"rec-74972511\"}",
+     "id": "call_fdc063e0278644fc9111042e",
+     "name": "get_record"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 95,
+  "record_type": "model.turn",
+  "occurred_at": 608,
+  "recorded_at": 608,
+  "payload": {
+   "cost_usd": 0.01274825,
+   "ledger": {
+    "seq": 18,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "16567b3a11c242b5b9b071b52858e5f6",
+   "tick_id": "k-0940722a",
+   "tool_calls": [
+    {
+     "arguments": "{\"deadline_simulated_min\": 700}",
+     "id": "call_ffe9fe5c109940e9be268767",
+     "name": "wait_until"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 96,
+  "record_type": "wake.registered",
+  "occurred_at": 608,
+  "recorded_at": 608,
+  "payload": {
+   "after": {
+    "minute": 608,
+    "port_writes": 4
+   },
+   "tick_id": "k-0940722a",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": 700,
+    "predicate": {
+     "on": "step.completed"
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 608,
+     "recorded_at": 608,
+     "wall_at": "2026-10-28T02:38:43.562Z"
+    },
+    "registered_by": "model",
+    "wake_id": "w-46daaa71"
+   }
+  }
+ },
+ {
+  "seq": 98,
+  "record_type": "wake.registered",
+  "occurred_at": 608,
+  "recorded_at": 608,
+  "payload": {
+   "after": {
+    "minute": 608,
+    "port_writes": 4
+   },
+   "tick_id": "k-0940722a",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "any_of": [
+      {
+       "on": "step.completed",
+       "where": {
+        "step_id": "st16"
+       }
+      },
+      {
+       "on": "step.completed",
+       "where": {
+        "step_id": "st13"
+       }
+      }
+     ]
+    },
+    "record_ids": [
+     "rec-18fd4e1b",
+     "rec-5b9fc130"
+    ],
+    "registered_at": {
+     "occurred_at": 608,
+     "recorded_at": 608,
+     "wall_at": "2026-10-28T02:38:43.571Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-7c26ba60"
+   }
+  }
+ },
+ {
+  "seq": 99,
+  "record_type": "wake.registered",
+  "occurred_at": 608,
+  "recorded_at": 608,
+  "payload": {
+   "after": {
+    "minute": 608,
+    "port_writes": 4
+   },
+   "tick_id": "k-0940722a",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "on": "requirements.changed"
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 608,
+     "recorded_at": 608,
+     "wall_at": "2026-10-28T02:38:43.575Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-8e839e2e"
+   }
+  }
+ },
+ {
+  "seq": 100,
+  "record_type": "task.state_changed",
+  "occurred_at": 608,
+  "recorded_at": 608,
+  "payload": {
+   "from": "running",
+   "reason": "awaiting_recorded_events",
+   "to": "waiting",
+   "unmet": [
+    "refund_voucher.draft",
+    "refund_voucher.final"
+   ]
+  }
+ },
+ {
+  "seq": 101,
+  "record_type": "tick.ended",
+  "occurred_at": 608,
+  "recorded_at": 608,
+  "payload": {
+   "outcome": "control",
+   "tick_id": "k-0940722a"
+  }
+ },
+ {
+  "seq": 102,
+  "record_type": "resumer.cursor",
+  "occurred_at": 610,
+  "recorded_at": 610,
+  "payload": {
+   "now": 610,
+   "world_seq": 15
+  }
+ },
+ {
+  "seq": 103,
+  "record_type": "task.resumed",
+  "occurred_at": 640,
+  "recorded_at": 640,
+  "payload": {
+   "now": 640,
+   "trigger": "ev-39eb73b9",
+   "wake_id": "w-46daaa71",
+   "world_seq": 16
+  }
+ },
+ {
+  "seq": 104,
+  "record_type": "tick.started",
+  "occurred_at": 640,
+  "recorded_at": 640,
+  "payload": {
+   "now": 640,
+   "reason": {
+    "kind": "resumed",
+    "trigger": "ev-39eb73b9",
+    "wake_id": "w-46daaa71"
+   },
+   "tick_id": "k-4f218358"
+  }
+ },
+ {
+  "seq": 105,
+  "record_type": "model.turn",
+  "occurred_at": 640,
+  "recorded_at": 640,
+  "payload": {
+   "cost_usd": 0.0043425,
+   "ledger": {
+    "seq": 19,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "7633925460044394b6e40077b73cf0e6",
+   "tick_id": "k-4f218358",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_8a93d44530a04cbd8bf0b344",
+     "name": "get_case_state"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 107,
+  "record_type": "model.turn",
+  "occurred_at": 640,
+  "recorded_at": 640,
+  "payload": {
+   "cost_usd": 0.00696225,
+   "ledger": {
+    "seq": 20,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "7bc1420b2b6249cebcd8945557f3fe5d",
+   "tick_id": "k-4f218358",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_f8a7b79420e24458af588d30",
+     "name": "get_ward_requirements"
+    },
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_3a4893b00684470f8e8cbffe",
+     "name": "get_workflow_definition"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 110,
+  "record_type": "model.turn",
+  "occurred_at": 640,
+  "recorded_at": 640,
+  "payload": {
+   "cost_usd": 0.01227825,
+   "ledger": {
+    "seq": 21,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "a9437c098f0a4f0dae9262c9bf816fd6",
+   "tick_id": "k-4f218358",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\", \"version\": 1, \"requirement_version\": \"r1\", \"explanation\": \"Ward r1 requires refund_voucher for this case unconditionally, but workflow v1 gates refund_voucher draft (st17a) after record_departure st16 via soft edge e07 and trigger after st16. This prevents completing required discharge paperwork before departure, contradicting ward requirement that refund_voucher be issued as part of discharge.\", \"evidence\": [\"ev-0241c69d\", \"ev-8c0ecdd4\", \"ev-0aeb3c78\"]}",
+     "id": "call_12ebbb59224e4fb8ae969350",
+     "name": "raise_workflow_conflict"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 111,
+  "record_type": "action.intent",
+  "occurred_at": 640,
+  "recorded_at": 640,
+  "payload": {
+   "action_id": "a-4f3252af",
+   "action_kind": "raise_workflow_conflict",
+   "args": {
+    "case_id": "c-agent001",
+    "evidence": [
+     "ev-0241c69d",
+     "ev-8c0ecdd4",
+     "ev-0aeb3c78"
+    ],
+    "explanation": "Ward r1 requires refund_voucher for this case unconditionally, but workflow v1 gates refund_voucher draft (st17a) after record_departure st16 via soft edge e07 and trigger after st16. This prevents completing required discharge paperwork before departure, contradicting ward requirement that refund_voucher be issued as part of discharge.",
+    "requirement_version": "r1",
+    "version": 1
+   },
+   "model_response_id": "a9437c098f0a4f0dae9262c9bf816fd6",
+   "tick_id": "k-4f218358",
+   "tool_call_id": "call_12ebbb59224e4fb8ae969350"
+  }
+ },
+ {
+  "seq": 112,
+  "record_type": "action.written",
+  "occurred_at": 640,
+  "recorded_at": 640,
+  "payload": {
+   "action_id": "a-4f3252af",
+   "written": {
+    "base_version": null,
+    "effect_at": 640,
+    "event_id": "ev-4cd5e5b3",
+    "reconciled": false,
+    "record_id": "rec-73699b82",
+    "target_record_id": "rec-73699b82"
+   }
+  }
+ },
+ {
+  "seq": 113,
+  "record_type": "action.completed",
+  "occurred_at": 640,
+  "recorded_at": 640,
+  "payload": {
+   "action_id": "a-4f3252af",
+   "proof": {
+    "model_response_id": "a9437c098f0a4f0dae9262c9bf816fd6",
+    "produced_event_ids": [
+     "ev-4cd5e5b3"
+    ],
+    "record_hash": "f36872fe05d3b3dc93614586dbbc83db23c89219a2b55048ed5231a872c4bb83",
+    "record_id": "rec-73699b82",
+    "record_version": 1,
+    "source_refs": [],
+    "tool_call_ids": [
+     "call_12ebbb59224e4fb8ae969350"
+    ],
+    "verified_at": {
+     "occurred_at": 640,
+     "recorded_at": 640,
+     "wall_at": "2026-10-28T02:38:44.314Z"
+    }
+   }
+  }
+ },
+ {
+  "seq": 115,
+  "record_type": "model.turn",
+  "occurred_at": 640,
+  "recorded_at": 640,
+  "payload": {
+   "cost_usd": 0.0110235,
+   "ledger": {
+    "seq": 22,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "08c7049ac4c947c787e15e3c0767a824",
+   "tick_id": "k-4f218358",
+   "tool_calls": [
+    {
+     "arguments": "{\"record_id\": \"rec-74972511\"}",
+     "id": "call_78c77a8f86f14a40a0e11c9b",
+     "name": "get_record"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 117,
+  "record_type": "model.turn",
+  "occurred_at": 640,
+  "recorded_at": 640,
+  "payload": {
+   "cost_usd": 0.011228,
+   "ledger": {
+    "seq": 23,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "2c38aae05c62497480526e886b9f523b",
+   "tick_id": "k-4f218358",
+   "tool_calls": [
+    {
+     "arguments": "{\"deadline_simulated_min\": 900}",
+     "id": "call_90e740e75cda43828c4cf752",
+     "name": "wait_until"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 118,
+  "record_type": "wake.registered",
+  "occurred_at": 640,
+  "recorded_at": 640,
+  "payload": {
+   "after": {
+    "minute": 640,
+    "port_writes": 5
+   },
+   "tick_id": "k-4f218358",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": 900,
+    "predicate": {
+     "on": "step.completed"
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 640,
+     "recorded_at": 640,
+     "wall_at": "2026-10-28T02:38:44.352Z"
+    },
+    "registered_by": "model",
+    "wake_id": "w-2329bae4"
+   }
+  }
+ },
+ {
+  "seq": 120,
+  "record_type": "wake.registered",
+  "occurred_at": 640,
+  "recorded_at": 640,
+  "payload": {
+   "after": {
+    "minute": 640,
+    "port_writes": 5
+   },
+   "tick_id": "k-4f218358",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "any_of": [
+      {
+       "on": "step.completed",
+       "where": {
+        "step_id": "st16"
+       }
+      },
+      {
+       "on": "step.completed",
+       "where": {
+        "step_id": "st13"
+       }
+      }
+     ]
+    },
+    "record_ids": [
+     "rec-18fd4e1b",
+     "rec-5b9fc130"
+    ],
+    "registered_at": {
+     "occurred_at": 640,
+     "recorded_at": 640,
+     "wall_at": "2026-10-28T02:38:44.361Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-6b9bd3fc"
+   }
+  }
+ },
+ {
+  "seq": 121,
+  "record_type": "wake.registered",
+  "occurred_at": 640,
+  "recorded_at": 640,
+  "payload": {
+   "after": {
+    "minute": 640,
+    "port_writes": 5
+   },
+   "tick_id": "k-4f218358",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "on": "requirements.changed"
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 640,
+     "recorded_at": 640,
+     "wall_at": "2026-10-28T02:38:44.365Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-93aeb9e3"
+   }
+  }
+ },
+ {
+  "seq": 122,
+  "record_type": "task.state_changed",
+  "occurred_at": 640,
+  "recorded_at": 640,
+  "payload": {
+   "from": "running",
+   "reason": "awaiting_recorded_events",
+   "to": "waiting",
+   "unmet": [
+    "refund_voucher.draft",
+    "refund_voucher.final"
+   ]
+  }
+ },
+ {
+  "seq": 123,
+  "record_type": "tick.ended",
+  "occurred_at": 640,
+  "recorded_at": 640,
+  "payload": {
+   "outcome": "control",
+   "tick_id": "k-4f218358"
+  }
+ },
+ {
+  "seq": 124,
+  "record_type": "resumer.cursor",
+  "occurred_at": 640,
+  "recorded_at": 640,
+  "payload": {
+   "now": 640,
+   "world_seq": 17
+  }
+ },
+ {
+  "seq": 125,
+  "record_type": "task.resumed",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "now": 645,
+   "trigger": "ev-f0dcf6f9",
+   "wake_id": "w-2329bae4",
+   "world_seq": 18
+  }
+ },
+ {
+  "seq": 126,
+  "record_type": "tick.started",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "now": 645,
+   "reason": {
+    "kind": "resumed",
+    "trigger": "ev-f0dcf6f9",
+    "wake_id": "w-2329bae4"
+   },
+   "tick_id": "k-6dfb0c19"
+  }
+ },
+ {
+  "seq": 127,
+  "record_type": "model.turn",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "cost_usd": 0.00433325,
+   "ledger": {
+    "seq": 24,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "9039d33cee094ba1ae984d4b517261b9",
+   "tick_id": "k-6dfb0c19",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_b9ca6a826e0d4092b342532c",
+     "name": "get_case_state"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 129,
+  "record_type": "model.turn",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "cost_usd": 0.0076875,
+   "ledger": {
+    "seq": 25,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "c891d80c38e347968ed59e844d991c97",
+   "tick_id": "k-6dfb0c19",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_ecd99e67f55e4b91affb5b1e",
+     "name": "get_workflow_definition"
+    },
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_ea4a278f3038490db0c08e03",
+     "name": "get_ward_requirements"
+    },
+    {
+     "arguments": "{\"record_id\": \"rec-74972511\"}",
+     "id": "call_1648661b5ae14c66b2ba573f",
+     "name": "get_record"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 133,
+  "record_type": "model.turn",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "cost_usd": 0.0120785,
+   "ledger": {
+    "seq": 26,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "d2dae4a592c3458db8308a0c60ebf370",
+   "tick_id": "k-6dfb0c19",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\", \"document_id\": \"refund_voucher\", \"stage\": \"draft\"}",
+     "id": "call_80ab2fe19860469cb1df2747",
+     "name": "prepare_document"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 134,
+  "record_type": "action.intent",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "action_id": "a-5e8787d2",
+   "action_kind": "prepare_document",
+   "args": {
+    "case_id": "c-agent001",
+    "document_id": "refund_voucher",
+    "stage": "draft"
+   },
+   "model_response_id": "d2dae4a592c3458db8308a0c60ebf370",
+   "tick_id": "k-6dfb0c19",
+   "tool_call_id": "call_80ab2fe19860469cb1df2747"
+  }
+ },
+ {
+  "seq": 135,
+  "record_type": "action.refused",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "action_id": "a-5e8787d2",
+   "detail": {
+    "waiting_for": [
+     {
+      "edge_id": "e07",
+      "kind": "soft_edge",
+      "step_id": "st16",
+      "when": null
+     },
+     {
+      "edge_id": null,
+      "kind": "trigger",
+      "step_id": null,
+      "when": {
+       "after": {
+        "step": "st16"
+       }
+      }
+     }
+    ]
+   },
+   "reason": "prerequisite_unmet"
+  }
+ },
+ {
+  "seq": 137,
+  "record_type": "model.turn",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "cost_usd": 0.01252125,
+   "ledger": {
+    "seq": 27,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "88efea91a11145bf8279ccab92e144c1",
+   "tick_id": "k-6dfb0c19",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\", \"role\": \"nurse\", \"question\": \"Discharge summary is ready for check and handover; financial clearance is complete. Please check, hand over documents, and record departure so final paperwork can complete.\"}",
+     "id": "call_63b7b5ea33bd4e3c9d2cbb36",
+     "name": "ask_staff"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 138,
+  "record_type": "action.intent",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "action_id": "a-4fbb2cd3",
+   "action_kind": "ask_staff",
+   "args": {
+    "case_id": "c-agent001",
+    "question": "Discharge summary is ready for check and handover; financial clearance is complete. Please check, hand over documents, and record departure so final paperwork can complete.",
+    "role": "nurse"
+   },
+   "model_response_id": "88efea91a11145bf8279ccab92e144c1",
+   "tick_id": "k-6dfb0c19",
+   "tool_call_id": "call_63b7b5ea33bd4e3c9d2cbb36"
+  }
+ },
+ {
+  "seq": 139,
+  "record_type": "action.written",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "action_id": "a-4fbb2cd3",
+   "written": {
+    "base_version": null,
+    "effect_at": 645,
+    "event_id": "ev-45a24655",
+    "reconciled": false,
+    "record_id": "rec-3e50f828",
+    "target_record_id": "rec-3e50f828"
+   }
+  }
+ },
+ {
+  "seq": 140,
+  "record_type": "action.completed",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "action_id": "a-4fbb2cd3",
+   "proof": {
+    "model_response_id": "88efea91a11145bf8279ccab92e144c1",
+    "produced_event_ids": [
+     "ev-45a24655"
+    ],
+    "record_hash": "243a556f0bed17c6905b06db5f82eea7f5082ef8a716ea820dfba3715da8d6d0",
+    "record_id": "rec-3e50f828",
+    "record_version": 1,
+    "source_refs": [],
+    "tool_call_ids": [
+     "call_63b7b5ea33bd4e3c9d2cbb36"
+    ],
+    "verified_at": {
+     "occurred_at": 645,
+     "recorded_at": 645,
+     "wall_at": "2026-10-28T02:38:44.847Z"
+    }
+   }
+  }
+ },
+ {
+  "seq": 142,
+  "record_type": "model.turn",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "cost_usd": 0.01121375,
+   "ledger": {
+    "seq": 28,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "352e8d4377b04193b1eb7eb16bb59749",
+   "tick_id": "k-6dfb0c19",
+   "tool_calls": [
+    {
+     "arguments": "{\"deadline_simulated_min\": 900, \"event_kind\": \"step.completed\", \"step_id\": \"st16\"}",
+     "id": "call_a81766ba59804b11931e68f4",
+     "name": "wait_until"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 143,
+  "record_type": "wake.registered",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "after": {
+    "minute": 645,
+    "port_writes": 6
+   },
+   "tick_id": "k-6dfb0c19",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": 900,
+    "predicate": {
+     "on": "step.completed",
+     "where": {
+      "step_id": "st16"
+     }
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 645,
+     "recorded_at": 645,
+     "wall_at": "2026-10-28T02:38:44.865Z"
+    },
+    "registered_by": "model",
+    "wake_id": "w-19b690de"
+   }
+  }
+ },
+ {
+  "seq": 145,
+  "record_type": "wake.registered",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "after": {
+    "minute": 645,
+    "port_writes": 6
+   },
+   "tick_id": "k-6dfb0c19",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "on": "step.completed",
+     "where": {
+      "step_id": "st16"
+     }
+    },
+    "record_ids": [
+     "rec-18fd4e1b",
+     "rec-5b9fc130"
+    ],
+    "registered_at": {
+     "occurred_at": 645,
+     "recorded_at": 645,
+     "wall_at": "2026-10-28T02:38:44.878Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-0d1bc25a"
+   }
+  }
+ },
+ {
+  "seq": 146,
+  "record_type": "wake.registered",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "after": {
+    "minute": 645,
+    "port_writes": 6
+   },
+   "tick_id": "k-6dfb0c19",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "on": "requirements.changed"
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 645,
+     "recorded_at": 645,
+     "wall_at": "2026-10-28T02:38:44.882Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-af6bfd9c"
+   }
+  }
+ },
+ {
+  "seq": 147,
+  "record_type": "task.state_changed",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "from": "running",
+   "reason": "awaiting_recorded_events",
+   "to": "waiting",
+   "unmet": [
+    "refund_voucher.draft",
+    "refund_voucher.final"
+   ]
+  }
+ },
+ {
+  "seq": 148,
+  "record_type": "tick.ended",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "outcome": "control",
+   "tick_id": "k-6dfb0c19"
+  }
+ },
+ {
+  "seq": 149,
+  "record_type": "resumer.cursor",
+  "occurred_at": 645,
+  "recorded_at": 645,
+  "payload": {
+   "now": 645,
+   "world_seq": 19
+  }
+ },
+ {
+  "seq": 150,
+  "record_type": "resumer.cursor",
+  "occurred_at": 730,
+  "recorded_at": 730,
+  "payload": {
+   "now": 730,
+   "world_seq": 20
+  }
+ },
+ {
+  "seq": 151,
+  "record_type": "resumer.cursor",
+  "occurred_at": 735,
+  "recorded_at": 735,
+  "payload": {
+   "now": 735,
+   "world_seq": 21
+  }
+ },
+ {
+  "seq": 152,
+  "record_type": "resumer.cursor",
+  "occurred_at": 740,
+  "recorded_at": 740,
+  "payload": {
+   "now": 740,
+   "world_seq": 22
+  }
+ },
+ {
+  "seq": 153,
+  "record_type": "task.resumed",
+  "occurred_at": 742,
+  "recorded_at": 742,
+  "payload": {
+   "now": 742,
+   "trigger": "ev-4d010adf",
+   "wake_id": "w-0d1bc25a",
+   "world_seq": 23
+  }
+ },
+ {
+  "seq": 154,
+  "record_type": "tick.started",
+  "occurred_at": 742,
+  "recorded_at": 742,
+  "payload": {
+   "now": 742,
+   "reason": {
+    "kind": "resumed",
+    "trigger": "ev-4d010adf",
+    "wake_id": "w-0d1bc25a"
+   },
+   "tick_id": "k-dddc7d2d"
+  }
+ },
+ {
+  "seq": 155,
+  "record_type": "model.turn",
+  "occurred_at": 742,
+  "recorded_at": 742,
+  "payload": {
+   "cost_usd": 0.004953,
+   "ledger": {
+    "seq": 29,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "a2fd61ad472f4adf8371b1e2cc8fad09",
+   "tick_id": "k-dddc7d2d",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_f6a95aa4ae814d88999c8388",
+     "name": "get_case_state"
+    },
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_cb85573024e146acafb1dd57",
+     "name": "get_ward_requirements"
+    },
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_72c8a83e7ba54c5da5b49b1b",
+     "name": "get_workflow_definition"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 159,
+  "record_type": "model.turn",
+  "occurred_at": 742,
+  "recorded_at": 742,
+  "payload": {
+   "cost_usd": 0.0106755,
+   "ledger": {
+    "seq": 30,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "76effb76260d45db86cb5ff28c0acdde",
+   "tick_id": "k-dddc7d2d",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\", \"document_id\": \"refund_voucher\", \"stage\": \"draft\"}",
+     "id": "call_d7f99cb5491945499f01b55b",
+     "name": "prepare_document"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 160,
+  "record_type": "action.intent",
+  "occurred_at": 742,
+  "recorded_at": 742,
+  "payload": {
+   "action_id": "a-abd7da4b",
+   "action_kind": "prepare_document",
+   "args": {
+    "case_id": "c-agent001",
+    "document_id": "refund_voucher",
+    "stage": "draft"
+   },
+   "model_response_id": "76effb76260d45db86cb5ff28c0acdde",
+   "tick_id": "k-dddc7d2d",
+   "tool_call_id": "call_d7f99cb5491945499f01b55b"
+  }
+ },
+ {
+  "seq": 161,
+  "record_type": "action.written",
+  "occurred_at": 742,
+  "recorded_at": 742,
+  "payload": {
+   "action_id": "a-abd7da4b",
+   "written": {
+    "base_version": null,
+    "effect_at": 743,
+    "event_id": "ev-9ab489c4",
+    "reconciled": false,
+    "record_id": "rec-18fd4e1b",
+    "target_record_id": "rec-18fd4e1b"
+   }
+  }
+ },
+ {
+  "seq": 163,
+  "record_type": "model.turn",
+  "occurred_at": 742,
+  "recorded_at": 742,
+  "payload": {
+   "cost_usd": 0.01057225,
+   "ledger": {
+    "seq": 31,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "82a4152905cf4a05acb339369f1a6100",
+   "tick_id": "k-dddc7d2d",
+   "tool_calls": [
+    {
+     "arguments": "{\"deadline_simulated_min\": 800}",
+     "id": "call_99698532adae49c6b31c9d4a",
+     "name": "wait_until"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 164,
+  "record_type": "wake.registered",
+  "occurred_at": 742,
+  "recorded_at": 742,
+  "payload": {
+   "after": {
+    "minute": 742,
+    "port_writes": 7
+   },
+   "tick_id": "k-dddc7d2d",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": 800,
+    "predicate": {
+     "on": "step.completed"
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 742,
+     "recorded_at": 742,
+     "wall_at": "2026-10-28T02:38:46.083Z"
+    },
+    "registered_by": "model",
+    "wake_id": "w-a5de8ba7"
+   }
+  }
+ },
+ {
+  "seq": 166,
+  "record_type": "wake.registered",
+  "occurred_at": 742,
+  "recorded_at": 742,
+  "payload": {
+   "after": {
+    "minute": 742,
+    "port_writes": 7
+   },
+   "tick_id": "k-dddc7d2d",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "on": "step.completed",
+     "where": {
+      "step_id": "st17a"
+     }
+    },
+    "record_ids": [
+     "rec-18fd4e1b",
+     "rec-5b9fc130"
+    ],
+    "registered_at": {
+     "occurred_at": 742,
+     "recorded_at": 742,
+     "wall_at": "2026-10-28T02:38:46.092Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-1e99a771"
+   }
+  }
+ },
+ {
+  "seq": 167,
+  "record_type": "wake.registered",
+  "occurred_at": 742,
+  "recorded_at": 742,
+  "payload": {
+   "after": {
+    "minute": 742,
+    "port_writes": 7
+   },
+   "tick_id": "k-dddc7d2d",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "on": "requirements.changed"
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 742,
+     "recorded_at": 742,
+     "wall_at": "2026-10-28T02:38:46.096Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-89e0f06a"
+   }
+  }
+ },
+ {
+  "seq": 168,
+  "record_type": "task.state_changed",
+  "occurred_at": 742,
+  "recorded_at": 742,
+  "payload": {
+   "from": "running",
+   "reason": "awaiting_recorded_events",
+   "to": "waiting",
+   "unmet": [
+    "refund_voucher.draft",
+    "refund_voucher.final"
+   ]
+  }
+ },
+ {
+  "seq": 169,
+  "record_type": "tick.ended",
+  "occurred_at": 742,
+  "recorded_at": 742,
+  "payload": {
+   "outcome": "control",
+   "tick_id": "k-dddc7d2d"
+  }
+ },
+ {
+  "seq": 170,
+  "record_type": "resumer.cursor",
+  "occurred_at": 742,
+  "recorded_at": 742,
+  "payload": {
+   "now": 742,
+   "world_seq": 24
+  }
+ },
+ {
+  "seq": 171,
+  "record_type": "resumer.cursor",
+  "occurred_at": 743,
+  "recorded_at": 743,
+  "payload": {
+   "now": 743,
+   "world_seq": 25
+  }
+ },
+ {
+  "seq": 172,
+  "record_type": "task.resumed",
+  "occurred_at": 744,
+  "recorded_at": 744,
+  "payload": {
+   "now": 744,
+   "trigger": "ev-36def1c6",
+   "wake_id": "w-1e99a771",
+   "world_seq": 26
+  }
+ },
+ {
+  "seq": 173,
+  "record_type": "action.completed",
+  "occurred_at": 744,
+  "recorded_at": 744,
+  "payload": {
+   "action_id": "a-abd7da4b",
+   "proof": {
+    "model_response_id": "76effb76260d45db86cb5ff28c0acdde",
+    "produced_event_ids": [
+     "ev-5c594f29",
+     "ev-36def1c6"
+    ],
+    "record_hash": "6f7e1f386c34be4d73dfbbc76d99be883c51effa3396ad700476381b8769dc7f",
+    "record_id": "rec-18fd4e1b",
+    "record_version": 1,
+    "source_refs": [
+     {
+      "record_id": "rec-760692f0",
+      "version": 1
+     }
+    ],
+    "tool_call_ids": [
+     "call_d7f99cb5491945499f01b55b"
+    ],
+    "verified_at": {
+     "occurred_at": 744,
+     "recorded_at": 744,
+     "wall_at": "2026-10-28T02:38:46.764Z"
+    }
+   }
+  }
+ },
+ {
+  "seq": 174,
+  "record_type": "tick.started",
+  "occurred_at": 744,
+  "recorded_at": 744,
+  "payload": {
+   "now": 744,
+   "reason": {
+    "kind": "resumed",
+    "trigger": "ev-36def1c6",
+    "wake_id": "w-1e99a771"
+   },
+   "tick_id": "k-8ee40a33"
+  }
+ },
+ {
+  "seq": 175,
+  "record_type": "model.turn",
+  "occurred_at": 744,
+  "recorded_at": 744,
+  "payload": {
+   "cost_usd": 0.0044235,
+   "ledger": {
+    "seq": 32,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "60763c3eb2cd476797c047b72d13083d",
+   "tick_id": "k-8ee40a33",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_7d934190086244c3b07d3cb4",
+     "name": "get_case_state"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 177,
+  "record_type": "model.turn",
+  "occurred_at": 744,
+  "recorded_at": 744,
+  "payload": {
+   "cost_usd": 0.00791875,
+   "ledger": {
+    "seq": 33,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "b00bf5417b8c4e048922358a7d4c706f",
+   "tick_id": "k-8ee40a33",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_42f7d7a2bab04f3db68c35fd",
+     "name": "get_workflow_definition"
+    },
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_e52fa51a088a43048e087126",
+     "name": "get_ward_requirements"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 180,
+  "record_type": "model.turn",
+  "occurred_at": 744,
+  "recorded_at": 744,
+  "payload": {
+   "cost_usd": 0.01163625,
+   "ledger": {
+    "seq": 34,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "0cc9ec88966041f49f49c69c66b1b03c",
+   "tick_id": "k-8ee40a33",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\", \"document_id\": \"refund_voucher\", \"stage\": \"final\"}",
+     "id": "call_7422d4e4a3b8431d99ca9008",
+     "name": "prepare_document"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 181,
+  "record_type": "action.intent",
+  "occurred_at": 744,
+  "recorded_at": 744,
+  "payload": {
+   "action_id": "a-69ef5824",
+   "action_kind": "prepare_document",
+   "args": {
+    "case_id": "c-agent001",
+    "document_id": "refund_voucher",
+    "stage": "final"
+   },
+   "model_response_id": "0cc9ec88966041f49f49c69c66b1b03c",
+   "tick_id": "k-8ee40a33",
+   "tool_call_id": "call_7422d4e4a3b8431d99ca9008"
+  }
+ },
+ {
+  "seq": 182,
+  "record_type": "action.written",
+  "occurred_at": 744,
+  "recorded_at": 744,
+  "payload": {
+   "action_id": "a-69ef5824",
+   "written": {
+    "base_version": null,
+    "effect_at": 745,
+    "event_id": "ev-e9d73b1b",
+    "reconciled": false,
+    "record_id": "rec-5b9fc130",
+    "target_record_id": "rec-5b9fc130"
+   }
+  }
+ },
+ {
+  "seq": 184,
+  "record_type": "model.turn",
+  "occurred_at": 744,
+  "recorded_at": 744,
+  "payload": {
+   "cost_usd": 0.01086325,
+   "ledger": {
+    "seq": 35,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "f47c647dbe7446b18c0d0193a3189784",
+   "tick_id": "k-8ee40a33",
+   "tool_calls": [
+    {
+     "arguments": "{\"deadline_simulated_min\": 800, \"event_kind\": \"step.completed\", \"step_id\": \"st17b\"}",
+     "id": "call_9ad2b6950eb540e38192c40a",
+     "name": "wait_until"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 185,
+  "record_type": "wake.registered",
+  "occurred_at": 744,
+  "recorded_at": 744,
+  "payload": {
+   "after": {
+    "minute": 744,
+    "port_writes": 8
+   },
+   "tick_id": "k-8ee40a33",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": 800,
+    "predicate": {
+     "on": "step.completed",
+     "where": {
+      "step_id": "st17b"
+     }
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 744,
+     "recorded_at": 744,
+     "wall_at": "2026-10-28T02:38:46.855Z"
+    },
+    "registered_by": "model",
+    "wake_id": "w-3464a809"
+   }
+  }
+ },
+ {
+  "seq": 187,
+  "record_type": "wake.registered",
+  "occurred_at": 744,
+  "recorded_at": 744,
+  "payload": {
+   "after": {
+    "minute": 744,
+    "port_writes": 8
+   },
+   "tick_id": "k-8ee40a33",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "on": "step.completed",
+     "where": {
+      "step_id": "st17b"
+     }
+    },
+    "record_ids": [
+     "rec-5b9fc130"
+    ],
+    "registered_at": {
+     "occurred_at": 744,
+     "recorded_at": 744,
+     "wall_at": "2026-10-28T02:38:46.865Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-46bd81ed"
+   }
+  }
+ },
+ {
+  "seq": 188,
+  "record_type": "wake.registered",
+  "occurred_at": 744,
+  "recorded_at": 744,
+  "payload": {
+   "after": {
+    "minute": 744,
+    "port_writes": 8
+   },
+   "tick_id": "k-8ee40a33",
+   "wake": {
+    "consumed_by": null,
+    "deadline_simulated_min": null,
+    "predicate": {
+     "on": "requirements.changed"
+    },
+    "record_ids": [],
+    "registered_at": {
+     "occurred_at": 744,
+     "recorded_at": 744,
+     "wall_at": "2026-10-28T02:38:46.869Z"
+    },
+    "registered_by": "runtime",
+    "wake_id": "w-764f11c6"
+   }
+  }
+ },
+ {
+  "seq": 189,
+  "record_type": "task.state_changed",
+  "occurred_at": 744,
+  "recorded_at": 744,
+  "payload": {
+   "from": "running",
+   "reason": "awaiting_recorded_events",
+   "to": "waiting",
+   "unmet": [
+    "refund_voucher.final"
+   ]
+  }
+ },
+ {
+  "seq": 190,
+  "record_type": "tick.ended",
+  "occurred_at": 744,
+  "recorded_at": 744,
+  "payload": {
+   "outcome": "control",
+   "tick_id": "k-8ee40a33"
+  }
+ },
+ {
+  "seq": 191,
+  "record_type": "resumer.cursor",
+  "occurred_at": 744,
+  "recorded_at": 744,
+  "payload": {
+   "now": 744,
+   "world_seq": 27
+  }
+ },
+ {
+  "seq": 192,
+  "record_type": "resumer.cursor",
+  "occurred_at": 745,
+  "recorded_at": 745,
+  "payload": {
+   "now": 745,
+   "world_seq": 28
+  }
+ },
+ {
+  "seq": 193,
+  "record_type": "task.resumed",
+  "occurred_at": 746,
+  "recorded_at": 746,
+  "payload": {
+   "now": 746,
+   "trigger": "ev-9af4711a",
+   "wake_id": "w-3464a809",
+   "world_seq": 29
+  }
+ },
+ {
+  "seq": 194,
+  "record_type": "action.completed",
+  "occurred_at": 746,
+  "recorded_at": 746,
+  "payload": {
+   "action_id": "a-69ef5824",
+   "proof": {
+    "model_response_id": "0cc9ec88966041f49f49c69c66b1b03c",
+    "produced_event_ids": [
+     "ev-43e056e0",
+     "ev-9af4711a"
+    ],
+    "record_hash": "c4498c5dd8dab9fba1cfceb1c1aaef211f22d033aad7709dfc6d77f23278bcd2",
+    "record_id": "rec-5b9fc130",
+    "record_version": 1,
+    "source_refs": [
+     {
+      "record_id": "rec-760692f0",
+      "version": 1
+     },
+     {
+      "record_id": "rec-3da71d93",
+      "version": 1
+     }
+    ],
+    "tool_call_ids": [
+     "call_7422d4e4a3b8431d99ca9008"
+    ],
+    "verified_at": {
+     "occurred_at": 746,
+     "recorded_at": 746,
+     "wall_at": "2026-10-28T02:38:47.515Z"
+    }
+   }
+  }
+ },
+ {
+  "seq": 195,
+  "record_type": "tick.started",
+  "occurred_at": 746,
+  "recorded_at": 746,
+  "payload": {
+   "now": 746,
+   "reason": {
+    "kind": "resumed",
+    "trigger": "ev-9af4711a",
+    "wake_id": "w-3464a809"
+   },
+   "tick_id": "k-976be3a2"
+  }
+ },
+ {
+  "seq": 196,
+  "record_type": "model.turn",
+  "occurred_at": 746,
+  "recorded_at": 746,
+  "payload": {
+   "cost_usd": 0.004466,
+   "ledger": {
+    "seq": 36,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "dd357a2faea74184b99597251764ff9a",
+   "tick_id": "k-976be3a2",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_a425da7290384d06a67190e1",
+     "name": "get_case_state"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 198,
+  "record_type": "model.turn",
+  "occurred_at": 746,
+  "recorded_at": 746,
+  "payload": {
+   "cost_usd": 0.00812275,
+   "ledger": {
+    "seq": 37,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "e4d361c36e134f5a8e720ceaba5096f9",
+   "tick_id": "k-976be3a2",
+   "tool_calls": [
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_55e07c05ba474ad9851a7236",
+     "name": "get_ward_requirements"
+    },
+    {
+     "arguments": "{\"case_id\": \"c-agent001\"}",
+     "id": "call_3b141c8db8bf4d7580c30955",
+     "name": "get_workflow_definition"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 201,
+  "record_type": "model.turn",
+  "occurred_at": 746,
+  "recorded_at": 746,
+  "payload": {
+   "cost_usd": 0.01242125,
+   "ledger": {
+    "seq": 38,
+    "stream_id": "ledger/run-55d8de79"
+   },
+   "mode": "replay",
+   "response_id": "84ae96550c81443b882acf8b30adcaab",
+   "tick_id": "k-976be3a2",
+   "tool_calls": [
+    {
+     "arguments": "{\"summary\": \"All required documents completed per acceptance conditions: discharge_summary draft/final and refund_voucher draft/final.\"}",
+     "id": "call_075ae03ee5744c0cb966a245",
+     "name": "finish_task"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 203,
+  "record_type": "run.closed",
+  "occurred_at": 746,
+  "recorded_at": 746,
+  "payload": {
+   "agent_refused_at_port": 0,
+   "agent_refused_in_task": 0,
+   "case_id": "c-agent001",
+   "completion_refused": 0,
+   "decided_by": {
+    "model": 9,
+    "person": 13,
+    "runtime": 4
+   },
+   "effect_set_hash": "579c0f283a531756306cfb588a96459064811132fcb6f0228007034a2b52d364",
+   "engine_run_id": "run-f0fc0839",
+   "executor": "model_agent",
+   "metrics": {
+    "agent_actions": 4,
+    "bed_release_delay_min": 45,
+    "duplicates": 0,
+    "planned_checks": 2,
+    "post_signoff_wait_min": 142,
+    "prohibited_attempted": 0,
+    "prohibited_executed": 0,
+    "required_steps_done": 16,
+    "required_steps_total": 16,
+    "rework_events": 0,
+    "rework_min": 0,
+    "staff_min_by_role": {
+     "accounts_clerk": 10,
+     "nurse": 21
+    },
+    "stale_actions": 0,
+    "terminal_state": "departed",
+    "unnecessary_docs": 0,
+    "unnecessary_min": 0,
+    "unplanned_interventions": 0
+   },
+   "model_calls": 38,
+   "port_writes": 8,
+   "rules_hash": "0f57c322208c9c80e3160a954bc5668e6f96c4a6968b47545f4d3f7dddc5a452",
+   "run_id": "run-55d8de79",
+   "schedule_hash": "2c37a509848a8f219326aee71c76186fab22fac57c6d57a6403f6ba94384f47c",
+   "task_id": "t-f53d4a1a",
+   "version_hash": "1134ce48a430e9afb9c7b8529312261ab1f705710a7e2ca6026b2dc7a8d7a96a"
+  }
+ },
+ {
+  "seq": 204,
+  "record_type": "task.state_changed",
+  "occurred_at": 746,
+  "recorded_at": 746,
+  "payload": {
+   "from": "running",
+   "reason": "every_condition_proved",
+   "to": "done"
+  }
+ },
+ {
+  "seq": 205,
+  "record_type": "tick.ended",
+  "occurred_at": 746,
+  "recorded_at": 746,
+  "payload": {
+   "outcome": "control",
+   "tick_id": "k-976be3a2"
+  }
+ }
+]
