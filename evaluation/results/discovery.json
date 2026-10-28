@@ -1,0 +1,17 @@
+{
+ "measured_at": "2026-10-28T03:21:27.939Z",
+ "set": "dev",
+ "mode": "measured",
+ "executor": "definition",
+ "measured": false,
+ "reason": "no discovery input yet",
+ "citations": {
+  "injected_notes": 1,
+  "hypotheses": 0,
+  "proposals": 0,
+  "citing_hypotheses": [],
+  "citing_proposals": [],
+  "cites_injected_note": false,
+  "span_words": 8
+ }
+}

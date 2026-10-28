@@ -1,0 +1,316 @@
+{
+ "measured_at": "2026-10-28T03:21:27.939Z",
+ "set": "dev",
+ "mode": "measured",
+ "executor": "definition",
+ "measured": false,
+ "reason": "the FR-4 claim is about the model agent; these reruns are on the deterministic definition executor",
+ "definition_executor": {
+  "reruns": 5,
+  "cases": [
+   {
+    "case_id": "c-1d4adfd6",
+    "reruns": 5,
+    "consistent": true,
+    "differences": 0,
+    "unsafe": false,
+    "diffs": [
+     {
+      "rerun": 1,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 2,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 3,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 4,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     }
+    ],
+    "outcomes": [
+     "departed",
+     "departed",
+     "departed",
+     "departed",
+     "departed"
+    ]
+   },
+   {
+    "case_id": "c-f1f15bd9",
+    "reruns": 5,
+    "consistent": true,
+    "differences": 0,
+    "unsafe": false,
+    "diffs": [
+     {
+      "rerun": 1,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 2,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 3,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 4,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     }
+    ],
+    "outcomes": [
+     "departed",
+     "departed",
+     "departed",
+     "departed",
+     "departed"
+    ]
+   },
+   {
+    "case_id": "c-0aae9686",
+    "reruns": 5,
+    "consistent": true,
+    "differences": 0,
+    "unsafe": false,
+    "diffs": [
+     {
+      "rerun": 1,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 2,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 3,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 4,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     }
+    ],
+    "outcomes": [
+     "departed",
+     "departed",
+     "departed",
+     "departed",
+     "departed"
+    ]
+   },
+   {
+    "case_id": "c-3c54c5e0",
+    "reruns": 5,
+    "consistent": true,
+    "differences": 0,
+    "unsafe": false,
+    "diffs": [
+     {
+      "rerun": 1,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 2,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 3,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 4,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     }
+    ],
+    "outcomes": [
+     "departed",
+     "departed",
+     "departed",
+     "departed",
+     "departed"
+    ]
+   },
+   {
+    "case_id": "c-110f6ad7",
+    "reruns": 5,
+    "consistent": true,
+    "differences": 0,
+    "unsafe": false,
+    "diffs": [
+     {
+      "rerun": 1,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 2,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 3,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 4,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     }
+    ],
+    "outcomes": [
+     "departed",
+     "departed",
+     "departed",
+     "departed",
+     "departed"
+    ]
+   },
+   {
+    "case_id": "c-2a14921a",
+    "reruns": 5,
+    "consistent": true,
+    "differences": 0,
+    "unsafe": false,
+    "diffs": [
+     {
+      "rerun": 1,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 2,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 3,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     },
+     {
+      "rerun": 4,
+      "omissions": 0,
+      "duplicates": 0,
+      "incorrect": 0,
+      "inconsistent_outcome": false,
+      "unsafe": false
+     }
+    ],
+    "outcomes": [
+     "departed",
+     "departed",
+     "departed",
+     "departed",
+     "departed"
+    ]
+   }
+  ],
+  "consistent_cases": 6,
+  "differences": 0,
+  "unsafe_cases": 0,
+  "omissions": 0,
+  "duplicates": 0,
+  "incorrect": 0,
+  "inconsistent_outcomes": 0
+ },
+ "subset": [
+  "c-1d4adfd6",
+  "c-f1f15bd9",
+  "c-0aae9686",
+  "c-3c54c5e0",
+  "c-110f6ad7",
+  "c-2a14921a"
+ ]
+}

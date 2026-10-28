@@ -1,0 +1,70 @@
+{
+ "schema": "hey-pisgah/proposal-input/1",
+ "arm": "A2",
+ "source": {
+  "kind": "fixture",
+  "mode": "fixture",
+  "provider": null,
+  "model_id": null,
+  "commitment_hashes": {},
+  "request_ids": [],
+  "note": "Hand-written stand-in for an adopted model proposal: the remove-e04 plus round-entry trigger pair the validation pipeline marks dev_validated."
+ },
+ "runs": [
+  {
+   "run_id": "fixture-1",
+   "proposals": [
+    {
+     "proposal_id": "p-learned1",
+     "parent_proposal_id": null,
+     "base_version": 1,
+     "ops": [
+      {
+       "op": "remove_soft_edge",
+       "edge_id": "e04"
+      },
+      {
+       "op": "set_prep_trigger",
+       "target": {
+        "step": "st06"
+       },
+       "when": {
+        "on": "step.completed",
+        "where": {
+         "step_id": "st01"
+        }
+       }
+      }
+     ],
+     "scope": {
+      "wards": "all",
+      "condition": null
+     },
+     "rationale": "Start the summary draft once the round entry is in, so the nurse can verify it while she is free; the final still waits for the clinical discharge.",
+     "evidence": {
+      "hypothesis_ids": [],
+      "experiment_ids": [],
+      "event_ids": []
+     },
+     "expected_effects": [
+      {
+       "metric": "post_signoff_wait_min",
+       "direction": "down",
+       "subgroup_condition": null
+      }
+     ],
+     "known_exceptions": [],
+     "viewed_case_ids": [],
+     "status": "submitted",
+     "hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+   ]
+  }
+ ],
+ "adopted": {
+  "proposal_id": "p-learned1",
+  "approver_role": "ward_manager",
+  "adopted_at_wall": "2026-10-28T00:00:00.000Z"
+ },
+ "cost": null
+}

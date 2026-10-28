@@ -1,14 +1,15 @@
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { execSync } from "node:child_process";
 import { z } from "zod";
 import { Claim, ClaimsStatusFile } from "@hey-pisgah/contracts";
 import { claimStatus, fieldAt, parseClaimPredicate } from "@hey-pisgah/evaluator";
 
 export const ClaimsRegistry = z.object({ schema_version: z.number().int(), claims: z.array(Claim).length(16), revisions: z.array(z.unknown()).optional() });
-export type ClaimsCheckOptions = { commit?: string; now?: () => string };
+export type ClaimsCheckOptions = { commit?: string; now?: () => string; resultsRoot?: string };
 type StatusFile = z.infer<typeof ClaimsStatusFile>;
 
-const placeholders = (wording: Record<string, string>) => [...new Set(Object.values(wording).flatMap((w) => [...w.matchAll(/\{([a-z_]+)\}/g)].map((m) => m[1]!)))];
+const placeholders = (wording: Record<string, string>) => [...new Set(Object.values(wording).flatMap((w) => [...w.matchAll(/\{([a-z0-9_]+)\}/g)].map((m) => m[1]!)))];
 
 // Evaluates each claim's predicate over its result file and writes evaluation/claims.status.json.
 export function claimsCheck(root: string, opts: ClaimsCheckOptions = {}): StatusFile {
@@ -17,7 +18,7 @@ export function claimsCheck(root: string, opts: ClaimsCheckOptions = {}): Status
   const commit = opts.commit ?? execSync("git rev-parse --short HEAD", { cwd: root }).toString().trim();
   const claims = registry.claims.map((c) => {
     const pred = parseClaimPredicate(c.acceptance.predicate);
-    const file = `${root}/${c.acceptance.result_path}`;
+    const file = `${opts.resultsRoot ?? root}/${c.acceptance.result_path}`;
     const names = [...pred.fields, ...placeholders(c.wording).filter((p) => !pred.fields.includes(p))];
     if (!existsSync(file)) return { claim_id: c.claim_id, status: "not_measured" as const, values: Object.fromEntries(names.map((n) => [n, null])), measured_at: null };
     let data: unknown;
@@ -30,8 +31,10 @@ export function claimsCheck(root: string, opts: ClaimsCheckOptions = {}): Status
     return { claim_id: c.claim_id, status, values, measured_at };
   });
   const status = ClaimsStatusFile.parse({ generated_at: now(), commit, claims });
-  writeFileSync(`${root}/evaluation/claims.status.json`, JSON.stringify(status, null, 2) + "\n");
+  const outFile = `${opts.resultsRoot ?? root}/evaluation/claims.status.json`;
+  mkdirSync(dirname(outFile), { recursive: true });
+  writeFileSync(outFile, JSON.stringify(status, null, 2) + "\n");
   const counts = claims.reduce<Record<string, number>>((m, c) => ({ ...m, [c.status]: (m[c.status] ?? 0) + 1 }), {});
-  console.log(`claims: ${JSON.stringify(counts)} -> evaluation/claims.status.json`);
+  console.log(`claims: ${JSON.stringify(counts)} -> ${outFile}`);
   return status;
 }
