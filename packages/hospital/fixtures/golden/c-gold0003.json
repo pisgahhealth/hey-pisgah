@@ -1,9 +1,27 @@
 {
   "schedule": {
+    "schedule_version": 1,
     "case_id": "c-gold0003",
-    "ward_id": "B",
-    "payer_type": "hmo",
-    "staff": {
+    "facts": {
+      "ward_id": "B",
+      "payer_type": "hmo",
+      "has_take_home_order": "true",
+      "take_home_status": "ordered",
+      "expected_disposition": "home",
+      "expected_discharge_recorded": "false",
+      "signoff_recorded": "false",
+      "final_bill_issued": "false",
+      "insurer_status": "none",
+      "payment_status": "unpaid",
+      "ward_requires": [
+        "discharge_summary",
+        "stay_bill",
+        "clearance_slip",
+        "hmo_claim_cover",
+        "refund_voucher"
+      ]
+    },
+    "actors": {
       "doctor": "d_b1",
       "nurse": "n_b1",
       "pharmacist": "p_01",
@@ -12,68 +30,126 @@
       "authoriser": "au_01",
       "insurer": "ins_01"
     },
-    "doctor": {
-      "round_at": 510,
-      "expected_discharge_at": 600,
-      "expected_disposition": "home",
-      "signoff_at": 660,
-      "signoff_disposition": "home",
-      "follow_up": "Medical outpatient clinic in two weeks.",
-      "take_home_orders": [
-        {
-          "item": "Metformin 500 mg tablets",
-          "qty": 56
-        }
-      ],
-      "amendments": []
-    },
-    "pharmacy": {
-      "backlog": [
-        15,
-        15
-      ],
-      "review_min": 15,
-      "dispense_min": 12,
-      "screen_block": null,
-      "substitution": null
-    },
-    "accounts": {
-      "backlog": [
-        10
-      ],
-      "sponsor_arrival_at": 700,
-      "payment_min": 15,
-      "waiver": null,
-      "on_account": null
-    },
-    "insurer": {
-      "response_delay": 150,
-      "decision": "approved"
-    },
-    "nurses": [
-      {
-        "nurse_id": "n_b1",
-        "shift": {
-          "start": 420,
-          "end": 1140
+    "steps": {
+      "st01": {
+        "due": {
+          "at": 510
         },
-        "busy_blocks": []
+        "sets_facts": {
+          "expected_discharge_recorded": "true"
+        }
+      },
+      "st05": {
+        "due": {
+          "at": 660
+        },
+        "sets_facts": {
+          "signoff_recorded": "true",
+          "final_bill_issued": "true"
+        },
+        "payload": {
+          "follow_up": "Medical outpatient clinic in two weeks."
+        }
+      },
+      "st02": {
+        "due": {
+          "at": 515
+        },
+        "payload": {
+          "items": [
+            "Amlodipine 5 mg tablets",
+            "Paracetamol 500 mg tablets"
+          ]
+        }
+      },
+      "st11": {
+        "due": {
+          "after": "st10",
+          "delay_min": 150
+        },
+        "sets_facts": {
+          "insurer_status": "responded"
+        }
+      },
+      "st12a": {
+        "not_before": 700,
+        "sets_facts": {
+          "payment_status": "paid"
+        }
+      },
+      "st16": {
+        "due": {
+          "after": "st13",
+          "delay_min": 0
+        }
       }
-    ],
-    "service_min": {
-      "prepare_document:discharge_summary:draft:1": 25,
-      "prepare_document:discharge_summary:final:1": 5,
-      "check_document:discharge_summary:final:1": 5,
-      "hand_over_document:discharge_summary:final:1": 5,
-      "hand_over_take_home:1": 5,
-      "financial_clearance:1": 5,
-      "prepare_document:hmo_claim_cover:draft:1": 15,
-      "prepare_document:hmo_claim_cover:final:1": 5,
-      "submit_claim:1": 5,
-      "prepare_document:refund_voucher:draft:1": 10,
-      "prepare_document:refund_voucher:final:1": 5,
-      "refund_deposit:1": 5
     },
-    "entry_lag": {}
+    "alternatives": {
+      "settlement": "st12a"
+    },
+    "resources": {
+      "nurse": {
+        "kind": "single",
+        "busy_blocks": [],
+        "backlog": []
+      },
+      "pharmacist": {
+        "kind": "fifo",
+        "busy_blocks": [],
+        "backlog": [
+          {
+            "job_id": "p0",
+            "arrive_at": 470,
+            "service_min": 15
+          },
+          {
+            "job_id": "p1",
+            "arrive_at": 475,
+            "service_min": 15
+          }
+        ]
+      },
+      "accounts_clerk": {
+        "kind": "fifo",
+        "busy_blocks": [],
+        "backlog": [
+          {
+            "job_id": "a0",
+            "arrive_at": 700,
+            "service_min": 10
+          }
+        ]
+      },
+      "claims_clerk": {
+        "kind": "fifo",
+        "busy_blocks": [],
+        "backlog": []
+      }
+    },
+    "record_updates": [],
+    "service_min": {
+      "prepare_document|discharge_summary|draft|1": 25,
+      "prepare_document|discharge_summary|final|1": 5,
+      "prepare_document|hmo_claim_cover|draft|1": 15,
+      "prepare_document|hmo_claim_cover|final|1": 5,
+      "prepare_document|refund_voucher|draft|1": 10,
+      "prepare_document|refund_voucher|final|1": 5
+    },
+    "service_default_min": {
+      "pharmacy_review": 15,
+      "dispense": 12,
+      "prepare_document": 25,
+      "revise_document": 6,
+      "check_document": 5,
+      "submit_claim": 5,
+      "receive_payment": 15,
+      "financial_clearance": 5,
+      "hand_over_document": 5,
+      "hand_over_take_home": 5,
+      "record_departure": 2,
+      "refund_deposit": 5
+    },
+    "entry_lag": {},
+    "draws": {}
   }
 }

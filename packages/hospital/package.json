@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@hey-pisgah/contracts": "*",
+    "@hey-pisgah/simulator": "*",
+    "@hey-pisgah/workflow": "*",
     "zod": "^4.6.7"
   }
 }
