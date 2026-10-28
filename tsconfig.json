@@ -9,7 +9,14 @@
     "allowImportingTsExtensions": false,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["packages/*/src", "apps/*/src", "scripts"]
+  "include": [
+    "packages/*/src",
+    "packages/*/test",
+    "apps/*/src",
+    "scripts"
+  ]
 }
