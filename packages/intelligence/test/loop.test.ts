@@ -9,8 +9,9 @@ import { ELIDED, NOTES_HEADER, REPEAT_NOTE, systemPrompt } from "../src/prompts.
 import { ENGINE_SEMANTICS } from "../src/views.js";
 import { SETTINGS, compact, dropOldTurns, runLoop, type Digests } from "../src/loop.js";
 import { scriptedInvestigator } from "../src/mock.js";
-import { DEFINITION_UNCHANGED, READ_BUDGET, READ_BUDGET_MESSAGE, STREAMS, Session, sessionStreamId, type Arm } from "../src/session.js";
+import { DEFINITION_UNCHANGED, EXPERIMENT_BUDGET_MESSAGE, READ_BUDGET, READ_BUDGET_MESSAGE, STREAMS, Session, sessionStreamId, type Arm } from "../src/session.js";
 import { dispatch } from "../src/tools.js";
+import { HYPOTHESIS_SHAPES } from "../src/shapes.js";
 import { denyScan } from "../src/deny.js";
 import { LEARNED, LONG, SHORT, evidence, hyp, pool, tempRoot } from "./helpers.js";
 
@@ -263,6 +264,53 @@ describe("revision 7 read rules", () => {
     expect(s.timeline({ case_id: LONG[0], order: "occurred" })).toHaveProperty("items");
     expect(s.counters.read_refusals).toBe(3);
     expect(denyScan([{ label: "budget", text: READ_BUDGET_MESSAGE }, { label: "unchanged", text: DEFINITION_UNCHANGED }, { label: "def", text: DEFINITION_NOTE }])).toEqual([]);
+    s.close();
+  });
+});
+
+describe("revision 8 hypothesis window", () => {
+  it("refuses record_hypothesis and case reads after three active hypotheses with no experiment, counts it, and reopens on an experiment or a no_experiment_reason note", () => {
+    const s = new Session({ storeRoot: tempRoot(), runId: "run-0e7e0010", arm: "adaptive", pool: pool() });
+    const h1 = hyp(s);
+    const h2 = hyp(s, { competing: [h1], if_true: { metric: "post_signoff_wait_min", comparison: "no_difference", tolerance_min: 10, scope: { cases: [...LONG] } }, if_false: { metric: "post_signoff_wait_min", comparison: "intervention_lt_control", tolerance_min: 30, scope: { cases: [...LONG] } } });
+    hyp(s);
+    const blocked = [s.recordHypothesis({}), s.timeline({ case_id: LONG[0], order: "occurred" }), s.record({ case_id: LONG[0], record_kind: "take_home_order" }), s.queue({ case_id: LONG[0], at_min: 600 }), s.staff({ case_id: LONG[0], role: "nurse" }), s.intervals({ case_ids: [LONG[0]], from: { kind: "step.completed", step_id: "st05" }, to: { kind: "step.completed", step_id: "st16" }, clock: "occurred" })];
+    for (const b of blocked) expect(b).toEqual({ ok: false, error: "experiment_budget", message: EXPERIMENT_BUDGET_MESSAGE });
+    expect(s.definition()).toHaveProperty("definition");
+    expect(s.listCases()).toHaveProperty("cases");
+    expect(s.counters).toMatchObject({ experiment_budget_refusals: 6, experiments_used: 0, invalid_requests: 0, hypothesis_schema_errors: 0 });
+    expect(s.runExperiment({ hypothesis_id: h1, distinguishes: [h2], base: { version: 1 }, ops: LEARNED, case_ids: [...LONG], note: "n" }).ok).toBe(true);
+    expect(s.timeline({ case_id: LONG[0], order: "occurred" })).toHaveProperty("items");
+    hyp(s); hyp(s); hyp(s);
+    expect(s.recordHypothesis({}).error).toBe("experiment_budget");
+    expect(s.recordNote({ note: "the three readings need one shared case first", no_experiment_reason: "no case yet separates them" })).toMatchObject({ ok: true, experiment_window_reopened: true });
+    expect(s.timeline({ case_id: LONG[0], order: "occurred" })).toHaveProperty("items");
+    expect(denyScan([{ label: "budget", text: EXPERIMENT_BUDGET_MESSAGE }])).toEqual([]);
+    s.close();
+  });
+
+  it("does not apply to the arm without experiments", () => {
+    const s = new Session({ storeRoot: tempRoot(), runId: "run-0e7e0011", arm: "a3", pool: pool() });
+    hyp(s); hyp(s); hyp(s); hyp(s);
+    expect(s.timeline({ case_id: LONG[0], order: "occurred" })).toHaveProperty("items");
+    s.close();
+  });
+
+  it("shows the expected shape of each failing field on a schema error and counts it", async () => {
+    const s = new Session({ storeRoot: tempRoot(), runId: "run-0e7e0012", arm: "adaptive", pool: pool() });
+    const r = await dispatch(s, "record_hypothesis", JSON.stringify({ statement: "s", mechanism: "m", subject_refs: [], competing: { none_identified_reason: "r" }, evidence: evidence(), if_true: { metric: "post_signoff_wait_min", comparison: "lower", tolerance_min: 30, scope: { cases: [...LONG] } }, if_false: { metric: "post_signoff_wait_min", comparison: "no_difference", tolerance_min: 10, scope: { cases: [...LONG] } } }));
+    expect(r.error).toBe("invalid_arguments");
+    const expected = r.expected as { field: string; type: string; example: unknown }[];
+    expect(expected.map((e) => e.field)).toEqual(["if_true", "refuted_if"]);
+    expect(expected[0]).toEqual({ field: "if_true", ...HYPOTHESIS_SHAPES.if_true });
+    const same = s.recordHypothesis({ statement: "s", mechanism: "m", subject_refs: [], competing: { none_identified_reason: "r" }, evidence: evidence(), if_true: { metric: "post_signoff_wait_min", comparison: "no_difference", tolerance_min: 10, scope: { cases: [...LONG] } }, if_false: { metric: "post_signoff_wait_min", comparison: "no_difference", tolerance_min: 5, scope: { cases: [...LONG] } }, refuted_if: "r" });
+    expect((same.expected as { field: string }[]).map((e) => e.field)).toEqual(["if_true", "if_false"]);
+    expect(s.counters.hypothesis_schema_errors).toBe(2);
+    const text = JSON.stringify(HYPOTHESIS_SHAPES);
+    expect(text).not.toMatch(/st0\d|e0\d|discharge_summary|post_signoff/);
+    expect(text).toMatch(/st17a/);
+    expect(text).toMatch(/e99/);
+    expect(denyScan([{ label: "shapes", text }])).toEqual([]);
     s.close();
   });
 });

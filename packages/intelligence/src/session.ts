@@ -10,6 +10,7 @@ import { z } from "zod";
 import { runMatched, summarise, type Behaviour, type CaseResult, type Runner } from "./experiments.js";
 import { DiscoveryPool } from "./pool.js";
 import { checkAfter, checkBefore, type Deltas } from "./prediction.js";
+import { expectedShapes } from "./shapes.js";
 import { UNKNOWN_ID } from "./unknown.js";
 import * as views from "./views.js";
 
@@ -79,7 +80,11 @@ export const StatusInput = z.strictObject({
 export const ProposalInput = WorkflowChangeProposal.omit({ proposal_id: true, viewed_case_ids: true, status: true, hash: true });
 
 export const NOTE_LIMIT = 20;
-export const NoteInput = z.strictObject({ note: z.string().trim().min(1).max(600), no_hypothesis_reason: z.string().trim().min(1).max(300).optional() });
+export const NoteInput = z.strictObject({ note: z.string().trim().min(1).max(600), no_hypothesis_reason: z.string().trim().min(1).max(300).optional(), no_experiment_reason: z.string().trim().min(1).max(300).optional() });
+
+// After this many active hypotheses recorded since the last experiment, case reads and record_hypothesis wait for an experiment or a no_experiment_reason note.
+export const EXPERIMENT_BUDGET = { hypotheses: 3 } as const;
+export const EXPERIMENT_BUDGET_MESSAGE = `Experiment budget reached: ${EXPERIMENT_BUDGET.hypotheses} active hypotheses recorded since the last experiment. Call run_experiment, or record_note with a no_experiment_reason, before further record_hypothesis calls or case reads. This refusal is counted and uses no experiment.`;
 
 // Before any hypothesis exists, reads are budgeted per window; a no_hypothesis_reason note opens a new window.
 export const READ_BUDGET = { pages: 25, calls: 12 } as const;
@@ -141,7 +146,8 @@ export class Session {
   readonly notes: string[] = [];
   private readWindow = { pages: 0, callsAtStart: 0 };
   private definitionRead: { turn: number; hash: string } | null = null;
-  counters = { definition_unchanged: 0, read_refusals: 0, timeline_pages: 0, experiments_used: 0, invalid_requests: 0, pair_refusals: 0, no_pair_reasons: 0, zod_streak: 0, repairs: 0, listed_used: 0, proposals_used: 0, say_do_mismatches: 0, retains: 0, rejects: 0 };
+  private experimentWindowStart = new Set<string>();
+  counters = { hypothesis_schema_errors: 0, experiment_budget_refusals: 0, definition_unchanged: 0, read_refusals: 0, timeline_pages: 0, experiments_used: 0, invalid_requests: 0, pair_refusals: 0, no_pair_reasons: 0, zod_streak: 0, repairs: 0, listed_used: 0, proposals_used: 0, say_do_mismatches: 0, retains: 0, rejects: 0 };
   stop: { reason: StopReason; detail: string } | null = null;
   private readonly streams: { hypotheses: Stream; experiments: Stream; proposals: Stream; log: Stream };
   private serial = 0;
@@ -187,6 +193,30 @@ export class Session {
   // Read tools: every id outside the discovery pool gets the same unknown_id.
   listCases(): Result { return views.listCases(this.pool); }
 
+  // A record_hypothesis schema error with the expected shape of each failing field, counted per run.
+  private hypothesisSchemaError(message: string, error: z.ZodError): Result {
+    this.counters.repairs += 1;
+    this.counters.hypothesis_schema_errors += 1;
+    return refusal("invalid_arguments", message, { issues: zodIssues(error), expected: expectedShapes(error) });
+  }
+
+  // Active hypotheses recorded since the last experiment or no_experiment_reason note.
+  private hypothesesInExperimentWindow(): number {
+    return this.active().filter((h) => !this.experimentWindowStart.has(h.hypothesis_id)).length;
+  }
+
+  // Once the window holds EXPERIMENT_BUDGET.hypotheses active hypotheses, case reads and record_hypothesis refuse until an experiment or a no_experiment_reason note.
+  private experimentBudgetRefusal(tool: string): Result | null {
+    if (this.o.arm !== "adaptive" || this.hypothesesInExperimentWindow() < EXPERIMENT_BUDGET.hypotheses) return null;
+    this.counters.experiment_budget_refusals += 1;
+    this.log("hypothesis_window.refused", { tool, active_in_window: this.hypothesesInExperimentWindow(), experiment_budget_refusals: this.counters.experiment_budget_refusals });
+    return refusal("experiment_budget", EXPERIMENT_BUDGET_MESSAGE);
+  }
+
+  private resetExperimentWindow(): void {
+    this.experimentWindowStart = new Set(this.hypotheses.keys());
+  }
+
   // The refusal a budgeted read gets once the window is spent with no hypothesis recorded; null while reads may go on.
   private readBudgetRefusal(tool: string): Result | null {
     if (this.hypotheses.size > 0) return null;
@@ -198,6 +228,8 @@ export class Session {
   }
 
   timeline(a: { case_id: string; order: "occurred" | "recorded"; offset?: number | undefined; limit?: number | undefined; kinds?: string[] | undefined }, cap?: number): Result {
+    const window = this.experimentBudgetRefusal("get_case_timeline");
+    if (window) return window;
     const budget = this.readBudgetRefusal("get_case_timeline");
     if (budget) return budget;
     const c = this.pool.get(a.case_id);
@@ -209,6 +241,8 @@ export class Session {
   }
 
   record(a: { case_id: string; record_kind?: string | undefined; document_id?: string | undefined }): Result {
+    const window = this.experimentBudgetRefusal("get_record");
+    if (window) return window;
     const budget = this.readBudgetRefusal("get_record");
     if (budget) return budget;
     const c = this.pool.get(a.case_id);
@@ -218,6 +252,8 @@ export class Session {
   }
 
   intervals(a: { case_ids: string[]; from: views.Selector; to: views.Selector; clock: "occurred" | "recorded" }): Result {
+    const window = this.experimentBudgetRefusal("compute_intervals");
+    if (window) return window;
     const cs = a.case_ids.map((id) => this.pool.get(id));
     if (cs.some((c) => c === null)) return UNKNOWN_ID;
     for (const c of cs) this.view(c!.case_id);
@@ -225,6 +261,8 @@ export class Session {
   }
 
   queue(a: { case_id: string; at_min: number }): Result {
+    const window = this.experimentBudgetRefusal("get_queue_snapshot");
+    if (window) return window;
     const c = this.pool.get(a.case_id);
     if (!c) return UNKNOWN_ID;
     this.view(c.case_id);
@@ -232,6 +270,8 @@ export class Session {
   }
 
   staff(a: { case_id: string; role: string }): Result {
+    const window = this.experimentBudgetRefusal("get_staff_activity");
+    if (window) return window;
     const c = this.pool.get(a.case_id);
     if (!c) return UNKNOWN_ID;
     this.view(c.case_id);
@@ -252,8 +292,10 @@ export class Session {
 
   // Records a hypothesis; ids are checked against the pool and the session, predictions against the per-metric caps.
   recordHypothesis(raw: unknown): Result {
+    const budget = this.experimentBudgetRefusal("record_hypothesis");
+    if (budget) return budget;
     const parsed = HypothesisInput.safeParse(raw);
-    if (!parsed.success) { this.counters.repairs += 1; return refusal("invalid_arguments", "The arguments do not match the schema.", { issues: zodIssues(parsed.error) }); }
+    if (!parsed.success) return this.hypothesisSchemaError("The arguments do not match the schema.", parsed.error);
     const a = parsed.data;
     const competing = Array.isArray(a.competing) ? a.competing : null;
     const ci = competing ? competing.findIndex((id) => !this.hypotheses.has(id)) : -1;
@@ -271,7 +313,7 @@ export class Session {
     const created = this.clocks();
     const rec = { hypothesis_id: id, ...content, created, hash: hashJson(content), status: "open" as const, status_history: [{ status: "open" as const, at: created, evidence_event_ids: [], experiment_ids: [], note: "recorded" }] };
     const checked = HypothesisRecord.safeParse(rec);
-    if (!checked.success) { this.counters.repairs += 1; return refusal("invalid_arguments", "The hypothesis breaks a record rule.", { issues: zodIssues(checked.error) }); }
+    if (!checked.success) return this.hypothesisSchemaError("The hypothesis breaks a record rule.", checked.error);
     this.hypotheses.set(id, checked.data as HR);
     this.streams.hypotheses.append("hypothesis.recorded", checked.data, { recorded_at: 0, occurred_at: 0 });
     for (const c of new Set(a.evidence.map((e) => e.case_id))) this.view(c);
@@ -428,6 +470,7 @@ export class Session {
       hypothesis_hashes: hashes, warnings: m.warnings, cases: m.cases, summary: summarise(m.cases), deltas: m.deltas, prediction_check: { before, after }, abort_reason: m.aborted ? `${m.aborted.case_id}: ${m.aborted.reason}` : null, behaviour: m.behaviour, no_pair_reason: noPair
     };
     this.experiments.set(xid, stored);
+    if (source === "request") this.resetExperimentWindow();
     this.streams.experiments.append(m.aborted ? "experiment.aborted" : "experiment.completed", stored, { recorded_at: 0, occurred_at: 0 });
     return this.experimentView(stored);
   }
@@ -497,11 +540,13 @@ export class Session {
     if (!parsed.success) { this.counters.repairs += 1; return refusal("invalid_arguments", "The arguments do not match the schema.", { issues: zodIssues(parsed.error) }); }
     if (this.notes.length >= NOTE_LIMIT) return refusal("notes_full", `At most ${NOTE_LIMIT} notes are kept.`);
     const reason = parsed.data.no_hypothesis_reason;
-    const text = reason ? `${parsed.data.note} (no hypothesis yet: ${reason})` : parsed.data.note;
+    const noExp = parsed.data.no_experiment_reason;
+    const text = [parsed.data.note, reason ? `(no hypothesis yet: ${reason})` : null, noExp ? `(no experiment yet: ${noExp})` : null].filter(Boolean).join(" ");
     this.notes.push(text);
-    this.log("note.recorded", { number: this.notes.length, note: text, no_hypothesis_reason: reason ?? null });
+    this.log("note.recorded", { number: this.notes.length, note: text, no_hypothesis_reason: reason ?? null, no_experiment_reason: noExp ?? null });
     if (reason && this.hypotheses.size === 0) this.readWindow = { pages: 0, callsAtStart: this.o.usage?.().calls ?? 0 };
-    return { ok: true, note_number: this.notes.length, notes_left: NOTE_LIMIT - this.notes.length, ...(reason ? { reading_window_reopened: this.hypotheses.size === 0 } : {}) };
+    if (noExp) this.resetExperimentWindow();
+    return { ok: true, note_number: this.notes.length, notes_left: NOTE_LIMIT - this.notes.length, ...(reason ? { reading_window_reopened: this.hypotheses.size === 0 } : {}), ...(noExp ? { experiment_window_reopened: true } : {}) };
   }
 
   // Cases cited by an active hypothesis, in its evidence or its prediction scopes.
