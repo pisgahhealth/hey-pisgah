@@ -50,7 +50,11 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
     say(`    before: speaks to ${pc.before.speaks_to.join(", ") || "none"}; distinguishes ${pc.before.distinguishes.map((p) => p.join(" vs ")).join(", ") || "no pair"}`);
     const per = Object.entries(pc.after?.per_hypothesis ?? {}).map(([h, v]) => `${h} ${v.landed}`).join(", ");
     say(`    after: ${per || "nothing landed"}; contradicted ${pc.after?.contradicted.join(", ") || "none"}`);
+    if (x.behaviour) say(`    behaviour: event logs identical to control in ${x.behaviour.event_logs_identical_to_control}${x.behaviour.note ? "; behaviour unchanged" : ""}`);
   }
+  const pairRefused = exps.filter((e) => e.record_type === "experiment.refused_pair").length;
+  const reasons = done.filter((x) => x.no_pair_reason).map((x) => `${x.experiment_id}: ${String(x.no_pair_reason).slice(0, 120)}`);
+  say(`pair gate: ${pairRefused} refused, ${reasons.length} run on a stated no_pair_reason${reasons.length ? ` (${reasons.join("; ")})` : ""}`);
   say(`say-do mismatches ${refused.length}`);
   for (const p of props) {
     const r = reports.find((x) => x.proposal_id === p.proposal_id);
@@ -58,8 +62,11 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
   }
   if (result) say(`declared result ${String(result.result)}: ${String(result.note).slice(0, 160)}`);
   const usd = rows.reduce((s, r) => s + r.cost_usd, 0);
+  const promptTokens = rows.reduce((s, r) => s + r.prompt_tokens, 0);
+  const promptPerCall = rows.length ? Math.round(promptTokens / rows.length) : 0;
+  const promptMax = rows.reduce((m, r) => Math.max(m, r.prompt_tokens), 0);
   const lat = rows.map((r) => r.latency_ms).sort((a, b) => a - b);
-  say(`stop ${String(stopped?.stop ?? "not stopped")}  calls ${rows.length}  cost $${usd.toFixed(4)}  prompt ${rows.reduce((s, r) => s + r.prompt_tokens, 0)}  completion ${rows.reduce((s, r) => s + r.completion_tokens, 0)}  reasoning ${rows.reduce((s, r) => s + (r.reasoning_tokens ?? 0), 0)}  latency p50 ${lat.length ? lat[Math.floor(lat.length / 2)] : 0} ms`);
+  say(`stop ${String(stopped?.stop ?? "not stopped")}  calls ${rows.length}  cost $${usd.toFixed(4)}  prompt ${promptTokens} (${promptPerCall} a call, max ${promptMax})  completion ${rows.reduce((s, r) => s + r.completion_tokens, 0)}  reasoning ${rows.reduce((s, r) => s + (r.reasoning_tokens ?? 0), 0)}  latency p50 ${lat.length ? lat[Math.floor(lat.length / 2)] : 0} ms`);
   const counters = (stopped?.counters ?? {}) as Row;
   const failed = tools.filter((t) => t.ok === false).length;
   say(`repairs ${Number(counters.repairs ?? 0)}  tool calls ${tools.length}  refused tool calls ${failed}  efforts ${[...new Set(rows.map((r) => r.effort))].join(",") || "-"}`);
@@ -82,5 +89,5 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
   };
   const pass = Object.values(needs).every(Boolean);
   say(`check: ${Object.entries(needs).map(([k, v]) => `${k} ${v ? "pass" : "FAIL"}`).join("  ")}  => ${pass ? "PASS" : "FAIL"}`);
-  return { pass, lines, summary: { run_id: runId, arm, needs, calls: rows.length, usd, hypotheses: hyps.length, experiments: done.length, aborted, invalid, say_do_mismatches: refused.length, proposals: props.map((p) => p.proposal_id), validations: reports.map((r) => r.status), stop: stopped?.stop ?? null, deny_hits: hits.length } };
+  return { pass, lines, summary: { run_id: runId, arm, needs, calls: rows.length, usd, prompt_tokens: promptTokens, prompt_tokens_per_call: promptPerCall, prompt_tokens_max: promptMax, hypotheses: hyps.length, experiments: done.length, aborted, invalid, pair_refusals: pairRefused, no_pair_reasons: reasons.length, say_do_mismatches: refused.length, proposals: props.map((p) => p.proposal_id), validations: reports.map((r) => r.status), stop: stopped?.stop ?? null, deny_hits: hits.length } };
 }

@@ -4,7 +4,7 @@ import { SIM_EVENT_KINDS } from "@hey-pisgah/workflow";
 import type { DiscoveryPool, PoolCase } from "./pool.js";
 
 // Every tool result is capped so one read can never flood the context.
-export const RESULT_CHAR_CAP = 12_000;
+export const RESULT_CHAR_CAP = 8_000;
 export const NOTE_CHAR_CAP = 500;
 
 type Row = Record<string, unknown>;
@@ -33,7 +33,7 @@ export function listCases(pool: DiscoveryPool): Row {
 export type TimelineArgs = { case_id: string; order: "occurred" | "recorded"; offset?: number | undefined; limit?: number | undefined; kinds?: string[] | undefined };
 
 // One page of a case's events and notes in the chosen clock order; notes arrive wrapped as untrusted_text.
-export function timeline(c: PoolCase, a: TimelineArgs): Row {
+export function timeline(c: PoolCase, a: TimelineArgs, cap = RESULT_CHAR_CAP): Row {
   const key = a.order === "occurred" ? "occurred_at" : "recorded_at";
   const rows: { at: number; seq: number; row: Row }[] = c.events
     .filter((e) => !a.kinds || a.kinds.includes(e.kind))
@@ -50,7 +50,7 @@ export function timeline(c: PoolCase, a: TimelineArgs): Row {
   let size = 200;
   for (const r of rows.slice(offset, offset + limit)) {
     const s = JSON.stringify(r.row).length + 1;
-    if (page.length > 0 && size + s > RESULT_CHAR_CAP) break;
+    if (page.length > 0 && size + s > Math.min(cap, RESULT_CHAR_CAP)) break;
     page.push(r.row);
     size += s;
   }
@@ -191,6 +191,16 @@ export const OPERATION_VOCABULARY = [
   { op: "rebind_section", shape: { op: "rebind_section", document_id: "<document id>", section_id: "<section id>", source: { record_kind: "<allowed source>", field_path: "<path>", version_policy: "current" } }, example: { op: "rebind_section", document_id: "refund_voucher", section_id: "settlement", source: { record_kind: "payment", field_path: "balance", version_policy: "current" } }, rule: "Data-integrity fences are derived again from the new binding." }
 ] as const;
 
+// How the definition executor reads a definition, stated as rules of the engine for every arm alike.
+export const ENGINE_SEMANTICS = [
+  "A step can start only when it is required, every start edge into it holds and, if it has triggers, at least one of its triggers has fired.",
+  "A trigger fires once its when predicate holds and its condition, if any, is true, and it stays fired.",
+  "An edge with gate complete lets its target start but holds the target's completion until the source step completes.",
+  "An edge or after predicate whose source step is not required counts as satisfied.",
+  "Edges and triggers are separate: removing, adding or moving an edge never changes a trigger, and set_prep_trigger changes triggers only.",
+  "Operations may target only steps whose action is prepare_document and that are not external."
+] as const;
+
 // Record kinds a section may bind to: those a step produces or those the definition already binds.
 export function allowedSources(def: WorkflowDefinition): string[] {
   const out = new Set<string>();
@@ -208,6 +218,7 @@ export function definitionView(def: WorkflowDefinition): Row {
     event_kinds: [...SIM_EVENT_KINDS],
     condition_facts: Object.fromEntries(Object.entries(FACT_VALUES).map(([k, v]) => [k, v instanceof RegExp ? `pattern ${v.source}` : v])),
     allowed_sources: allowedSources(def),
+    engine_semantics: ENGINE_SEMANTICS,
     operations: OPERATION_VOCABULARY,
     limits: { ops_per_change: 3, condition_atoms: 3, predicate_depth: 2, predicate_leaves: 4 }
   };

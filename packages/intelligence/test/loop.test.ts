@@ -4,8 +4,10 @@ import { openStream, readStream } from "@hey-pisgah/store";
 import { describe, expect, it } from "vitest";
 import { checkDiscovery } from "../src/check.js";
 import { appendCommitment, appendOnlyProblems, commitmentFor, currentContent, readCommitments } from "../src/commitments.js";
+import { ARGS_NOTE, DEFINITION_NOTE, DROPPED_NOTE, resultDigest } from "../src/digest.js";
 import { ELIDED, REPEAT_NOTE, systemPrompt } from "../src/prompts.js";
-import { SETTINGS, compact, runLoop } from "../src/loop.js";
+import { ENGINE_SEMANTICS } from "../src/views.js";
+import { SETTINGS, compact, dropOldTurns, runLoop, type Digests } from "../src/loop.js";
 import { scriptedInvestigator } from "../src/mock.js";
 import { STREAMS, Session, sessionStreamId, type Arm } from "../src/session.js";
 import { LEARNED, LONG, SHORT, pool, tempRoot } from "./helpers.js";
@@ -102,11 +104,69 @@ describe("discovery loop in mock mode", () => {
     client.close();
   });
 
-  it("elides older tool results beyond the context budget", () => {
+  it("elides older tool results beyond the context budget and never the turn the model has not seen", () => {
     const big = "x".repeat(400);
-    const m = [{ role: "system" as const, content: "s" }, ...[1, 2, 3].map((i) => ({ role: "tool" as const, tool_call_id: String(i), content: big }))];
+    const tool = (i: number) => ({ role: "tool" as const, tool_call_id: String(i), content: big });
+    const call = (i: number, args = "{}") => ({ role: "assistant" as const, content: null, tool_calls: [{ id: String(i), type: "function" as const, function: { name: "get_record", arguments: args } }] });
+    const m = [{ role: "system" as const, content: "s" }, call(1), tool(1), call(2), tool(2), call(3), tool(3), call(4), tool(4)];
     const out = compact(m, 900);
-    expect(out.map((x) => x.content)).toEqual(["s", ELIDED, big, big]);
+    expect(out.filter((x) => x.role === "tool").map((x) => x.content)).toEqual([ELIDED, big, big, big]);
+    const unseen = compact([{ role: "system" as const, content: "s" }, call(1), tool(1), tool(2), tool(3)], 10);
+    expect(unseen.filter((x) => x.role === "tool").map((x) => x.content)).toEqual([big, big, big]);
+    const longArgs = JSON.stringify({ statement: "y".repeat(600) });
+    const args = compact([{ role: "system" as const, content: "s" }, call(1, longArgs), tool(1), call(2), tool(2)], 500);
+    expect((args[1] as { tool_calls: { function: { arguments: string } }[] }).tool_calls[0]!.function.arguments).toBe(JSON.stringify({ elided: ARGS_NOTE }));
+  });
+
+  it("shows the definition whole once, then its short form with the engine rules", () => {
+    const s = new Session({ storeRoot: tempRoot(), runId: "run-d1ae5100", arm: "adaptive", pool: pool() });
+    const full = JSON.stringify(s.definition());
+    const digests: Digests = new Map([["d", { name: "get_workflow_definition", digest: JSON.stringify(resultDigest("get_workflow_definition", s.definition(), s.base)) }]]);
+    const read = [{ role: "system" as const, content: "s" }, { role: "assistant" as const, content: null, tool_calls: [{ id: "d", type: "function" as const, function: { name: "get_workflow_definition", arguments: "{}" } }] }, { role: "tool" as const, tool_call_id: "d", content: full }];
+    expect(compact(read, 100_000, digests)[2]!.content).toBe(full);
+    const later = compact([...read, { role: "assistant" as const, content: "next" }], 100_000, digests)[2]!.content as string;
+    expect(later.length).toBeLessThan(full.length / 3);
+    const d = JSON.parse(later) as { digest: string; edges: string[]; triggers: string[]; engine_semantics: string[] };
+    expect(d.digest).toBe(DEFINITION_NOTE);
+    expect(d.edges).toContain("e04 st05>st06 start soft");
+    expect(d.triggers).toContain('st06 when {"after":{"step":"st05"}}');
+    expect(d.engine_semantics).toEqual([...ENGINE_SEMANTICS]);
+    s.close();
+  });
+
+  it("drops whole older turns past the history cap and keeps the definition's short form in one note", () => {
+    const s = new Session({ storeRoot: tempRoot(), runId: "run-d1ae5101", arm: "adaptive", pool: pool() });
+    const digest = JSON.stringify(resultDigest("get_workflow_definition", s.definition(), s.base));
+    const turn = (i: number, content: string) => [{ role: "assistant" as const, content: null, tool_calls: [{ id: `c${i}`, type: "function" as const, function: { name: "get_record", arguments: "{}" } }] }, { role: "tool" as const, tool_call_id: `c${i}`, content }];
+    const m = [{ role: "system" as const, content: "s" }, { role: "user" as const, content: "k" }, ...turn(0, digest), ...[1, 2, 3, 4, 5].flatMap((i) => turn(i, "x".repeat(3000)))];
+    const out = dropOldTurns(m, 8000);
+    expect(out.slice(0, 2)).toEqual(m.slice(0, 2));
+    const note = JSON.parse(out[2]!.content as string) as { elided_turns: number; note: string; definition: { digest: string } };
+    expect(note.note).toBe(DROPPED_NOTE);
+    expect(note.elided_turns).toBe(3);
+    expect(note.definition.digest).toBe(DEFINITION_NOTE);
+    expect(out.slice(3)).toEqual(m.slice(-6));
+    expect(out[3]!.role).toBe("assistant");
+    expect(dropOldTurns(m, 1_000_000)).toEqual(m);
+    const huge = [...m.slice(0, 6), ...turn(9, "x".repeat(60_000))];
+    expect(dropOldTurns(huge, 8000)).toEqual(huge);
+    expect(compact(huge, 8000).filter((x) => x.role === "tool").map((x) => (x.content as string).length)).toEqual(huge.filter((x) => x.role === "tool").map((x) => (x.content as string).length));
+    s.close();
+  });
+
+  it("keeps a sixty-call run's conversation under the history cap", async () => {
+    const ids = pool().ids();
+    let n = 0;
+    const reads: MockResponder = ({ body }) => {
+      n += 1;
+      const c = ids[n % ids.length]!;
+      const calls = n === 1 ? [["list_cases", {}], ["get_workflow_definition", {}], ["get_ward_requirements", {}]] : [["get_case_timeline", { case_id: c, order: n % 2 ? "occurred" : "recorded", limit: 60 }], ["get_staff_activity", { case_id: c, role: "nurse" }]];
+      return { id: "m", object: "chat.completion", created: 0, model: String(body.model), choices: [{ index: 0, message: { role: "assistant", content: "reading", refusal: null, tool_calls: calls.map(([name, args], i) => ({ id: `c${n}_${i}`, type: "function", function: { name: name as string, arguments: JSON.stringify(args) } })) }, finish_reason: "tool_calls", logprobs: null }], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } };
+    };
+    const r = await mockRun("adaptive", { calls: 60, mock: reads });
+    expect(r.out.calls).toBe(60);
+    const newest = 2 * 8_200 + 1_500;
+    for (const b of r.bodies) expect(JSON.stringify((b.messages as unknown[]).slice(2)).length).toBeLessThan(SETTINGS.history_chars + newest);
   });
 });
 

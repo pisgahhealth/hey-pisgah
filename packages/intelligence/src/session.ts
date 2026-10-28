@@ -7,7 +7,7 @@ import { readStream, openStream, type Stream } from "@hey-pisgah/store";
 import type { WorldRules } from "@hey-pisgah/simulator";
 import { applyOperations, evalCondition } from "@hey-pisgah/workflow";
 import { z } from "zod";
-import { runMatched, summarise, type CaseResult, type Runner } from "./experiments.js";
+import { runMatched, summarise, type Behaviour, type CaseResult, type Runner } from "./experiments.js";
 import { DiscoveryPool } from "./pool.js";
 import { checkAfter, checkBefore, type Deltas } from "./prediction.js";
 import { UNKNOWN_ID } from "./unknown.js";
@@ -38,6 +38,16 @@ export type SessionOptions = {
 };
 
 type Result = Record<string, unknown>;
+
+// The uniform unknown_id plus the argument path that held it; the path never carries the id, so it says nothing about other pools.
+const unknownField = (field: string, detail?: string): Result => ({ ...UNKNOWN_ID, field, ...(detail ? { detail } : {}) });
+
+// Takes the optional no_pair_reason off a run_experiment request, so the strict contract schema still checks the rest.
+function splitReason(raw: unknown): { raw: unknown; reason: string | undefined } {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw) || !("no_pair_reason" in raw)) return { raw, reason: undefined };
+  const { no_pair_reason: r, ...rest } = raw as Record<string, unknown>;
+  return { raw: rest, reason: typeof r === "string" && r.trim().length > 0 ? r.trim().slice(0, 300) : undefined };
+}
 const refusal = (error: string, message: string, extra: Result = {}): Result => ({ ok: false, error, message, ...extra });
 const zodIssues = (e: z.ZodError) => e.issues.slice(0, 8).map((i) => `${i.path.join(".") || "$"}: ${i.message}`);
 
@@ -90,9 +100,26 @@ export type StoredExperiment = {
   deltas: Deltas;
   prediction_check: PredictionCheck;
   abort_reason: string | null;
+  behaviour: Behaviour | null;
+  no_pair_reason: string | null;
 };
 
 export type StopReason = "dev_valid_proposal" | "declared_negative" | "lockout" | "proposals_exhausted" | "prior_proposal_submitted";
+
+// At most this many step time and action differences per case reach the model; the stored record keeps them all.
+export const DIFFS_PER_CASE = 8;
+
+// One case of an experiment as the model reads it: control metrics, every delta, and the intervention fields a delta cannot carry.
+function caseView(c: CaseResult): Result {
+  const { terminal_state: t, agent_actions: a, staff_min_by_role: m, ...metrics } = c.control;
+  const i = c.intervention;
+  const out: Result = { case_id: c.case_id, event_logs_identical: c.event_logs_identical, control: { ...metrics, terminal_state: t, agent_actions: a, staff_min_by_role: m }, delta: c.delta, intervention: { terminal_state: i.terminal_state, agent_actions: i.agent_actions, staff_min_by_role: i.staff_min_by_role } };
+  out.step_time_diffs = c.step_time_diffs.slice(0, DIFFS_PER_CASE);
+  out.action_diff = c.action_diff.slice(0, DIFFS_PER_CASE);
+  const more = Math.max(0, c.step_time_diffs.length - DIFFS_PER_CASE) + Math.max(0, c.action_diff.length - DIFFS_PER_CASE);
+  if (more) out.diffs_not_shown = more;
+  return out;
+}
 
 // One investigation session: the tools' state, the budgets, and the append-only learning streams.
 export class Session {
@@ -103,7 +130,7 @@ export class Session {
   readonly proposals = new Map<string, WorkflowChangeProposal>();
   readonly viewed = new Set<string>();
   readonly frozen = new Set<string>();
-  counters = { experiments_used: 0, invalid_requests: 0, zod_streak: 0, repairs: 0, listed_used: 0, proposals_used: 0, say_do_mismatches: 0, retains: 0, rejects: 0 };
+  counters = { experiments_used: 0, invalid_requests: 0, pair_refusals: 0, no_pair_reasons: 0, zod_streak: 0, repairs: 0, listed_used: 0, proposals_used: 0, say_do_mismatches: 0, retains: 0, rejects: 0 };
   stop: { reason: StopReason; detail: string } | null = null;
   private readonly streams: { hypotheses: Stream; experiments: Stream; proposals: Stream; log: Stream };
   private serial = 0;
@@ -149,11 +176,11 @@ export class Session {
   // Read tools: every id outside the discovery pool gets the same unknown_id.
   listCases(): Result { return views.listCases(this.pool); }
 
-  timeline(a: { case_id: string; order: "occurred" | "recorded"; offset?: number | undefined; limit?: number | undefined; kinds?: string[] | undefined }): Result {
+  timeline(a: { case_id: string; order: "occurred" | "recorded"; offset?: number | undefined; limit?: number | undefined; kinds?: string[] | undefined }, cap?: number): Result {
     const c = this.pool.get(a.case_id);
     if (!c) return UNKNOWN_ID;
     this.view(c.case_id);
-    return views.timeline(c, a);
+    return views.timeline(c, a, cap);
   }
 
   record(a: { case_id: string; record_kind?: string | undefined; document_id?: string | undefined }): Result {
@@ -193,14 +220,14 @@ export class Session {
     if (!parsed.success) { this.counters.repairs += 1; return refusal("invalid_arguments", "The arguments do not match the schema.", { issues: zodIssues(parsed.error) }); }
     const a = parsed.data;
     const competing = Array.isArray(a.competing) ? a.competing : null;
-    if (competing && competing.some((id) => !this.hypotheses.has(id))) return UNKNOWN_ID;
-    if (a.revises && (!this.hypotheses.has(a.revises) || this.hypotheses.get(a.revises)!.status === "revised")) return UNKNOWN_ID;
-    for (const ev of a.evidence) {
-      const hit = this.pool.event(ev.event_id);
-      if (!hit || hit.case_id !== ev.case_id) return UNKNOWN_ID;
-    }
-    for (const pr of [a.if_true, a.if_false]) {
-      if ("cases" in pr.scope && pr.scope.cases.some((id) => !this.pool.get(id))) return UNKNOWN_ID;
+    const ci = competing ? competing.findIndex((id) => !this.hypotheses.has(id)) : -1;
+    if (ci >= 0) return unknownField(`competing[${ci}]`);
+    if (a.revises && (!this.hypotheses.has(a.revises) || this.hypotheses.get(a.revises)!.status === "revised")) return unknownField("revises");
+    const ei = a.evidence.findIndex((ev) => this.pool.event(ev.event_id)?.case_id !== ev.case_id);
+    if (ei >= 0) return unknownField(`evidence[${ei}]`, "The event_id is not an event of the case_id given with it in this pool.");
+    for (const [label, pr] of [["if_true", a.if_true], ["if_false", a.if_false]] as const) {
+      const k = "cases" in pr.scope ? pr.scope.cases.findIndex((id) => !this.pool.get(id)) : -1;
+      if (k >= 0) return unknownField(`${label}.scope.cases[${k}]`);
       if (pr.tolerance_min > toleranceCap(pr.metric)) return refusal("tolerance_cap", `tolerance_min for ${pr.metric} may be at most ${toleranceCap(pr.metric)}.`);
     }
     const id = this.nextId("h");
@@ -286,10 +313,11 @@ export class Session {
   }
 
   // Validates in the published order, then runs matched control and intervention arms; the result carries numbers and diffs only.
-  runExperiment(raw: unknown): Result {
+  runExperiment(rawIn: unknown): Result {
     if (this.o.arm !== "adaptive") return refusal("not_available", "This tool is not available in this session.");
     if (this.locked) return refusal("locked_out", "Three refused requests ended access to experiments.");
     if (this.counters.experiments_used >= ExperimentBudget.experiments) return refusal("budget_exhausted", "No experiments are left.");
+    const { raw, reason } = splitReason(rawIn);
     const parsed = ExperimentRequest.safeParse(raw);
     if (!parsed.success) {
       this.counters.zod_streak += 1;
@@ -308,7 +336,23 @@ export class Session {
     if (act.length < 2 && !act.some((h) => !Array.isArray(h.competing))) {
       return this.invalid("preregistration", raw, ["needs two hypotheses, or one with a stated reason"], refusal("preregistration", "Record two competing hypotheses, or one with the reason no competitor was identified, before the first experiment."));
     }
-    return this.execute("request", q, base, q.ops, files as NonNullable<(typeof files)[number]>[], act, [q.hypothesis_id, ...q.distinguishes]);
+    const ran = [...this.experiments.values()].filter((x) => x.source === "request").length;
+    let noPair: string | null = null;
+    if (ran >= 1 && this.distinguishablePairs(act).length === 0) {
+      if (reason === undefined) {
+        this.counters.pair_refusals += 1;
+        this.streams.experiments.append("experiment.refused_pair", { session_id: this.o.runId, request_hash: hashJson(JSON.parse(JSON.stringify(raw ?? null))), active: act.map((h) => h.hypothesis_id), pair_refusals: this.counters.pair_refusals }, { recorded_at: 0, occurred_at: 0 });
+        return refusal("no_distinguishable_pair", "From the second experiment on, hold two active hypotheses whose if_true predictions do not overlap on one metric for a shared pool case, or give no_pair_reason saying why no such pair can be formed. This request used no experiment.", { budget: this.budgetView() });
+      }
+      noPair = reason;
+      this.counters.no_pair_reasons += 1;
+    }
+    return this.execute("request", q, base, q.ops, files as NonNullable<(typeof files)[number]>[], act, [q.hypothesis_id, ...q.distinguishes], noPair);
+  }
+
+  // Pairs of active hypotheses whose if_true predictions are disjoint on one metric for a shared experimentable pool case.
+  distinguishablePairs(act: readonly HR[] = this.active()): [string, string][] {
+    return checkBefore(act, this.pool.ids().filter((id) => this.pool.experimentable(id) !== null), this.factsOf).distinguishes;
   }
 
   // The predetermined list for the A4 arm: the app chooses the experiment, the model only reads the result.
@@ -321,10 +365,10 @@ export class Session {
     this.counters.listed_used += 1;
     const files = entry.case_ids.map((id) => this.pool.experimentable(id));
     if (files.some((f) => f === null)) throw new Error(`listed experiment ${i} names a case outside the discovery pool`);
-    return this.execute("listed", { index: i, ops: entry.ops, case_ids: entry.case_ids }, this.base, entry.ops, files as NonNullable<(typeof files)[number]>[], this.active(), []);
+    return this.execute("listed", { index: i, ops: entry.ops, case_ids: entry.case_ids }, this.base, entry.ops, files as NonNullable<(typeof files)[number]>[], this.active(), [], null);
   }
 
-  private execute(source: "request" | "listed", request: unknown, base: WD, ops: readonly Operation[], files: NonNullable<ReturnType<DiscoveryPool["experimentable"]>>[], act: HR[], cited: string[]): Result {
+  private execute(source: "request" | "listed", request: unknown, base: WD, ops: readonly Operation[], files: NonNullable<ReturnType<DiscoveryPool["experimentable"]>>[], act: HR[], cited: string[], noPair: string | null): Result {
     const caseIds = files.map((f) => f.case_id);
     const before = checkBefore(act, caseIds, this.factsOf);
     const xid = this.nextId("x");
@@ -345,7 +389,7 @@ export class Session {
     const after = m.aborted ? null : checkAfter(act, before, caseIds, m.deltas, this.factsOf);
     const stored: StoredExperiment = {
       experiment_id: xid, session_id: this.o.runId, source, request, status: m.aborted ? "aborted" : "completed", base_hash: m.base_hash, intervention_hash: m.intervention_hash,
-      hypothesis_hashes: hashes, warnings: m.warnings, cases: m.cases, summary: summarise(m.cases), deltas: m.deltas, prediction_check: { before, after }, abort_reason: m.aborted ? `${m.aborted.case_id}: ${m.aborted.reason}` : null
+      hypothesis_hashes: hashes, warnings: m.warnings, cases: m.cases, summary: summarise(m.cases), deltas: m.deltas, prediction_check: { before, after }, abort_reason: m.aborted ? `${m.aborted.case_id}: ${m.aborted.reason}` : null, behaviour: m.behaviour, no_pair_reason: noPair
     };
     this.experiments.set(xid, stored);
     this.streams.experiments.append(m.aborted ? "experiment.aborted" : "experiment.completed", stored, { recorded_at: 0, occurred_at: 0 });
@@ -355,7 +399,7 @@ export class Session {
   // What the model sees of an experiment: never the prediction check, never a verdict.
   experimentView(x: StoredExperiment): Result {
     if (x.status === "aborted") return { ok: false, error: "experiment_aborted", experiment_id: x.experiment_id, message: x.abort_reason, budget: this.budgetView() };
-    return { ok: true, experiment_id: x.experiment_id, request: x.request, base_hash: x.base_hash, intervention_hash: x.intervention_hash, warnings: x.warnings, cases: x.cases, median_delta: x.summary, budget: this.budgetView() };
+    return { ok: true, experiment_id: x.experiment_id, request: x.request, base_hash: x.base_hash, intervention_hash: x.intervention_hash, warnings: x.warnings, behaviour: x.behaviour, cases: x.cases.map(caseView), median_delta: x.summary, budget: this.budgetView() };
   }
 
   getExperiment(a: { experiment_id: string }): Result {

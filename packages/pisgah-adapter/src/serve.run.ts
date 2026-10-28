@@ -34,7 +34,9 @@ async function main(): Promise<void> {
   const s = await startEmrServe({
     storeRoot: store, port: rec ? keepingContext(port, join(rec, "context.json")) : port, recordingsDir: rec ? join(rec, "model") : join(store, "..", "emr-recordings"), hosts: ["127.0.0.1", "::1"],
     ...(rec ? { transcribe: recordingTranscriber(voiceTranscriber, join(rec, "transcripts.json")) } : {}),
-    listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4100), runtime: { holdMs: Number(process.env["HEY_PISGAH_HOLD_MS"] ?? 4000), ...(profile.owners.length ? { watchMs: Number(process.env["HEY_PISGAH_WATCH_MS"] ?? 5000) } : {}) },
+    // Without a recordings folder no model request is kept, since gate requests carry heard words; the second ear is on unless turned off.
+    recordModel: !!rec || process.env["HEY_PISGAH_RECORD_MODEL"] === "1", ears: process.env["HEY_PISGAH_SECOND_EAR"] === "off" ? "off" : "spark",
+    listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4100), runtime: { holdMs: Number(process.env["HEY_PISGAH_HOLD_MS"] ?? 4000), keepHeard: process.env["HEY_PISGAH_KEEP_HEARD"] === "1", ...(profile.owners.length ? { watchMs: Number(process.env["HEY_PISGAH_WATCH_MS"] ?? 5000) } : {}) },
     log: (l) => process.stderr.write(`${l}\n`)
   });
   process.stdout.write(`emr serve on ${s.urls.join(" ")} (mode ${s.client.mode}, ${Object.keys(bearers).length} owner${Object.keys(bearers).length > 1 ? "s" : ""})\n`);

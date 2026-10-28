@@ -1,5 +1,5 @@
 import { WorkflowChangeProposal, hashJson, type RunResult } from "@hey-pisgah/contracts";
-import { externalSubLogHash, runDefinition } from "@hey-pisgah/simulator";
+import { BEHAVIOUR_UNCHANGED, externalSubLogHash, runDefinition } from "@hey-pisgah/simulator";
 import { openStream, readStream } from "@hey-pisgah/store";
 import { describe, expect, it } from "vitest";
 import { STREAMS, type Session } from "../src/session.js";
@@ -27,6 +27,30 @@ describe("matched experiments", () => {
     expect(stored.prediction_check.after.per_hypothesis[h2]).toEqual({ landed: "if_false" });
     expect(stored.hypothesis_hashes[h1]).toBe(s.hypotheses.get(h1)!.hash);
     expect(readStream(s.o.storeRoot, STREAMS.hypotheses).filter((e) => e.record_type === "hypothesis.frozen").length).toBe(2);
+    s.close();
+  });
+
+  it("says when the event logs equal control and names what still gates the targeted steps", () => {
+    const s = session();
+    const { h1, h2 } = two(s);
+    const ops = [{ op: "move_step_after", step: { step: "st06" }, after: { step: "st01" }, gate: "start" }, { op: "add_soft_edge", from: { step: "st05" }, to: { step: "st07" }, gate: "start" }];
+    const r = s.runExperiment(req(h1, h2, { ops }));
+    expect(r.ok).toBe(true);
+    expect(r.intervention_hash).not.toBe(r.base_hash);
+    const b = r.behaviour as { event_logs_identical_to_control: string; identical_cases: string[]; note: string | null; gating: { step: string; start_edges: { edge_id: string; from: string }[]; triggers: { when: unknown }[] }[] };
+    expect(b.event_logs_identical_to_control).toBe("4 of 4 cases");
+    expect(b.identical_cases).toEqual([...LONG, SHORT]);
+    expect(b.note).toBe(BEHAVIOUR_UNCHANGED);
+    expect(b.gating.map((g) => g.step)).toEqual(["st06", "st07"]);
+    expect(b.gating[0]!.triggers).toEqual([{ when: { after: { step: "st05" } }, condition: null }]);
+    expect(b.gating[0]!.start_edges.map((e) => e.from)).toEqual(["st01"]);
+    expect(b.gating[1]!.start_edges.map((e) => e.from).sort()).toEqual(["st05", "st06"]);
+    for (const c of r.cases as { event_logs_identical: boolean }[]) expect(c.event_logs_identical).toBe(true);
+    const text = JSON.stringify(r);
+    for (const w of ["verdict", "landed", "family", "should", "because"]) expect(text).not.toContain(w);
+    const changed = s.runExperiment(req(h1, h2));
+    const cb = changed.behaviour as { identical_cases: string[]; note: string | null; gating: unknown };
+    expect(cb).toMatchObject({ identical_cases: [], note: null, gating: null });
     s.close();
   });
 
@@ -60,7 +84,7 @@ describe("matched experiments", () => {
     expect(s.runExperiment(req(h1, h1, { distinguishes: [] })).ok).toBe(true);
     expect(JSON.stringify(s.runExperiment(req(h1, h1, { distinguishes: [], case_ids: ["c-zz99zz99"] })))).toBe(JSON.stringify(UNKNOWN_ID));
     expect(s.counters.invalid_requests).toBe(2);
-    const fence = s.runExperiment(req(h1, h1, { distinguishes: [], ops: [{ op: "remove_soft_edge", edge_id: "e19" }] }));
+    const fence = s.runExperiment(req(h1, h1, { distinguishes: [], ops: [{ op: "remove_soft_edge", edge_id: "e19" }], no_pair_reason: "only one reading so far" }));
     expect(fence.error).toBe("invalid_request");
     expect(fence.stage).toBe("static");
     expect(s.locked).toBe(true);
@@ -82,6 +106,30 @@ describe("matched experiments", () => {
     s.close();
   });
 
+  it("needs a distinguishable pair or a stated reason before the second experiment, and counts each refusal apart", () => {
+    const s = session();
+    const h1 = hyp(s);
+    expect(s.runExperiment(req(h1, h1, { distinguishes: [] })).ok).toBe(true);
+    const overlap = hyp(s, { competing: [h1], if_true: pred("intervention_lt_control", 20), if_false: pred("no_difference", 5) });
+    expect(s.distinguishablePairs()).toEqual([]);
+    const refused = s.runExperiment(req(h1, overlap));
+    expect(refused.error).toBe("no_distinguishable_pair");
+    expect(String(refused.message)).not.toMatch(/h-[0-9a-f]{8}|c-[0-9a-f]{8}/);
+    expect(s.counters).toMatchObject({ pair_refusals: 1, invalid_requests: 0, experiments_used: 1 });
+    expect(s.runExperiment(req(h1, overlap, { no_pair_reason: "  " })).error).toBe("no_distinguishable_pair");
+    expect(s.counters.pair_refusals).toBe(2);
+    const withReason = s.runExperiment(req(h1, overlap, { no_pair_reason: "both readings predict a fall in the same cases" }));
+    expect(withReason.ok).toBe(true);
+    expect(s.experiments.get(String(withReason.experiment_id))!.no_pair_reason).toBe("both readings predict a fall in the same cases");
+    const h3 = hyp(s, { competing: [h1], if_true: pred("no_difference", 10, "post_signoff_wait_min", [LONG[0]]), if_false: pred("intervention_lt_control", 30) });
+    expect(s.distinguishablePairs()).toEqual([[h1, h3], [overlap, h3]]);
+    expect(s.runExperiment(req(h1, h3)).ok).toBe(true);
+    const rows = readStream(s.o.storeRoot, STREAMS.experiments).map((e) => e.record_type);
+    expect(rows.filter((r) => r === "experiment.refused_pair").length).toBe(2);
+    expect(s.counters).toMatchObject({ pair_refusals: 2, no_pair_reasons: 1, experiments_used: 3, invalid_requests: 0 });
+    s.close();
+  });
+
   it("gives two schema repairs, then counts the request as refused", () => {
     const s = session();
     const h1 = hyp(s);
@@ -97,9 +145,9 @@ describe("matched experiments", () => {
 
   it("stops at eight experiments", () => {
     const s = session();
-    const h1 = hyp(s);
-    for (let i = 0; i < 8; i++) expect(s.runExperiment(req(h1, h1, { distinguishes: [], case_ids: [LONG[i % 3]!] })).ok).toBe(true);
-    expect(s.runExperiment(req(h1, h1, { distinguishes: [] })).error).toBe("budget_exhausted");
+    const { h1, h2 } = two(s);
+    for (let i = 0; i < 8; i++) expect(s.runExperiment(req(h1, h2, { case_ids: [LONG[i % 3]!] })).ok).toBe(true);
+    expect(s.runExperiment(req(h1, h2)).error).toBe("budget_exhausted");
     s.close();
   });
 });

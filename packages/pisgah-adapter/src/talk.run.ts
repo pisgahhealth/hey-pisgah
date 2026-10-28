@@ -37,7 +37,7 @@ async function main(): Promise<void> {
   const client = new ModelClient({ storeRoot: store, mode: "replay", recordingsDir: join(rec, "model"), taskStateOf: (id) => serve?.runtime.stateOf(id) ?? null });
   serve = await startEmrServe({
     storeRoot: store, port: new MemoryEmrPort(readKeptContext(join(rec, "context.json")), admission), client, listenPort: 0,
-    transcribe: replayTranscriber(join(rec, "transcripts.json")), runtime: { holdMs: 0, proofRetryMs: 1 }
+    transcribe: replayTranscriber(join(rec, "transcripts.json")), ears: "spark", runtime: { holdMs: 0, proofRetryMs: 1 }
   });
   const replay = await feedTalk({ serveUrl: serve.url, owner: "replay-owner", admissionId: admission, sessionId: "replay-1", chunks, pace: "fast", mode: "replay", talkId: talk.talk_id, gateHash: currentGateHash(), settleMs: 30_000 });
   await serve.close();

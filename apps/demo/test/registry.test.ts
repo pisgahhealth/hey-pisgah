@@ -9,8 +9,8 @@ import { fixturePage, loadClaims, renderEval, renderStep, root } from "./render"
 const { registry, status } = loadRegistry(root);
 
 describe("claims registry render rule", () => {
-  it("the status file covers the registry, 18 claims", () => {
-    expect(registry.claims).toHaveLength(18);
+  it("the status file covers the registry, 19 claims", () => {
+    expect(registry.claims).toHaveLength(19);
     expect(status.claims.map((c) => c.claim_id).sort()).toEqual(registry.claims.map((c) => c.claim_id).sort());
   });
 

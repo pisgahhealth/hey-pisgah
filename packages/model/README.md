@@ -18,6 +18,8 @@ Every model call goes through `ModelClient.call`. Each call writes one ledger ro
 
 Live mode saves each request and response to `fixtures/recordings/<hash>.json`.
 The hash is over the provider and the request body.
+A call with a run id also saves a small reply file keyed by the body hash, the run id and the call's number among identical bodies in that run.
+Replay serves that run's own reply first, so two runs that sent the same body each replay their own answer; older recordings replay by body hash.
 Only a few response headers are kept; a recording that contains a key value is never written.
 Replay serves the saved response and fails with `replay_miss` when none matches.
 

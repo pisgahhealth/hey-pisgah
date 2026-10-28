@@ -5,3 +5,4 @@ export { MAX_KEYWORDS, MAX_KEYWORD_LENGTH, MAX_KEYWORD_WORDS, buildKeywords, typ
 export { ASR_MODEL, ASR_URL, USD_PER_AUDIO_HOUR, VoiceError, requestPart, transcribeWav, type FinalTranscript, type TranscribeOptions, type VoiceErrorCode } from "./transcribe.js";
 export { SILENCE_RMS, frameRms, leadingSilenceMs, silenceRuns, sliceMs, stripChunks, trailingSilenceMs, type AudioChunk, type ChunkOptions, type SilenceRun } from "./chunk.js";
 export { cleanTranscript, spokenDigits } from "./numbers.js";
+export { MEASURES, VITALS_KEYWORDS, continuesNumber, danglingEnd, measuresIn, numbersIn, readVitals, vitalsTokens, vitalsVocabulary, type Measure, type Rewrite, type VitalsReading, type VocabularyResult } from "./vitals.js";

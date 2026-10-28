@@ -1,11 +1,12 @@
 import { hashJson, sha256 } from "@hey-pisgah/contracts";
 import { ModelError, type ChatMessage, type ModelClient, type ProviderId } from "@hey-pisgah/model";
+import { ARGS_NOTE, DROPPED_NOTE, resultDigest } from "./digest.js";
 import { ELIDED, NUDGE, REPEAT_NOTE, armHashes, kickoff, systemPrompt } from "./prompts.js";
 import type { Session } from "./session.js";
 import { dispatch, toolDefs } from "./tools.js";
 
 // Model settings every investigator call carries; they are part of the committed record.
-export const SETTINGS = { effort: "xhigh", parallel_tool_calls: true, max_completion_tokens: 32_000, context_chars: 60_000, provider: "modal", model: "meta-models/Muse-Spark-Open-816B-A42B" } as const;
+export const SETTINGS = { effort: "xhigh", parallel_tool_calls: true, max_completion_tokens: 32_000, context_chars: 12_000, history_chars: 28_000, turn_result_chars: 20_000, provider: "modal", model: "meta-models/Muse-Spark-Open-816B-A42B" } as const;
 
 // After this many repeated identical calls in one run, the run ends as stalled.
 export const REPEAT_LIMIT = 3;
@@ -28,17 +29,81 @@ export type LoopOptions = {
 
 export type LoopOutcome = { stop: string; detail: string; calls: number; usd: number; turns: number };
 
-// Older tool results beyond the context budget are replaced by a short stub; the model can read them again.
-export function compact(messages: readonly ChatMessage[], budget: number): ChatMessage[] {
+// What compaction knows about each tool result: the tool name and its short form.
+export type Digests = Map<string, { name: string; digest: string | null }>;
+
+const ELIDED_ARGS = JSON.stringify({ elided: ARGS_NOTE });
+// The smallest stub, for results and arguments older than the short-form tier.
+export const ELIDED_MIN = JSON.stringify({ elided: true });
+// Older assistant text past the budget keeps only its opening characters.
+const TEXT_KEEP = 240;
+
+// Newest first: the turn the model has not seen stays whole and outside the budget; the latest definition read becomes its short form and stays; then full results up to the budget, short forms up to the budget again, and the smallest stub after that.
+export function compact(messages: readonly ChatMessage[], budget: number, digests: Digests = new Map()): ChatMessage[] {
   let used = 0;
+  let shortUsed = 0;
+  let definitionPinned = false;
   const out = [...messages];
+  let lastAssistant = -1;
+  for (let i = out.length - 1; i >= 0; i--) if (out[i]!.role === "assistant") { lastAssistant = i; break; }
+  const shorten = (full: string, short: string | null): string => {
+    if (used + full.length <= budget) { used += full.length; return full; }
+    used = budget + 1;
+    if (short !== null && short.length < full.length && shortUsed + short.length <= budget) { shortUsed += short.length; return short; }
+    return full.length > ELIDED_MIN.length ? ELIDED_MIN : full;
+  };
   for (let i = out.length - 1; i >= 0; i--) {
     const m = out[i]!;
+    if (m.role === "assistant") {
+      if (i === lastAssistant) continue;
+      const text = typeof m.content === "string" && m.content.length > TEXT_KEEP && used > budget ? m.content.slice(0, TEXT_KEEP) : m.content;
+      if (typeof m.content === "string") used += m.content.length;
+      const calls = m.tool_calls?.map((c) => (c.type !== "function" ? c : { ...c, function: { ...c.function, arguments: shorten(c.function.arguments, ELIDED_ARGS) } }));
+      out[i] = { ...m, content: text ?? null, ...(calls ? { tool_calls: calls } : {}) } as ChatMessage;
+      continue;
+    }
     if (m.role !== "tool" || typeof m.content !== "string") continue;
-    used += m.content.length;
-    if (used > budget && m.content.length > ELIDED.length) out[i] = { ...m, content: ELIDED };
+    if (i > lastAssistant) continue;
+    const d = digests.get(m.tool_call_id);
+    if (d?.name === "get_workflow_definition") {
+      out[i] = { ...m, content: definitionPinned || !d.digest ? ELIDED_MIN : d.digest };
+      definitionPinned = true;
+      continue;
+    }
+    out[i] = { ...m, content: shorten(m.content, d?.digest ?? ELIDED) };
   }
   return out;
+}
+
+// When the older turns after the kickoff still pass the cap, whole older turns go, oldest first, and one note says how many and keeps the short forms of the definition and the case list.
+export function dropOldTurns(messages: readonly ChatMessage[], cap: number): ChatMessage[] {
+  const head = messages.slice(0, 2);
+  let lastAssistant = messages.length - 1;
+  while (lastAssistant >= 2 && messages[lastAssistant]!.role !== "assistant") lastAssistant -= 1;
+  if (lastAssistant < 2) return [...messages];
+  let older = messages.slice(2, lastAssistant);
+  const newest = messages.slice(lastAssistant);
+  const size = (ms: readonly ChatMessage[]) => ms.reduce((n, m) => n + JSON.stringify(m).length, 0);
+  if (size(older) <= cap) return [...messages];
+  let dropped = 0;
+  const kept: Record<string, unknown> = {};
+  const keep = (m: ChatMessage) => {
+    if (m.role !== "tool" || typeof m.content !== "string") return;
+    try {
+      const v = JSON.parse(m.content) as Record<string, unknown>;
+      if (Array.isArray(v.steps) && Array.isArray(v.edges)) kept.definition = v;
+      if (Array.isArray(v.cases) && typeof v.cases[0] === "string") kept.cases = v.cases;
+    } catch { /* a stub or text */ }
+  };
+  while (older.length && size(older) > cap) {
+    let k = 1;
+    while (k < older.length && older[k]!.role === "tool") k += 1;
+    for (const m of older.slice(0, k)) keep(m);
+    older = older.slice(k);
+    dropped += 1;
+  }
+  const note = JSON.stringify({ elided_turns: dropped, note: DROPPED_NOTE, ...kept });
+  return [...head, { role: "user", content: note }, ...older, ...newest];
 }
 
 // The investigator loop: one model call per turn, tool calls run in call order, and the run stops on the published stop rule.
@@ -61,6 +126,7 @@ export async function runLoop(o: LoopOptions): Promise<LoopOutcome> {
   let repeats = 0;
   let stop: { reason: string; detail: string } | null = null;
   const sleep = o.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+  const digests: Digests = new Map();
   while (!stop) {
     if (s.stop) { stop = { reason: s.stop.reason, detail: s.stop.detail }; break; }
     const u = o.client.runUsage(s.runId);
@@ -71,7 +137,7 @@ export async function runLoop(o: LoopOptions): Promise<LoopOutcome> {
     for (;;) {
       try {
         res = await o.client.call({
-          provider, model, effort: SETTINGS.effort, messages: compact(messages, SETTINGS.context_chars), tools, parallel_tool_calls: SETTINGS.parallel_tool_calls,
+          provider, model, effort: SETTINGS.effort, messages: dropOldTurns(compact(messages, SETTINGS.context_chars, digests), SETTINGS.history_chars), tools, parallel_tool_calls: SETTINGS.parallel_tool_calls,
           max_completion_tokens: SETTINGS.max_completion_tokens, purpose: `discovery.${arm}`, run_id: s.runId, task_id: null, task_state: null, thread: "main", affinity_key: s.runId
         });
         break;
@@ -96,14 +162,17 @@ export async function runLoop(o: LoopOptions): Promise<LoopOutcome> {
     }
     idle = 0;
     messages.push({ role: "assistant", content: msg?.content ?? null, tool_calls: calls.map((c) => ({ id: c.id, type: "function" as const, function: { name: c.name, arguments: c.arguments } })) });
+    const pageChars = Math.max(2_000, Math.floor(SETTINGS.turn_result_chars / calls.length));
     for (const [i, c] of calls.entries()) {
       const key = callKey(c.name, c.arguments);
       const repeated = key === previous;
       previous = key;
       if (repeated) repeats += 1;
-      const result = repeated ? { ok: false, error: "repeated_call", message: REPEAT_NOTE } : await dispatch(s, c.name, c.arguments);
+      const result = repeated ? { ok: false, error: "repeated_call", message: REPEAT_NOTE } : await dispatch(s, c.name, c.arguments, { pageChars });
       const text = JSON.stringify(result);
       s.log("tool.called", { turn: turns, index: i, call_id: c.id, name: c.name, args: c.arguments.slice(0, 8000), args_hash: sha256(c.arguments), result_hash: sha256(text), ok: result.ok !== false, error: result.ok === false ? String(result.error) : null, result: text.slice(0, 30_000) });
+      const short = resultDigest(c.name, result, s.base);
+      digests.set(c.id, { name: c.name, digest: short ? JSON.stringify(short) : null });
       messages.push({ role: "tool", tool_call_id: c.id, content: text });
     }
     if (repeats >= REPEAT_LIMIT && !s.stop) s.stall(repeats);

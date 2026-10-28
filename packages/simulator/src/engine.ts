@@ -95,3 +95,12 @@ export function externalSubLog(events: readonly SimEvent[]): Omit<SimEvent, "eve
 export function externalSubLogHash(events: readonly SimEvent[]): string {
   return hashJson(externalSubLog(events));
 }
+
+export const BEHAVIOUR_UNCHANGED = "behaviour unchanged: the two definitions differ, and every matched run produced an event log identical to its control";
+
+// Compares matched runs of two definitions; a changed definition with identical event logs in every run gets the behaviour-unchanged note.
+export function behaviourNote(control: { version_hash: string; events: readonly SimEvent[] }[], intervention: { version_hash: string; events: readonly SimEvent[] }[]): { identical: boolean[]; definition_changed: boolean; note: string | null } {
+  const identical = control.map((c, i) => intervention[i] !== undefined && eventLogHash(c.events) === eventLogHash(intervention[i]!.events));
+  const definitionChanged = control.some((c, i) => intervention[i] !== undefined && c.version_hash !== intervention[i]!.version_hash);
+  return { identical, definition_changed: definitionChanged, note: definitionChanged && identical.length > 0 && identical.every(Boolean) ? BEHAVIOUR_UNCHANGED : null };
+}
