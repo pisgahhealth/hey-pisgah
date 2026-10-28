@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@hey-pisgah/agent": "*",
+    "@hey-pisgah/cases": "*",
     "@hey-pisgah/contracts": "*",
-    "zod": "^4.6.7",
-    "@hey-pisgah/cases": "*"
+    "zod": "^4.6.7"
   }
 }
