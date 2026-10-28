@@ -109,6 +109,24 @@ describe("EMR runtime", () => {
     await rt.stop();
   });
 
+  it("values the clinician did not say are left out, so a model that fills one in writes nothing extra", async () => {
+    const root = emrRoot();
+    const port = new FakeEmr();
+    let rt: EmrRuntime | null = null;
+    const eager = (said: string): Decision => /pressure/.test(said) ? { decision: "record", bp: "128/82", pulse: 88, temp_c: 37.8, summary: "x" } : { decision: "record", pulse: 61, summary: "x" };
+    rt = new EmrRuntime({ storeRoot: root, client: mockClient(root, eager, () => rt?.stateOf ?? null), port, proofRetryMs: 1 });
+    rt.start();
+    const a = await say(rt, "Chart blood pressure 128 over 82");
+    await rt.settled();
+    expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, bp: "128/82" }]);
+    expect(rt.view(a.task_id)!.notes.map((x) => x.text)).toEqual(["Left out values you did not say: temp_c 37.8, pulse 88."]);
+    await say(rt, "Chart the pulse", a.task_id);
+    await rt.settled();
+    expect(port.writes).toHaveLength(1);
+    expect(rt.view(a.task_id)).toMatchObject({ state: "waiting", questions: [{ text: expect.stringMatching(/^I could not use those values/) }] });
+    await rt.stop();
+  });
+
   it("an interrupt stops the pending action before its write and pauses the task with no model call; a later say resumes it", async () => {
     const { root, port, rt } = setup({ holdMs: 200 });
     const a = await say(rt, "Chart blood pressure 128/82");

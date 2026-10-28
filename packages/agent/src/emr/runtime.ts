@@ -325,11 +325,19 @@ export class EmrRuntime {
     // A correction carries over every value of the corrected action the clinician did not restate.
     const base = corrects ? Object.fromEntries(Object.entries(corrects.args).filter(([k]) => ["temp_c", "pulse", "resp_rate", "bp"].includes(k))) : {};
     const raw: Record<string, unknown> = { ...base, admission_id: t.admission_id };
-    const temp = tempText(d.temp_c);
-    if (d.temp_c !== null && d.temp_c !== undefined) raw["temp_c"] = temp ?? String(d.temp_c);
-    if (d.pulse !== null && d.pulse !== undefined) raw["pulse"] = d.pulse;
-    if (d.resp_rate !== null && d.resp_rate !== undefined) raw["resp_rate"] = d.resp_rate;
-    if (d.bp) raw["bp"] = d.bp.replace(/\s+/g, "");
+    // A value is kept only when its number was in the clinician's words, so the model cannot fill one in.
+    const said = new Set((t.lines.find((x) => x.id === lineId)?.text.match(/\d+(?:\.\d+)?/g) ?? []).map((x) => String(Number(x))));
+    const heard = (v: string | number) => String(v).split("/").every((n) => said.has(String(Number(n))));
+    const dropped: string[] = [];
+    const take = (k: string, v: string | number | null | undefined, norm: (x: string | number) => string | number) => {
+      if (v === null || v === undefined || v === "") return;
+      if (heard(v)) raw[k] = norm(v); else dropped.push(`${k} ${v}`);
+    };
+    take("temp_c", d.temp_c, (v) => tempText(v) ?? String(v));
+    take("pulse", d.pulse, (v) => v);
+    take("resp_rate", d.resp_rate, (v) => v);
+    take("bp", d.bp, (v) => String(v).replace(/\s+/g, ""));
+    if (dropped.length) this.note(l, `Left out values you did not say: ${dropped.join(", ")}.`);
     if (d.remark) raw["remark"] = d.remark;
     // A correction of an entry already written cites it; a correction of one still on hold replaces it, so nothing is cited.
     if (corrects && corrects.written) raw["corrects_record_id"] = corrects.written.record_id;
