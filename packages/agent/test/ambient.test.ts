@@ -158,7 +158,7 @@ describe("speech gate", () => {
     ]), earOf({ 1000: "Let's chart her observations. Temperature 37.9. Pulse 96. Thanks.", 1100: "Pulse 88. No wait, pulse 90." }));
     for (const [i, ms] of [1000, 1100].entries()) { await say(listen, i, chunkWav(ms, 700)); await rt.settled(); }
     expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, temp_c: "37.9", pulse: 96 }]);
-    expect(rt.views(OWNER)[0]!.asked.map((q) => q.text)).toEqual(["You gave two values for pulse: 88 and 90. Which one should I chart?"]);
+    expect(rt.views(OWNER)[0]!.asked.map((q) => q.text)).toEqual(['I heard "Pulse 88. pulse 90.". Say 88 or 90.']);
   });
 
   it("shows the gate only words said before the line, even when later lines are already heard", async () => {

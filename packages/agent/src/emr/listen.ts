@@ -232,7 +232,7 @@ export class ListenSessions {
     return { samples: parts, seqs, rate, audio_ms: totalMs(parts, rate), trailing_ms: silence, arrived, text: v.text, raw: heard.text, cost_usd: heard.cost_usd, keywords_dropped: dropped, rewrites: v.rewrites, strong: false, joined: false };
   }
 
-  // Hands one finished utterance to the runtime as an ambient line.
+  // Hands one finished utterance to the runtime as an ambient line, with its audio kept in memory for the second ear.
   private async deliver(s: Session, sessionId: string, h: Heard, why: ListenOutcome["why"]): Promise<ListenUtterance> {
     // A joined line that waited again and went on alone still says it was joined.
     const finished = h.joined && why === "number_alone" ? "joined_across_cut" : why;
@@ -240,7 +240,7 @@ export class ListenSessions {
       owner: s.owner, target: { admission_id: s.ctx.admission_id }, text: h.text, source: "audio", spoken_at: new Date(h.arrived - h.audio_ms).toISOString(),
       audio: { audio_ms: h.audio_ms, cost_usd: h.cost_usd, session_id: sessionId },
       ambient: { session_id: sessionId, seqs: h.seqs, raw_text: h.raw.slice(0, 2000), ended_at: new Date(h.arrived - h.trailing_ms).toISOString(), final_at: new Date(h.arrived).toISOString(), trailing_silence_ms: h.trailing_ms, finished_by: finished },
-      context: s.ctx
+      context: s.ctx, clip: encodeWav(concat(h.samples), h.rate), rewrites: h.rewrites
     });
     const u: ListenUtterance = { id: r.line_id, line_id: r.line_id, task_id: r.task_id, text: h.text, seqs: h.seqs, class: null, classes: [] };
     s.unreported.push(u);

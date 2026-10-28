@@ -40,11 +40,13 @@ export function joinedAudio(chunks: readonly TalkChunk[], capMs = 6000, finalSil
 
 type View = {
   task_id: string; admission_id: string; state: string; calls: number; usd: number;
+  ears?: { sessions: { session_id: string; compared: number; agreed: number }[] };
   transcript: { id: string; text: string; decided: boolean; classes: string[]; ambient?: { session_id: string; seqs: number[]; ended_at: string; finished_by?: string } }[];
   actions: { action_id: string; line_id: string; kind: string; args: Record<string, unknown>; state: string; corrects_action_id: string | null; written_at: string | null }[];
   asked: { line_id: string; text: string }[]; refusals: { line_id: string; kind: string | null; asked_for: string }[];
 };
-type Outcome = { final: boolean; why: string; cost_usd: number };
+type Outcome = { final: boolean; why: string; cost_usd: number; utterance?: { line_id: string; text: string } | null };
+type Reply = { outcome?: Outcome; utterances?: { line_id: string; text: string }[]; error?: string };
 export type FeedOptions = {
   serveUrl: string; owner: string; admissionId: string; sessionId: string; chunks: readonly TalkChunk[];
   pace: "real" | "fast"; mode: AmbientRun["mode"]; talkId: string; gateHash: string | null; settleMs?: number; log?: (s: string) => void;
@@ -55,14 +57,17 @@ export async function feedTalk(o: FeedOptions): Promise<AmbientRun> {
   const started = new Date();
   const t0 = Date.now();
   const sent: Promise<Outcome>[] = [];
+  // Serve stores no words of a line nothing rests on, so the heard text comes from the listen answers.
+  const heardText = new Map<string, string>();
   for (const c of o.chunks) {
     if (o.pace === "real") { const wait = t0 + c.end_ms - Date.now(); if (wait > 0) await new Promise((r) => setTimeout(r, wait)); }
     const f = new FormData();
     f.append("audio", new Blob([new Uint8Array(c.wav)], { type: "audio/wav" }), `c${c.seq}.wav`);
     f.append("owner", o.owner); f.append("admissionId", o.admissionId); f.append("session_id", o.sessionId); f.append("seq", String(c.seq));
     const p = fetch(`${o.serveUrl}/tasks/listen?wait=1`, { method: "POST", body: f }).then(async (r) => {
-      const j = (await r.json()) as { outcome?: Outcome; error?: string };
+      const j = (await r.json()) as Reply;
       if (r.status >= 300 || !j.outcome) throw new Error(`listen seq ${c.seq} answered ${r.status} ${j.error ?? ""}`);
+      for (const u of [...(j.utterances ?? []), ...(j.outcome.utterance ? [j.outcome.utterance] : [])]) heardText.set(u.line_id, u.text);
       o.log?.(`seq ${c.seq} ${c.cut} ${j.outcome.why}`);
       return j.outcome;
     });
@@ -82,7 +87,7 @@ export async function feedTalk(o: FeedOptions): Promise<AmbientRun> {
   }
   const keysBySeq = new Map(o.chunks.map((c) => [c.seq, c.key_ids]));
   const lines = mine.flatMap((v) => v.transcript.filter((t) => t.ambient?.session_id === o.sessionId)).map((t) => ({
-    line_id: t.id, key_id: keysBySeq.get(t.ambient!.seqs.at(-1)!)?.[0] ?? null, text: t.text, classes: t.classes, seqs: t.ambient!.seqs, ended_at: t.ambient!.ended_at, finished_by: t.ambient!.finished_by ?? null
+    line_id: t.id, key_id: keysBySeq.get(t.ambient!.seqs.at(-1)!)?.[0] ?? null, text: t.text || heardText.get(t.id) || "", classes: t.classes, seqs: t.ambient!.seqs, ended_at: t.ambient!.ended_at, finished_by: t.ambient!.finished_by ?? null
   }));
   const ids = new Set(lines.map((l) => l.line_id));
   const chunks: RunChunk[] = o.chunks.map((c, i) => ({ seq: c.seq, key_ids: c.key_ids, final: outcomes[i]!.final, why: outcomes[i]!.why }));
@@ -91,6 +96,7 @@ export async function feedTalk(o: FeedOptions): Promise<AmbientRun> {
     lines, actions: mine.flatMap((v) => v.actions).filter((a) => ids.has(a.line_id)).map((a) => ({ action_id: a.action_id, line_id: a.line_id, kind: a.kind, args: a.args, state: a.state, corrects_action_id: a.corrects_action_id, written_at: a.written_at })),
     questions: mine.flatMap((v) => v.asked).filter((q) => ids.has(q.line_id)).map((q) => ({ line_id: q.line_id, text: q.text })),
     refusals: mine.flatMap((v) => v.refusals).filter((r) => ids.has(r.line_id)),
+    ears: mine.flatMap((v) => v.ears?.sessions ?? []).filter((x) => x.session_id === o.sessionId).reduce((m, x) => ({ compared: m.compared + x.compared, agreed: m.agreed + x.agreed }), { compared: 0, agreed: 0 }),
     chunks, calls: mine.reduce((s, v) => s + v.calls, 0), cost_usd: mine.reduce((s, v) => s + v.usd, 0), asr_cost_usd: outcomes.reduce((s, x) => s + x.cost_usd, 0)
   };
 }

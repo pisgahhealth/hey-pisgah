@@ -49,6 +49,8 @@ export type ClientOptions = {
   // The projected task state wins over the caller's argument, so a stale caller cannot slip past the waiting gate.
   taskStateOf?: (taskId: string) => TaskStateValue | null;
   baseURLOverride?: Partial<Record<ProviderId, string>>;
+  // False writes no recording of live calls, for serves whose requests carry heard words.
+  record?: boolean;
   timeoutMs?: number;
   now?: () => Date;
 };
@@ -221,7 +223,7 @@ export class ModelClient {
         }
         latency = Math.round(performance.now() - t0);
         completion = res.data;
-        writeRecording(
+        if (this.opts.record !== false) writeRecording(
           this.recordingsDir,
           { hash, provider: args.provider, request: body, response: completion, headers: pickHeaders(res.response.headers), status: res.response.status, latency_ms: latency, recorded_at: this.now().toISOString() },
           Object.values(this.keys).filter((v) => v.length >= 6).concat(route.apiKey(this.keys) ?? [])

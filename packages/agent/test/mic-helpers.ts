@@ -4,6 +4,7 @@ import { ModelClient } from "@hey-pisgah/model";
 import { encodeWav, type FinalTranscript } from "@hey-pisgah/voice";
 import { EmrRuntime } from "../src/emr/runtime.js";
 import { ListenSessions, type Transcriber } from "../src/emr/listen.js";
+import type { SecondEar } from "../src/emr/ears.js";
 import { ADM, FakeEmr, OWNER, emrRoot, gater, type C } from "./emr-helpers.js";
 
 // Helpers for the tests built from the first real-mic session: strip-shaped chunks, scripted ears, and a runtime with a listener.
@@ -21,13 +22,19 @@ export const earOf = (byMs: Record<number, string>, sent: number[] = []): Transc
   sent.push(ms);
   return { final: true, text: byMs[ms] ?? "", audio_ms: ms, session_id: sessionId, cost_usd: 0.0001 };
 };
-export function boot(script: (said: string) => C[], ear: Transcriber, o: { strongMs?: number; numberMs?: number } = {}) {
+// The second ear as a script keyed by clip length.
+export const secondOf = (byMs: Record<number, string>, heard: number[] = []): SecondEar => async (wav) => {
+  heard.push(msOf(wav));
+  return { text: byMs[msOf(wav)] ?? "", provider: "modal", model: "meta-models/Muse-Spark-Open-816B-A42B", response_id: null, cost_usd: 0.002, fallback_reason: null };
+};
+
+export function boot(script: (said: string) => C[], ear: Transcriber, o: { second?: SecondEar; strongMs?: number; numberMs?: number } = {}) {
   const root = emrRoot();
   const port = new FakeEmr();
   let rt: EmrRuntime | null = null;
   const seen: string[] = [];
   const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater(script, seen), taskStateOf: (id) => rt?.stateOf(id) ?? null });
-  rt = new EmrRuntime({ storeRoot: root, client, port, holdMs: 0, proofRetryMs: 1 });
+  rt = new EmrRuntime({ storeRoot: root, client, port, holdMs: 0, proofRetryMs: 1, ...(o.second ? { secondEar: o.second } : {}) });
   rt.start();
   const listen = new ListenSessions(rt, { transcribe: ear, strongJoinWaitMs: o.strongMs ?? 5000, numberJoinWaitMs: o.numberMs ?? 5000 });
   const settle = async () => { await listen.flush("s1"); await rt!.settled(); };

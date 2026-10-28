@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-28T10:26:32.991Z",
-  "commit": "22a33d8",
+  "generated_at": "2026-10-28T12:08:28.686Z",
+  "commit": "5c2fe64",
   "claims": [
     {
       "claim_id": "C-01",
@@ -255,6 +255,17 @@
         "fr1_missed": 0
       },
       "measured_at": "2026-10-28T10:25:01.061Z"
+    },
+    {
+      "claim_id": "C-19",
+      "status": "green",
+      "values": {
+        "value_errors": 0,
+        "values_acted": 16,
+        "runs": 2,
+        "questions": 3
+      },
+      "measured_at": "2026-10-28T12:08:28.056Z"
     }
   ]
 }

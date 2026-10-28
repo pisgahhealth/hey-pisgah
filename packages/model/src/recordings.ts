@@ -39,9 +39,19 @@ export function pickHeaders(h: Headers): Record<string, string> {
   return out;
 }
 
+// Audio sent inline is kept only as its hash, so a recording never holds a voice.
+export function withoutAudio(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(withoutAudio);
+  if (!v || typeof v !== "object") return v;
+  const o = v as Record<string, unknown>;
+  if (o["type"] === "audio_url" && o["audio_url"] && typeof (o["audio_url"] as { url?: unknown }).url === "string") return { type: "audio_url", audio_url: { url: `sha256:${sha256((o["audio_url"] as { url: string }).url)}` } };
+  if (o["type"] === "input_audio" && o["input_audio"] && typeof (o["input_audio"] as { data?: unknown }).data === "string") return { type: "input_audio", input_audio: { ...(o["input_audio"] as object), data: `sha256:${sha256((o["input_audio"] as { data: string }).data)}` } };
+  return Object.fromEntries(Object.entries(o).map(([k, x]) => [k, withoutAudio(x)]));
+}
+
 // Refuses to write a recording that contains any secret value.
 export function writeRecording(dir: string, rec: Recording, secrets: readonly string[]): string {
-  const text = `${JSON.stringify(rec, null, 2)}\n`;
+  const text = `${JSON.stringify({ ...rec, request: withoutAudio(rec.request) }, null, 2)}\n`;
   if (secrets.some((s) => s.length > 0 && text.includes(s))) throw new ModelError("secret_in_recording", "a key value appeared in a recording; nothing was written");
   mkdirSync(dir, { recursive: true });
   const file = join(dir, `${rec.hash}.json`);
