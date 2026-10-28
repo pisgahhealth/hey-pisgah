@@ -1,6 +1,7 @@
 import { serveCommand } from "@hey-pisgah/agent";
 import { describeCommand } from "@hey-pisgah/cases";
-import { checkG } from "@hey-pisgah/evaluator";
+import { checkG, runValidationStream } from "@hey-pisgah/evaluator";
+import { checkDiscoveryCommand, discoverCommand } from "@hey-pisgah/intelligence";
 import { claimsCheck } from "./claims-check.js";
 import { evalCommand } from "./eval.js";
 import { videoScript } from "./video-script.js";
@@ -10,9 +11,10 @@ import { runProbe } from "./probe/index.js";
 const root = new URL("../../..", import.meta.url).pathname.replace(/\/$/, "");
 const command = process.argv[2] ?? "help";
 const commands: Record<string, (() => void) | null> = {
-  probe: () => { void runProbe(root, process.argv.slice(3)).then((code) => process.exit(code)); }, sim: null, discover: null, eval: () => { void evalCommand(root, process.argv.slice(3)).then((code) => process.exit(code)); }, replay: null,
+  probe: () => { void runProbe(root, process.argv.slice(3)).then((code) => process.exit(code)); }, sim: null,
+  discover: () => { void discoverCommand(root, process.argv.slice(3), { validate: async (store) => { await runValidationStream(store); } }).then((code) => process.exit(code)); }, eval: () => { void evalCommand(root, process.argv.slice(3)).then((code) => process.exit(code)); }, replay: null,
   serve: () => { void serveCommand(root, process.argv.slice(3)).then((code) => { if (code !== null) process.exit(code); }); },
-  "claims:check": () => claimsCheck(root, claimsArgs(process.argv.slice(3))), describe: () => process.exit(describeCommand(process.argv.slice(3))), "video:script": () => process.exit(videoScript(root, process.argv.slice(3))), "check:discovery": null,
+  "claims:check": () => claimsCheck(root, claimsArgs(process.argv.slice(3))), describe: () => process.exit(describeCommand(process.argv.slice(3))), "video:script": () => process.exit(videoScript(root, process.argv.slice(3))), "check:discovery": () => process.exit(checkDiscoveryCommand(root, process.argv.slice(3))),
   "check:g": () => process.exit(checkG(process.argv.slice(3)))
 };
 if (command === "help" || !(command in commands)) {
