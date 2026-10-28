@@ -135,6 +135,6 @@ describe("demo steps render", () => {
     }
     let anchored = 0;
     for (const t of EVAL_TABS) anchored += count(renderEval(t.slug, claims, task), 'id="claim-C-');
-    expect(anchored).toBe(17);
+    expect(anchored).toBe(18);
   });
 });

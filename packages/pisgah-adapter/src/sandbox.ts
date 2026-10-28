@@ -13,8 +13,10 @@ export const SandboxBlock = z.strictObject({
   // The other owners whose agents serve mints, by login and clinic; their password is the sandbox's own.
   owners: z.array(z.strictObject({ login: z.string().regex(/^[a-z0-9._-]{1,40}$/), clinic: z.string().min(1).max(80).optional() })).default([]),
   sql: z.record(z.string(), z.string()),
+  // The seed's ids for the journey, written by the platform's own seed script.
+  journey_file: z.string().min(1).optional(),
   // Steps a person does in the journey, run with the person's own bearer; agents never call these.
-  person_ops: z.record(z.string(), z.strictObject({ login: z.string(), method: z.enum(["GET", "POST"]), path: z.string(), body: z.record(z.string(), z.json()).optional(), query: z.record(z.string(), z.string()).optional() })).default({})
+  person_ops: z.record(z.string(), z.strictObject({ login: z.string(), clinic: z.string().optional(), method: z.enum(["GET", "POST"]), path: z.string(), body: z.record(z.string(), z.json()).optional(), query: z.record(z.string(), z.string()).optional() })).default({})
 });
 export type SandboxBlock = z.infer<typeof SandboxBlock>;
 

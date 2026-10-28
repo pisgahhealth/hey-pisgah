@@ -146,5 +146,6 @@ describe("profile-driven work over the door", () => {
 
   it("renders list and missing placeholders plainly", () => {
     expect(render("A {x.a} B {x.l[].t} C {x.none}", { x: { a: 1, l: [{ t: "p" }, { t: "q" }] } })).toBe("A 1 B p, q C none");
+    expect(render("{x.g[].items[].label}", { x: { g: [{ items: [{ label: "a" }] }, { items: [{ label: "b" }, { label: "c" }] }] } })).toBe("a, b, c");
   });
 });

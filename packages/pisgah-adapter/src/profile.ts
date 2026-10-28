@@ -10,13 +10,15 @@ export const DEFAULT_PROFILE_PATH = join(homedir(), ".hey-pisgah-door.json");
 const HeaderName = z.string().regex(/^[A-Za-z][A-Za-z0-9-]{0,63}$/);
 const PathTpl = z.string().regex(/^[a-z0-9_{}-]+(\/[a-z0-9_{}-]+)*$/);
 const Dotted = z.string().regex(/^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)*$/);
+// A list path where "a[].b" flattens each element's b.
+const ListPath = z.string().regex(/^[A-Za-z0-9_]+((\.|\[\]\.)[A-Za-z0-9_]+)*$/);
 const Words = z.array(z.string().min(1).max(40)).min(1).max(12);
 
 // One door read: a path template and query values, each "$name" filled from the subject or the work's arguments.
 const ReadSpec = z.strictObject({ path: PathTpl, query: z.record(z.string(), z.string()).optional() });
 // A fresh read that proves a write: optionally pick one element of a list, then every check must hold.
 const ProofSpec = ReadSpec.extend({
-  find: z.strictObject({ list: Dotted, where: z.record(z.string(), z.string()) }).optional(),
+  find: z.strictObject({ list: ListPath, where: z.record(z.string(), z.string()) }).optional(),
   // A check is "$name" (equal), "@nonnull", "@startswith:$name" or "@contains:$name".
   checks: z.record(z.string(), z.string()).refine((c) => Object.keys(c).length > 0, "a proof needs a check")
 });
@@ -35,6 +37,8 @@ const Fact = z.strictObject({ path: Dotted, label: z.string().min(1).max(60) });
 export const OwnerSpec = z.strictObject({
   id: z.string().min(1).max(80), label: z.string().min(1).max(80), kinds: z.array(z.string().min(1)).min(1),
   watches: z.array(z.string()).default([]), inbox: z.boolean().default(false),
+  // The admission read this owner's role may make, when it is not the common one.
+  context: ReadSpec.extend({ label: Dotted, facts: z.record(z.string(), Dotted).default({}) }).optional(),
   offers: z.array(z.strictObject({ fact: z.string().min(1), equals: z.string().min(1), kind: z.string().min(1), ask: z.string().min(1).max(300) })).default([])
 });
 export type OwnerSpec = z.infer<typeof OwnerSpec>;

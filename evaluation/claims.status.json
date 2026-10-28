@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-28T08:51:54.339Z",
-  "commit": "45658e4",
+  "generated_at": "2026-10-28T09:50:52.338Z",
+  "commit": "e86293f",
   "claims": [
     {
       "claim_id": "C-01",
@@ -236,6 +236,25 @@
         "wrong_actions": 0
       },
       "measured_at": "2026-10-28T08:51:34.681Z"
+    },
+    {
+      "claim_id": "C-18",
+      "status": "not_measured",
+      "values": {
+        "steps_passed": null,
+        "steps": null,
+        "fr1_appropriate": null,
+        "fr1_points": null,
+        "prohibited_attempts": null,
+        "calls_while_paused": null,
+        "digest_present": null,
+        "actions_unproved": null,
+        "handoffs_picked_up": null,
+        "replay_same": null,
+        "steps_failed": null,
+        "fr1_missed": null
+      },
+      "measured_at": null
     }
   ]
 }

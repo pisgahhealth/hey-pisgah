@@ -51,7 +51,7 @@ export class PisgahPort implements EmrPort {
   constructor(readonly profile: DoorProfile, private readonly o: PisgahPortOptions) {
     const ops = profile.ops;
     const reads = [
-      ...(ops.patient_context ? [ops.patient_context.path] : []), ...Object.values(profile.watches).map((w) => w.path),
+      ...(ops.patient_context ? [ops.patient_context.path] : []), ...profile.owners.flatMap((o) => (o.context ? [o.context.path] : [])), ...Object.values(profile.watches).map((w) => w.path),
       ...(profile.inbox ? [profile.inbox.path, ...(profile.inbox.detail ? [profile.inbox.detail.path] : [])] : []),
       ...Object.values(profile.work).flatMap((w) => ("reads" in w ? Object.values(w.reads).map((r) => r.path) : [w.proof.path, ...(w.before ?? []).map((b) => b.path)]))
     ];
@@ -171,9 +171,15 @@ export class PisgahPort implements EmrPort {
     const known = this.admissionOf(target);
     if (!known && target.patient_id) return this.patientContext(target.patient_id, prov);
     const admissionId = this.admissionFor(target);
+    const own = this.profile.owners.find((x) => x.id === prov.owner)?.context;
+    if (own) {
+      const json = await this.read(own, { admission_id: admissionId }, prov);
+      const label = str(pick(json, own.label)) ?? "the patient";
+      const patient = target.patient_id ?? this.learned.patient_by_admission.get(admissionId) ?? null;
+      return { admission_id: admissionId, patient_id: patient, visit_id: null, label, facts: Object.fromEntries(Object.entries(own.facts).map(([k, p]) => [k, str(pick(json, p))])), keywords: [label, ...this.profile.vocabulary] };
+    }
     const json = await this.readAdmission(admissionId, prov);
     const op = this.profile.ops.read_admission;
-    const str = (v: unknown) => (v === null || v === undefined ? null : typeof v === "object" ? JSON.stringify(v).slice(0, 300) : String(v).slice(0, 300));
     const facts = Object.fromEntries(Object.entries(op.facts).map(([k, p]) => [k, str(pick(json, p))]));
     const label = str(pick(json, op.label)) ?? "the patient";
     const patient = target.patient_id ?? Object.entries(this.profile.targets.admission_by_patient).find(([, a]) => a === admissionId)?.[0] ?? this.learned.patient_by_admission.get(admissionId) ?? null;
@@ -328,12 +334,13 @@ export class PisgahPort implements EmrPort {
     try { json = await this.read(op.proof, vars, prov); } catch { return null; }
     let base: unknown = json;
     if (op.proof.find) {
-      const list = pick(json, op.proof.find.list);
-      base = (Array.isArray(list) ? list : []).filter((x) => Object.entries(op.proof.find!.where).every(([k, want]) => checkOne(pick(x, k), want, vars))).at(-1);
+      base = pickAll(json, op.proof.find.list).filter((x) => Object.entries(op.proof.find!.where).every(([k, want]) => checkOne(pick(x, k), want, vars))).at(-1);
       if (base === undefined) return null;
     }
     const seen = Object.fromEntries(Object.keys(op.proof.checks).map((k) => [k, pick(base, k) ?? null]));
-    if (!Object.entries(op.proof.checks).every(([k, want]) => checkOne(seen[k], want, vars))) return null;
+    // A check on a value the work did not carry is skipped, but at least one check must run.
+    const run = Object.entries(op.proof.checks).filter(([, want]) => !skipped(want, vars));
+    if (!run.length || !run.every(([k, want]) => checkOne(seen[k], want, vars))) return null;
     return {
       record_id: written.record_id, record_version: written.record_version, event_ids: written.event_ids,
       record_hash: sha256(canonical({ record_id: written.record_id, seen })), verified_at: this.now().toISOString(),
@@ -387,13 +394,20 @@ function checkOne(seen: unknown, want: string, vars: Vars): boolean {
   return same(seen, val(want));
 }
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+const skipped = (want: string, vars: Vars) => { const m = /\$([a-z_]+)$/.exec(want); return !!m && (vars[m[1]!] === undefined || vars[m[1]!] === null); };
+
+// Picks a list path where "a[].b" flattens each element's b, so nested groups read as one list.
+export function pickAll(v: unknown, path: string): unknown[] {
+  let cur: unknown[] = [v];
+  for (const seg of path.split("[].")) cur = cur.flatMap((x) => { const y = pick(x, seg); return Array.isArray(y) ? y : y === undefined ? [] : [y]; });
+  return cur;
+}
 
 // Renders "{alias.path}" and "{alias.list[].field}" placeholders from the reads; a missing value reads "none".
 export function render(tpl: string, got: Record<string, unknown>): string {
-  return tpl.replace(/\{([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)(?:\[\]\.([A-Za-z0-9_.]+))?\}/g, (_m, path: string, field?: string) => {
-    const v = pick(got, path);
-    if (field) return Array.isArray(v) && v.length ? v.map((x) => str(pick(x, field)) ?? "").filter(Boolean).join(", ") : "none";
-    return str(v) ?? "none";
+  return tpl.replace(/\{([A-Za-z0-9_]+(?:(?:\.|\[\]\.)[A-Za-z0-9_]+)*)\}/g, (_m, path: string) => {
+    if (path.includes("[].")) { const all = pickAll(got, path).map((x) => str(x) ?? "").filter(Boolean); return all.length ? all.join(", ") : "none"; }
+    return str(pick(got, path)) ?? "none";
   }).replace(/\s+/g, " ").trim();
 }
 type P = Record<string, unknown>;

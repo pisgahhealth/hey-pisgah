@@ -16,4 +16,4 @@ export const Claim = z.strictObject({
 export type Claim = z.infer<typeof Claim>;
 
 export const ClaimStatusEntry = z.strictObject({ claim_id: ClaimId, status: ClaimStatus, values: z.record(z.string(), z.unknown()), measured_at: z.iso.datetime().nullable() });
-export const ClaimsStatusFile = z.strictObject({ generated_at: z.iso.datetime(), commit: z.string(), claims: z.array(ClaimStatusEntry).length(17) });
+export const ClaimsStatusFile = z.strictObject({ generated_at: z.iso.datetime(), commit: z.string(), claims: z.array(ClaimStatusEntry).length(18) });
