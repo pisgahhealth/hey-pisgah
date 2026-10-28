@@ -5,12 +5,12 @@ import { describe, expect, it } from "vitest";
 import { checkDiscovery } from "../src/check.js";
 import { appendCommitment, appendOnlyProblems, commitmentFor, currentContent, readCommitments } from "../src/commitments.js";
 import { ARGS_NOTE, DEFINITION_NOTE, DROPPED_NOTE, resultDigest } from "../src/digest.js";
-import { ELIDED, REPEAT_NOTE, systemPrompt } from "../src/prompts.js";
+import { ELIDED, NOTES_HEADER, REPEAT_NOTE, systemPrompt } from "../src/prompts.js";
 import { ENGINE_SEMANTICS } from "../src/views.js";
 import { SETTINGS, compact, dropOldTurns, runLoop, type Digests } from "../src/loop.js";
 import { scriptedInvestigator } from "../src/mock.js";
 import { STREAMS, Session, sessionStreamId, type Arm } from "../src/session.js";
-import { LEARNED, LONG, SHORT, pool, tempRoot } from "./helpers.js";
+import { LEARNED, LONG, SHORT, evidence, pool, tempRoot } from "./helpers.js";
 
 const repoRoot = join(import.meta.dirname, "..", "..", "..");
 const budget = (calls = 40) => ({ runUsd: 1, runMaxCalls: calls, weekUsd: 120, weekStopFraction: 0.8, weekSince: () => new Date(0) });
@@ -121,7 +121,7 @@ describe("discovery loop in mock mode", () => {
   it("shows the definition whole once, then its short form with the engine rules", () => {
     const s = new Session({ storeRoot: tempRoot(), runId: "run-d1ae5100", arm: "adaptive", pool: pool() });
     const full = JSON.stringify(s.definition());
-    const digests: Digests = new Map([["d", { name: "get_workflow_definition", digest: JSON.stringify(resultDigest("get_workflow_definition", s.definition(), s.base)) }]]);
+    const digests: Digests = new Map([["d", { name: "get_workflow_definition", digest: JSON.stringify(resultDigest("get_workflow_definition", s.definition(), s.base)), cases: [] }]]);
     const read = [{ role: "system" as const, content: "s" }, { role: "assistant" as const, content: null, tool_calls: [{ id: "d", type: "function" as const, function: { name: "get_workflow_definition", arguments: "{}" } }] }, { role: "tool" as const, tool_call_id: "d", content: full }];
     expect(compact(read, 100_000, digests)[2]!.content).toBe(full);
     const later = compact([...read, { role: "assistant" as const, content: "next" }], 100_000, digests)[2]!.content as string;
@@ -167,6 +167,54 @@ describe("discovery loop in mock mode", () => {
     expect(r.out.calls).toBe(60);
     const newest = 2 * 8_200 + 1_500;
     for (const b of r.bodies) expect(JSON.stringify((b.messages as unknown[]).slice(2)).length).toBeLessThan(SETTINGS.history_chars + newest);
+  });
+});
+
+describe("working notes", () => {
+  it("are capped, logged, shown numbered after the kickoff on every later call, and scanned", async () => {
+    const s = new Session({ storeRoot: tempRoot(), runId: "run-0e7e0001", arm: "adaptive", pool: pool() });
+    expect(s.recordNote({ note: "x".repeat(601) }).error).toBe("invalid_arguments");
+    expect(s.recordNote({ note: "c-491dbab0 waits 149 min after the clinical discharge" })).toMatchObject({ ok: true, note_number: 1 });
+    for (let i = 2; i <= 20; i++) expect(s.recordNote({ note: `n${i}` }).ok).toBe(true);
+    expect(s.recordNote({ note: "one more" }).error).toBe("notes_full");
+    s.close();
+    let n = 0;
+    const script: MockResponder = ({ body }) => {
+      n += 1;
+      const calls = n === 1 ? [["record_note", { note: "the wait is longest in Ward C cases" }]] : [["get_case_timeline", { case_id: LONG[n % 3], order: "occurred", limit: 60 }]];
+      return { id: "m", object: "chat.completion", created: 0, model: String(body.model), choices: [{ index: 0, message: { role: "assistant", content: null, refusal: null, tool_calls: calls.map(([name, args], i) => ({ id: `c${n}_${i}`, type: "function", function: { name: name as string, arguments: JSON.stringify(args) } })) }, finish_reason: "tool_calls", logprobs: null }], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } };
+    };
+    const r = await mockRun("adaptive", { calls: 30, mock: script });
+    expect((r.bodies[0]!.messages as unknown[]).length).toBe(2);
+    for (const b of r.bodies.slice(1)) expect((b.messages as { role: string; content: string }[])[2]).toEqual({ role: "user", content: `${NOTES_HEADER}\n1. the wait is longest in Ward C cases` });
+    const c = checkDiscovery(r.storeRoot, r.runId);
+    expect(c.summary.notes).toBe(1);
+    expect(c.lines.join("\n")).toContain("1. the wait is longest in Ward C cases");
+    const planted = await mockRun("adaptive", { calls: 2, mock: ({ body }) => ({ id: "m", object: "chat.completion", created: 0, model: String(body.model), choices: [{ index: 0, message: { role: "assistant", content: null, refusal: null, tool_calls: [{ id: "p1", type: "function", function: { name: "record_note", arguments: JSON.stringify({ note: "start it earlier" }) } }] }, finish_reason: "tool_calls", logprobs: null }], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } }) });
+    expect(checkDiscovery(planted.storeRoot, planted.runId).summary.deny_hits).toBe(1);
+  });
+});
+
+describe("pinned results", () => {
+  it("keep results on a case an active hypothesis cites whole, and drop their turns last", () => {
+    const turn = (i: number, content: string) => [{ role: "assistant" as const, content: null, tool_calls: [{ id: `c${i}`, type: "function" as const, function: { name: "get_record", arguments: "{}" } }] }, { role: "tool" as const, tool_call_id: `c${i}`, content }];
+    const big = "x".repeat(3000);
+    const m = [{ role: "system" as const, content: "s" }, { role: "user" as const, content: "k" }, ...[0, 1, 2, 3, 4, 5].flatMap((i) => turn(i, big))];
+    const pinned = new Set(["c0"]);
+    const out = compact(m, 4000, new Map(), pinned);
+    expect(out.filter((x) => x.role === "tool").map((x) => (x.content as string).length)).toEqual([3000, ELIDED.length, ELIDED.length, ELIDED.length, 3000, 3000]);
+    const dropped = dropOldTurns(m, 8000, pinned);
+    const kept = dropped.filter((x) => x.role === "tool").map((x) => (x as { tool_call_id: string }).tool_call_id);
+    expect(kept[0]).toBe("c0");
+    expect(kept.at(-1)).toBe("c5");
+  });
+
+  it("follow the cases an active hypothesis cites", () => {
+    const s = new Session({ storeRoot: tempRoot(), runId: "run-0e7e0002", arm: "adaptive", pool: pool() });
+    expect(s.citedCases().size).toBe(0);
+    s.recordHypothesis({ statement: "s", mechanism: "m", subject_refs: [], competing: { none_identified_reason: "r" }, evidence: evidence(), if_true: { metric: "post_signoff_wait_min", comparison: "intervention_lt_control", tolerance_min: 30, scope: { cases: [LONG[2]] } }, if_false: { metric: "post_signoff_wait_min", comparison: "no_difference", tolerance_min: 10, scope: { cases: [LONG[2]] } }, refuted_if: "r" });
+    expect([...s.citedCases()].sort()).toEqual([LONG[0], LONG[2], SHORT].sort());
+    s.close();
   });
 });
 

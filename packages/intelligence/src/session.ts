@@ -78,6 +78,9 @@ export const StatusInput = z.strictObject({
 
 export const ProposalInput = WorkflowChangeProposal.omit({ proposal_id: true, viewed_case_ids: true, status: true, hash: true });
 
+export const NOTE_LIMIT = 20;
+export const NoteInput = z.strictObject({ note: z.string().trim().min(1).max(600) });
+
 export const EndInput = z.strictObject({
   result: z.enum(["no_change_warranted", "insufficient_evidence"]),
   note: z.string().min(1).max(600),
@@ -130,6 +133,7 @@ export class Session {
   readonly proposals = new Map<string, WorkflowChangeProposal>();
   readonly viewed = new Set<string>();
   readonly frozen = new Set<string>();
+  readonly notes: string[] = [];
   counters = { experiments_used: 0, invalid_requests: 0, pair_refusals: 0, no_pair_reasons: 0, zod_streak: 0, repairs: 0, listed_used: 0, proposals_used: 0, say_do_mismatches: 0, retains: 0, rejects: 0 };
   stop: { reason: StopReason; detail: string } | null = null;
   private readonly streams: { hypotheses: Stream; experiments: Stream; proposals: Stream; log: Stream };
@@ -453,6 +457,26 @@ export class Session {
     if (!r) return { ok: true, proposal_id: a.proposal_id, status: "pending" };
     const { hashes: _h, ...rest } = r;
     return { ok: true, ...rest };
+  }
+
+  // A working note the investigator keeps for itself; notes are logged and shown verbatim at the top of later turns.
+  recordNote(raw: unknown): Result {
+    const parsed = NoteInput.safeParse(raw);
+    if (!parsed.success) { this.counters.repairs += 1; return refusal("invalid_arguments", "The arguments do not match the schema.", { issues: zodIssues(parsed.error) }); }
+    if (this.notes.length >= NOTE_LIMIT) return refusal("notes_full", `At most ${NOTE_LIMIT} notes are kept.`);
+    this.notes.push(parsed.data.note);
+    this.log("note.recorded", { number: this.notes.length, note: parsed.data.note });
+    return { ok: true, note_number: this.notes.length, notes_left: NOTE_LIMIT - this.notes.length };
+  }
+
+  // Cases cited by an active hypothesis, in its evidence or its prediction scopes.
+  citedCases(): Set<string> {
+    const out = new Set<string>();
+    for (const h of this.active()) {
+      for (const e of h.evidence) out.add(e.case_id);
+      for (const p of [h.if_true, h.if_false]) if ("cases" in p.scope) for (const c of p.scope.cases) out.add(c);
+    }
+    return out;
   }
 
   ledger(): Result {

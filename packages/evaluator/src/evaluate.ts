@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { hashJson, sha256, type HypothesisRecord, type Operation, type PredictionCheck, type WorkflowDefinition as WD } from "@hey-pisgah/contracts";
 import { loadSubsets, type GeneratedCase } from "@hey-pisgah/cases";
@@ -173,7 +173,8 @@ export async function evaluateDev(o: EvalOptions): Promise<Record<string, unknow
 
   const reliability = { ...stamp, measured: false, reason: "the FR-4 claim is about the model agent; these reruns are on the deterministic definition executor", definition_executor: fr4Def, subset: fr4Ids };
   write(out, "reliability.json", reliability);
-  write(out, "discovery.json", o.discovery ? { ...stamp, ...discoverySummary(o.discovery), citations } : { ...stamp, measured: false, reason: "no discovery input yet", citations });
+  const runs = carriedAdaptiveRuns([join(out, "discovery.json"), join(o.root, "evaluation", "results", "discovery.json")]);
+  write(out, "discovery.json", { ...(o.discovery ? { ...stamp, ...discoverySummary(o.discovery), citations } : { ...stamp, measured: false, reason: "no discovery input yet", citations }), ...(runs ? { adaptive_runs: runs } : {}) });
   write(out, "monitor.json", { ...stamp, measured: false, reason: "the monitor runs with the adopted version in the agent lane; no monitor log was given" });
   write(out, "cycle2.json", { ...stamp, measured: false, reason: "the second learning cycle has not run; no cycle input was given" });
 
@@ -186,6 +187,18 @@ export async function evaluateDev(o: EvalOptions): Promise<Record<string, unknow
   write(out, "tables.json", tables);
   writeFileSync(join(out, "tables.md"), tablesMarkdown(tables));
   return tables;
+}
+
+// The live adaptive runs the intelligence publisher wrote; eval carries them over instead of dropping them.
+export function carriedAdaptiveRuns(files: readonly string[]): unknown {
+  for (const f of files) {
+    if (!existsSync(f)) continue;
+    try {
+      const v = (JSON.parse(readFileSync(f, "utf8")) as Record<string, unknown>).adaptive_runs;
+      if (v !== undefined) return v;
+    } catch { /* an unreadable file carries nothing */ }
+  }
+  return null;
 }
 
 function discoverySummary(d: DiscoveryInput): Record<string, unknown> {

@@ -71,7 +71,11 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
   const failed = tools.filter((t) => t.ok === false).length;
   say(`repairs ${Number(counters.repairs ?? 0)}  tool calls ${tools.length}  refused tool calls ${failed}  efforts ${[...new Set(rows.map((r) => r.effort))].join(",") || "-"}`);
 
+  const notes = log.filter((e) => e.record_type === "note.recorded").map((e) => e.payload as Row);
+  say(`notes ${notes.length}`);
+  for (const n of notes) say(`  ${String(n.number)}. ${String(n.note).slice(0, 140)}`);
   const scanned = [
+    ...notes.map((n) => ({ label: `note.${String(n.number)}`, text: String(n.note) })),
     ...appTexts(arm),
     { label: "session.system", text: String(opened.system_prompt) },
     { label: "session.kickoff", text: String(opened.kickoff) },
@@ -89,5 +93,5 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
   };
   const pass = Object.values(needs).every(Boolean);
   say(`check: ${Object.entries(needs).map(([k, v]) => `${k} ${v ? "pass" : "FAIL"}`).join("  ")}  => ${pass ? "PASS" : "FAIL"}`);
-  return { pass, lines, summary: { run_id: runId, arm, needs, calls: rows.length, usd, prompt_tokens: promptTokens, prompt_tokens_per_call: promptPerCall, prompt_tokens_max: promptMax, hypotheses: hyps.length, experiments: done.length, aborted, invalid, pair_refusals: pairRefused, no_pair_reasons: reasons.length, say_do_mismatches: refused.length, proposals: props.map((p) => p.proposal_id), validations: reports.map((r) => r.status), stop: stopped?.stop ?? null, deny_hits: hits.length } };
+  return { pass, lines, summary: { run_id: runId, arm, needs, calls: rows.length, usd, prompt_tokens: promptTokens, prompt_tokens_per_call: promptPerCall, prompt_tokens_max: promptMax, hypotheses: hyps.length, experiments: done.length, aborted, invalid, pair_refusals: pairRefused, no_pair_reasons: reasons.length, say_do_mismatches: refused.length, notes: notes.length, proposals: props.map((p) => p.proposal_id), validations: reports.map((r) => r.status), stop: stopped?.stop ?? null, deny_hits: hits.length } };
 }

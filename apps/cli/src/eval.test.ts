@@ -80,11 +80,17 @@ describe("eval --set reserved", () => {
 describe("eval --set dev", () => {
   it("writes every result file claims.json names, with fixture inputs kept out of the claim fields", async () => {
     const d = scratch(), out = join(d, "evaluation", "results");
+    const runs = { k_of_n: { n: 1, dev_valid_proposal: 0, honest_negative: 0, insufficient_evidence: 0, no_outcome: 1 }, runs: [{ run_id: "run-0000c001" }] };
+    mkdirSync(out, { recursive: true });
+    writeFileSync(join(out, "discovery.json"), JSON.stringify({ measured: false, adaptive_runs: runs }));
     const t = await evaluateDev({ root: d, set: "dev", outDir: out, inputs: [loadProposalInput(FIXTURE_INPUT)], sweepLimit: 4, fuzzN: 5, now: () => "2026-10-28T00:00:00.000Z" });
     for (const f of ["all-runs", "ledger-summary", "discovery", "validation", "monitor", "cycle2", "completion", "reliability", "tables"]) expect(existsSync(join(out, `${f}.json`))).toBe(true);
     expect(existsSync(join(out, "tables.md"))).toBe(true);
     const v = JSON.parse(readFileSync(join(out, "validation.json"), "utf8")) as Record<string, unknown>;
     expect([v["measured"], v["dev_gate_pass"]]).toEqual([false, undefined]);
+    const disc = JSON.parse(readFileSync(join(out, "discovery.json"), "utf8")) as Record<string, unknown>;
+    expect(disc["adaptive_runs"]).toEqual(runs);
+    expect(disc["reason"]).toBe("no discovery input yet");
     expect(t["mode"]).toBe("mock");
     expect((t["primary"] as { arm: string; status: string }[]).map((r) => `${r.arm}:${r.status}`)).toEqual(["A0:measured", "A1:measured", "A2:measured", "A2a:not_run", "A3:not_run", "A4:not_run", "A-prior:not_run"]);
   }, 60_000);

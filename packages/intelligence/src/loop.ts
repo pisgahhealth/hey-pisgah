@@ -1,15 +1,23 @@
 import { hashJson, sha256 } from "@hey-pisgah/contracts";
 import { ModelError, type ChatMessage, type ModelClient, type ProviderId } from "@hey-pisgah/model";
 import { ARGS_NOTE, DROPPED_NOTE, resultDigest } from "./digest.js";
-import { ELIDED, NUDGE, REPEAT_NOTE, armHashes, kickoff, systemPrompt } from "./prompts.js";
+import { ELIDED, NOTES_HEADER, NUDGE, REPEAT_NOTE, armHashes, kickoff, systemPrompt } from "./prompts.js";
 import type { Session } from "./session.js";
 import { dispatch, toolDefs } from "./tools.js";
 
 // Model settings every investigator call carries; they are part of the committed record.
-export const SETTINGS = { effort: "xhigh", parallel_tool_calls: true, max_completion_tokens: 32_000, context_chars: 12_000, history_chars: 28_000, turn_result_chars: 20_000, provider: "modal", model: "meta-models/Muse-Spark-Open-816B-A42B" } as const;
+export const SETTINGS = { effort: "xhigh", parallel_tool_calls: true, max_completion_tokens: 32_000, context_chars: 30_000, history_chars: 70_000, turn_result_chars: 20_000, provider: "modal", model: "meta-models/Muse-Spark-Open-816B-A42B" } as const;
 
 // After this many repeated identical calls in one run, the run ends as stalled.
 export const REPEAT_LIMIT = 3;
+
+// The case ids one call's arguments name, so its result can stay whole while a hypothesis cites the case.
+function casesOf(args: string): string[] {
+  try {
+    const a = JSON.parse(args || "{}") as { case_id?: unknown; case_ids?: unknown };
+    return [...(typeof a.case_id === "string" ? [a.case_id] : []), ...(Array.isArray(a.case_ids) ? a.case_ids.filter((x): x is string => typeof x === "string") : [])];
+  } catch { return []; }
+}
 
 // Name plus canonical arguments, so key order and spacing do not hide a repeat.
 function callKey(name: string, args: string): string {
@@ -30,7 +38,7 @@ export type LoopOptions = {
 export type LoopOutcome = { stop: string; detail: string; calls: number; usd: number; turns: number };
 
 // What compaction knows about each tool result: the tool name and its short form.
-export type Digests = Map<string, { name: string; digest: string | null }>;
+export type Digests = Map<string, { name: string; digest: string | null; cases: string[] }>;
 
 const ELIDED_ARGS = JSON.stringify({ elided: ARGS_NOTE });
 // The smallest stub, for results and arguments older than the short-form tier.
@@ -38,8 +46,8 @@ export const ELIDED_MIN = JSON.stringify({ elided: true });
 // Older assistant text past the budget keeps only its opening characters.
 const TEXT_KEEP = 240;
 
-// Newest first: the turn the model has not seen stays whole and outside the budget; the latest definition read becomes its short form and stays; then full results up to the budget, short forms up to the budget again, and the smallest stub after that.
-export function compact(messages: readonly ChatMessage[], budget: number, digests: Digests = new Map()): ChatMessage[] {
+// Newest first: the turn the model has not seen stays whole and outside the budget; results on a case an active hypothesis cites stay whole; the latest definition read becomes its short form and stays; then full results up to the budget, short forms up to the budget again, and the smallest stub after that.
+export function compact(messages: readonly ChatMessage[], budget: number, digests: Digests = new Map(), pinned: ReadonlySet<string> = new Set()): ChatMessage[] {
   let used = 0;
   let shortUsed = 0;
   let definitionPinned = false;
@@ -70,22 +78,27 @@ export function compact(messages: readonly ChatMessage[], budget: number, digest
       definitionPinned = true;
       continue;
     }
+    if (pinned.has(m.tool_call_id)) { used += m.content.length; continue; }
     out[i] = { ...m, content: shorten(m.content, d?.digest ?? ELIDED) };
   }
   return out;
 }
 
-// When the older turns after the kickoff still pass the cap, whole older turns go, oldest first, and one note says how many and keeps the short forms of the definition and the case list.
-export function dropOldTurns(messages: readonly ChatMessage[], cap: number): ChatMessage[] {
+// When the older turns after the kickoff still pass the cap, whole older turns go, oldest first and turns holding a pinned result last, and one note says how many and keeps the short forms of the definition and the case list.
+export function dropOldTurns(messages: readonly ChatMessage[], cap: number, pinned: ReadonlySet<string> = new Set()): ChatMessage[] {
   const head = messages.slice(0, 2);
   let lastAssistant = messages.length - 1;
   while (lastAssistant >= 2 && messages[lastAssistant]!.role !== "assistant") lastAssistant -= 1;
   if (lastAssistant < 2) return [...messages];
-  let older = messages.slice(2, lastAssistant);
   const newest = messages.slice(lastAssistant);
   const size = (ms: readonly ChatMessage[]) => ms.reduce((n, m) => n + JSON.stringify(m).length, 0);
-  if (size(older) <= cap) return [...messages];
-  let dropped = 0;
+  const groups: ChatMessage[][] = [];
+  for (const m of messages.slice(2, lastAssistant)) {
+    if (m.role === "tool" && groups.length) groups.at(-1)!.push(m);
+    else groups.push([m]);
+  }
+  let total = groups.reduce((n, g) => n + size(g), 0);
+  if (total <= cap) return [...messages];
   const kept: Record<string, unknown> = {};
   const keep = (m: ChatMessage) => {
     if (m.role !== "tool" || typeof m.content !== "string") return;
@@ -95,15 +108,29 @@ export function dropOldTurns(messages: readonly ChatMessage[], cap: number): Cha
       if (Array.isArray(v.cases) && typeof v.cases[0] === "string") kept.cases = v.cases;
     } catch { /* a stub or text */ }
   };
-  while (older.length && size(older) > cap) {
-    let k = 1;
-    while (k < older.length && older[k]!.role === "tool") k += 1;
-    for (const m of older.slice(0, k)) keep(m);
-    older = older.slice(k);
-    dropped += 1;
+  const holdsPin = (g: ChatMessage[]) => g.some((m) => m.role === "tool" && pinned.has(m.tool_call_id));
+  const gone = new Set<number>();
+  for (const pass of [false, true]) {
+    for (let i = 0; i < groups.length && total > cap; i++) {
+      if (gone.has(i) || holdsPin(groups[i]!) !== pass) continue;
+      gone.add(i);
+      total -= size(groups[i]!);
+    }
   }
-  const note = JSON.stringify({ elided_turns: dropped, note: DROPPED_NOTE, ...kept });
-  return [...head, { role: "user", content: note }, ...older, ...newest];
+  for (const i of [...gone].sort((a, b) => a - b)) for (const m of groups[i]!) keep(m);
+  const note = JSON.stringify({ elided_turns: gone.size, note: DROPPED_NOTE, ...kept });
+  return [...head, { role: "user", content: note }, ...groups.flatMap((g, i) => (gone.has(i) ? [] : g)), ...newest];
+}
+
+// The investigator's saved notes, numbered, as one message placed after the kickoff; null when there are none.
+export function notesMessage(notes: readonly string[]): ChatMessage | null {
+  return notes.length ? { role: "user", content: `${NOTES_HEADER}\n${notes.map((n, i) => `${i + 1}. ${n}`).join("\n")}` } : null;
+}
+
+// Puts the notes message right after the system prompt and the kickoff.
+export function withNotes(messages: readonly ChatMessage[], notes: readonly string[]): ChatMessage[] {
+  const n = notesMessage(notes);
+  return n ? [...messages.slice(0, 2), n, ...messages.slice(2)] : [...messages];
 }
 
 // The investigator loop: one model call per turn, tool calls run in call order, and the run stops on the published stop rule.
@@ -132,12 +159,14 @@ export async function runLoop(o: LoopOptions): Promise<LoopOutcome> {
     const u = o.client.runUsage(s.runId);
     if (u.calls >= o.maxCalls) { stop = { reason: "budget_calls", detail: `${u.calls} calls` }; break; }
     if (u.usd + maxCost > o.budgetUsd) { stop = { reason: "budget_usd", detail: `${u.usd.toFixed(4)} spent, next call could pass the cap` }; break; }
+    const cited = s.citedCases();
+    const pinned = new Set([...digests.entries()].filter(([, d]) => d.cases.some((c) => cited.has(c))).map(([id]) => id));
     let res;
     let tries = 0;
     for (;;) {
       try {
         res = await o.client.call({
-          provider, model, effort: SETTINGS.effort, messages: dropOldTurns(compact(messages, SETTINGS.context_chars, digests), SETTINGS.history_chars), tools, parallel_tool_calls: SETTINGS.parallel_tool_calls,
+          provider, model, effort: SETTINGS.effort, messages: withNotes(dropOldTurns(compact(messages, SETTINGS.context_chars, digests, pinned), SETTINGS.history_chars, pinned), s.notes), tools, parallel_tool_calls: SETTINGS.parallel_tool_calls,
           max_completion_tokens: SETTINGS.max_completion_tokens, purpose: `discovery.${arm}`, run_id: s.runId, task_id: null, task_state: null, thread: "main", affinity_key: s.runId
         });
         break;
@@ -172,7 +201,7 @@ export async function runLoop(o: LoopOptions): Promise<LoopOutcome> {
       const text = JSON.stringify(result);
       s.log("tool.called", { turn: turns, index: i, call_id: c.id, name: c.name, args: c.arguments.slice(0, 8000), args_hash: sha256(c.arguments), result_hash: sha256(text), ok: result.ok !== false, error: result.ok === false ? String(result.error) : null, result: text.slice(0, 30_000) });
       const short = resultDigest(c.name, result, s.base);
-      digests.set(c.id, { name: c.name, digest: short ? JSON.stringify(short) : null });
+      digests.set(c.id, { name: c.name, digest: short ? JSON.stringify(short) : null, cases: casesOf(c.arguments) });
       messages.push({ role: "tool", tool_call_id: c.id, content: text });
     }
     if (repeats >= REPEAT_LIMIT && !s.stop) s.stall(repeats);

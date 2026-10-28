@@ -178,6 +178,43 @@
         "insufficient_evidence_default": false
       },
       "hash": "0027c82eccf9af8000c335b058b8abcbcdf5d3ed8fe39f54c12a1b811361bcdc"
+    },
+    {
+      "revision": 6,
+      "at": "2026-10-28T12:20:48.531Z",
+      "reason": "Give the investigator memory that survives compaction: a record_note tool (600 characters, 20 notes) whose notes are logged, deny-list scanned and shown as a numbered list after the kickoff on every later call; results on any case an active hypothesis cites stay whole and their turns drop last; caps loosened about 2.5x (context_chars 30000, history_chars 70000), the newest turn still outside all caps. Reason: under revision 5 runs run-a8abc392 and run-841b4fa7 read for 60 calls at about 18k prompt tokens a call, re-read the definition 21 to 24 times and restarted their plan, and recorded no hypothesis; the context cut had removed the model's memory of its own reading. No prompt sentence changed.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "466d9adfecd58ca35ae7e571c691327cfb16abf4494424e13c093c7f27ca0a13",
+            "tools": "30bcac78964a92ca7bec804f02456b908ee892cd9c2b8e01161c64d9a58c9779"
+          },
+          "a3": {
+            "prompt": "98c4043606f147a71b7873da4b434783fea58e340c5707a0a8eb6ba1aa4cae72",
+            "tools": "bd8e71e63957fd1c27d789c538b675e2f6d38577ddac38f083d2e5b43579dda2"
+          },
+          "a4": {
+            "prompt": "0d21d9af56d178df7e6f6b19eb815b5cb8846534dd6a2c6025b0b8bf85f51ae0",
+            "tools": "fb34d50eb01552b7e1c06a0586cbd099a604dd41d4da29b4018fa3a258f72535"
+          },
+          "prior": {
+            "prompt": "20413643b12b4e41ea99754259a0f2957f1288d939ecf570a1ed9cfa1aa1714e",
+            "tools": "2fd590e02488a003e8deb611346c1209fc6a604d9cb9138f4867447bb975b514"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 30000,
+          "history_chars": 70000,
+          "turn_result_chars": 20000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "d112937c83fe783643627ff749647fa2934b50d968b44bbc3b2a134e8d886452"
     }
   ]
 }

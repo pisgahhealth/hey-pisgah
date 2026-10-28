@@ -40,6 +40,7 @@ const KICKOFF: Record<"records" | "prior", string> = {
   prior: "Session start. No case records and no experiments are available in this session. Budget: {calls} model calls, {usd} US dollars, 1 proposal. From the workflow definition and the ward requirements alone, propose one workflow change you expect to serve the hospital's aim, or end the session with no_change_warranted."
 };
 const CYCLE_TWO = "This is a second cycle. The pool also holds verified outcomes of the adopted version. Hypotheses from the first cycle are not evidence; cite recorded events.";
+export const NOTES_HEADER = "Notes you saved with record_note, oldest first:";
 export const NUDGE = "Continue with the tools, or end the session with a result.";
 export const REPEAT_NOTE = "identical call already answered; use the result above or choose a different query";
 export const ELIDED = JSON.stringify({ elided: true, note: "Older tool result removed to save context; call the tool again if you need it." });
@@ -60,6 +61,7 @@ export function appTexts(arm: Arm): { label: string; text: string }[] {
     { label: `${arm}.kickoff`, text: kickoffTemplate(arm) },
     { label: "cycle_two", text: CYCLE_TWO },
     { label: "nudge", text: NUDGE },
+    { label: "notes_header", text: NOTES_HEADER },
     { label: "elided", text: ELIDED },
     { label: "repeat_note", text: REPEAT_NOTE },
     { label: "digest_note", text: DIGEST_NOTE },
@@ -77,5 +79,5 @@ export const ARMS: readonly Arm[] = ["adaptive", "a3", "a4", "prior"];
 
 // The hashes a run is reported under; the commitments file must carry them before a live run.
 export function armHashes(arm: Arm): { prompt: string; tools: string } {
-  return { prompt: sha256(`${systemPrompt(arm)}\n---\n${kickoffTemplate(arm)}\n---\n${CYCLE_TWO}\n---\n${NUDGE}\n---\n${ELIDED}\n---\n${REPEAT_NOTE}\n---\n${DIGEST_NOTE}\n---\n${DEFINITION_NOTE}\n---\n${ARGS_NOTE}\n---\n${DROPPED_NOTE}`), tools: hashJson({ defs: toolDefs(arm), vocabulary: OPERATION_VOCABULARY, semantics: ENGINE_SEMANTICS }) };
+  return { prompt: sha256(`${systemPrompt(arm)}\n---\n${kickoffTemplate(arm)}\n---\n${CYCLE_TWO}\n---\n${NUDGE}\n---\n${ELIDED}\n---\n${REPEAT_NOTE}\n---\n${DIGEST_NOTE}\n---\n${DEFINITION_NOTE}\n---\n${ARGS_NOTE}\n---\n${DROPPED_NOTE}\n---\n${NOTES_HEADER}`), tools: hashJson({ defs: toolDefs(arm), vocabulary: OPERATION_VOCABULARY, semantics: ENGINE_SEMANTICS }) };
 }
