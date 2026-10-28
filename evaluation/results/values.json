@@ -1,16 +1,16 @@
 {
- "measured_at": "2026-10-28T12:08:28.056Z",
+ "measured_at": "2026-10-28T12:10:16.388Z",
  "measured": true,
  "talk_id": "ward-talk-1",
- "runs": 2,
- "values_acted": 16,
+ "runs": 5,
+ "values_acted": 41,
  "value_errors": 0,
  "value_error_rate": 0,
- "questions": 3,
- "runs_with_two_readings": 0,
- "ears_compared": 0,
- "ears_agreed": 0,
- "agreement_rate": null,
+ "questions": 7,
+ "runs_with_two_readings": 3,
+ "ears_compared": 12,
+ "ears_agreed": 11,
+ "agreement_rate": 0.9167,
  "by_run": [
   {
    "run": "run6",
@@ -29,6 +29,33 @@
    "questions": 1,
    "ears_compared": null,
    "ears_agreed": null
+  },
+  {
+   "run": "run8",
+   "mode": "live",
+   "values_acted": 7,
+   "value_errors": 0,
+   "questions": 2,
+   "ears_compared": 4,
+   "ears_agreed": 3
+  },
+  {
+   "run": "run9",
+   "mode": "live",
+   "values_acted": 8,
+   "value_errors": 0,
+   "questions": 1,
+   "ears_compared": 4,
+   "ears_agreed": 4
+  },
+  {
+   "run": "run10",
+   "mode": "live",
+   "values_acted": 10,
+   "value_errors": 0,
+   "questions": 1,
+   "ears_compared": 4,
+   "ears_agreed": 4
   }
  ]
 }

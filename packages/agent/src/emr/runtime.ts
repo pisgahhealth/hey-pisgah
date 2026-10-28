@@ -84,7 +84,7 @@ export type EmrRuntimeOptions = {
   watchMs?: number;
   // The second ear for vitals heard from audio; without it no agreement step runs.
   secondEar?: SecondEar;
-  // False stores an ambient line's words only when an action or a question rests on them.
+  // Keeps every heard line's words in the store, for synthetic evaluation runs only; by default an ambient line's words are stored only when something rests on them.
   keepHeard?: boolean;
   // How long after a question a short spoken answer may settle it by rule.
   answerWindowMs?: number;
@@ -457,8 +457,8 @@ export class EmrRuntime {
     if (CLOSED_TASK.has(l.task.state)) throw new Error(`the task is ${l.task.state}`);
     const live = l;
     const viaGate = !!s.ambient || s.via === "gate" || (s.via !== "intent" && isWide(this.kinds(s.owner)));
-    // Ambient words may be held in memory and reach the store only once an action or a question rests on them.
-    const withhold = !!s.ambient && this.o.keepHeard === false;
+    // Ambient words reach the store only once an action or a question rests on them; until then they live in memory.
+    const withhold = !!s.ambient && !this.o.keepHeard;
     const stored = withhold ? { text: "", withheld: true, words: text.split(/\s+/).filter(Boolean).length, ambient: { ...s.ambient!, raw_text: "" } } : { text, ...(s.ambient ? { ambient: s.ambient } : {}) };
     this.append(live, "utterance.heard", { line_id: lineId, ...stored, source: s.source ?? "text", spoken_at: spokenAt, ...(s.audio ? { audio: s.audio } : {}), ...(viaGate && !s.ambient ? { via: "gate" } : {}) });
     if (withhold) { const ln = live.task.lines.find((x) => x.id === lineId)!; ln.text = text; ln.ambient = { ...s.ambient! }; }
