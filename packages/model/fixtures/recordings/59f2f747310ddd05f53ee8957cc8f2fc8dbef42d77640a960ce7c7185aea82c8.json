@@ -1,0 +1,96 @@
+{
+  "hash": "59f2f747310ddd05f53ee8957cc8f2fc8dbef42d77640a960ce7c7185aea82c8",
+  "provider": "modal",
+  "request": {
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a discharge assistant. Use the tool to read case state. Never invent ids."
+      },
+      {
+        "role": "user",
+        "content": "Look up the current state of case c-ab12cd34."
+      }
+    ],
+    "reasoning_effort": "low",
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_case_state",
+          "description": "Read the current state of one discharge case.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "case_id": {
+                "type": "string",
+                "pattern": "^c-[a-z0-9]{8}$"
+              }
+            },
+            "required": [
+              "case_id"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    ],
+    "parallel_tool_calls": false,
+    "max_completion_tokens": 600
+  },
+  "response": {
+    "id": "6428fffcd1c747fdb99b3be8aa5bff0b",
+    "object": "chat.completion",
+    "created": 1793149922,
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "I'll look up the current state of case c-ab12cd34 for you.",
+          "reasoning_content": "We need to look up case c-ab12cd34. Use get_case_state tool.",
+          "tool_calls": [
+            {
+              "id": "call_3cbfa69c8a7a4ac99f2d589c",
+              "index": 0,
+              "type": "function",
+              "function": {
+                "name": "get_case_state",
+                "arguments": "{\"case_id\": \"c-ab12cd34\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "matched_stop": null
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 674,
+      "total_tokens": 772,
+      "completion_tokens": 98,
+      "prompt_tokens_details": null,
+      "reasoning_tokens": 22
+    },
+    "metadata": {
+      "weight_version": "default",
+      "weight_versions": [
+        {
+          "version": "default",
+          "start": 0,
+          "end": 98
+        }
+      ]
+    }
+  },
+  "headers": {
+    "content-type": "application/json",
+    "date": "Wed, 28 Oct 2026 01:12:02 GMT"
+  },
+  "status": 200,
+  "latency_ms": 2461,
+  "recorded_at": "2026-10-28T01:12:02.757Z"
+}
