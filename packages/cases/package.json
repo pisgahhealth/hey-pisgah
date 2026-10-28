@@ -9,6 +9,21 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./reserved": {
+      "types": "./src/reserved.ts",
+      "default": "./src/reserved.ts"
+    },
+    "./checks": {
+      "types": "./src/checks.ts",
+      "default": "./src/checks.ts"
     }
+  },
+  "dependencies": {
+    "@hey-pisgah/contracts": "*",
+    "@hey-pisgah/hospital": "*",
+    "@hey-pisgah/simulator": "*",
+    "@hey-pisgah/workflow": "*",
+    "zod": "^4.6.7"
   }
 }

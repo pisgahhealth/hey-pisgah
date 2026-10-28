@@ -1,0 +1,934 @@
+[
+ {
+  "canary": "AK238850",
+  "case_id": "c-fabffee6",
+  "decision_points": [
+   {
+    "acceptable_classes": [
+     "act",
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary draft",
+    "dp_id": "dp01",
+    "from": {
+     "step_completed": "st01"
+    },
+    "kind": "summary_draft_window",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary final",
+    "dp_id": "dp02",
+    "from": {
+     "case_start": true
+    },
+    "kind": "summary_final_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "send_staff_message saying the patient is ready to leave",
+    "dp_id": "dp03",
+    "from": {
+     "case_start": true
+    },
+    "kind": "readiness_message_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document discharge_summary final and request_check",
+    "dp_id": "dp04",
+    "from": {
+     "step_completed": "st05"
+    },
+    "kind": "summary_final_open",
+    "until": {
+     "step_completed": "st14"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document refund_voucher draft and final",
+    "dp_id": "dp05",
+    "from": {
+     "step_completed": "st16"
+    },
+    "kind": "refund_voucher_open",
+    "until": null
+   }
+  ],
+  "family": "F1",
+  "infra_fault": null,
+  "overlays": [],
+  "payer_type": "self_pay",
+  "pool": "dev_held",
+  "requirement_version": "r1",
+  "schedule_hash": "ace50e57d0b8ef2a1f5e634e6b49fc8ddb9e8355bb8897f5d72d740d8b20478a",
+  "seed": "9f025a2acd2f542781682b8fe1860adbf7203d95492b7cf3d9d80eea5db18f5b",
+  "should_apply": {
+   "value": true,
+   "why": "helps"
+  },
+  "traps": [
+   "T2"
+  ],
+  "variant": null,
+  "ward_id": "A"
+ },
+ {
+  "canary": "AK429688",
+  "case_id": "c-dfcc8a61",
+  "decision_points": [
+   {
+    "acceptable_classes": [
+     "act",
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary draft",
+    "dp_id": "dp01",
+    "from": {
+     "step_completed": "st01"
+    },
+    "kind": "summary_draft_window",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary final",
+    "dp_id": "dp02",
+    "from": {
+     "case_start": true
+    },
+    "kind": "summary_final_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "send_staff_message saying the patient is ready to leave",
+    "dp_id": "dp03",
+    "from": {
+     "case_start": true
+    },
+    "kind": "readiness_message_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document discharge_summary final and request_check",
+    "dp_id": "dp04",
+    "from": {
+     "step_completed": "st05"
+    },
+    "kind": "summary_final_open",
+    "until": {
+     "step_completed": "st14"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document refund_voucher draft and final",
+    "dp_id": "dp05",
+    "from": {
+     "step_completed": "st16"
+    },
+    "kind": "refund_voucher_open",
+    "until": null
+   }
+  ],
+  "family": "F1",
+  "infra_fault": null,
+  "overlays": [],
+  "payer_type": "self_pay",
+  "pool": "dev_held",
+  "requirement_version": "r1",
+  "schedule_hash": "4d24cf1d239e1603a765f632afaa0803cd1972a6ffb0a386c66be28bb17701e6",
+  "seed": "6820b8ceaf2405ae9520781f8cf3e322cecb4af6f668fc1e63a6fa069d793ee6",
+  "should_apply": {
+   "value": true,
+   "why": "helps"
+  },
+  "traps": [
+   "T2"
+  ],
+  "variant": null,
+  "ward_id": "A"
+ },
+ {
+  "canary": "AK791186",
+  "case_id": "c-c48e3655",
+  "decision_points": [
+   {
+    "acceptable_classes": [
+     "act",
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary draft",
+    "dp_id": "dp01",
+    "from": {
+     "step_completed": "st01"
+    },
+    "kind": "summary_draft_window",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary final",
+    "dp_id": "dp02",
+    "from": {
+     "case_start": true
+    },
+    "kind": "summary_final_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "send_staff_message saying the patient is ready to leave",
+    "dp_id": "dp03",
+    "from": {
+     "case_start": true
+    },
+    "kind": "readiness_message_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document discharge_summary final and request_check",
+    "dp_id": "dp04",
+    "from": {
+     "step_completed": "st05"
+    },
+    "kind": "summary_final_open",
+    "until": {
+     "step_completed": "st14"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document refund_voucher draft and final",
+    "dp_id": "dp05",
+    "from": {
+     "step_completed": "st16"
+    },
+    "kind": "refund_voucher_open",
+    "until": null
+   }
+  ],
+  "family": "F2",
+  "infra_fault": null,
+  "overlays": [],
+  "payer_type": "self_pay",
+  "pool": "dev_held",
+  "requirement_version": "r1",
+  "schedule_hash": "38ff9fb99d83c8f42df15d94ea9786b64cb1e8c8f05910536e4b6f0882788ade",
+  "seed": "85b200de14a1ccdbbac8c43dad630c2a5517a584aa3754d444fee3fb73e6571d",
+  "should_apply": {
+   "value": true,
+   "why": "no_effect"
+  },
+  "traps": [
+   "T2"
+  ],
+  "variant": null,
+  "ward_id": "A"
+ },
+ {
+  "canary": "AK143132",
+  "case_id": "c-29b03edf",
+  "decision_points": [
+   {
+    "acceptable_classes": [
+     "act",
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary draft",
+    "dp_id": "dp01",
+    "from": {
+     "step_completed": "st01"
+    },
+    "kind": "summary_draft_window",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary final",
+    "dp_id": "dp02",
+    "from": {
+     "case_start": true
+    },
+    "kind": "summary_final_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "send_staff_message saying the patient is ready to leave",
+    "dp_id": "dp03",
+    "from": {
+     "case_start": true
+    },
+    "kind": "readiness_message_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document discharge_summary final and request_check",
+    "dp_id": "dp04",
+    "from": {
+     "step_completed": "st05"
+    },
+    "kind": "summary_final_open",
+    "until": {
+     "step_completed": "st14"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document refund_voucher draft and final",
+    "dp_id": "dp05",
+    "from": {
+     "step_completed": "st16"
+    },
+    "kind": "refund_voucher_open",
+    "until": null
+   }
+  ],
+  "family": "F3",
+  "infra_fault": null,
+  "overlays": [],
+  "payer_type": "self_pay",
+  "pool": "dev_held",
+  "requirement_version": "r1",
+  "schedule_hash": "1fd1d0cb639fd2fffa14f0c6ae95ae72b8193fa4f7c56e78efc521a1ea8ac677",
+  "seed": "e7b68bc4f27a5cc5cd26d2748ec96a4854c5d3968717c391b599a5bd0a86cd62",
+  "should_apply": {
+   "value": true,
+   "why": "no_effect"
+  },
+  "traps": [
+   "T2"
+  ],
+  "variant": null,
+  "ward_id": "A"
+ },
+ {
+  "canary": "AK800725",
+  "case_id": "c-749deb11",
+  "decision_points": [
+   {
+    "acceptable_classes": [
+     "act",
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary draft",
+    "dp_id": "dp01",
+    "from": {
+     "step_completed": "st01"
+    },
+    "kind": "summary_draft_window",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary final",
+    "dp_id": "dp02",
+    "from": {
+     "case_start": true
+    },
+    "kind": "summary_final_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "send_staff_message saying the patient is ready to leave",
+    "dp_id": "dp03",
+    "from": {
+     "case_start": true
+    },
+    "kind": "readiness_message_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document discharge_summary final and request_check",
+    "dp_id": "dp04",
+    "from": {
+     "step_completed": "st05"
+    },
+    "kind": "summary_final_open",
+    "until": {
+     "step_completed": "st14"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document refund_voucher draft and final",
+    "dp_id": "dp05",
+    "from": {
+     "step_completed": "st16"
+    },
+    "kind": "refund_voucher_open",
+    "until": null
+   }
+  ],
+  "family": "F4",
+  "infra_fault": null,
+  "overlays": [],
+  "payer_type": "self_pay",
+  "pool": "dev_held",
+  "requirement_version": "r1",
+  "schedule_hash": "b36a71ec4870724f30f53d12432915ebfa725a138a897bb9d407d3622ec33d22",
+  "seed": "2b155da5be5b43cfbae427bfc9d077db17c7a6f6ca52df6fc9f28a1c4e7f6de8",
+  "should_apply": {
+   "value": true,
+   "why": "no_effect"
+  },
+  "traps": [
+   "T2"
+  ],
+  "variant": null,
+  "ward_id": "A"
+ },
+ {
+  "canary": "AK952596",
+  "case_id": "c-0367952b",
+  "decision_points": [
+   {
+    "acceptable_classes": [
+     "act",
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary draft",
+    "dp_id": "dp01",
+    "from": {
+     "step_completed": "st01"
+    },
+    "kind": "summary_draft_window",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary final",
+    "dp_id": "dp02",
+    "from": {
+     "case_start": true
+    },
+    "kind": "summary_final_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "send_staff_message saying the patient is ready to leave",
+    "dp_id": "dp03",
+    "from": {
+     "case_start": true
+    },
+    "kind": "readiness_message_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document discharge_summary final and request_check",
+    "dp_id": "dp04",
+    "from": {
+     "step_completed": "st05"
+    },
+    "kind": "summary_final_open",
+    "until": {
+     "step_completed": "st14"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "prepare_document hmo_claim_cover final",
+    "dp_id": "dp05",
+    "from": {
+     "case_start": true
+    },
+    "kind": "claim_cover_final_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document hmo_claim_cover final",
+    "dp_id": "dp06",
+    "from": {
+     "step_completed": "st05"
+    },
+    "kind": "claim_cover_final_open",
+    "until": {
+     "step_completed": "st10"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document refund_voucher draft and final",
+    "dp_id": "dp07",
+    "from": {
+     "step_completed": "st16"
+    },
+    "kind": "refund_voucher_open",
+    "until": null
+   }
+  ],
+  "family": "F5",
+  "infra_fault": null,
+  "overlays": [],
+  "payer_type": "hmo",
+  "pool": "dev_held",
+  "requirement_version": "r1",
+  "schedule_hash": "b9a3de23e1120e3cd119076a5f2e2aecc84d5c5db9891fe81bc906a47e37f3e0",
+  "seed": "f06befb7cdd896a8b9d7e4e60e5bffc3f1a3c53618498d5fb6a3ec20cb9a8d35",
+  "should_apply": {
+   "value": true,
+   "why": "no_effect"
+  },
+  "traps": [
+   "T2",
+   "T3"
+  ],
+  "variant": null,
+  "ward_id": "A"
+ },
+ {
+  "canary": "AK849762",
+  "case_id": "c-7d0ca3d1",
+  "decision_points": [
+   {
+    "acceptable_classes": [
+     "act",
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary draft",
+    "dp_id": "dp01",
+    "from": {
+     "step_completed": "st01"
+    },
+    "kind": "summary_draft_window",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary final",
+    "dp_id": "dp02",
+    "from": {
+     "case_start": true
+    },
+    "kind": "summary_final_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "send_staff_message saying the patient is ready to leave",
+    "dp_id": "dp03",
+    "from": {
+     "case_start": true
+    },
+    "kind": "readiness_message_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document discharge_summary final and request_check",
+    "dp_id": "dp04",
+    "from": {
+     "step_completed": "st05"
+    },
+    "kind": "summary_final_open",
+    "until": {
+     "step_completed": "st14"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document refund_voucher draft and final",
+    "dp_id": "dp05",
+    "from": {
+     "step_completed": "st16"
+    },
+    "kind": "refund_voucher_open",
+    "until": null
+   }
+  ],
+  "family": "F6",
+  "infra_fault": null,
+  "overlays": [],
+  "payer_type": "self_pay",
+  "pool": "dev_held",
+  "requirement_version": "r1",
+  "schedule_hash": "36a34d4473ecd4e6b69574b8a315df947c74de08980363a4e4f028edcf321b2b",
+  "seed": "38246867fdf3a0f1da8b181fdff58c43f9e038f7b2e85862e894390b0977b7d3",
+  "should_apply": {
+   "value": true,
+   "why": "helps"
+  },
+  "traps": [
+   "T2"
+  ],
+  "variant": null,
+  "ward_id": "A"
+ },
+ {
+  "canary": "CK716667",
+  "case_id": "c-4e138737",
+  "decision_points": [
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary at any stage",
+    "dp_id": "dp01",
+    "from": {
+     "case_start": true
+    },
+    "kind": "summary_draft_window",
+    "until": null
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "send_staff_message saying the patient is ready to leave",
+    "dp_id": "dp02",
+    "from": {
+     "case_start": true
+    },
+    "kind": "readiness_message_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document refund_voucher draft and final",
+    "dp_id": "dp03",
+    "from": {
+     "step_completed": "st16"
+    },
+    "kind": "refund_voucher_open",
+    "until": null
+   }
+  ],
+  "family": "F8",
+  "infra_fault": null,
+  "overlays": [],
+  "payer_type": "self_pay",
+  "pool": "dev_held",
+  "requirement_version": "r1",
+  "schedule_hash": "3498d2bb06cd098ddfd0a55b405a1bc471798b2db5d97e20d8c777c5062d8b49",
+  "seed": "2b54dc4893136e18ef13831686f37bfaea4d6e2565b9742a33d16d984f0e9ce3",
+  "should_apply": {
+   "value": false,
+   "why": "not_required"
+  },
+  "traps": [],
+  "variant": null,
+  "ward_id": "C"
+ },
+ {
+  "canary": "AK939645",
+  "case_id": "c-2172525c",
+  "decision_points": [
+   {
+    "acceptable_classes": [
+     "act",
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary draft",
+    "dp_id": "dp01",
+    "from": {
+     "step_completed": "st01"
+    },
+    "kind": "summary_draft_window",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary final",
+    "dp_id": "dp02",
+    "from": {
+     "case_start": true
+    },
+    "kind": "summary_final_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "send_staff_message saying the patient is ready to leave",
+    "dp_id": "dp03",
+    "from": {
+     "case_start": true
+    },
+    "kind": "readiness_message_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document discharge_summary final and request_check",
+    "dp_id": "dp04",
+    "from": {
+     "step_completed": "st05"
+    },
+    "kind": "summary_final_open",
+    "until": {
+     "step_completed": "st14"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "revise_document so the summary cites the current take-home order",
+    "dp_id": "dp05",
+    "from": {
+     "record_updated": "u1"
+    },
+    "kind": "list_changed",
+    "until": {
+     "step_completed": "st14"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document refund_voucher draft and final",
+    "dp_id": "dp06",
+    "from": {
+     "step_completed": "st16"
+    },
+    "kind": "refund_voucher_open",
+    "until": null
+   }
+  ],
+  "family": "F9",
+  "infra_fault": null,
+  "overlays": [],
+  "payer_type": "self_pay",
+  "pool": "dev_held",
+  "requirement_version": "r1",
+  "schedule_hash": "29159a417a1e7efb54989e449580e14a764f1eac93cbef3d2f718d2e3557e71a",
+  "seed": "1355f8595eb2abd6d52d39b2c22625e9c57c9fb7d33aab722231da932ae05fab",
+  "should_apply": {
+   "value": true,
+   "why": "rework_risk"
+  },
+  "traps": [
+   "T2",
+   "T4"
+  ],
+  "variant": "amendment",
+  "ward_id": "A"
+ },
+ {
+  "canary": "AK794109",
+  "case_id": "c-07be2b75",
+  "decision_points": [
+   {
+    "acceptable_classes": [
+     "act",
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary draft",
+    "dp_id": "dp01",
+    "from": {
+     "step_completed": "st01"
+    },
+    "kind": "summary_draft_window",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "prepare_document discharge_summary final",
+    "dp_id": "dp02",
+    "from": {
+     "case_start": true
+    },
+    "kind": "summary_final_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "wait"
+    ],
+    "act_means": "send_staff_message saying the patient is ready to leave",
+    "dp_id": "dp03",
+    "from": {
+     "case_start": true
+    },
+    "kind": "readiness_message_held",
+    "until": {
+     "step_completed": "st05"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document discharge_summary final and request_check",
+    "dp_id": "dp04",
+    "from": {
+     "step_completed": "st05"
+    },
+    "kind": "summary_final_open",
+    "until": {
+     "step_completed": "st14"
+    }
+   },
+   {
+    "acceptable_classes": [
+     "act"
+    ],
+    "act_means": "prepare_document refund_voucher draft and final",
+    "dp_id": "dp05",
+    "from": {
+     "step_completed": "st16"
+    },
+    "kind": "refund_voucher_open",
+    "until": null
+   }
+  ],
+  "family": "F10",
+  "infra_fault": null,
+  "overlays": [],
+  "payer_type": "self_pay",
+  "pool": "dev_held",
+  "requirement_version": "r1",
+  "schedule_hash": "41a81f8d07a13721b62ebe3674f0d95800f3a1910d8c452bec7c1c9921f22b02",
+  "seed": "0ac1c624f728b6d55d54c169c83b81d427c4b8a7bdcdd749225e156d8a7a430b",
+  "should_apply": {
+   "value": true,
+   "why": "signoff_risk"
+  },
+  "traps": [
+   "T1",
+   "T2"
+  ],
+  "variant": "next_day",
+  "ward_id": "A"
+ }
+]
