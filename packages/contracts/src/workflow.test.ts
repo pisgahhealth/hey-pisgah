@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { hashJson } from "./canonical.js";
-import { ConditionExpr, Edge, SOFT_EDGE_NOTE, Trigger, WorkflowDefinition, countAtoms, definitionHash, fencesHash, permissionsHash, structureHash, type WorkflowDefinition as WD } from "./workflow.js";
+import { ConditionExpr, Edge, SOFT_EDGE_NOTE, Trigger, WorkflowDefinition, countAtoms, definitionHash, fencesHash, permissionsHash, structureHash, type ConditionExpr as CE, type WorkflowDefinition as WD } from "./workflow.js";
 
 const zero = "0".repeat(64);
 const minimal = (): WD => ({
@@ -69,7 +69,7 @@ describe("workflow definition", () => {
   it("caps predicate depth and condition atoms everywhere a condition appears", () => {
     const deep = { all_of: [{ any_of: [{ all_of: [{ on: "a.b" }] }] }] };
     expect(Trigger.safeParse({ target: { step: "st06" }, when: deep, condition: null }).success).toBe(false);
-    const four = { all: [{ fact: "ward_id", eq: "A" }, { fact: "payer_type", eq: "hmo" }, { fact: "has_take_home_order", eq: "true" }, { fact: "signoff_recorded", eq: "true" }] } as const;
+    const four: CE = { all: [{ fact: "ward_id", eq: "A" }, { fact: "payer_type", eq: "hmo" }, { fact: "has_take_home_order", eq: "true" }, { fact: "signoff_recorded", eq: "true" }] };
     expect(countAtoms(four)).toBe(4);
     expect(Trigger.safeParse({ target: { step: "st06" }, when: { on: "a.b" }, condition: four }).success).toBe(false);
     const w = minimal(); w.steps[1]!.required_when = four;
