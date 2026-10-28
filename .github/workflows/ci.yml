@@ -22,3 +22,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run ci
+      - name: mock dev eval
+        run: npm run eval -- --set dev --mock --sweep-limit 120 --fuzz 50
+      - name: claims check on the mock results
+        run: npm run claims:check -- --results .hey-pisgah/runs/eval-mock

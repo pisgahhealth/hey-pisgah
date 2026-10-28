@@ -35,3 +35,4 @@ export { diffEffects, effectsFromRun, rerunHarness, type ReliabilityCase, type R
 export { draftUseSweep, draftUseWorld, injectedNoteCitations, injectedNotes, type CitationMetric, type InjectedNote, type SensitivityRow } from "./extras.js";
 export { PRIMARY_ARMS, markdownTable, median, pairedVsA1, primaryMarkdown, primaryRow, signTest, type Cost, type PairedMetric, type PairedRow, type PrimaryRow } from "./tables.js";
 export { CLAIM_RULES, sumTextClaims, turnTextVsProof, type TextClaimCount } from "./textclaims.js";
+export { evaluateDev, evaluateReserved, type AgentRunData, type DiscoveryInput, type EvalOptions } from "./evaluate.js";

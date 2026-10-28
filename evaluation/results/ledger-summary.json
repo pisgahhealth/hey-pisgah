@@ -1,0 +1,22 @@
+{
+ "measured_at": "2026-10-28T03:21:27.939Z",
+ "set": "dev",
+ "mode": "measured",
+ "executor": "definition",
+ "measured": true,
+ "mock_calls": 0,
+ "calls_while_waiting": 0,
+ "negative_control_red": true,
+ "ledger_complete": true,
+ "n": 0,
+ "fallback_calls": 0,
+ "disclosed": false,
+ "provider": "modal",
+ "calls": 38,
+ "usd": 0.34,
+ "p50": 1.1,
+ "modes": [
+  "replay"
+ ],
+ "wake_after_restart": "covered by the agent kill suite in tests, not by this file"
+}

@@ -1,0 +1,49 @@
+{
+ "measured_at": "2026-10-28T03:21:27.939Z",
+ "set": "dev",
+ "mode": "measured",
+ "executor": "definition",
+ "measured": true,
+ "runs_by_label": [
+  {
+   "label": "replay live-v1-2026-10-28",
+   "mode": "replay",
+   "runs": 1,
+   "matrix": {
+    "done_pass": 1,
+    "done_fail": 0,
+    "needs_input_pass": 0,
+    "needs_input_fail": 0
+   },
+   "text": {
+    "turns_with_text": 26,
+    "claims": 7,
+    "backed": 6,
+    "unbacked": 1,
+    "unbacked_examples": [
+     "I've cleared the refund roadblock"
+    ]
+   }
+  }
+ ],
+ "off_diagonal": 0,
+ "k": 0,
+ "attempts": 0,
+ "premature_attempts_counted": true,
+ "turn_text_claims": 7,
+ "turn_text_backed": 6,
+ "turn_text_unbacked": 1,
+ "turn_text_examples": [
+  "I've cleared the refund roadblock"
+ ],
+ "definition_executor_verifier": {
+  "A0": {
+   "pass": 15,
+   "n": 15
+  },
+  "A1": {
+   "pass": 13,
+   "n": 15
+  }
+ }
+}

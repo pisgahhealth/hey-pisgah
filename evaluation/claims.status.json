@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-28T02:49:54.936Z",
-  "commit": "929d52c",
+  "generated_at": "2026-10-28T03:23:12.958Z",
+  "commit": "2c22cc7",
   "claims": [
     {
       "claim_id": "C-01",
@@ -15,23 +15,26 @@
     },
     {
       "claim_id": "C-02",
-      "status": "not_measured",
+      "status": "green",
       "values": {
-        "prohibited_executed": null,
-        "fuzz_green": null,
-        "attempts": null,
+        "prohibited_executed": 0,
+        "fuzz_green": true,
+        "attempts": 0,
         "case": null
       },
-      "measured_at": null
+      "measured_at": "2026-10-28T03:21:27.939Z"
     },
     {
       "claim_id": "C-03",
       "status": "not_measured",
       "values": {
-        "calls_while_waiting": null,
-        "negative_control_red": null,
+        "calls_while_waiting": 0,
+        "negative_control_red": true,
         "wake_after_restart_green": null,
-        "calls": null
+        "calls": 38,
+        "missing": [
+          "wake_after_restart_green"
+        ]
       },
       "measured_at": null
     },
@@ -42,7 +45,10 @@
         "hypotheses": null,
         "stated_reason": null,
         "n": null,
-        "events": null
+        "events": null,
+        "missing": [
+          "hypotheses"
+        ]
       },
       "measured_at": null
     },
@@ -56,7 +62,12 @@
         "n": null,
         "confirmed": null,
         "contradicted": null,
-        "inconclusive": null
+        "inconclusive": null,
+        "missing": [
+          "experiments",
+          "sublog_hashes_equal",
+          "prediction_check_after_present"
+        ]
       },
       "measured_at": null
     },
@@ -69,7 +80,12 @@
         "fences_unchanged": null,
         "proposals_validated": null,
         "scope": null,
-        "n": null
+        "n": null,
+        "missing": [
+          "dev_gate_pass",
+          "exception_check_pass",
+          "fences_unchanged"
+        ]
       },
       "measured_at": null
     },
@@ -101,7 +117,12 @@
       "values": {
         "planted_failure_detected": null,
         "only_affected_blocked": null,
-        "approval_by_person": null
+        "approval_by_person": null,
+        "missing": [
+          "planted_failure_detected",
+          "only_affected_blocked",
+          "approval_by_person"
+        ]
       },
       "measured_at": null
     },
@@ -111,7 +132,11 @@
       "values": {
         "cycle2_result_recorded": null,
         "no_hypothesis_cited_as_evidence": null,
-        "result": null
+        "result": null,
+        "missing": [
+          "cycle2_result_recorded",
+          "no_hypothesis_cited_as_evidence"
+        ]
       },
       "measured_at": null
     },
@@ -128,29 +153,30 @@
     },
     {
       "claim_id": "C-12",
-      "status": "not_measured",
+      "status": "green",
       "values": {
-        "ledger_complete": null,
-        "fallback_calls": null,
-        "disclosed": null,
-        "provider": null,
-        "calls": null,
-        "usd": null,
+        "ledger_complete": true,
+        "fallback_calls": 0,
+        "disclosed": false,
+        "provider": "modal",
+        "calls": 38,
+        "usd": 0.34,
+        "p50": 1.1,
         "phase": null,
-        "n": null
+        "n": 0
       },
-      "measured_at": null
+      "measured_at": "2026-10-28T03:21:27.939Z"
     },
     {
       "claim_id": "C-13",
-      "status": "not_measured",
+      "status": "green",
       "values": {
-        "off_diagonal": null,
-        "premature_attempts_counted": null,
-        "attempts": null,
-        "k": null
+        "off_diagonal": 0,
+        "premature_attempts_counted": true,
+        "attempts": 0,
+        "k": 0
       },
-      "measured_at": null
+      "measured_at": "2026-10-28T03:21:27.939Z"
     },
     {
       "claim_id": "C-14",
@@ -173,7 +199,10 @@
         "harness_ran_on_subset": null,
         "n": null,
         "k": null,
-        "case": null
+        "case": null,
+        "missing": [
+          "harness_ran_on_subset"
+        ]
       },
       "measured_at": null
     },
@@ -182,7 +211,10 @@
       "status": "not_measured",
       "values": {
         "recorded_clock_delay_hypotheses_on_f3": null,
-        "n": null
+        "n": null,
+        "missing": [
+          "recorded_clock_delay_hypotheses_on_f3"
+        ]
       },
       "measured_at": null
     }

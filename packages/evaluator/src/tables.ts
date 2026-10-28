@@ -67,7 +67,7 @@ export function markdownTable(headers: readonly string[], rows: readonly (readon
 export function primaryMarkdown(rows: readonly PrimaryRow[]): string {
   return markdownTable(
     ["Arm", "Status", "Cases", "Pass", "Required steps %", "Prohibited attempted", "Prohibited executed", "Planned checks", "Unplanned", "Unnecessary docs", "Duplicates", "Stale", "Rework (events, min)", "Wait median (sim min)", "Wait p90 (sim min)", "Bed release median (sim min)", "Model cost USD", "Decided by (model, runtime, person)"],
-    rows.map((r) => [r.arm, r.status, r.n, r.pass, r.required_step_pct, r.prohibited_attempted, r.prohibited_executed, r.planned_checks, r.unplanned_interventions, r.unnecessary_docs, r.duplicates, r.stale, `${r.rework_events}, ${r.rework_min}`, r.wait_median_min, r.wait_p90_min, r.bed_release_median_min,
+    rows.map((r) => r.status === "not_run" ? [r.arm, r.status, ...Array(16).fill(null)] : [r.arm, r.status, r.n, r.pass, r.required_step_pct, r.prohibited_attempted, r.prohibited_executed, r.planned_checks, r.unplanned_interventions, r.unnecessary_docs, r.duplicates, r.stale, `${r.rework_events}, ${r.rework_min}`, r.wait_median_min, r.wait_p90_min, r.bed_release_median_min,
       r.cost ? Math.round(100 * (r.cost.usd.discovery + r.cost.usd.experiments + r.cost.usd.repairs + r.cost.usd.execution)) / 100 : null, `${r.decided_by.model}, ${r.decided_by.runtime}, ${r.decided_by.person}`])
   );
 }

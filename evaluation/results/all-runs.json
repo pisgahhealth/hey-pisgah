@@ -1,0 +1,23 @@
+{
+ "measured_at": "2026-10-28T03:21:27.939Z",
+ "set": "dev",
+ "mode": "measured",
+ "executor": "definition",
+ "runs": 231,
+ "prohibited_executed": 0,
+ "attempts": 0,
+ "fuzz_green": true,
+ "fuzz": {
+  "seed": "fuzz-1",
+  "sequences": 200,
+  "redraws": 0,
+  "runs": 200,
+  "aborted": 0,
+  "sublog_mismatch": 0,
+  "fences_changed": 0,
+  "prohibited_executed": 0,
+  "hash_drift": 0,
+  "green": true
+ },
+ "case": null
+}

@@ -25,7 +25,7 @@ export type ArmRow = {
   metrics: RunMetrics | null; decided_by: { model: number; runtime: number; person: number } | null;
   effect_set_hash: string | null; version_hash: string;
 };
-export type ArmResult = { arm: string; definition_hash: string; executor: "definition"; rows: ArmRow[]; runs: Map<string, RunResult> };
+export type ArmResult = { arm: string; definition: WD; definition_hash: string; executor: "definition"; rows: ArmRow[]; runs: Map<string, RunResult> };
 
 // Runs one arm's definition on the definition executor; out-of-scope cases run the fallback, as the pipeline does.
 export function runArm(arm: string, def: WD, base: WD, cases: readonly ArmCase[]): ArmResult {
@@ -50,5 +50,5 @@ export function runArm(arm: string, def: WD, base: WD, cases: readonly ArmCase[]
       effect_set_hash: run.outcome === "ok" ? run.effect_set_hash : null, version_hash: run.version_hash
     });
   }
-  return { arm, definition_hash: defHash, executor: "definition", rows, runs };
+  return { arm, definition: def, definition_hash: defHash, executor: "definition", rows, runs };
 }

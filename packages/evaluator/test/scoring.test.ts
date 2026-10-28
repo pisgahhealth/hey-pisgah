@@ -50,6 +50,11 @@ describe("FR-1 decision-point scorer on hand fixtures", () => {
     const f12 = score(pick("F12")), fv = score(pick("FV", poolCases("variation")));
     expect(f12.points.find((p) => p.kind === "case_note_request")?.outcome).toBe("failure_to_act");
     expect(fv.points.find((p) => p.kind === "requirement_conflict")?.outcome).toBe("failure_to_act");
+    const f9 = score(pick("F9"));
+    expect(f9.points.find((p) => p.kind === "list_changed")?.outcome).toBe("appropriate");
+    const a1 = earliestPermitted(v1).definition, c9 = pick("F9");
+    const early = scoreCase(c9.manifest, traceFromRun(runCase(a1, c9.schedule), a1, c9.initial_state)!);
+    expect(early.find((p) => p.kind === "refund_voucher_open")?.outcome).toBe("appropriate");
     const row = fr1Row("A0", [f12, fv]);
     expect(row.appropriate + row.unnecessary_questions + row.unnecessary_refusals + row.failures_to_act + row.prohibited + (row.decision_points - row.reached)).toBe(row.decision_points);
   });
