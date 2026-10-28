@@ -6,7 +6,7 @@ import type { Session } from "./session.js";
 import { dispatch, toolDefs } from "./tools.js";
 
 // Model settings every investigator call carries; they are part of the committed record.
-export const SETTINGS = { effort: "xhigh", parallel_tool_calls: true, max_completion_tokens: 32_000, context_chars: 24_000, history_chars: 40_000, provider: "modal", model: "meta-models/Muse-Spark-Open-816B-A42B" } as const;
+export const SETTINGS = { effort: "xhigh", parallel_tool_calls: true, max_completion_tokens: 32_000, context_chars: 12_000, history_chars: 28_000, turn_result_chars: 20_000, provider: "modal", model: "meta-models/Muse-Spark-Open-816B-A42B" } as const;
 
 // After this many repeated identical calls in one run, the run ends as stalled.
 export const REPEAT_LIMIT = 3;
@@ -38,7 +38,7 @@ export const ELIDED_MIN = JSON.stringify({ elided: true });
 // Older assistant text past the budget keeps only its opening characters.
 const TEXT_KEEP = 240;
 
-// Newest first: the turn the model has not seen stays whole; the latest definition read becomes its short form and stays; then full results up to the budget, short forms up to half the budget, and the smallest stub after that.
+// Newest first: the turn the model has not seen stays whole and outside the budget; the latest definition read becomes its short form and stays; then full results up to the budget, short forms up to the budget again, and the smallest stub after that.
 export function compact(messages: readonly ChatMessage[], budget: number, digests: Digests = new Map()): ChatMessage[] {
   let used = 0;
   let shortUsed = 0;
@@ -49,17 +49,13 @@ export function compact(messages: readonly ChatMessage[], budget: number, digest
   const shorten = (full: string, short: string | null): string => {
     if (used + full.length <= budget) { used += full.length; return full; }
     used = budget + 1;
-    if (short !== null && short.length < full.length && shortUsed + short.length <= budget / 2) { shortUsed += short.length; return short; }
+    if (short !== null && short.length < full.length && shortUsed + short.length <= budget) { shortUsed += short.length; return short; }
     return full.length > ELIDED_MIN.length ? ELIDED_MIN : full;
   };
   for (let i = out.length - 1; i >= 0; i--) {
     const m = out[i]!;
     if (m.role === "assistant") {
-      if (i === lastAssistant) {
-        for (const c of m.tool_calls ?? []) if (c.type === "function") used += c.function.arguments.length;
-        used += typeof m.content === "string" ? m.content.length : 0;
-        continue;
-      }
+      if (i === lastAssistant) continue;
       const text = typeof m.content === "string" && m.content.length > TEXT_KEEP && used > budget ? m.content.slice(0, TEXT_KEEP) : m.content;
       if (typeof m.content === "string") used += m.content.length;
       const calls = m.tool_calls?.map((c) => (c.type !== "function" ? c : { ...c, function: { ...c.function, arguments: shorten(c.function.arguments, ELIDED_ARGS) } }));
@@ -67,7 +63,7 @@ export function compact(messages: readonly ChatMessage[], budget: number, digest
       continue;
     }
     if (m.role !== "tool" || typeof m.content !== "string") continue;
-    if (i > lastAssistant) { used += m.content.length; continue; }
+    if (i > lastAssistant) continue;
     const d = digests.get(m.tool_call_id);
     if (d?.name === "get_workflow_definition") {
       out[i] = { ...m, content: definitionPinned || !d.digest ? ELIDED_MIN : d.digest };
@@ -79,31 +75,35 @@ export function compact(messages: readonly ChatMessage[], budget: number, digest
   return out;
 }
 
-// When the conversation after the kickoff still passes the cap, whole older turns go, oldest first, and one note says how many and keeps the definition's short form.
+// When the older turns after the kickoff still pass the cap, whole older turns go, oldest first, and one note says how many and keeps the short forms of the definition and the case list.
 export function dropOldTurns(messages: readonly ChatMessage[], cap: number): ChatMessage[] {
   const head = messages.slice(0, 2);
-  let rest = messages.slice(2);
+  let lastAssistant = messages.length - 1;
+  while (lastAssistant >= 2 && messages[lastAssistant]!.role !== "assistant") lastAssistant -= 1;
+  if (lastAssistant < 2) return [...messages];
+  let older = messages.slice(2, lastAssistant);
+  const newest = messages.slice(lastAssistant);
   const size = (ms: readonly ChatMessage[]) => ms.reduce((n, m) => n + JSON.stringify(m).length, 0);
-  if (size(rest) <= cap) return [...messages];
+  if (size(older) <= cap) return [...messages];
   let dropped = 0;
-  let definition: string | null = null;
-  const take = () => {
-    let k = 1;
-    while (k < rest.length && rest[k]!.role === "tool") k += 1;
-    for (const m of rest.slice(0, k)) if (m.role === "tool" && typeof m.content === "string" && m.content.includes('"steps":[')) definition = m.content;
-    rest = rest.slice(k);
-    dropped += 1;
+  const kept: Record<string, unknown> = {};
+  const keep = (m: ChatMessage) => {
+    if (m.role !== "tool" || typeof m.content !== "string") return;
+    try {
+      const v = JSON.parse(m.content) as Record<string, unknown>;
+      if (Array.isArray(v.steps) && Array.isArray(v.edges)) kept.definition = v;
+      if (Array.isArray(v.cases) && typeof v.cases[0] === "string") kept.cases = v.cases;
+    } catch { /* a stub or text */ }
   };
-  let lastAssistant = rest.length - 1;
-  while (lastAssistant >= 0 && rest[lastAssistant]!.role !== "assistant") lastAssistant -= 1;
-  while (rest.length > 1 && size(rest) > cap) {
-    const nextAssistant = rest.findIndex((m) => m.role === "assistant");
-    const turns = rest.filter((m) => m.role === "assistant").length;
-    if (nextAssistant < 0 || turns <= 1) break;
-    take();
+  while (older.length && size(older) > cap) {
+    let k = 1;
+    while (k < older.length && older[k]!.role === "tool") k += 1;
+    for (const m of older.slice(0, k)) keep(m);
+    older = older.slice(k);
+    dropped += 1;
   }
-  const note = JSON.stringify({ elided_turns: dropped, note: DROPPED_NOTE, ...(definition ? { definition: JSON.parse(definition) as unknown } : {}) });
-  return [...head, { role: "user", content: note }, ...rest];
+  const note = JSON.stringify({ elided_turns: dropped, note: DROPPED_NOTE, ...kept });
+  return [...head, { role: "user", content: note }, ...older, ...newest];
 }
 
 // The investigator loop: one model call per turn, tool calls run in call order, and the run stops on the published stop rule.
@@ -162,12 +162,13 @@ export async function runLoop(o: LoopOptions): Promise<LoopOutcome> {
     }
     idle = 0;
     messages.push({ role: "assistant", content: msg?.content ?? null, tool_calls: calls.map((c) => ({ id: c.id, type: "function" as const, function: { name: c.name, arguments: c.arguments } })) });
+    const pageChars = Math.max(2_000, Math.floor(SETTINGS.turn_result_chars / calls.length));
     for (const [i, c] of calls.entries()) {
       const key = callKey(c.name, c.arguments);
       const repeated = key === previous;
       previous = key;
       if (repeated) repeats += 1;
-      const result = repeated ? { ok: false, error: "repeated_call", message: REPEAT_NOTE } : await dispatch(s, c.name, c.arguments);
+      const result = repeated ? { ok: false, error: "repeated_call", message: REPEAT_NOTE } : await dispatch(s, c.name, c.arguments, { pageChars });
       const text = JSON.stringify(result);
       s.log("tool.called", { turn: turns, index: i, call_id: c.id, name: c.name, args: c.arguments.slice(0, 8000), args_hash: sha256(c.arguments), result_hash: sha256(text), ok: result.ok !== false, error: result.ok === false ? String(result.error) : null, result: text.slice(0, 30_000) });
       const short = resultDigest(c.name, result, s.base);

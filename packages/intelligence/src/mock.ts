@@ -24,7 +24,8 @@ const last = (ctx: Ctx, name: string, n = 1) => ctx.results.filter((r) => r.name
 function eventOf(ctx: Ctx, caseId: string, subject: string): string {
   for (const r of ctx.results) {
     if (r.name !== "get_case_timeline" || r.value.case_id !== caseId) continue;
-    const hit = ((r.value.items ?? []) as { kind?: string; subject?: string; event_id?: string }[]).find((e) => e.kind === "step.completed" && e.subject === subject);
+    const items = ((r.value.items ?? []) as ({ kind?: string; subject?: string; event_id?: string } | string)[]).map((x) => (typeof x === "string" ? { event_id: x.split(" ")[0], kind: x.split(" ")[1], subject: x.split(" ")[2] } : x));
+    const hit = items.find((e) => e.kind === "step.completed" && e.subject === subject);
     if (hit?.event_id) return hit.event_id;
   }
   return "ev-00000000";

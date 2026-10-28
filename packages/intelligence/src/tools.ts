@@ -107,8 +107,8 @@ export function toolDefs(arm: Arm, flags: { insufficientEvidence?: boolean | und
   });
 }
 
-// Runs one tool call; unknown tools and unparseable arguments come back as data the model can read.
-export async function dispatch(s: Session, name: string, argText: string): Promise<Record<string, unknown>> {
+// Runs one tool call; unknown tools and unparseable arguments come back as data the model can read, and pageChars shortens timeline pages.
+export async function dispatch(s: Session, name: string, argText: string, o: { pageChars?: number } = {}): Promise<Record<string, unknown>> {
   if (!(armTools(s.o.arm) as string[]).includes(name)) return { ok: false, error: "no_such_tool", message: "No tool has that name in this session." };
   let args: unknown;
   try { args = argText.trim() ? JSON.parse(argText) : {}; } catch { s.counters.repairs += 1; return { ok: false, error: "invalid_arguments", message: "The arguments are not valid JSON." }; }
@@ -120,7 +120,7 @@ export async function dispatch(s: Session, name: string, argText: string): Promi
   const a = (loose.success ? loose.data : args) as never;
   switch (name as ToolName) {
     case "list_cases": return s.listCases();
-    case "get_case_timeline": return s.timeline(a);
+    case "get_case_timeline": return s.timeline(a, o.pageChars);
     case "get_record": return s.record(a);
     case "compute_intervals": return s.intervals(a);
     case "get_queue_snapshot": return s.queue(a);

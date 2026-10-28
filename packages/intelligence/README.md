@@ -11,7 +11,7 @@ The investigator: it reads recorded discharges, records hypotheses, runs matched
 | No-effect data | When a case's event log equals control, the result says so and lists the edges, derived gates and triggers on each targeted step; a changed definition with identical logs everywhere gets a "behaviour unchanged" note. |
 | Pair gate | From the second experiment on, two active hypotheses whose `if_true` predictions do not overlap on one metric and shared case, or a stated `no_pair_reason`. A refusal is counted apart and uses no experiment. |
 | Engine rules | `get_workflow_definition` carries a short block of how the engine starts steps, gates and triggers. |
-| Context | The definition is shown whole once, then in short form. Older results become short forms, then stubs; whole old turns drop past 40,000 characters. |
+| Context | The newest turn is shown whole, with timeline pages shortened so one turn stays near 20,000 characters. The definition is shown whole once, then in short form. Older results become short forms, then stubs; whole older turns drop past 28,000 characters, keeping the definition and case list short forms in one note. |
 | Prediction check | Computed by the app before and after each run, never shown to the model. Inconclusive is a normal outcome. |
 | Status rules | Retained needs a matching `if_true` result. Rejected needs `if_false`, a contradiction, or cited events. A refusal counts as a say-do mismatch. |
 | Proposals | Appended to `learning/proposals`; the evaluator writes `learning/validations`. 3 per run, 1 for the prior arm. |

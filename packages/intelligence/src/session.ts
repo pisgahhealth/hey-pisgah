@@ -176,11 +176,11 @@ export class Session {
   // Read tools: every id outside the discovery pool gets the same unknown_id.
   listCases(): Result { return views.listCases(this.pool); }
 
-  timeline(a: { case_id: string; order: "occurred" | "recorded"; offset?: number | undefined; limit?: number | undefined; kinds?: string[] | undefined }): Result {
+  timeline(a: { case_id: string; order: "occurred" | "recorded"; offset?: number | undefined; limit?: number | undefined; kinds?: string[] | undefined }, cap?: number): Result {
     const c = this.pool.get(a.case_id);
     if (!c) return UNKNOWN_ID;
     this.view(c.case_id);
-    return views.timeline(c, a);
+    return views.timeline(c, a, cap);
   }
 
   record(a: { case_id: string; record_kind?: string | undefined; document_id?: string | undefined }): Result {

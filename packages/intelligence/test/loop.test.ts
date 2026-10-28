@@ -110,7 +110,7 @@ describe("discovery loop in mock mode", () => {
     const call = (i: number, args = "{}") => ({ role: "assistant" as const, content: null, tool_calls: [{ id: String(i), type: "function" as const, function: { name: "get_record", arguments: args } }] });
     const m = [{ role: "system" as const, content: "s" }, call(1), tool(1), call(2), tool(2), call(3), tool(3), call(4), tool(4)];
     const out = compact(m, 900);
-    expect(out.filter((x) => x.role === "tool").map((x) => x.content)).toEqual([ELIDED, ELIDED, big, big]);
+    expect(out.filter((x) => x.role === "tool").map((x) => x.content)).toEqual([ELIDED, big, big, big]);
     const unseen = compact([{ role: "system" as const, content: "s" }, call(1), tool(1), tool(2), tool(3)], 10);
     expect(unseen.filter((x) => x.role === "tool").map((x) => x.content)).toEqual([big, big, big]);
     const longArgs = JSON.stringify({ statement: "y".repeat(600) });
@@ -143,11 +143,14 @@ describe("discovery loop in mock mode", () => {
     expect(out.slice(0, 2)).toEqual(m.slice(0, 2));
     const note = JSON.parse(out[2]!.content as string) as { elided_turns: number; note: string; definition: { digest: string } };
     expect(note.note).toBe(DROPPED_NOTE);
-    expect(note.elided_turns).toBe(4);
+    expect(note.elided_turns).toBe(3);
     expect(note.definition.digest).toBe(DEFINITION_NOTE);
-    expect(out.slice(3)).toEqual(m.slice(-4));
+    expect(out.slice(3)).toEqual(m.slice(-6));
     expect(out[3]!.role).toBe("assistant");
     expect(dropOldTurns(m, 1_000_000)).toEqual(m);
+    const huge = [...m.slice(0, 6), ...turn(9, "x".repeat(60_000))];
+    expect(dropOldTurns(huge, 8000)).toEqual(huge);
+    expect(compact(huge, 8000).filter((x) => x.role === "tool").map((x) => (x.content as string).length)).toEqual(huge.filter((x) => x.role === "tool").map((x) => (x.content as string).length));
     s.close();
   });
 

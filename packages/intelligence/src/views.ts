@@ -33,7 +33,7 @@ export function listCases(pool: DiscoveryPool): Row {
 export type TimelineArgs = { case_id: string; order: "occurred" | "recorded"; offset?: number | undefined; limit?: number | undefined; kinds?: string[] | undefined };
 
 // One page of a case's events and notes in the chosen clock order; notes arrive wrapped as untrusted_text.
-export function timeline(c: PoolCase, a: TimelineArgs): Row {
+export function timeline(c: PoolCase, a: TimelineArgs, cap = RESULT_CHAR_CAP): Row {
   const key = a.order === "occurred" ? "occurred_at" : "recorded_at";
   const rows: { at: number; seq: number; row: Row }[] = c.events
     .filter((e) => !a.kinds || a.kinds.includes(e.kind))
@@ -50,7 +50,7 @@ export function timeline(c: PoolCase, a: TimelineArgs): Row {
   let size = 200;
   for (const r of rows.slice(offset, offset + limit)) {
     const s = JSON.stringify(r.row).length + 1;
-    if (page.length > 0 && size + s > RESULT_CHAR_CAP) break;
+    if (page.length > 0 && size + s > Math.min(cap, RESULT_CHAR_CAP)) break;
     page.push(r.row);
     size += s;
   }
