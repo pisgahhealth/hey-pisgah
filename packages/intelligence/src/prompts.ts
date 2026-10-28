@@ -1,7 +1,7 @@
 import { hashJson, sha256 } from "@hey-pisgah/contracts";
 import type { Arm } from "./session.js";
 import { DESCRIPTIONS, toolDefs } from "./tools.js";
-import { OPERATION_VOCABULARY } from "./views.js";
+import { ENGINE_SEMANTICS, OPERATION_VOCABULARY } from "./views.js";
 
 // The two opening lines carry the most weight with the model, so the untrusted-text rule and the authority rule come first.
 const CORE = [
@@ -23,7 +23,7 @@ const CORE = [
 
 // The one sentence that names the experiment tool; the A3 and prior arms drop it and nothing else.
 const EXPERIMENT_SENTENCE: Record<Arm, string | null> = {
-  adaptive: "run_experiment runs the base version and your changed version on the same recorded world for up to six cases; you have eight experiments, and three refused requests end access to it.",
+  adaptive: "run_experiment runs the base version and your changed version on the same recorded world for up to six cases; you have eight experiments, three refused requests end access to it, and from the second experiment on it needs two active hypotheses whose if_true predictions do not overlap on one metric for a shared case, or a no_pair_reason saying why no such pair can be formed.",
   a4: "get_listed_experiment runs the next experiment from a committed list that you do not choose; you may read up to eight.",
   a3: null,
   prior: null
@@ -63,7 +63,8 @@ export function appTexts(arm: Arm): { label: string; text: string }[] {
     { label: "repeat_note", text: REPEAT_NOTE },
     ...Object.entries(DESCRIPTIONS).map(([k, v]) => ({ label: `tool.${k}`, text: v })),
     { label: `${arm}.tool_schemas`, text: JSON.stringify(toolDefs(arm, { insufficientEvidence: true })) },
-    { label: "operation_vocabulary", text: JSON.stringify(OPERATION_VOCABULARY) }
+    { label: "operation_vocabulary", text: JSON.stringify(OPERATION_VOCABULARY) },
+    { label: "engine_semantics", text: JSON.stringify(ENGINE_SEMANTICS) }
   ];
 }
 
@@ -71,5 +72,5 @@ export const ARMS: readonly Arm[] = ["adaptive", "a3", "a4", "prior"];
 
 // The hashes a run is reported under; the commitments file must carry them before a live run.
 export function armHashes(arm: Arm): { prompt: string; tools: string } {
-  return { prompt: sha256(`${systemPrompt(arm)}\n---\n${kickoffTemplate(arm)}\n---\n${CYCLE_TWO}\n---\n${NUDGE}\n---\n${ELIDED}\n---\n${REPEAT_NOTE}`), tools: hashJson({ defs: toolDefs(arm), vocabulary: OPERATION_VOCABULARY }) };
+  return { prompt: sha256(`${systemPrompt(arm)}\n---\n${kickoffTemplate(arm)}\n---\n${CYCLE_TWO}\n---\n${NUDGE}\n---\n${ELIDED}\n---\n${REPEAT_NOTE}`), tools: hashJson({ defs: toolDefs(arm), vocabulary: OPERATION_VOCABULARY, semantics: ENGINE_SEMANTICS }) };
 }

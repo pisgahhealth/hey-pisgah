@@ -70,6 +70,41 @@
         "insufficient_evidence_default": false
       },
       "hash": "b317394e616d25a961601f218fca59e5b97de1548c86bcd6943b213059bd13dd"
+    },
+    {
+      "revision": 3,
+      "at": "2026-10-28T11:37:32.274Z",
+      "reason": "Publish the engine's start, gate and trigger rules as a neutral block in get_workflow_definition and hash it with the tools; from the second experiment on, require two active hypotheses whose if_true predictions do not overlap on one metric for a shared pool case, or a stated no_pair_reason, counted apart when refused; describe the identical-event-log data in run_experiment. Reason: in the L2.1 adaptive run (revision 2) every experiment left the event logs identical without the result saying so, the start rules were not shown to the model, and no hypothesis pair could be told apart by any experiment.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "4eb8d72563af33a95790a1c4abc733fe66be085978f76e3dc2c68a23e6f7ccd1",
+            "tools": "bd0d1a3c9e44dabfb43f6e4972932d93c2157726598889f265e596cdb8ceeaa7"
+          },
+          "a3": {
+            "prompt": "abd00d939ec431ee20c1fcd53f872836a8cc1d20ba680121a3001f6105553b9f",
+            "tools": "6e5dfae2c5816af339b1d3e3048225fee892b4c79fcb9ee87168e1f0514a357c"
+          },
+          "a4": {
+            "prompt": "3a81325daac7d1d3ed63375fc452c9405a086d79600662879b258d6c43668d64",
+            "tools": "7867ce9de02637f0b4b24b17a1575305a776ef8c9267fe59bd524d934eb3aad6"
+          },
+          "prior": {
+            "prompt": "edd7a6d9a0697a2b1fb2f93241b301bb4732808679202558636420bef0e9c4d2",
+            "tools": "2fd590e02488a003e8deb611346c1209fc6a604d9cb9138f4867447bb975b514"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 60000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "b52aea34edfc4f8a684ee4ddc94dd8c1746bbbdf80a379d62a382a255c166a6b"
     }
   ]
 }

@@ -7,6 +7,7 @@ import { ARMS, appTexts } from "../src/prompts.js";
 import { STREAMS } from "../src/session.js";
 import { UNKNOWN_ID } from "../src/unknown.js";
 import { DESCRIPTIONS } from "../src/tools.js";
+import { ENGINE_SEMANTICS } from "../src/views.js";
 import { LEARNED, LONG, SHORT, eventId, evidence, hyp, pool, pred, session } from "./helpers.js";
 
 const facts = (id: string) => pool().get(id)?.facts ?? null;
@@ -20,6 +21,20 @@ describe("deny list over prompts and tool descriptions", () => {
   it("catches planted terms, including a Reasoning strength line", () => {
     const planted = ["Reasoning strength: 8.", "prepare the draft before sign-off", "family F1", "start it earlier"];
     expect(denyScan(planted.map((text, i) => ({ label: String(i), text }))).length).toBe(4);
+  });
+});
+
+describe("engine semantics", () => {
+  it("are published in the definition view, hashed with the tools and scanned with the prompts", () => {
+    const s = session();
+    const sem = s.definition().engine_semantics as string[];
+    expect(sem).toEqual([...ENGINE_SEMANTICS]);
+    expect(sem.some((l) => l.includes("if it has triggers, at least one of its triggers has fired"))).toBe(true);
+    expect(sem.some((l) => l.includes("removing, adding or moving an edge never changes a trigger"))).toBe(true);
+    expect(sem.some((l) => l.includes("prepare_document and that are not external"))).toBe(true);
+    for (const arm of ARMS) expect(appTexts(arm).map((t) => t.label)).toContain("engine_semantics");
+    expect(denyScan([{ label: "semantics", text: JSON.stringify(ENGINE_SEMANTICS) }])).toEqual([]);
+    s.close();
   });
 });
 

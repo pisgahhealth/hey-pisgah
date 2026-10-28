@@ -191,6 +191,16 @@ export const OPERATION_VOCABULARY = [
   { op: "rebind_section", shape: { op: "rebind_section", document_id: "<document id>", section_id: "<section id>", source: { record_kind: "<allowed source>", field_path: "<path>", version_policy: "current" } }, example: { op: "rebind_section", document_id: "refund_voucher", section_id: "settlement", source: { record_kind: "payment", field_path: "balance", version_policy: "current" } }, rule: "Data-integrity fences are derived again from the new binding." }
 ] as const;
 
+// How the definition executor reads a definition, stated as rules of the engine for every arm alike.
+export const ENGINE_SEMANTICS = [
+  "A step can start only when it is required, every start edge into it holds and, if it has triggers, at least one of its triggers has fired.",
+  "A trigger fires once its when predicate holds and its condition, if any, is true, and it stays fired.",
+  "An edge with gate complete lets its target start but holds the target's completion until the source step completes.",
+  "An edge or after predicate whose source step is not required counts as satisfied.",
+  "Edges and triggers are separate: removing, adding or moving an edge never changes a trigger, and set_prep_trigger changes triggers only.",
+  "Operations may target only steps whose action is prepare_document and that are not external."
+] as const;
+
 // Record kinds a section may bind to: those a step produces or those the definition already binds.
 export function allowedSources(def: WorkflowDefinition): string[] {
   const out = new Set<string>();
@@ -208,6 +218,7 @@ export function definitionView(def: WorkflowDefinition): Row {
     event_kinds: [...SIM_EVENT_KINDS],
     condition_facts: Object.fromEntries(Object.entries(FACT_VALUES).map(([k, v]) => [k, v instanceof RegExp ? `pattern ${v.source}` : v])),
     allowed_sources: allowedSources(def),
+    engine_semantics: ENGINE_SEMANTICS,
     operations: OPERATION_VOCABULARY,
     limits: { ops_per_change: 3, condition_atoms: 3, predicate_depth: 2, predicate_leaves: 4 }
   };

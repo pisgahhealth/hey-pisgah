@@ -52,6 +52,9 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
     say(`    after: ${per || "nothing landed"}; contradicted ${pc.after?.contradicted.join(", ") || "none"}`);
     if (x.behaviour) say(`    behaviour: event logs identical to control in ${x.behaviour.event_logs_identical_to_control}${x.behaviour.note ? "; behaviour unchanged" : ""}`);
   }
+  const pairRefused = exps.filter((e) => e.record_type === "experiment.refused_pair").length;
+  const reasons = done.filter((x) => x.no_pair_reason).map((x) => `${x.experiment_id}: ${String(x.no_pair_reason).slice(0, 120)}`);
+  say(`pair gate: ${pairRefused} refused, ${reasons.length} run on a stated no_pair_reason${reasons.length ? ` (${reasons.join("; ")})` : ""}`);
   say(`say-do mismatches ${refused.length}`);
   for (const p of props) {
     const r = reports.find((x) => x.proposal_id === p.proposal_id);
@@ -83,5 +86,5 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
   };
   const pass = Object.values(needs).every(Boolean);
   say(`check: ${Object.entries(needs).map(([k, v]) => `${k} ${v ? "pass" : "FAIL"}`).join("  ")}  => ${pass ? "PASS" : "FAIL"}`);
-  return { pass, lines, summary: { run_id: runId, arm, needs, calls: rows.length, usd, hypotheses: hyps.length, experiments: done.length, aborted, invalid, say_do_mismatches: refused.length, proposals: props.map((p) => p.proposal_id), validations: reports.map((r) => r.status), stop: stopped?.stop ?? null, deny_hits: hits.length } };
+  return { pass, lines, summary: { run_id: runId, arm, needs, calls: rows.length, usd, hypotheses: hyps.length, experiments: done.length, aborted, invalid, pair_refusals: pairRefused, no_pair_reasons: reasons.length, say_do_mismatches: refused.length, proposals: props.map((p) => p.proposal_id), validations: reports.map((r) => r.status), stop: stopped?.stop ?? null, deny_hits: hits.length } };
 }
