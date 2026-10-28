@@ -1,9 +1,12 @@
 import { claimsOn, type ClaimsModel } from "../src/lib/claims.js";
+import type { WardBoard } from "../src/lib/discovery.js";
 import { stepOf, STEPS, type DemoStep } from "../src/lib/steps.js";
 import type { TaskPage } from "../src/lib/task-source.js";
 import { ClaimGroup } from "./claims";
 import { LiveRefresh, StartTask } from "./client";
 import { Frame } from "./frame";
+import { WardBoardView } from "./ward-board";
+import { TaskViewPanel } from "./task-view";
 
 function StepHead({ step }: { step: DemoStep }) {
   return (
@@ -36,10 +39,6 @@ export function ShellBody({ step }: { step: DemoStep }) {
 }
 
 function TaskBody({ page }: { page: TaskPage }) {
-  return <section className="shell" data-shell="5"><p className="shell-tag">Task view next</p><p>Task {page.view?.task_id ?? "none"} is loaded; its view lands in the next commit.</p></section>;
-}
-
-export function TaskBodyFull({ page }: { page: TaskPage }) {
   const v = page.view;
   if (!v) {
     return (
@@ -58,6 +57,7 @@ export function TaskBodyFull({ page }: { page: TaskPage }) {
         <p className="shell-tag">Adoption record arrives in L2.4</p>
         <p>The task below ran on workflow v{v.workflow_version}; the adopted version and its approver show here once a person adopts a change.</p>
       </section>
+      <TaskViewPanel task={v} />
       {page.source.kind === "serve" && page.tasks.length > 1 ? (
         <nav className="task-pick" aria-label="Tasks on serve">
           {page.tasks.map((t) => <a key={t.task_id} href={`/step/5?task=${t.task_id}`} aria-current={t.task_id === v.task_id ? "true" : undefined}>{t.task_id} · {t.state}</a>)}
@@ -68,13 +68,13 @@ export function TaskBodyFull({ page }: { page: TaskPage }) {
 }
 
 // Renders one step with the shared frame, from data the caller already loaded.
-export function StepPage({ n, claims, board, task }: { n: number; claims: ClaimsModel; board: null; task: TaskPage }) {
+export function StepPage({ n, claims, board, task }: { n: number; claims: ClaimsModel; board: WardBoard | null; task: TaskPage }) {
   const step = stepOf(n) ?? STEPS[0]!;
   return (
     <Frame step={step.n} claims={claims} footer={task.footer} source={task.source}>
       <StepHead step={step} />
       <ClaimGroup claims={claimsOn(claims, String(step.n))} title={`Claims on step ${step.n}`} />
-      {step.n === 1 ? <section className="shell" data-shell="1"><p className="shell-tag">Ward board next</p></section> : null}
+      {step.n === 1 && board ? <WardBoardView board={board} /> : null}
       {step.n === 5 ? <TaskBody page={task} /> : null}
       {!step.ready ? <ShellBody step={step} /> : null}
       <StepFoot n={step.n} />

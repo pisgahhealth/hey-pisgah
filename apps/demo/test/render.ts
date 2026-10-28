@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { EvaluationPage } from "../components/evaluation";
 import { StepPage } from "../components/pages";
 import { loadClaims, type ClaimsModel } from "../src/lib/claims.js";
+import { loadWardBoard } from "../src/lib/discovery.js";
 import { repoRoot } from "../src/lib/paths.js";
 import { loadTaskPage, type TaskPage } from "../src/lib/task-source.js";
 
@@ -13,7 +14,7 @@ export async function fixturePage(): Promise<TaskPage> {
 }
 
 export function renderStep(n: number, claims: ClaimsModel, task: TaskPage): string {
-  return renderToStaticMarkup(createElement(StepPage, { n, claims, board: null, task }));
+  return renderToStaticMarkup(createElement(StepPage, { n, claims, board: n === 1 ? loadWardBoard(root) : null, task }));
 }
 
 export function renderEval(tab: string, claims: ClaimsModel, task: TaskPage): string {
