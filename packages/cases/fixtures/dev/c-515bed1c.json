@@ -1,0 +1,193 @@
+{
+ "case_id": "c-515bed1c",
+ "history": null,
+ "infra_fault": {
+  "from_min": 606,
+  "kind": "read_unavailable",
+  "target": "get_record hmo_claim_cover",
+  "to_min": 646
+ },
+ "initial_state": {
+  "admission_reason": "Cellulitis of the left leg",
+  "bed": "A-03",
+  "case_id": "c-515bed1c",
+  "deposit_naira": 70000,
+  "notes": [
+   {
+    "author_id": "n_a3",
+    "author_role": "nurse",
+    "note_id": "n01",
+    "occurred_at": 545,
+    "recorded_at": 545,
+    "untrusted_text": "Relatives informed of the plan for discharge today."
+   },
+   {
+    "author_id": "n_a3",
+    "author_role": "nurse",
+    "note_id": "n02",
+    "occurred_at": 583,
+    "recorded_at": 583,
+    "untrusted_text": "Cannula removed, site clean."
+   }
+  ],
+  "patient": {
+   "age_years": 69,
+   "hospital_no": "AK114804",
+   "name": "Emem Abubakar",
+   "sex": "male"
+  },
+  "payer_type": "hmo",
+  "requirement_version": "r1",
+  "ward_id": "A"
+ },
+ "schedule": {
+  "actors": {
+   "accounts_clerk": "ac_01",
+   "authoriser": "au_01",
+   "claims_clerk": "cc_01",
+   "doctor": "d_a1",
+   "insurer": "ins_01",
+   "nurse": "n_a3",
+   "pharmacist": "p_01"
+  },
+  "alternatives": {
+   "settlement": "st12a"
+  },
+  "case_id": "c-515bed1c",
+  "draws": {},
+  "entry_lag": {},
+  "facts": {
+   "expected_discharge_recorded": "false",
+   "expected_disposition": "home",
+   "final_bill_issued": "false",
+   "has_take_home_order": "false",
+   "insurer_status": "none",
+   "payer_type": "hmo",
+   "payment_status": "unpaid",
+   "signoff_recorded": "false",
+   "take_home_status": "none",
+   "ward_id": "A",
+   "ward_requires": [
+    "discharge_summary",
+    "stay_bill",
+    "clearance_slip",
+    "hmo_claim_cover",
+    "refund_voucher"
+   ]
+  },
+  "record_updates": [],
+  "resources": {
+   "accounts_clerk": {
+    "backlog": [],
+    "busy_blocks": [],
+    "kind": "fifo"
+   },
+   "claims_clerk": {
+    "backlog": [],
+    "busy_blocks": [],
+    "kind": "fifo"
+   },
+   "nurse": {
+    "backlog": [],
+    "busy_blocks": [
+     {
+      "from": 693,
+      "to": 755
+     }
+    ],
+    "kind": "single"
+   },
+   "pharmacist": {
+    "backlog": [
+     {
+      "arrive_at": 523,
+      "job_id": "p0",
+      "service_min": 11
+     }
+    ],
+    "busy_blocks": [],
+    "kind": "fifo"
+   }
+  },
+  "schedule_version": 1,
+  "service_default_min": {
+   "check_document": 5,
+   "dispense": 12,
+   "financial_clearance": 5,
+   "hand_over_document": 5,
+   "hand_over_take_home": 5,
+   "pharmacy_review": 15,
+   "prepare_document": 25,
+   "receive_payment": 15,
+   "record_departure": 2,
+   "refund_deposit": 5,
+   "revise_document": 6,
+   "submit_claim": 5
+  },
+  "service_min": {
+   "dispense|-|-|1": 10,
+   "pharmacy_review|-|-|1": 16,
+   "prepare_document|discharge_summary|draft|1": 25,
+   "prepare_document|discharge_summary|final|1": 7,
+   "prepare_document|hmo_claim_cover|draft|1": 19,
+   "prepare_document|hmo_claim_cover|final|1": 5,
+   "prepare_document|refund_voucher|draft|1": 10,
+   "prepare_document|refund_voucher|final|1": 5,
+   "receive_payment|-|-|1": 11
+  },
+  "steps": {
+   "st01": {
+    "due": {
+     "at": 533
+    },
+    "payload": {
+     "expected_disposition": "home",
+     "expected_time": "09:56"
+    },
+    "sets_facts": {
+     "expected_discharge_recorded": "true"
+    }
+   },
+   "st05": {
+    "due": {
+     "at": 596
+    },
+    "payload": {
+     "disposition": "home",
+     "follow_up": "Hypertension clinic in two weeks; repeat blood pressure check."
+    },
+    "sets_facts": {
+     "final_bill_issued": "true",
+     "signoff_recorded": "true"
+    }
+   },
+   "st10": {
+    "sets_facts": {
+     "insurer_status": "submitted"
+    }
+   },
+   "st11": {
+    "due": {
+     "after": "st10",
+     "delay_min": 188
+    },
+    "sets_facts": {
+     "insurer_status": "responded"
+    }
+   },
+   "st12a": {
+    "not_before": 623,
+    "sets_facts": {
+     "payment_status": "paid"
+    }
+   },
+   "st16": {
+    "due": {
+     "after": "st13",
+     "delay_min": 0
+    }
+   }
+  }
+ },
+ "schedule_hash": "33b6c355641f9fa74eac9a46b0a548ba9f64fb695c0423c02484620d163d68e2"
+}

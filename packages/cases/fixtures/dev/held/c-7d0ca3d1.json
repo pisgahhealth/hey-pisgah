@@ -1,0 +1,225 @@
+{
+ "case_id": "c-7d0ca3d1",
+ "history": null,
+ "infra_fault": null,
+ "initial_state": {
+  "admission_reason": "Hypertensive urgency",
+  "bed": "A-16",
+  "case_id": "c-7d0ca3d1",
+  "deposit_naira": 90000,
+  "notes": [
+   {
+    "author_id": "n_a1",
+    "author_role": "nurse",
+    "note_id": "n01",
+    "occurred_at": 533,
+    "recorded_at": 533,
+    "untrusted_text": "Cannula removed, site clean."
+   },
+   {
+    "author_id": "n_a1",
+    "author_role": "nurse",
+    "note_id": "n02",
+    "occurred_at": 635,
+    "recorded_at": 635,
+    "untrusted_text": "Observations stable on the morning check."
+   }
+  ],
+  "patient": {
+   "age_years": 34,
+   "hospital_no": "AK849762",
+   "name": "Okon Umoh",
+   "sex": "male"
+  },
+  "payer_type": "self_pay",
+  "requirement_version": "r1",
+  "ward_id": "A"
+ },
+ "schedule": {
+  "actors": {
+   "accounts_clerk": "ac_01",
+   "authoriser": "au_01",
+   "claims_clerk": "cc_01",
+   "doctor": "d_a1",
+   "insurer": "ins_01",
+   "nurse": "n_a1",
+   "pharmacist": "p_01"
+  },
+  "alternatives": {
+   "settlement": "st12a"
+  },
+  "case_id": "c-7d0ca3d1",
+  "draws": {},
+  "entry_lag": {},
+  "facts": {
+   "expected_discharge_recorded": "false",
+   "expected_disposition": "home",
+   "final_bill_issued": "false",
+   "has_take_home_order": "true",
+   "insurer_status": "none",
+   "payer_type": "self_pay",
+   "payment_status": "unpaid",
+   "signoff_recorded": "false",
+   "take_home_status": "ordered",
+   "ward_id": "A",
+   "ward_requires": [
+    "discharge_summary",
+    "stay_bill",
+    "clearance_slip",
+    "refund_voucher"
+   ]
+  },
+  "record_updates": [],
+  "resources": {
+   "accounts_clerk": {
+    "backlog": [
+     {
+      "arrive_at": 693,
+      "job_id": "a0",
+      "service_min": 16
+     },
+     {
+      "arrive_at": 693,
+      "job_id": "a1",
+      "service_min": 15
+     }
+    ],
+    "busy_blocks": [],
+    "kind": "fifo"
+   },
+   "claims_clerk": {
+    "backlog": [],
+    "busy_blocks": [],
+    "kind": "fifo"
+   },
+   "nurse": {
+    "backlog": [],
+    "busy_blocks": [
+     {
+      "from": 672,
+      "to": 743
+     }
+    ],
+    "kind": "single"
+   },
+   "pharmacist": {
+    "backlog": [
+     {
+      "arrive_at": 486,
+      "job_id": "p0",
+      "service_min": 66
+     },
+     {
+      "arrive_at": 487,
+      "job_id": "p1",
+      "service_min": 55
+     },
+     {
+      "arrive_at": 488,
+      "job_id": "p2",
+      "service_min": 54
+     },
+     {
+      "arrive_at": 489,
+      "job_id": "p3",
+      "service_min": 61
+     }
+    ],
+    "busy_blocks": [],
+    "kind": "fifo"
+   }
+  },
+  "schedule_version": 1,
+  "service_default_min": {
+   "check_document": 5,
+   "dispense": 12,
+   "financial_clearance": 5,
+   "hand_over_document": 5,
+   "hand_over_take_home": 5,
+   "pharmacy_review": 15,
+   "prepare_document": 25,
+   "receive_payment": 15,
+   "record_departure": 2,
+   "refund_deposit": 5,
+   "revise_document": 6,
+   "submit_claim": 5
+  },
+  "service_min": {
+   "dispense|-|-|1": 12,
+   "pharmacy_review|-|-|1": 14,
+   "prepare_document|discharge_summary|draft|1": 29,
+   "prepare_document|discharge_summary|final|1": 7,
+   "prepare_document|hmo_claim_cover|draft|1": 14,
+   "prepare_document|hmo_claim_cover|final|1": 5,
+   "prepare_document|refund_voucher|draft|1": 10,
+   "prepare_document|refund_voucher|final|1": 5,
+   "receive_payment|-|-|1": 13
+  },
+  "steps": {
+   "st01": {
+    "due": {
+     "at": 499
+    },
+    "payload": {
+     "expected_disposition": "home",
+     "expected_time": "10:50"
+    },
+    "sets_facts": {
+     "expected_discharge_recorded": "true"
+    }
+   },
+   "st02": {
+    "due": {
+     "at": 516
+    },
+    "payload": {
+     "items": [
+      "Amoxicillin 500 mg capsules, 15",
+      "Artemether-lumefantrine 20/120 mg tablets, 24",
+      "Nifedipine 20 mg tablets, 28",
+      "Lisinopril 10 mg tablets, 28"
+     ]
+    }
+   },
+   "st04": {
+    "payload": {
+     "items": [
+      "Amoxicillin 500 mg capsules, 15",
+      "Artemether-lumefantrine 20/120 mg tablets, 24",
+      "Nifedipine 20 mg tablets, 28",
+      "Lisinopril 10 mg tablets, 28"
+     ]
+    },
+    "sets_facts": {
+     "take_home_status": "dispensed"
+    }
+   },
+   "st05": {
+    "due": {
+     "at": 650
+    },
+    "payload": {
+     "disposition": "home",
+     "follow_up": "Hypertension clinic in two weeks; repeat blood pressure check."
+    },
+    "sets_facts": {
+     "final_bill_issued": "true",
+     "signoff_recorded": "true"
+    }
+   },
+   "st12a": {
+    "not_before": 693,
+    "sets_facts": {
+     "payment_status": "paid"
+    }
+   },
+   "st16": {
+    "due": {
+     "after": "st13",
+     "delay_min": 4
+    }
+   }
+  }
+ },
+ "schedule_hash": "36a34d4473ecd4e6b69574b8a315df947c74de08980363a4e4f028edcf321b2b"
+}

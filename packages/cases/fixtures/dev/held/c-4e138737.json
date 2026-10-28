@@ -1,0 +1,184 @@
+{
+ "case_id": "c-4e138737",
+ "history": null,
+ "infra_fault": null,
+ "initial_state": {
+  "admission_reason": "Anaemia for transfusion",
+  "bed": "C-18",
+  "case_id": "c-4e138737",
+  "deposit_naira": 100000,
+  "notes": [
+   {
+    "author_id": "n_c1",
+    "author_role": "nurse",
+    "note_id": "n01",
+    "occurred_at": 521,
+    "recorded_at": 521,
+    "untrusted_text": "Cannula removed, site clean."
+   }
+  ],
+  "patient": {
+   "age_years": 58,
+   "hospital_no": "CK716667",
+   "name": "Samuel Bassey",
+   "sex": "male"
+  },
+  "payer_type": "self_pay",
+  "requirement_version": "r1",
+  "ward_id": "C"
+ },
+ "schedule": {
+  "actors": {
+   "accounts_clerk": "ac_01",
+   "authoriser": "au_01",
+   "claims_clerk": "cc_01",
+   "doctor": "d_c1",
+   "insurer": "ins_01",
+   "nurse": "n_c1",
+   "pharmacist": "p_01"
+  },
+  "alternatives": {
+   "settlement": "st12a"
+  },
+  "case_id": "c-4e138737",
+  "draws": {},
+  "entry_lag": {},
+  "facts": {
+   "expected_discharge_recorded": "false",
+   "expected_disposition": "home",
+   "final_bill_issued": "false",
+   "has_take_home_order": "true",
+   "insurer_status": "none",
+   "payer_type": "self_pay",
+   "payment_status": "unpaid",
+   "signoff_recorded": "false",
+   "take_home_status": "ordered",
+   "ward_id": "C",
+   "ward_requires": [
+    "stay_bill",
+    "clearance_slip",
+    "refund_voucher"
+   ]
+  },
+  "record_updates": [],
+  "resources": {
+   "accounts_clerk": {
+    "backlog": [
+     {
+      "arrive_at": 671,
+      "job_id": "a0",
+      "service_min": 15
+     }
+    ],
+    "busy_blocks": [],
+    "kind": "fifo"
+   },
+   "claims_clerk": {
+    "backlog": [],
+    "busy_blocks": [],
+    "kind": "fifo"
+   },
+   "nurse": {
+    "backlog": [],
+    "busy_blocks": [
+     {
+      "from": 713,
+      "to": 793
+     }
+    ],
+    "kind": "single"
+   },
+   "pharmacist": {
+    "backlog": [],
+    "busy_blocks": [],
+    "kind": "fifo"
+   }
+  },
+  "schedule_version": 1,
+  "service_default_min": {
+   "check_document": 5,
+   "dispense": 12,
+   "financial_clearance": 5,
+   "hand_over_document": 5,
+   "hand_over_take_home": 5,
+   "pharmacy_review": 15,
+   "prepare_document": 25,
+   "receive_payment": 15,
+   "record_departure": 2,
+   "refund_deposit": 5,
+   "revise_document": 6,
+   "submit_claim": 5
+  },
+  "service_min": {
+   "dispense|-|-|1": 10,
+   "pharmacy_review|-|-|1": 14,
+   "prepare_document|discharge_summary|draft|1": 21,
+   "prepare_document|discharge_summary|final|1": 5,
+   "prepare_document|hmo_claim_cover|draft|1": 15,
+   "prepare_document|hmo_claim_cover|final|1": 5,
+   "prepare_document|refund_voucher|draft|1": 10,
+   "prepare_document|refund_voucher|final|1": 5,
+   "receive_payment|-|-|1": 17
+  },
+  "steps": {
+   "st01": {
+    "due": {
+     "at": 513
+    },
+    "payload": {
+     "expected_disposition": "home",
+     "expected_time": "10:33"
+    },
+    "sets_facts": {
+     "expected_discharge_recorded": "true"
+    }
+   },
+   "st02": {
+    "due": {
+     "at": 525
+    },
+    "payload": {
+     "items": [
+      "Nifedipine 20 mg tablets, 28"
+     ]
+    }
+   },
+   "st04": {
+    "payload": {
+     "items": [
+      "Nifedipine 20 mg tablets, 28"
+     ]
+    },
+    "sets_facts": {
+     "take_home_status": "dispensed"
+    }
+   },
+   "st05": {
+    "due": {
+     "at": 633
+    },
+    "payload": {
+     "disposition": "home",
+     "follow_up": "Diabetes clinic in ten days; bring the glucose diary."
+    },
+    "sets_facts": {
+     "final_bill_issued": "true",
+     "signoff_recorded": "true"
+    }
+   },
+   "st12a": {
+    "not_before": 678,
+    "sets_facts": {
+     "payment_status": "paid"
+    }
+   },
+   "st16": {
+    "due": {
+     "after": "st13",
+     "delay_min": 3
+    }
+   }
+  }
+ },
+ "schedule_hash": "3498d2bb06cd098ddfd0a55b405a1bc471798b2db5d97e20d8c777c5062d8b49"
+}

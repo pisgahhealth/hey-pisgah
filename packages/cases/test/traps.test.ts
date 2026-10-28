@@ -4,9 +4,9 @@ import { loadV1 } from "@hey-pisgah/hospital";
 import { runLearned, runV1, type Checked } from "../src/checks.js";
 import { PHARMACY_WAIT_NOTE } from "../src/text.js";
 import { generateCase } from "../src/generate.js";
-import { sample } from "./helpers.js";
+import { asChecked, committed, sample } from "./helpers.js";
 
-const all: Checked[] = [...sample(5)];
+const all: Checked[] = [...asChecked(committed()), ...sample(5)];
 const fam = (f: string) => all.filter((c) => c.manifest.family === f || c.manifest.overlays.includes(f as never));
 const v1 = loadV1();
 const section = (doc: string, id: string) => v1.documents.find((d) => d.document_id === doc)!.sections.find((s) => s.section_id === id)!;
