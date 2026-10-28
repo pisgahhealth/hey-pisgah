@@ -1,4 +1,5 @@
 import { canonical } from "@hey-pisgah/contracts";
+import { worldRules } from "@hey-pisgah/hospital";
 import { ModelClient } from "@hey-pisgah/model";
 import { loadCases } from "../src/cases.js";
 import { scriptedAgent } from "../src/mock.js";
@@ -16,7 +17,7 @@ const client = new ModelClient({
   budget: { runUsd: 5, runMaxCalls: 400, weekUsd: 120, weekStopFraction: 0.8, weekSince: () => new Date(0) }
 });
 rt = new AgentRuntime({
-  storeRoot: root, client, cases: loadCases(), registry: registry(), pollMs: 2,
+  storeRoot: root, client, cases: loadCases(), registry: registry(), world: worldRules(), pollMs: 2,
   boundary: (b) => {
     hits[b] = (hits[b] ?? 0) + 1;
     if (b === crashAt && hits[b] === nth) process.kill(process.pid, "SIGKILL");

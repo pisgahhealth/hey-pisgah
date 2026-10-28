@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { AGENT_ALLOWED_KINDS, CaseId, DocumentId, type RunResult, type SimEvent, type Step, type WorkflowDefinition as WD } from "@hey-pisgah/contracts";
 import { WardRequirementSet, wardRequires, type Facts as HospitalFacts } from "@hey-pisgah/hospital";
-import { ExternalSchedule, HORIZON_MIN, runDefinition, type ExternalSchedule as Schedule } from "@hey-pisgah/simulator";
+import { ExternalSchedule, HORIZON_MIN, runDefinition, type ExternalSchedule as Schedule, type WorldRules } from "@hey-pisgah/simulator";
 import { isPreparingStep } from "@hey-pisgah/workflow";
 
 const Minute = z.number().int().min(0).max(HORIZON_MIN);
@@ -77,8 +77,8 @@ export function engineSchedule(world: CaseWorld, def: WD, commits: readonly Engi
 
 export type OkRun = Extract<RunResult, { outcome: "ok" }>;
 
-export function engineRun(world: CaseWorld, def: WD, commits: readonly EngineCommit[], runId: string): OkRun {
-  const r = runDefinition(def, engineSchedule(world, def, commits), { run_id: runId, executor: "definition", use_agent: true });
+export function engineRun(world: CaseWorld, def: WD, commits: readonly EngineCommit[], runId: string, rules: WorldRules | null): OkRun {
+  const r = runDefinition(def, engineSchedule(world, def, commits), { run_id: runId, executor: "definition", use_agent: true, ...(rules ? { world: rules } : {}) });
   if (r.outcome !== "ok") throw new PortError("world_aborted", `the world run aborted: ${r.invariant_violations.join("; ")}`);
   return r;
 }

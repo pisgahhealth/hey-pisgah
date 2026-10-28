@@ -33,7 +33,7 @@ The personal agent runtime. It works one discharge case through the hospital por
 | --- | --- |
 | `npm run serve` | Long-lived process on 127.0.0.1:4317 (`HEY_PISGAH_SERVE_PORT` to change). |
 | `npm run serve -- --once --case c-agent001` | One task to a settled state, then a JSON summary. |
-| `HEY_PISGAH_MODE=replay npm run serve -- --once` | Replays the recorded live case with no network. |
+| `HEY_PISGAH_MODE=replay npm run serve -- --once --recorded live-v1-2026-10-28` | Replays the recorded live case, in the world it ran in, with no network. |
 
 HTTP routes: `GET /health`, `GET /tasks`, `POST /tasks {case_id, goal, owner}`, `GET /tasks/<id>`, `POST /tasks/<id>/cancel {by}`, `POST /tasks/<id>/input {text, by}`, `GET /cases`, `GET|POST /cases/<id>/clock` (POST in `--clock manual` only), `POST /learning {record_type, payload}`.
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ModelError } from "@hey-pisgah/model";
+import { worldRules } from "@hey-pisgah/hospital";
 import { readStream } from "@hey-pisgah/store";
 import { callsWhileWaiting } from "../src/checks.js";
 import { scriptedAgent } from "../src/mock.js";
@@ -239,10 +240,11 @@ describe("agent runtime on the v1 case (mock model)", () => {
 
   it("the port refuses a world that changed under an existing stream", () => {
     const root = tempRoot();
-    const port = HospitalPort.open(root, baseCase(), registry());
+    const port = HospitalPort.open(root, baseCase(), registry(), worldRules());
     port.close();
     const changed = baseCase();
     changed.opened_at = 490;
-    expect(() => HospitalPort.open(root, changed, registry())).toThrow(/differs/);
+    expect(() => HospitalPort.open(root, changed, registry(), worldRules())).toThrow(/case world differs/);
+    expect(() => HospitalPort.open(root, baseCase(), registry(), null)).toThrow(/world rules differ/);
   });
 });

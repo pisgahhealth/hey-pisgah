@@ -1,16 +1,26 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { CaseId, StreamId } from "@hey-pisgah/contracts";
-import { loadV1 } from "@hey-pisgah/hospital";
+import { loadV1, worldRules } from "@hey-pisgah/hospital";
 import { ModelClient, type EffortLevel, type Mode, type ProviderId } from "@hey-pisgah/model";
 import { STORE_RECORD_TYPES, openStream, type Stream } from "@hey-pisgah/store";
+import type { WorldRules } from "@hey-pisgah/simulator";
 import { Registry } from "@hey-pisgah/workflow";
 import { FIXTURE_CASES_DIR, loadCases } from "./cases.js";
 import { scriptedAgent } from "./mock.js";
 import { AgentRuntime } from "./runtime.js";
 
 export const AGENT_RECORDINGS_DIR = new URL("../fixtures/recordings/", import.meta.url).pathname;
+export const RECORDED_DIR = new URL("../fixtures/recorded/", import.meta.url).pathname;
+
+// A frozen live run: the definition and case world it used, replayed with no world rules.
+export function recordedWorld(name: string): { registry: Registry; casesDir: string; world: null } {
+  if (!/^[a-z0-9-]+$/.test(name)) throw new Error("recorded run names are lower-case words and dashes");
+  const dir = join(RECORDED_DIR, name);
+  return { registry: Registry.load([JSON.parse(readFileSync(join(dir, "v1.json"), "utf8"))]), casesDir: join(dir, "cases"), world: null };
+}
 export const LEARNING_STREAM = "learning/main";
 
 export type ServeOptions = {
@@ -25,6 +35,9 @@ export type ServeOptions = {
   model?: string;
   effort?: EffortLevel;
   recordingsDir?: string;
+  // Defaults to the adopted hospital v1 and the hospital's world rules.
+  registry?: Registry;
+  world?: WorldRules | null;
   log?: (line: string) => void;
 };
 export type Serve = { url: string; runtime: AgentRuntime; client: ModelClient; learning: Stream; close: () => Promise<void> };
@@ -64,7 +77,7 @@ export async function startServe(o: ServeOptions): Promise<Serve> {
     taskStateOf: (id) => runtime?.stateOf(id) ?? null
   });
   const rt = new AgentRuntime({
-    storeRoot: o.storeRoot, client, cases, registry: Registry.load([loadV1()]), clock: o.clock ?? "auto", pollMs: o.pollMs ?? 250,
+    storeRoot: o.storeRoot, client, cases, registry: o.registry ?? Registry.load([loadV1()]), world: o.world === undefined ? worldRules() : o.world, clock: o.clock ?? "auto", pollMs: o.pollMs ?? 250,
     ...(o.provider ? { provider: o.provider } : {}), ...(o.model ? { model: o.model } : {}), ...(o.effort ? { effort: o.effort } : {}), ...(o.log ? { log: o.log } : {})
   });
   runtime = rt;
@@ -144,7 +157,9 @@ export async function serveCommand(repoRoot: string, args: string[]): Promise<nu
   const storeRoot = flag(args, "store") ?? join(repoRoot, ".hey-pisgah", "store");
   const once = args.includes("--once");
   const clock = (flag(args, "clock") ?? "auto") as "auto" | "manual";
+  const recorded = flag(args, "recorded");
   const s = await startServe({
+    ...(recorded ? recordedWorld(recorded) : {}),
     storeRoot, clock, port: Number(flag(args, "port") ?? (once ? 0 : process.env["HEY_PISGAH_SERVE_PORT"] ?? 4317)),
     pollMs: Number(flag(args, "poll-ms") ?? 250), log: (l) => process.stderr.write(`${l}\n`),
     ...(flag(args, "cases") ? { casesDir: flag(args, "cases")! } : {})

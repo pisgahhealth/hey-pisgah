@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadV1, loadWardRequirements } from "@hey-pisgah/hospital";
+import { loadV1, loadWardRequirements, worldRules } from "@hey-pisgah/hospital";
 import { ModelClient, type MockResponder } from "@hey-pisgah/model";
 import { readStream } from "@hey-pisgah/store";
 import { Registry } from "@hey-pisgah/workflow";
@@ -44,7 +44,7 @@ export function harness(root: string, o: { mock?: MockResponder; cases?: CaseWor
     taskStateOf: (id) => rt?.stateOf(id) ?? null,
     budget: { runUsd: 5, runMaxCalls: 400, weekUsd: 120, weekStopFraction: 0.8, weekSince: () => new Date(0) }
   });
-  rt = new AgentRuntime({ storeRoot: root, client, cases, registry: registry(), pollMs: 3, ...(o.runtime ?? {}) });
+  rt = new AgentRuntime({ storeRoot: root, client, cases, registry: registry(), world: worldRules(), pollMs: 3, ...(o.runtime ?? {}) });
   const h = rt;
   return { rt: h, client, bodies, close: async () => { await h.stop(); client.close(); } };
 }

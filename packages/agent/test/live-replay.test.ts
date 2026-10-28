@@ -3,16 +3,16 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { KEYS_PATH, secretValues } from "@hey-pisgah/model";
 import { readStream } from "@hey-pisgah/store";
-import { AGENT_RECORDINGS_DIR, startServe } from "../src/serve.js";
+import { AGENT_RECORDINGS_DIR, recordedWorld, startServe } from "../src/serve.js";
 import { GOAL, OWNER, tempRoot } from "./helpers.js";
 
-// The one live v1 case on Modal (effort low, 28 Oct 2026), replayed from its recordings with no network and no keys.
+// The one live v1 case on Modal (effort low, 28 Oct 2026), replayed from its recordings against the world it ran in, with no network and no keys.
 const LIVE = { calls: 38, cost_usd: 0.33711975, effect_set_hash: "579c0f283a531756306cfb588a96459064811132fcb6f0228007034a2b52d364" };
 
 describe("live v1 case, replayed", () => {
   it("replays to the same done state, call count, cost and effect set", async () => {
     const root = tempRoot();
-    const s = await startServe({ storeRoot: root, port: 0, mode: "replay", pollMs: 3 });
+    const s = await startServe({ storeRoot: root, port: 0, mode: "replay", pollMs: 3, ...recordedWorld("live-v1-2026-10-28") });
     const id = s.runtime.openTask({ case_id: "c-agent001", goal: GOAL, owner: OWNER });
     await s.runtime.settled(120_000);
     const st = s.runtime.status(id) as { state: string; closed: { effect_set_hash: string } };

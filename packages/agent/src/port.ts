@@ -2,7 +2,7 @@ import { statSync } from "node:fs";
 import {
   AGENT_ALLOWED_KINDS, hashJson, type ActionKind, type EventPredicate, type SimEvent, type Step, type WorkflowDefinition as WD
 } from "@hey-pisgah/contracts";
-import { scheduleHash } from "@hey-pisgah/simulator";
+import { scheduleHash, type WorldRules } from "@hey-pisgah/simulator";
 import { STORE_RECORD_TYPES, openStream, streamPaths, type Stream } from "@hey-pisgah/store";
 import { boundRecordKinds, deriveDataIntegrityFences, evalCondition, type Facts, type Registry } from "@hey-pisgah/workflow";
 import { eventIdFor, recordIdFor, shortHash } from "./ids.js";
@@ -53,31 +53,33 @@ export class HospitalPort {
   private clock: number;
   private cache: { n: number; run: OkRun } | null = null;
 
-  private constructor(readonly world: CaseWorld, private readonly stream: Stream, def: WD, clock: number) {
+  private constructor(readonly world: CaseWorld, private readonly stream: Stream, def: WD, clock: number, private readonly rules: WorldRules | null) {
     this.caseId = world.case_id;
     this.def = def;
     this.clock = clock;
-    this.engineRunId = `run-${shortHash(world.case_id, def.definition_hash, scheduleHash(world.schedule), "model_agent")}`;
+    this.engineRunId = `run-${shortHash(world.case_id, def.definition_hash, scheduleHash(world.schedule), "model_agent", ...(rules ? [rules.rules_hash] : []))}`;
   }
 
-  // Opens or reopens the case's world stream; a reopen must see the same world and keeps the version it started with.
-  static open(storeRoot: string, world: CaseWorld, registry: Registry): HospitalPort {
+  // Opens or reopens the case's world stream; a reopen must see the same world and world rules, and keeps the version it started with.
+  static open(storeRoot: string, world: CaseWorld, registry: Registry, rules: WorldRules | null = null): HospitalPort {
     const stream = openStream(storeRoot, PORT_STREAM(world.case_id), { writer: true });
     try {
       const recs = stream.records().filter((e) => !STORE_RECORD_TYPES.includes(e.record_type));
       const worldHash = hashJson(world);
+      const rulesHash = rules?.rules_hash ?? null;
       const opened = recs.find((e) => e.record_type === "port.opened");
       let def: WD;
       if (!opened) {
         const facts = { ...world.schedule.facts, ward_requires: wardRequiresList(world.requirements[0]!.set, world.schedule.facts) };
         def = registry.current(facts as Facts);
-        stream.append("port.opened", { case_id: world.case_id, world_hash: worldHash, version: def.version, definition_hash: def.definition_hash, opened_at: world.opened_at }, { recorded_at: world.opened_at, occurred_at: world.opened_at });
+        stream.append("port.opened", { case_id: world.case_id, world_hash: worldHash, world_rules_hash: rulesHash, version: def.version, definition_hash: def.definition_hash, opened_at: world.opened_at }, { recorded_at: world.opened_at, occurred_at: world.opened_at });
       } else {
-        const p = opened.payload as { world_hash: string; version: number };
+        const p = opened.payload as { world_hash: string; world_rules_hash?: string | null; version: number };
         if (p.world_hash !== worldHash) throw new PortError("world_mismatch", "the case world differs from the one this stream was opened with");
+        if ((p.world_rules_hash ?? null) !== rulesHash) throw new PortError("world_mismatch", "the world rules differ from the ones this stream was opened with");
         def = registry.get(p.version);
       }
-      const port = new HospitalPort(world, stream, def, world.opened_at);
+      const port = new HospitalPort(world, stream, def, world.opened_at, rules);
       for (const e of recs) {
         if (e.record_type === "clock.advanced") port.clock = (e.payload as { to: number }).to;
         else if (e.record_type === "port.write") port.writes.push(e.payload as PortWrite);
@@ -108,7 +110,7 @@ export class HospitalPort {
   // The full engine run under every write so far; events after now are never shown, only used to move the clock.
   run(): OkRun {
     const n = this.writes.length;
-    if (!this.cache || this.cache.n !== n) this.cache = { n, run: engineRun(this.world, this.def, this.commits(), this.engineRunId) };
+    if (!this.cache || this.cache.n !== n) this.cache = { n, run: engineRun(this.world, this.def, this.commits(), this.engineRunId, this.rules) };
     return this.cache.run;
   }
 

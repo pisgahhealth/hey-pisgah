@@ -1,32 +1,153 @@
 {
   "case_id": "c-agent001",
   "opened_at": 480,
-  "requirements": [{ "at": 0, "set": "r1" }],
+  "requirements": [
+    {
+      "at": 0,
+      "set": "r1"
+    }
+  ],
   "schedule": {
     "schedule_version": 1,
     "case_id": "c-agent001",
     "facts": {
-      "ward_id": "A", "payer_type": "self_pay", "has_take_home_order": "true", "take_home_status": "none",
-      "expected_discharge_recorded": "false", "expected_disposition": "home", "signoff_recorded": "false",
-      "final_bill_issued": "false", "insurer_status": "none", "payment_status": "unpaid"
+      "ward_id": "A",
+      "payer_type": "self_pay",
+      "has_take_home_order": "true",
+      "take_home_status": "none",
+      "expected_discharge_recorded": "false",
+      "expected_disposition": "home",
+      "signoff_recorded": "false",
+      "final_bill_issued": "false",
+      "insurer_status": "none",
+      "payment_status": "unpaid"
     },
-    "actors": { "doctor": "d-a1", "nurse": "n-a1", "pharmacist": "p-01", "accounts_clerk": "ac-01", "authoriser": "au-01", "claims_clerk": "cc-01", "insurer": "ins-01" },
+    "actors": {
+      "doctor": "d-a1",
+      "nurse": "n-a1",
+      "pharmacist": "p-01",
+      "accounts_clerk": "ac-01",
+      "authoriser": "au-01",
+      "claims_clerk": "cc-01",
+      "insurer": "ins-01"
+    },
     "steps": {
-      "st01": { "due": { "at": 480 }, "sets_facts": { "expected_discharge_recorded": "true", "expected_disposition": "home" }, "payload": { "expected_at": "10:00", "disposition": "home" } },
-      "st02": { "due": { "at": 490 }, "sets_facts": { "take_home_status": "ordered" }, "payload": { "items": ["Amlodipine 5 mg tablets, 28", "Paracetamol 500 mg tablets, 24"] } },
-      "st03": { "due": { "after": "st02", "delay_min": 30 }, "sets_facts": { "take_home_status": "reviewed" } },
-      "st04": { "due": { "after": "st03", "delay_min": 15 }, "sets_facts": { "take_home_status": "dispensed" }, "payload": { "dispensed": true } },
-      "st05": { "due": { "at": 600 }, "sets_facts": { "signoff_recorded": "true", "final_bill_issued": "true" }, "payload": { "follow_up": "Medical outpatient clinic in two weeks.", "discharge_details": "Discharged home in stable condition.", "total": 84000 } },
-      "st12a": { "due": { "after": "st05", "delay_min": 40 }, "sets_facts": { "payment_status": "paid" }, "payload": { "amount": 84000 } }
+      "st01": {
+        "due": {
+          "at": 480
+        },
+        "sets_facts": {
+          "expected_discharge_recorded": "true",
+          "expected_disposition": "home"
+        },
+        "payload": {
+          "expected_at": "10:00",
+          "disposition": "home"
+        }
+      },
+      "st02": {
+        "due": {
+          "at": 490
+        },
+        "sets_facts": {
+          "take_home_status": "ordered"
+        },
+        "payload": {
+          "items": [
+            "Amlodipine 5 mg tablets, 28",
+            "Paracetamol 500 mg tablets, 24"
+          ]
+        }
+      },
+      "st03": {
+        "sets_facts": {
+          "take_home_status": "reviewed"
+        }
+      },
+      "st04": {
+        "sets_facts": {
+          "take_home_status": "dispensed"
+        },
+        "payload": {
+          "dispensed": true
+        }
+      },
+      "st05": {
+        "due": {
+          "at": 600
+        },
+        "sets_facts": {
+          "signoff_recorded": "true",
+          "final_bill_issued": "true"
+        },
+        "payload": {
+          "follow_up": "Medical outpatient clinic in two weeks.",
+          "discharge_details": "Discharged home in stable condition.",
+          "total": 84000
+        }
+      },
+      "st12a": {
+        "not_before": 640,
+        "sets_facts": {
+          "payment_status": "paid"
+        },
+        "payload": {
+          "amount": 84000
+        }
+      },
+      "st16": {
+        "due": {
+          "after": "st13",
+          "delay_min": 0
+        }
+      }
     },
-    "alternatives": { "settlement": "st12a" },
+    "alternatives": {
+      "settlement": "st12a"
+    },
     "resources": {
-      "nurse": { "kind": "single", "busy_blocks": [{ "from": 610, "to": 730 }], "backlog": [] },
-      "accounts_clerk": { "kind": "fifo", "busy_blocks": [], "backlog": [] }
+      "nurse": {
+        "kind": "single",
+        "busy_blocks": [
+          {
+            "from": 610,
+            "to": 730
+          }
+        ],
+        "backlog": []
+      },
+      "accounts_clerk": {
+        "kind": "fifo",
+        "busy_blocks": [],
+        "backlog": []
+      },
+      "pharmacist": {
+        "kind": "fifo",
+        "busy_blocks": [],
+        "backlog": []
+      },
+      "claims_clerk": {
+        "kind": "fifo",
+        "busy_blocks": [],
+        "backlog": []
+      }
     },
     "record_updates": [],
     "service_min": {},
-    "service_default_min": { "prepare_document": 20, "revise_document": 5, "check_document": 5, "hand_over_document": 5, "hand_over_take_home": 5, "record_departure": 2, "financial_clearance": 5, "refund_deposit": 5, "submit_claim": 5 },
+    "service_default_min": {
+      "prepare_document": 20,
+      "revise_document": 5,
+      "check_document": 5,
+      "hand_over_document": 5,
+      "hand_over_take_home": 5,
+      "record_departure": 2,
+      "financial_clearance": 5,
+      "refund_deposit": 5,
+      "submit_claim": 5,
+      "pharmacy_review": 15,
+      "dispense": 12,
+      "receive_payment": 15
+    },
     "entry_lag": {},
     "draws": {}
   }

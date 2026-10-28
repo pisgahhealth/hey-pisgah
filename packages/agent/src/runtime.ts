@@ -1,6 +1,7 @@
 import { canonical, hashJson, sha256, type EventPredicate, type Proof, type Wake } from "@hey-pisgah/contracts";
 import { ModelError, ROUTES, type ChatMessage, type EffortLevel, type ModelClient, type ProviderId } from "@hey-pisgah/model";
 import { listStreams, openStream, type Stream } from "@hey-pisgah/store";
+import type { WorldRules } from "@hey-pisgah/simulator";
 import type { Registry } from "@hey-pisgah/workflow";
 import { REQUIREMENTS_WAKE, conditionStatuses, conditionsHash, deriveConditions, deriveWakeLeaves, type ConditionStatus } from "./acceptance.js";
 import { shortHash } from "./ids.js";
@@ -21,6 +22,8 @@ export type RuntimeOptions = {
   client: ModelClient;
   cases: ReadonlyMap<string, CaseWorld>;
   registry: Registry;
+  // The hospital's world-decided service times; null runs the bare definition executor.
+  world: WorldRules | null;
   provider?: ProviderId;
   model?: string;
   effort?: EffortLevel;
@@ -73,7 +76,7 @@ export class AgentRuntime {
     if (!p) {
       const world = this.o.cases.get(caseId);
       if (!world) throw new Error(`unknown case ${caseId}`);
-      p = HospitalPort.open(this.o.storeRoot, world, this.o.registry);
+      p = HospitalPort.open(this.o.storeRoot, world, this.o.registry, this.o.world);
       this.ports.set(caseId, p);
     }
     return p;

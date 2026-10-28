@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { AGENT_ALLOWED_KINDS, ActionKind, DocumentId } from "@hey-pisgah/contracts";
+import { worldRules } from "@hey-pisgah/hospital";
 import { readStream } from "@hey-pisgah/store";
 import { scriptedAgent } from "../src/mock.js";
 import { HospitalPort } from "../src/port.js";
 import { GOAL, OWNER, baseCase, harness, ofType, registry, tempRoot, variant } from "./helpers.js";
 
 const C = "c-agent001";
-const open = (root = tempRoot(), world = baseCase()) => HospitalPort.open(root, world, registry());
+const open = (root = tempRoot(), world = baseCase()) => HospitalPort.open(root, world, registry(), worldRules());
 const doc = (document_id: string, stage: string, case_id = C) => ({ case_id, document_id, stage });
 
 // A small seeded generator so the fuzz is repeatable.
