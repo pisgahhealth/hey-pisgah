@@ -2,7 +2,7 @@
   "workflow_id": "inpatient_discharge",
   "version": 1,
   "parent_version": null,
-  "definition_hash": "1134ce48a430e9afb9c7b8529312261ab1f705710a7e2ca6026b2dc7a8d7a96a",
+  "definition_hash": "173c977f5c68754a062e4399deb69b2d3a9d53df4860e51e0bffc33e74bd8805",
   "status": "adopted",
   "scope": {
     "wards": "all",
@@ -519,7 +519,7 @@
       "actor_roles": [
         "pharmacist"
       ],
-      "external": true,
+      "external": false,
       "document_ref": null,
       "produces": [],
       "consumes": [
@@ -542,7 +542,7 @@
       "actor_roles": [
         "pharmacist"
       ],
-      "external": true,
+      "external": false,
       "document_ref": null,
       "produces": [
         "dispense_record"
@@ -730,7 +730,7 @@
       "actor_roles": [
         "accounts_clerk"
       ],
-      "external": true,
+      "external": false,
       "document_ref": null,
       "produces": [
         "payment"
@@ -869,7 +869,7 @@
       "actor_roles": [
         "nurse"
       ],
-      "external": false,
+      "external": true,
       "document_ref": null,
       "produces": [],
       "consumes": [],
@@ -1382,7 +1382,7 @@
     "model_provenance": null,
     "fences_hash": "743b39d9ad0c2a5a36911cdabc94d0f7f7fc5cb970474423e9570ed5f551af26",
     "permissions_hash": "4e9e464ae87ddaffe8f9f47fb9377883a5f32cfb23c8473d8f96aa06e743637b",
-    "structure_hash": "9ef02778acceb17d778df133520b874023067b9c484724ff37a9f49804e83f0b",
-    "rules_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    "structure_hash": "315bea01ed41c97156e9de228d3d6a438edd9253276c2bc99bc6d10b5791f26a",
+    "rules_hash": "0f57c322208c9c80e3160a954bc5668e6f96c4a6968b47545f4d3f7dddc5a452"
   }
 }

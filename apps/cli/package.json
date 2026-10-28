@@ -3,5 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "dependencies": { "@hey-pisgah/agent": "*", "@hey-pisgah/contracts": "*", "zod": "^4.6.7" }
+  "dependencies": {
+    "@hey-pisgah/agent": "*",
+    "@hey-pisgah/cases": "*",
+    "@hey-pisgah/contracts": "*",
+    "zod": "^4.6.7"
+  }
 }

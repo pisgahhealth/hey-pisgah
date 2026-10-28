@@ -1,33 +1,33 @@
 {
-  "engine": "local stub (engine seam), historical executor",
+  "engine": "@hey-pisgah/simulator runDefinition, historical executor, hospital world rules",
   "runs": {
     "c-hand0001": {
       "fixture": "hand/f1.json",
-      "events_hash": "a3cfaaf46e0a0f151658af00da93c02060a9a90a0d8b9a5f2d438b6d3cf4382c",
-      "post_signoff_wait_min": 175,
+      "events_hash": "01c58283aac4edd7f880fa69277e8bac57f4741af939a566702c24537a757cf8",
+      "post_signoff_wait_min": 180,
       "terminal_state": "departed"
     },
     "c-gold0002": {
       "fixture": "golden/c-gold0002.json",
-      "events_hash": "1ac0a1e635a5cdf246b823fb5da6eaba110873b4b26c8bcb2f0d59674ac73bc9",
+      "events_hash": "a398c818ad0d0b5e8b71344c69e90a6de3ddfe0d06abe069364c0b937d84e145",
       "post_signoff_wait_min": 75,
       "terminal_state": "departed"
     },
     "c-gold0003": {
       "fixture": "golden/c-gold0003.json",
-      "events_hash": "3f23e51126b031aa29d880251d713770113f2f11bc5521116608a4fe361cc8b6",
+      "events_hash": "31bc4865b8956304361791d82917f2f3ee4339fac735fcaa0a41d32d8e13dba9",
       "post_signoff_wait_min": 220,
       "terminal_state": "departed"
     },
     "c-gold0004": {
       "fixture": "golden/c-gold0004.json",
-      "events_hash": "da86cf3eccd16d5c892affd33dca9d2253648ca3718b1d964f79b9f15033fe0d",
+      "events_hash": "5524e6f409c9ffb2ee1268d5257a9e4057eb6a66ab0e322adff2e52483430e6e",
       "post_signoff_wait_min": 245,
       "terminal_state": "departed"
     },
     "c-gold0005": {
       "fixture": "golden/c-gold0005.json",
-      "events_hash": "4ce16c2d7b327244a2c687f81b28818c0b412f38bf74b5c1264c8f8c8509fea5",
+      "events_hash": "276cbde00d69cb2d9c5d06654c89e2d9377ad9265d634565cef3b2ac46fbd1b6",
       "post_signoff_wait_min": 75,
       "terminal_state": "departed"
     }

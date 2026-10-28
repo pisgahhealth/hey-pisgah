@@ -1,0 +1,290 @@
+{
+ "pools": {
+  "demo": [
+   {
+    "family": "F1",
+    "index": 0,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "FV",
+    "index": 1,
+    "payer": "self_pay",
+    "ward": "B"
+   }
+  ],
+  "dev": [
+   {
+    "family": "F1",
+    "index": 0,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F1",
+    "index": 1,
+    "infra_fault": {
+     "from_after_signoff": 0,
+     "kind": "write_ack_lost",
+     "length_min": 30,
+     "target": "prepare_document discharge_summary final"
+    },
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F1",
+    "index": 2,
+    "payer": "self_pay",
+    "ward": "B"
+   },
+   {
+    "family": "F2",
+    "index": 3,
+    "overlays": [
+     "F11"
+    ],
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F2",
+    "index": 4,
+    "infra_fault": {
+     "from_after_signoff": 0,
+     "kind": "write_dropped",
+     "length_min": 240,
+     "target": "hand_over_document discharge_summary final"
+    },
+    "payer": "self_pay",
+    "ward": "B"
+   },
+   {
+    "family": "F3",
+    "index": 5,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F3",
+    "index": 6,
+    "payer": "self_pay",
+    "ward": "C"
+   },
+   {
+    "family": "F4",
+    "index": 7,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F5",
+    "index": 8,
+    "infra_fault": {
+     "from_after_signoff": 10,
+     "kind": "read_unavailable",
+     "length_min": 40,
+     "target": "get_record hmo_claim_cover"
+    },
+    "payer": "hmo",
+    "ward": "A"
+   },
+   {
+    "family": "F6",
+    "index": 9,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F8",
+    "index": 10,
+    "infra_fault": {
+     "from_after_signoff": 30,
+     "kind": "event_delivery_late",
+     "length_min": 120,
+     "target": "step.completed record_departure"
+    },
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F9",
+    "index": 11,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F9",
+    "index": 12,
+    "payer": "self_pay",
+    "ward": "B"
+   },
+   {
+    "family": "F10",
+    "index": 13,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F12",
+    "index": 14,
+    "payer": "self_pay",
+    "ward": "A"
+   }
+  ],
+  "dev_held": [
+   {
+    "family": "F1",
+    "index": 0,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F1",
+    "index": 1,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F2",
+    "index": 2,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F3",
+    "index": 3,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F4",
+    "index": 4,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F5",
+    "index": 5,
+    "payer": "hmo",
+    "ward": "A"
+   },
+   {
+    "family": "F6",
+    "index": 6,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F8",
+    "index": 7,
+    "payer": "self_pay",
+    "ward": "C"
+   },
+   {
+    "family": "F9",
+    "index": 8,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F10",
+    "index": 9,
+    "payer": "self_pay",
+    "ward": "A"
+   }
+  ],
+  "discovery": [
+   {
+    "family": "F1",
+    "index": 0,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F1",
+    "index": 1,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F1",
+    "index": 2,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F7",
+    "index": 3,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F7",
+    "index": 4,
+    "payer": "self_pay",
+    "ward": "B"
+   },
+   {
+    "family": "F2",
+    "index": 5,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F3",
+    "index": 6,
+    "payer": "self_pay",
+    "ward": "B"
+   },
+   {
+    "family": "F4",
+    "index": 7,
+    "payer": "self_pay",
+    "ward": "C"
+   },
+   {
+    "family": "F5",
+    "index": 8,
+    "payer": "hmo",
+    "ward": "A"
+   },
+   {
+    "family": "F6",
+    "index": 9,
+    "payer": "self_pay",
+    "ward": "A"
+   },
+   {
+    "family": "F8",
+    "index": 10,
+    "payer": "corporate",
+    "ward": "C"
+   },
+   {
+    "family": "F9",
+    "index": 11,
+    "payer": "self_pay",
+    "ward": "A"
+   }
+  ],
+  "variation": [
+   {
+    "family": "FV",
+    "index": 0,
+    "payer": "self_pay",
+    "ward": "B"
+   },
+   {
+    "family": "FV",
+    "index": 1,
+    "payer": "hmo",
+    "ward": "B"
+   }
+  ]
+ },
+ "pools_hash": "f7efc513177812008012cd6af0a6d8f8381500bcb2eecad6ca7bb5f2823a12e6",
+ "reserved": "seeds for reserved and spare follow the same rule under the pool names reserved and spare; only their list hash is committed in reserved.sha256",
+ "rule": "seed(pool, i) = sha256(\"hey-pisgah|seed-rule-1|\" + pool + \"|\" + i); case_id = \"c-\" + first 8 hex of sha256(\"case|\" + seed)"
+}

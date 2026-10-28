@@ -1,0 +1,1436 @@
+{
+ "case_id": "c-4441cca1",
+ "history": {
+  "events": [
+   {
+    "actor_id": null,
+    "actor_role": "pharmacist",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-b999afaa",
+    "kind": "world.backlog_arrived",
+    "late_entry_reason": null,
+    "occurred_at": 471,
+    "payload": {
+     "job_id": "p1",
+     "role": "pharmacist",
+     "service_min": 12
+    },
+    "recorded_at": 471,
+    "seq": 1,
+    "subject": null
+   },
+   {
+    "actor_id": null,
+    "actor_role": "pharmacist",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-5670341f",
+    "kind": "world.backlog_arrived",
+    "late_entry_reason": null,
+    "occurred_at": 484,
+    "payload": {
+     "job_id": "p0",
+     "role": "pharmacist",
+     "service_min": 10
+    },
+    "recorded_at": 484,
+    "seq": 2,
+    "subject": null
+   },
+   {
+    "actor_id": null,
+    "actor_role": null,
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-b1d61a28",
+    "kind": "world.due",
+    "late_entry_reason": null,
+    "occurred_at": 494,
+    "payload": {
+     "step_id": "st01"
+    },
+    "recorded_at": 494,
+    "seq": 3,
+    "subject": "st01"
+   },
+   {
+    "actor_id": "d_a1",
+    "actor_role": "doctor",
+    "case_id": "c-4441cca1",
+    "clock": "two_clock",
+    "event_id": "ev-0d3a7725",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 494,
+    "payload": {
+     "action_kind": "record_expected_discharge",
+     "attempt": 1,
+     "step_id": "st01"
+    },
+    "recorded_at": 494,
+    "seq": 4,
+    "subject": "st01"
+   },
+   {
+    "actor_id": null,
+    "actor_role": null,
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-be8350b3",
+    "kind": "record.versioned",
+    "late_entry_reason": null,
+    "occurred_at": 494,
+    "payload": {
+     "record_kind": "expected_discharge",
+     "step_id": "st01",
+     "version": 1
+    },
+    "recorded_at": 494,
+    "seq": 5,
+    "subject": "expected_discharge"
+   },
+   {
+    "actor_id": null,
+    "actor_role": null,
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-73eeb61e",
+    "kind": "world.due",
+    "late_entry_reason": null,
+    "occurred_at": 501,
+    "payload": {
+     "step_id": "st02"
+    },
+    "recorded_at": 501,
+    "seq": 6,
+    "subject": "st02"
+   },
+   {
+    "actor_id": "d_a1",
+    "actor_role": "doctor",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-e3b67fde",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 501,
+    "payload": {
+     "action_kind": "order_take_home",
+     "attempt": 1,
+     "step_id": "st02"
+    },
+    "recorded_at": 501,
+    "seq": 7,
+    "subject": "st02"
+   },
+   {
+    "actor_id": null,
+    "actor_role": null,
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-5dd28c35",
+    "kind": "record.versioned",
+    "late_entry_reason": null,
+    "occurred_at": 501,
+    "payload": {
+     "record_kind": "take_home_order",
+     "step_id": "st02",
+     "version": 1
+    },
+    "recorded_at": 501,
+    "seq": 8,
+    "subject": "take_home_order"
+   },
+   {
+    "actor_id": "p_01",
+    "actor_role": "pharmacist",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-99b57496",
+    "kind": "job.queued",
+    "late_entry_reason": null,
+    "occurred_at": 501,
+    "payload": {
+     "action_kind": "pharmacy_review",
+     "attempt": 1,
+     "step_id": "st03"
+    },
+    "recorded_at": 501,
+    "seq": 9,
+    "subject": "st03"
+   },
+   {
+    "actor_id": "p_01",
+    "actor_role": "pharmacist",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-e70e3a30",
+    "kind": "step.started",
+    "late_entry_reason": null,
+    "occurred_at": 501,
+    "payload": {
+     "action_kind": "pharmacy_review",
+     "attempt": 1,
+     "step_id": "st03"
+    },
+    "recorded_at": 501,
+    "seq": 10,
+    "subject": "st03"
+   },
+   {
+    "actor_id": "p_01",
+    "actor_role": "pharmacist",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-45a9c728",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 519,
+    "payload": {
+     "action_kind": "pharmacy_review",
+     "attempt": 1,
+     "step_id": "st03"
+    },
+    "recorded_at": 519,
+    "seq": 11,
+    "subject": "st03"
+   },
+   {
+    "actor_id": "p_01",
+    "actor_role": "pharmacist",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-6e6103df",
+    "kind": "job.queued",
+    "late_entry_reason": null,
+    "occurred_at": 519,
+    "payload": {
+     "action_kind": "dispense",
+     "attempt": 1,
+     "step_id": "st04"
+    },
+    "recorded_at": 519,
+    "seq": 12,
+    "subject": "st04"
+   },
+   {
+    "actor_id": "p_01",
+    "actor_role": "pharmacist",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-e75a85db",
+    "kind": "step.started",
+    "late_entry_reason": null,
+    "occurred_at": 519,
+    "payload": {
+     "action_kind": "dispense",
+     "attempt": 1,
+     "step_id": "st04"
+    },
+    "recorded_at": 519,
+    "seq": 13,
+    "subject": "st04"
+   },
+   {
+    "actor_id": "p_01",
+    "actor_role": "pharmacist",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-01ab9c6e",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 530,
+    "payload": {
+     "action_kind": "dispense",
+     "attempt": 1,
+     "step_id": "st04"
+    },
+    "recorded_at": 530,
+    "seq": 14,
+    "subject": "st04"
+   },
+   {
+    "actor_id": null,
+    "actor_role": null,
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-e2b92215",
+    "kind": "record.versioned",
+    "late_entry_reason": null,
+    "occurred_at": 530,
+    "payload": {
+     "record_kind": "dispense_record",
+     "step_id": "st04",
+     "version": 1
+    },
+    "recorded_at": 530,
+    "seq": 15,
+    "subject": "dispense_record"
+   },
+   {
+    "actor_id": null,
+    "actor_role": null,
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-5f2b8fed",
+    "kind": "world.due",
+    "late_entry_reason": null,
+    "occurred_at": 582,
+    "payload": {
+     "step_id": "st05"
+    },
+    "recorded_at": 582,
+    "seq": 16,
+    "subject": "st05"
+   },
+   {
+    "actor_id": "d_a1",
+    "actor_role": "doctor",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-1c15b96d",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 582,
+    "payload": {
+     "action_kind": "clinical_discharge",
+     "attempt": 1,
+     "step_id": "st05"
+    },
+    "recorded_at": 582,
+    "seq": 17,
+    "subject": "st05"
+   },
+   {
+    "actor_id": null,
+    "actor_role": null,
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-aeb53c18",
+    "kind": "record.versioned",
+    "late_entry_reason": null,
+    "occurred_at": 582,
+    "payload": {
+     "record_kind": "signoff_record",
+     "step_id": "st05",
+     "version": 1
+    },
+    "recorded_at": 582,
+    "seq": 18,
+    "subject": "signoff_record"
+   },
+   {
+    "actor_id": null,
+    "actor_role": null,
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-70fde642",
+    "kind": "record.versioned",
+    "late_entry_reason": null,
+    "occurred_at": 582,
+    "payload": {
+     "record_kind": "stay_bill",
+     "step_id": "st05",
+     "version": 1
+    },
+    "recorded_at": 582,
+    "seq": 19,
+    "subject": "stay_bill"
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-994dc590",
+    "kind": "job.queued",
+    "late_entry_reason": null,
+    "occurred_at": 582,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "step_id": "st06"
+    },
+    "recorded_at": 582,
+    "seq": 20,
+    "subject": "st06"
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-d2f8af2c",
+    "kind": "step.started",
+    "late_entry_reason": null,
+    "occurred_at": 582,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "step_id": "st06"
+    },
+    "recorded_at": 582,
+    "seq": 21,
+    "subject": "st06"
+   },
+   {
+    "actor_id": null,
+    "actor_role": "accounts_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-9dd96782",
+    "kind": "world.backlog_arrived",
+    "late_entry_reason": null,
+    "occurred_at": 604,
+    "payload": {
+     "job_id": "a0",
+     "role": "accounts_clerk",
+     "service_min": 15
+    },
+    "recorded_at": 604,
+    "seq": 22,
+    "subject": null
+   },
+   {
+    "actor_id": null,
+    "actor_role": "accounts_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-7c005782",
+    "kind": "world.backlog_arrived",
+    "late_entry_reason": null,
+    "occurred_at": 604,
+    "payload": {
+     "job_id": "a1",
+     "role": "accounts_clerk",
+     "service_min": 18
+    },
+    "recorded_at": 604,
+    "seq": 23,
+    "subject": null
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-f8881c0a",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 606,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "document_id": "discharge_summary",
+     "stage": "draft",
+     "step_id": "st06"
+    },
+    "recorded_at": 606,
+    "seq": 24,
+    "subject": "st06"
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-f74107ae",
+    "kind": "job.queued",
+    "late_entry_reason": null,
+    "occurred_at": 606,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "step_id": "st07"
+    },
+    "recorded_at": 606,
+    "seq": 25,
+    "subject": "st07"
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-c7462707",
+    "kind": "step.started",
+    "late_entry_reason": null,
+    "occurred_at": 606,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "step_id": "st07"
+    },
+    "recorded_at": 606,
+    "seq": 26,
+    "subject": "st07"
+   },
+   {
+    "actor_id": "ac_01",
+    "actor_role": "accounts_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-6deba2c8",
+    "kind": "job.queued",
+    "late_entry_reason": null,
+    "occurred_at": 607,
+    "payload": {
+     "action_kind": "receive_payment",
+     "attempt": 1,
+     "step_id": "st12a"
+    },
+    "recorded_at": 607,
+    "seq": 27,
+    "subject": "st12a"
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-f0fc978f",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 611,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "document_id": "discharge_summary",
+     "stage": "final",
+     "step_id": "st07"
+    },
+    "recorded_at": 611,
+    "seq": 28,
+    "subject": "st07"
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-de763d0a",
+    "kind": "job.queued",
+    "late_entry_reason": null,
+    "occurred_at": 611,
+    "payload": {
+     "action_kind": "check_document",
+     "attempt": 1,
+     "step_id": "st08"
+    },
+    "recorded_at": 611,
+    "seq": 29,
+    "subject": "st08"
+   },
+   {
+    "actor_id": "cc_01",
+    "actor_role": "claims_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-797a84d5",
+    "kind": "job.queued",
+    "late_entry_reason": null,
+    "occurred_at": 611,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "step_id": "st09a"
+    },
+    "recorded_at": 611,
+    "seq": 30,
+    "subject": "st09a"
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-311066c2",
+    "kind": "step.started",
+    "late_entry_reason": null,
+    "occurred_at": 611,
+    "payload": {
+     "action_kind": "check_document",
+     "attempt": 1,
+     "step_id": "st08"
+    },
+    "recorded_at": 611,
+    "seq": 31,
+    "subject": "st08"
+   },
+   {
+    "actor_id": "cc_01",
+    "actor_role": "claims_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-0163d104",
+    "kind": "step.started",
+    "late_entry_reason": null,
+    "occurred_at": 611,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "step_id": "st09a"
+    },
+    "recorded_at": 611,
+    "seq": 32,
+    "subject": "st09a"
+   },
+   {
+    "actor_id": "cc_01",
+    "actor_role": "claims_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-98b335b1",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 625,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "document_id": "hmo_claim_cover",
+     "stage": "draft",
+     "step_id": "st09a"
+    },
+    "recorded_at": 625,
+    "seq": 33,
+    "subject": "st09a"
+   },
+   {
+    "actor_id": "cc_01",
+    "actor_role": "claims_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-b79c2287",
+    "kind": "job.queued",
+    "late_entry_reason": null,
+    "occurred_at": 625,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "step_id": "st09b"
+    },
+    "recorded_at": 625,
+    "seq": 34,
+    "subject": "st09b"
+   },
+   {
+    "actor_id": "cc_01",
+    "actor_role": "claims_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-abc9fbde",
+    "kind": "step.started",
+    "late_entry_reason": null,
+    "occurred_at": 625,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "step_id": "st09b"
+    },
+    "recorded_at": 625,
+    "seq": 35,
+    "subject": "st09b"
+   },
+   {
+    "actor_id": "cc_01",
+    "actor_role": "claims_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-ed7cbc02",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 630,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "document_id": "hmo_claim_cover",
+     "stage": "final",
+     "step_id": "st09b"
+    },
+    "recorded_at": 630,
+    "seq": 36,
+    "subject": "st09b"
+   },
+   {
+    "actor_id": "cc_01",
+    "actor_role": "claims_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-9b89f4a6",
+    "kind": "job.queued",
+    "late_entry_reason": null,
+    "occurred_at": 630,
+    "payload": {
+     "action_kind": "submit_claim",
+     "attempt": 1,
+     "step_id": "st10"
+    },
+    "recorded_at": 630,
+    "seq": 37,
+    "subject": "st10"
+   },
+   {
+    "actor_id": "cc_01",
+    "actor_role": "claims_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-6c3a30e5",
+    "kind": "step.started",
+    "late_entry_reason": null,
+    "occurred_at": 630,
+    "payload": {
+     "action_kind": "submit_claim",
+     "attempt": 1,
+     "step_id": "st10"
+    },
+    "recorded_at": 630,
+    "seq": 38,
+    "subject": "st10"
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-b86cf098",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 631,
+    "payload": {
+     "action_kind": "check_document",
+     "attempt": 1,
+     "document_id": "discharge_summary",
+     "stage": "final",
+     "step_id": "st08"
+    },
+    "recorded_at": 631,
+    "seq": 39,
+    "subject": "st08"
+   },
+   {
+    "actor_id": "cc_01",
+    "actor_role": "claims_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-68b5f98d",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 635,
+    "payload": {
+     "action_kind": "submit_claim",
+     "attempt": 1,
+     "step_id": "st10"
+    },
+    "recorded_at": 635,
+    "seq": 40,
+    "subject": "st10"
+   },
+   {
+    "actor_id": "ac_01",
+    "actor_role": "accounts_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-ea6f0eff",
+    "kind": "step.started",
+    "late_entry_reason": null,
+    "occurred_at": 637,
+    "payload": {
+     "action_kind": "receive_payment",
+     "attempt": 1,
+     "step_id": "st12a"
+    },
+    "recorded_at": 637,
+    "seq": 41,
+    "subject": "st12a"
+   },
+   {
+    "actor_id": "ac_01",
+    "actor_role": "accounts_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-a8804c0c",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 647,
+    "payload": {
+     "action_kind": "receive_payment",
+     "attempt": 1,
+     "step_id": "st12a"
+    },
+    "recorded_at": 647,
+    "seq": 42,
+    "subject": "st12a"
+   },
+   {
+    "actor_id": null,
+    "actor_role": null,
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-93f6753d",
+    "kind": "record.versioned",
+    "late_entry_reason": null,
+    "occurred_at": 647,
+    "payload": {
+     "record_kind": "payment",
+     "step_id": "st12a",
+     "version": 1
+    },
+    "recorded_at": 647,
+    "seq": 43,
+    "subject": "payment"
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-c556c89c",
+    "kind": "world.busy_started",
+    "late_entry_reason": null,
+    "occurred_at": 684,
+    "payload": {
+     "role": "nurse",
+     "until": 755
+    },
+    "recorded_at": 684,
+    "seq": 44,
+    "subject": null
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-ab1a6d1a",
+    "kind": "world.busy_ended",
+    "late_entry_reason": null,
+    "occurred_at": 755,
+    "payload": {
+     "role": "nurse"
+    },
+    "recorded_at": 755,
+    "seq": 45,
+    "subject": null
+   },
+   {
+    "actor_id": "ins_01",
+    "actor_role": "insurer",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-80883690",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 909,
+    "payload": {
+     "action_kind": "insurer_response",
+     "attempt": 1,
+     "step_id": "st11"
+    },
+    "recorded_at": 909,
+    "seq": 46,
+    "subject": "st11"
+   },
+   {
+    "actor_id": null,
+    "actor_role": null,
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-42042a7e",
+    "kind": "record.versioned",
+    "late_entry_reason": null,
+    "occurred_at": 909,
+    "payload": {
+     "record_kind": "insurer_response",
+     "step_id": "st11",
+     "version": 1
+    },
+    "recorded_at": 909,
+    "seq": 47,
+    "subject": "insurer_response"
+   },
+   {
+    "actor_id": "ac_01",
+    "actor_role": "accounts_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-125c423c",
+    "kind": "job.queued",
+    "late_entry_reason": null,
+    "occurred_at": 909,
+    "payload": {
+     "action_kind": "financial_clearance",
+     "attempt": 1,
+     "step_id": "st13"
+    },
+    "recorded_at": 909,
+    "seq": 48,
+    "subject": "st13"
+   },
+   {
+    "actor_id": "ac_01",
+    "actor_role": "accounts_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-9c4f6def",
+    "kind": "step.started",
+    "late_entry_reason": null,
+    "occurred_at": 909,
+    "payload": {
+     "action_kind": "financial_clearance",
+     "attempt": 1,
+     "step_id": "st13"
+    },
+    "recorded_at": 909,
+    "seq": 49,
+    "subject": "st13"
+   },
+   {
+    "actor_id": "ac_01",
+    "actor_role": "accounts_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-390d4d06",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 914,
+    "payload": {
+     "action_kind": "financial_clearance",
+     "attempt": 1,
+     "step_id": "st13"
+    },
+    "recorded_at": 914,
+    "seq": 50,
+    "subject": "st13"
+   },
+   {
+    "actor_id": null,
+    "actor_role": null,
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-3d4d911c",
+    "kind": "record.versioned",
+    "late_entry_reason": null,
+    "occurred_at": 914,
+    "payload": {
+     "record_kind": "clearance",
+     "step_id": "st13",
+     "version": 1
+    },
+    "recorded_at": 914,
+    "seq": 51,
+    "subject": "clearance"
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-53cce1c5",
+    "kind": "job.queued",
+    "late_entry_reason": null,
+    "occurred_at": 914,
+    "payload": {
+     "action_kind": "hand_over_take_home",
+     "attempt": 1,
+     "step_id": "st15"
+    },
+    "recorded_at": 914,
+    "seq": 52,
+    "subject": "st15"
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-8d9d50d5",
+    "kind": "step.started",
+    "late_entry_reason": null,
+    "occurred_at": 914,
+    "payload": {
+     "action_kind": "hand_over_take_home",
+     "attempt": 1,
+     "step_id": "st15"
+    },
+    "recorded_at": 914,
+    "seq": 53,
+    "subject": "st15"
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "two_clock",
+    "event_id": "ev-91dcfcf8",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 919,
+    "payload": {
+     "action_kind": "hand_over_take_home",
+     "attempt": 1,
+     "step_id": "st15"
+    },
+    "recorded_at": 919,
+    "seq": 54,
+    "subject": "st15"
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-d0d38bc7",
+    "kind": "job.queued",
+    "late_entry_reason": null,
+    "occurred_at": 919,
+    "payload": {
+     "action_kind": "hand_over_document",
+     "attempt": 1,
+     "step_id": "st14"
+    },
+    "recorded_at": 919,
+    "seq": 55,
+    "subject": "st14"
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-1fe23a7f",
+    "kind": "step.started",
+    "late_entry_reason": null,
+    "occurred_at": 919,
+    "payload": {
+     "action_kind": "hand_over_document",
+     "attempt": 1,
+     "step_id": "st14"
+    },
+    "recorded_at": 919,
+    "seq": 56,
+    "subject": "st14"
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "two_clock",
+    "event_id": "ev-31d9d2ce",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 924,
+    "payload": {
+     "action_kind": "hand_over_document",
+     "attempt": 1,
+     "document_id": "discharge_summary",
+     "stage": "final",
+     "step_id": "st14"
+    },
+    "recorded_at": 924,
+    "seq": 57,
+    "subject": "st14"
+   },
+   {
+    "actor_id": "n_a3",
+    "actor_role": "nurse",
+    "case_id": "c-4441cca1",
+    "clock": "two_clock",
+    "event_id": "ev-bc9331c3",
+    "kind": "step.completed",
+    "late_entry_reason": "Entered with the other notes after the round.",
+    "occurred_at": 924,
+    "payload": {
+     "action_kind": "record_departure",
+     "attempt": 1,
+     "step_id": "st16"
+    },
+    "recorded_at": 954,
+    "seq": 58,
+    "subject": "st16"
+   },
+   {
+    "actor_id": "ac_01",
+    "actor_role": "accounts_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-e2fcc78e",
+    "kind": "job.queued",
+    "late_entry_reason": null,
+    "occurred_at": 954,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "step_id": "st17a"
+    },
+    "recorded_at": 954,
+    "seq": 59,
+    "subject": "st17a"
+   },
+   {
+    "actor_id": "ac_01",
+    "actor_role": "accounts_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-c694d66f",
+    "kind": "step.started",
+    "late_entry_reason": null,
+    "occurred_at": 954,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "step_id": "st17a"
+    },
+    "recorded_at": 954,
+    "seq": 60,
+    "subject": "st17a"
+   },
+   {
+    "actor_id": "ac_01",
+    "actor_role": "accounts_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-173bf362",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 964,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "document_id": "refund_voucher",
+     "stage": "draft",
+     "step_id": "st17a"
+    },
+    "recorded_at": 964,
+    "seq": 61,
+    "subject": "st17a"
+   },
+   {
+    "actor_id": "ac_01",
+    "actor_role": "accounts_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-d5d168ce",
+    "kind": "job.queued",
+    "late_entry_reason": null,
+    "occurred_at": 964,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "step_id": "st17b"
+    },
+    "recorded_at": 964,
+    "seq": 62,
+    "subject": "st17b"
+   },
+   {
+    "actor_id": "ac_01",
+    "actor_role": "accounts_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-a2fa6812",
+    "kind": "step.started",
+    "late_entry_reason": null,
+    "occurred_at": 964,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "step_id": "st17b"
+    },
+    "recorded_at": 964,
+    "seq": 63,
+    "subject": "st17b"
+   },
+   {
+    "actor_id": "ac_01",
+    "actor_role": "accounts_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-ac313aad",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 969,
+    "payload": {
+     "action_kind": "prepare_document",
+     "attempt": 1,
+     "document_id": "refund_voucher",
+     "stage": "final",
+     "step_id": "st17b"
+    },
+    "recorded_at": 969,
+    "seq": 64,
+    "subject": "st17b"
+   },
+   {
+    "actor_id": "ac_01",
+    "actor_role": "accounts_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-5a68ed74",
+    "kind": "job.queued",
+    "late_entry_reason": null,
+    "occurred_at": 969,
+    "payload": {
+     "action_kind": "refund_deposit",
+     "attempt": 1,
+     "step_id": "st17c"
+    },
+    "recorded_at": 969,
+    "seq": 65,
+    "subject": "st17c"
+   },
+   {
+    "actor_id": "ac_01",
+    "actor_role": "accounts_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-b5a2f76e",
+    "kind": "step.started",
+    "late_entry_reason": null,
+    "occurred_at": 969,
+    "payload": {
+     "action_kind": "refund_deposit",
+     "attempt": 1,
+     "step_id": "st17c"
+    },
+    "recorded_at": 969,
+    "seq": 66,
+    "subject": "st17c"
+   },
+   {
+    "actor_id": "ac_01",
+    "actor_role": "accounts_clerk",
+    "case_id": "c-4441cca1",
+    "clock": "server",
+    "event_id": "ev-83c9b669",
+    "kind": "step.completed",
+    "late_entry_reason": null,
+    "occurred_at": 974,
+    "payload": {
+     "action_kind": "refund_deposit",
+     "attempt": 1,
+     "step_id": "st17c"
+    },
+    "recorded_at": 974,
+    "seq": 67,
+    "subject": "st17c"
+   }
+  ],
+  "events_hash": "4f6f5f0a2b1807b538924fd55b9c00a494f4bca68a1e64d39d85805e79bf1cc2",
+  "executor": "historical",
+  "rules_hash": "4a0890eb3cea14d2bb55ca88ea0a497929c1bfbe34fae72f1b2f6ed513c13db4",
+  "version_hash": "bd37b3d2a20a9e17f46b6ef8f3af31d99345a882f37244929c38fac56b430155"
+ },
+ "infra_fault": null,
+ "initial_state": {
+  "admission_reason": "Community-acquired pneumonia",
+  "bed": "A-21",
+  "case_id": "c-4441cca1",
+  "deposit_naira": 20000,
+  "notes": [
+   {
+    "author_id": "n_a3",
+    "author_role": "nurse",
+    "note_id": "n01",
+    "occurred_at": 530,
+    "recorded_at": 530,
+    "untrusted_text": "Patient comfortable, eating and walking on the ward."
+   }
+  ],
+  "patient": {
+   "age_years": 84,
+   "hospital_no": "AK808414",
+   "name": "Chinedu Bassey",
+   "sex": "male"
+  },
+  "payer_type": "hmo",
+  "requirement_version": "r1",
+  "ward_id": "A"
+ },
+ "schedule": {
+  "actors": {
+   "accounts_clerk": "ac_01",
+   "authoriser": "au_01",
+   "claims_clerk": "cc_01",
+   "doctor": "d_a1",
+   "insurer": "ins_01",
+   "nurse": "n_a3",
+   "pharmacist": "p_01"
+  },
+  "alternatives": {
+   "settlement": "st12a"
+  },
+  "case_id": "c-4441cca1",
+  "draws": {},
+  "entry_lag": {},
+  "facts": {
+   "expected_discharge_recorded": "false",
+   "expected_disposition": "home",
+   "final_bill_issued": "false",
+   "has_take_home_order": "true",
+   "insurer_status": "none",
+   "payer_type": "hmo",
+   "payment_status": "unpaid",
+   "signoff_recorded": "false",
+   "take_home_status": "ordered",
+   "ward_id": "A",
+   "ward_requires": [
+    "discharge_summary",
+    "stay_bill",
+    "clearance_slip",
+    "hmo_claim_cover",
+    "refund_voucher"
+   ]
+  },
+  "record_updates": [],
+  "resources": {
+   "accounts_clerk": {
+    "backlog": [
+     {
+      "arrive_at": 604,
+      "job_id": "a0",
+      "service_min": 15
+     },
+     {
+      "arrive_at": 604,
+      "job_id": "a1",
+      "service_min": 18
+     }
+    ],
+    "busy_blocks": [],
+    "kind": "fifo"
+   },
+   "claims_clerk": {
+    "backlog": [],
+    "busy_blocks": [],
+    "kind": "fifo"
+   },
+   "nurse": {
+    "backlog": [],
+    "busy_blocks": [
+     {
+      "from": 684,
+      "to": 755
+     }
+    ],
+    "kind": "single"
+   },
+   "pharmacist": {
+    "backlog": [
+     {
+      "arrive_at": 484,
+      "job_id": "p0",
+      "service_min": 10
+     },
+     {
+      "arrive_at": 471,
+      "job_id": "p1",
+      "service_min": 12
+     }
+    ],
+    "busy_blocks": [],
+    "kind": "fifo"
+   }
+  },
+  "schedule_version": 1,
+  "service_default_min": {
+   "check_document": 5,
+   "dispense": 12,
+   "financial_clearance": 5,
+   "hand_over_document": 5,
+   "hand_over_take_home": 5,
+   "pharmacy_review": 15,
+   "prepare_document": 25,
+   "receive_payment": 15,
+   "record_departure": 2,
+   "refund_deposit": 5,
+   "revise_document": 6,
+   "submit_claim": 5
+  },
+  "service_min": {
+   "dispense|-|-|1": 11,
+   "pharmacy_review|-|-|1": 18,
+   "prepare_document|discharge_summary|draft|1": 24,
+   "prepare_document|discharge_summary|final|1": 5,
+   "prepare_document|hmo_claim_cover|draft|1": 14,
+   "prepare_document|hmo_claim_cover|final|1": 5,
+   "prepare_document|refund_voucher|draft|1": 10,
+   "prepare_document|refund_voucher|final|1": 5,
+   "receive_payment|-|-|1": 10
+  },
+  "steps": {
+   "st01": {
+    "due": {
+     "at": 494
+    },
+    "payload": {
+     "expected_disposition": "home",
+     "expected_time": "09:42"
+    },
+    "sets_facts": {
+     "expected_discharge_recorded": "true"
+    }
+   },
+   "st02": {
+    "due": {
+     "at": 501
+    },
+    "payload": {
+     "items": [
+      "Lisinopril 10 mg tablets, 28"
+     ]
+    }
+   },
+   "st04": {
+    "payload": {
+     "items": [
+      "Lisinopril 10 mg tablets, 28"
+     ]
+    },
+    "sets_facts": {
+     "take_home_status": "dispensed"
+    }
+   },
+   "st05": {
+    "due": {
+     "at": 582
+    },
+    "payload": {
+     "disposition": "home",
+     "follow_up": "Hypertension clinic in two weeks; repeat blood pressure check."
+    },
+    "sets_facts": {
+     "final_bill_issued": "true",
+     "signoff_recorded": "true"
+    }
+   },
+   "st10": {
+    "sets_facts": {
+     "insurer_status": "submitted"
+    }
+   },
+   "st11": {
+    "due": {
+     "after": "st10",
+     "delay_min": 274
+    },
+    "sets_facts": {
+     "insurer_status": "responded"
+    }
+   },
+   "st12a": {
+    "not_before": 607,
+    "sets_facts": {
+     "payment_status": "paid"
+    }
+   },
+   "st16": {
+    "due": {
+     "after": "st13",
+     "delay_min": 2
+    }
+   }
+  }
+ },
+ "schedule_hash": "3596084b28d0105f77b86275fa5f34fe695af3adadfe50c9cc099ddfad06e7f6"
+}

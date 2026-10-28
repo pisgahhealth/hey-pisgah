@@ -1,9 +1,25 @@
 {
   "schedule": {
+    "schedule_version": 1,
     "case_id": "c-gold0004",
-    "ward_id": "C",
-    "payer_type": "self_pay",
-    "staff": {
+    "facts": {
+      "ward_id": "C",
+      "payer_type": "self_pay",
+      "has_take_home_order": "false",
+      "take_home_status": "none",
+      "expected_disposition": "home",
+      "expected_discharge_recorded": "false",
+      "signoff_recorded": "false",
+      "final_bill_issued": "false",
+      "insurer_status": "none",
+      "payment_status": "unpaid",
+      "ward_requires": [
+        "stay_bill",
+        "clearance_slip",
+        "refund_voucher"
+      ]
+    },
+    "actors": {
       "doctor": "d_c1",
       "nurse": "n_c2",
       "pharmacist": "p_01",
@@ -12,65 +28,108 @@
       "authoriser": "au_01",
       "insurer": "ins_01"
     },
-    "doctor": {
-      "round_at": 480,
-      "expected_discharge_at": 600,
-      "expected_disposition": "home",
-      "signoff_at": 600,
-      "signoff_disposition": "home",
-      "follow_up": "Medical outpatient clinic in two weeks.",
-      "take_home_orders": [],
-      "amendments": []
-    },
-    "pharmacy": {
-      "backlog": [
-        15,
-        15
-      ],
-      "review_min": 15,
-      "dispense_min": 12,
-      "screen_block": null,
-      "substitution": null
-    },
-    "accounts": {
-      "backlog": [],
-      "sponsor_arrival_at": 640,
-      "payment_min": 15,
-      "waiver": {
-        "delay_min": 240
-      },
-      "on_account": null
-    },
-    "insurer": null,
-    "nurses": [
-      {
-        "nurse_id": "n_c2",
-        "shift": {
-          "start": 420,
-          "end": 1140
+    "steps": {
+      "st01": {
+        "due": {
+          "at": 480
         },
+        "sets_facts": {
+          "expected_discharge_recorded": "true"
+        }
+      },
+      "st05": {
+        "due": {
+          "at": 600
+        },
+        "sets_facts": {
+          "signoff_recorded": "true",
+          "final_bill_issued": "true"
+        },
+        "payload": {
+          "follow_up": "Medical outpatient clinic in two weeks."
+        }
+      },
+      "st12b": {
+        "due": {
+          "after": "st05",
+          "delay_min": 240
+        },
+        "sets_facts": {
+          "payment_status": "waived"
+        }
+      },
+      "st16": {
+        "due": {
+          "after": "st13",
+          "delay_min": 0
+        }
+      }
+    },
+    "alternatives": {
+      "settlement": "st12b"
+    },
+    "resources": {
+      "nurse": {
+        "kind": "single",
         "busy_blocks": [
           {
-            "start": 700,
-            "end": 760
+            "from": 700,
+            "to": 760
+          }
+        ],
+        "backlog": []
+      },
+      "pharmacist": {
+        "kind": "fifo",
+        "busy_blocks": [],
+        "backlog": [
+          {
+            "job_id": "p0",
+            "arrive_at": 470,
+            "service_min": 15
+          },
+          {
+            "job_id": "p1",
+            "arrive_at": 475,
+            "service_min": 15
           }
         ]
+      },
+      "accounts_clerk": {
+        "kind": "fifo",
+        "busy_blocks": [],
+        "backlog": []
+      },
+      "claims_clerk": {
+        "kind": "fifo",
+        "busy_blocks": [],
+        "backlog": []
       }
-    ],
-    "service_min": {
-      "prepare_document:discharge_summary:draft:1": 25,
-      "prepare_document:discharge_summary:final:1": 5,
-      "check_document:discharge_summary:final:1": 5,
-      "hand_over_document:discharge_summary:final:1": 5,
-      "hand_over_take_home:1": 5,
-      "financial_clearance:1": 5,
-      "prepare_document:hmo_claim_cover:draft:1": 15,
-      "prepare_document:hmo_claim_cover:final:1": 5,
-      "submit_claim:1": 5,
-      "prepare_document:refund_voucher:draft:1": 10,
-      "prepare_document:refund_voucher:final:1": 5,
-      "refund_deposit:1": 5
     },
-    "entry_lag": {}
+    "record_updates": [],
+    "service_min": {
+      "prepare_document|discharge_summary|draft|1": 25,
+      "prepare_document|discharge_summary|final|1": 5,
+      "prepare_document|hmo_claim_cover|draft|1": 15,
+      "prepare_document|hmo_claim_cover|final|1": 5,
+      "prepare_document|refund_voucher|draft|1": 10,
+      "prepare_document|refund_voucher|final|1": 5
+    },
+    "service_default_min": {
+      "pharmacy_review": 15,
+      "dispense": 12,
+      "prepare_document": 25,
+      "revise_document": 6,
+      "check_document": 5,
+      "submit_claim": 5,
+      "receive_payment": 15,
+      "financial_clearance": 5,
+      "hand_over_document": 5,
+      "hand_over_take_home": 5,
+      "record_departure": 2,
+      "refund_deposit": 5
+    },
+    "entry_lag": {},
+    "draws": {}
   }
 }

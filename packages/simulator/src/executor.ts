@@ -15,7 +15,12 @@ export type RunOptions = {
   executor?: "definition" | "historical";
   // When false, steps the agent could prepare go to the first staff role instead.
   use_agent?: boolean;
+  // A world-decided service time, consulted before the schedule; its rules_hash is folded into the run's rules_hash.
+  world?: WorldRules;
 };
+
+export type ServiceQuery = { action_kind: string; document_id: string | null; stage: string | null; attempt: number; now: number; events: readonly SimEvent[] };
+export type WorldRules = { rules_hash: string; service_min: (q: ServiceQuery) => number | undefined };
 
 type StepState = "idle" | "queued" | "running" | "held" | "revising" | "verifying" | "occurring" | "done";
 type JobKind = "step" | "revise" | "verify" | "recheck";
@@ -41,7 +46,7 @@ export function runDefinition(defIn: WD, scheduleIn: Schedule, opts: RunOptions 
   const useAgent = opts.use_agent ?? true;
   const version_hash = definitionHash(def);
   const schedule_hash = scheduleHash(schedule);
-  const rules_hash = rulesHashFor(params);
+  const rules_hash = opts.world ? hashJson({ sim: rulesHashFor(params), world: opts.world.rules_hash }) : rulesHashFor(params);
   const run_id = opts.run_id ?? `run-${hashJson({ version_hash, schedule_hash, executor, rules_hash, useAgent }).slice(0, 8)}`;
 
   const eng = new Engine(schedule.case_id, run_id);
@@ -73,7 +78,8 @@ export function runDefinition(defIn: WD, scheduleIn: Schedule, opts: RunOptions 
   const docOf = (id: string) => def.documents.find((d) => d.document_id === id);
 
   function serviceMin(kind: string, doc: string | null, stage: string | null, attempt: number): number {
-    const v = schedule.service_min[serviceKey(kind, doc, stage, attempt)] ?? schedule.service_default_min[kind];
+    const v = opts.world?.service_min({ action_kind: kind, document_id: doc, stage, attempt, now: eng.now, events: eng.events })
+      ?? schedule.service_min[serviceKey(kind, doc, stage, attempt)] ?? schedule.service_default_min[kind];
     if (v === undefined) throw new ScheduleMissingDraw(`no service time for ${serviceKey(kind, doc, stage, attempt)}`);
     return v;
   }

@@ -1,4 +1,5 @@
 import { serveCommand } from "@hey-pisgah/agent";
+import { describeCommand } from "@hey-pisgah/cases";
 import { claimsCheck } from "./claims-check.js";
 import { runProbe } from "./probe/index.js";
 
@@ -8,7 +9,7 @@ const command = process.argv[2] ?? "help";
 const commands: Record<string, (() => void) | null> = {
   probe: () => { void runProbe(root, process.argv.slice(3)).then((code) => process.exit(code)); }, sim: null, discover: null, eval: null, replay: null,
   serve: () => { void serveCommand(root, process.argv.slice(3)).then((code) => { if (code !== null) process.exit(code); }); },
-  "claims:check": () => claimsCheck(root), "video:script": null, "check:discovery": null
+  "claims:check": () => claimsCheck(root), describe: () => process.exit(describeCommand(process.argv.slice(3))), "video:script": null, "check:discovery": null
 };
 if (command === "help" || !(command in commands)) {
   console.log(`hey-pisgah <command>\n  ${Object.keys(commands).join("\n  ")}`);

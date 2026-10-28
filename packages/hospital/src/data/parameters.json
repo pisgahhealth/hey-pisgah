@@ -1,24 +1,158 @@
 {
   "frozen_at": "day-2",
-  "draft_verification_by_nurse": { "on": true, "minutes": 4, "tag": "assumed" },
-  "draft_use_by_staff": { "p": 0.3, "tag": "assumed" },
-  "agent_prepare_min": { "minutes": 1, "tag": "assumed" },
+  "draft_verification_by_nurse": {
+    "on": true,
+    "minutes": 4,
+    "tag": "assumed"
+  },
+  "draft_use_by_staff": {
+    "p": 0.3,
+    "tag": "assumed"
+  },
+  "agent_prepare_min": {
+    "minutes": 1,
+    "tag": "assumed"
+  },
   "base": [
-    { "name": "round_at", "min": 480, "max": 540, "unit": "minute_of_day", "tag": "assumed", "note": "Morning ward round, 08:00 to 09:00." },
-    { "name": "take_home_share", "min": 0.7, "max": 0.7, "unit": "share", "tag": "assumed", "note": "Share of patients with take-home medicines." },
-    { "name": "take_home_items", "min": 1, "max": 4, "unit": "count", "tag": "assumed", "note": "Items on a take-home order." },
-    { "name": "pharmacy_backlog_jobs", "min": 0, "max": 3, "unit": "count", "tag": "assumed", "note": "Other patients' jobs ahead in the pharmacy queue." },
-    { "name": "pharmacy_review_min", "min": 10, "max": 20, "unit": "minutes", "tag": "assumed", "note": "Pharmacist review of one order." },
-    { "name": "pharmacy_dispense_min", "min": 10, "max": 15, "unit": "minutes", "tag": "assumed", "note": "Dispensing one order." },
-    { "name": "signoff_at", "min": 570, "max": 690, "unit": "minute_of_day", "tag": "assumed", "note": "Clinical discharge, 09:30 to 11:30." },
-    { "name": "summary_draft_min", "min": 20, "max": 30, "unit": "minutes", "tag": "assumed", "note": "Writing a summary draft by hand." },
-    { "name": "summary_final_min", "min": 5, "max": 8, "unit": "minutes", "tag": "assumed", "note": "Completing the final summary." },
-    { "name": "summary_check_min", "min": 5, "max": 5, "unit": "minutes", "tag": "assumed", "note": "Nurse check of the final summary." },
-    { "name": "sponsor_arrival_after_signoff_min", "min": 20, "max": 60, "unit": "minutes_after_signoff", "tag": "assumed", "note": "Sponsor reaches the pay point." },
-    { "name": "payment_min", "min": 10, "max": 20, "unit": "minutes", "tag": "assumed", "note": "Taking one payment." },
-    { "name": "clearance_min", "min": 5, "max": 5, "unit": "minutes", "tag": "assumed", "note": "Issuing financial clearance." },
-    { "name": "handover_min", "min": 5, "max": 5, "unit": "minutes", "tag": "assumed", "note": "Each handover to the patient." },
-    { "name": "normal_post_signoff_wait_min", "min": 60, "max": 100, "unit": "minutes_after_signoff", "tag": "assumed", "note": "Typical time from clinical discharge to departure; a target for the generator, not a draw." }
+    {
+      "name": "round_at",
+      "min": 480,
+      "max": 540,
+      "unit": "minute_of_day",
+      "tag": "assumed",
+      "note": "Morning ward round, 08:00 to 09:00."
+    },
+    {
+      "name": "take_home_share",
+      "min": 0.7,
+      "max": 0.7,
+      "unit": "share",
+      "tag": "assumed",
+      "note": "Share of patients with take-home medicines."
+    },
+    {
+      "name": "take_home_items",
+      "min": 1,
+      "max": 4,
+      "unit": "count",
+      "tag": "assumed",
+      "note": "Items on a take-home order."
+    },
+    {
+      "name": "pharmacy_backlog_jobs",
+      "min": 0,
+      "max": 3,
+      "unit": "count",
+      "tag": "assumed",
+      "note": "Other patients' jobs ahead in the pharmacy queue."
+    },
+    {
+      "name": "pharmacy_review_min",
+      "min": 10,
+      "max": 20,
+      "unit": "minutes",
+      "tag": "assumed",
+      "note": "Pharmacist review of one order."
+    },
+    {
+      "name": "pharmacy_dispense_min",
+      "min": 10,
+      "max": 15,
+      "unit": "minutes",
+      "tag": "assumed",
+      "note": "Dispensing one order."
+    },
+    {
+      "name": "signoff_at",
+      "min": 570,
+      "max": 690,
+      "unit": "minute_of_day",
+      "tag": "assumed",
+      "note": "Clinical discharge, 09:30 to 11:30."
+    },
+    {
+      "name": "summary_draft_min",
+      "min": 20,
+      "max": 30,
+      "unit": "minutes",
+      "tag": "assumed",
+      "note": "Writing a summary draft by hand."
+    },
+    {
+      "name": "summary_final_min",
+      "min": 5,
+      "max": 8,
+      "unit": "minutes",
+      "tag": "assumed",
+      "note": "Completing the final summary."
+    },
+    {
+      "name": "summary_check_min",
+      "min": 5,
+      "max": 5,
+      "unit": "minutes",
+      "tag": "assumed",
+      "note": "Nurse check of the final summary."
+    },
+    {
+      "name": "sponsor_arrival_after_signoff_min",
+      "min": 20,
+      "max": 60,
+      "unit": "minutes_after_signoff",
+      "tag": "assumed",
+      "note": "Sponsor reaches the pay point."
+    },
+    {
+      "name": "payment_min",
+      "min": 10,
+      "max": 20,
+      "unit": "minutes",
+      "tag": "assumed",
+      "note": "Taking one payment."
+    },
+    {
+      "name": "clearance_min",
+      "min": 5,
+      "max": 5,
+      "unit": "minutes",
+      "tag": "assumed",
+      "note": "Issuing financial clearance."
+    },
+    {
+      "name": "handover_min",
+      "min": 5,
+      "max": 5,
+      "unit": "minutes",
+      "tag": "assumed",
+      "note": "Each handover to the patient."
+    },
+    {
+      "name": "normal_post_signoff_wait_min",
+      "min": 60,
+      "max": 100,
+      "unit": "minutes_after_signoff",
+      "tag": "assumed",
+      "note": "Typical time from clinical discharge to departure; a target for the generator, not a draw."
+    }
   ],
-  "flow_order": { "text": "The doctor certifies the patient fit, the patient goes to the pay point, and the folder and record leave with the patient.", "tag": "observed" }
+  "flow_order": {
+    "text": "The doctor certifies the patient fit, the patient goes to the pay point, and the folder and record leave with the patient.",
+    "tag": "observed"
+  },
+  "world_rules": {
+    "nurse_window": {
+      "text": "A nurse job starts only if it ends before her next busy block. Jobs are not paused and resumed.",
+      "tag": "assumed"
+    },
+    "summary_check": {
+      "action_kind": "check_document",
+      "document_id": "discharge_summary",
+      "stage": "final",
+      "seen_while_pending": "signoff_record",
+      "min_seen": 5,
+      "min_unseen": 20,
+      "text": "Checking the final summary takes 5 minutes when the nurse wrote or verified a draft of it while the clinical discharge was still pending, and 20 minutes otherwise.",
+      "tag": "assumed"
+    }
+  }
 }
