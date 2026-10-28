@@ -1,0 +1,40 @@
+{
+  "artifact": "intelligence",
+  "revisions": [
+    {
+      "revision": 1,
+      "at": "2026-10-28T03:17:30.706Z",
+      "reason": "Initial investigator, A3, A4 and A-prior prompts, tool schemas, operation vocabulary and model settings, committed before any live discovery or A-prior run.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "631811575433d013cfe0945ea8609663bfabe861a72d69e35066adb15fa69d53",
+            "tools": "5b72fa248a7fa7bdb4f5991cf4dc59a3a299458ea0363f5650e72cc34b58cd8c"
+          },
+          "a3": {
+            "prompt": "e44db7f0341f849988b8143ef52564d0d876dcf6766e53e11f4b1e07e70430cc",
+            "tools": "09e0279f1f2ae14fe6bacae3f0a2ab385dd7108acd5163bc0e868e2dc2e3f657"
+          },
+          "a4": {
+            "prompt": "b99dcb98b19e9df9ba2dcf0c34e7bee6c247c0c082094fbe61c997024db76d7d",
+            "tools": "6e3328bf754fa0e3293a2b455cb5654759c254f50ced737fbe85acb9161473d4"
+          },
+          "prior": {
+            "prompt": "8fc5616866ec8eedaa27ee7759bd85a34dff077fb27b8514907de80a42672965",
+            "tools": "1e67a98d1c4a475740b0ef3145dec3174e305f5b9e64852a7c176619a44d256e"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 60000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "1703fa91fa4489e45a0cbb60770bc9b8349afa537d81016eeea6ef3df6209dd6"
+    }
+  ]
+}

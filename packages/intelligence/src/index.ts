@@ -8,3 +8,8 @@ export { runMatched, type Matched, type Runner } from "./experiments.js";
 export { Session, STREAMS, sessionStreamId, toleranceCap, type Arm, type ListedExperiment, type SessionOptions, type StoredExperiment } from "./session.js";
 export { DESCRIPTIONS, armTools, dispatch, toolDefs, type ToolName } from "./tools.js";
 export { ARMS, NUDGE, appTexts, armHashes, kickoff, systemPrompt } from "./prompts.js";
+export { SETTINGS, compact, runLoop, type LoopOptions, type LoopOutcome } from "./loop.js";
+export { MOCK_CASES, scriptedInvestigator } from "./mock.js";
+export { appendCommitment, appendOnlyProblems, commitmentFor, commitmentsPath, currentContent, readCommitments, type CommitmentsFile } from "./commitments.js";
+export { checkDiscovery, type DiscoveryCheck } from "./check.js";
+export { INTELLIGENCE_RECORDINGS_DIR, checkDiscoveryCommand, discoverCommand, type DiscoverDeps } from "./cli.js";

@@ -1,6 +1,7 @@
 import { hashJson, sha256 } from "@hey-pisgah/contracts";
 import type { Arm } from "./session.js";
 import { DESCRIPTIONS, toolDefs } from "./tools.js";
+import { OPERATION_VOCABULARY } from "./views.js";
 
 // The two opening lines carry the most weight with the model, so the untrusted-text rule and the authority rule come first.
 const CORE = [
@@ -59,7 +60,8 @@ export function appTexts(arm: Arm): { label: string; text: string }[] {
     { label: "nudge", text: NUDGE },
     { label: "elided", text: ELIDED },
     ...Object.entries(DESCRIPTIONS).map(([k, v]) => ({ label: `tool.${k}`, text: v })),
-    { label: `${arm}.tool_schemas`, text: JSON.stringify(toolDefs(arm, { insufficientEvidence: true })) }
+    { label: `${arm}.tool_schemas`, text: JSON.stringify(toolDefs(arm, { insufficientEvidence: true })) },
+    { label: "operation_vocabulary", text: JSON.stringify(OPERATION_VOCABULARY) }
   ];
 }
 
@@ -67,5 +69,5 @@ export const ARMS: readonly Arm[] = ["adaptive", "a3", "a4", "prior"];
 
 // The hashes a run is reported under; the commitments file must carry them before a live run.
 export function armHashes(arm: Arm): { prompt: string; tools: string } {
-  return { prompt: sha256(`${systemPrompt(arm)}\n---\n${kickoffTemplate(arm)}\n---\n${CYCLE_TWO}\n---\n${NUDGE}\n---\n${ELIDED}`), tools: hashJson(toolDefs(arm)) };
+  return { prompt: sha256(`${systemPrompt(arm)}\n---\n${kickoffTemplate(arm)}\n---\n${CYCLE_TWO}\n---\n${NUDGE}\n---\n${ELIDED}`), tools: hashJson({ defs: toolDefs(arm), vocabulary: OPERATION_VOCABULARY }) };
 }
