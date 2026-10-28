@@ -15,7 +15,7 @@
   "span_words": 8
  },
  "adaptive_runs": {
-  "measured_at": "2026-10-28T12:09:16.412Z",
+  "measured_at": "2026-10-28T12:29:02.255Z",
   "arm": "adaptive",
   "provider": "modal",
   "budget_per_run": {
@@ -23,11 +23,11 @@
    "calls": 60
   },
   "k_of_n": {
-   "n": 3,
+   "n": 5,
    "dev_valid_proposal": 0,
    "honest_negative": 0,
    "insufficient_evidence": 0,
-   "no_outcome": 3
+   "no_outcome": 5
   },
   "runs": [
    {
@@ -55,6 +55,7 @@
     },
     "hypotheses": [],
     "experiments": [],
+    "notes": [],
     "pair_refusals": 0,
     "say_do_mismatches": 0,
     "proposals": [],
@@ -93,6 +94,7 @@
     },
     "hypotheses": [],
     "experiments": [],
+    "notes": [],
     "pair_refusals": 0,
     "say_do_mismatches": 0,
     "proposals": [],
@@ -131,6 +133,7 @@
     },
     "hypotheses": [],
     "experiments": [],
+    "notes": [],
     "pair_refusals": 0,
     "say_do_mismatches": 0,
     "proposals": [],
@@ -143,6 +146,84 @@
     "prompt_tokens_max": 23272,
     "completion_tokens": 66463,
     "reasoning_tokens": 50461
+   },
+   {
+    "run_id": "run-b41ebef2",
+    "outcome": "no_outcome",
+    "stop": "budget_calls (60 calls)",
+    "note": "revision 6; reads only: 78 timeline pages, 32 intervals, the definition 21 times; 0 notes; no hypothesis in 60 calls",
+    "commitment": {
+     "hash": "d112937c83fe783643627ff749647fa2934b50d968b44bbc3b2a134e8d886452",
+     "revision": 6
+    },
+    "hashes": {
+     "prompt": "466d9adfecd58ca35ae7e571c691327cfb16abf4494424e13c093c7f27ca0a13",
+     "tools": "30bcac78964a92ca7bec804f02456b908ee892cd9c2b8e01161c64d9a58c9779"
+    },
+    "effort": "xhigh",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "check_discovery": "FAIL",
+    "needs": {
+     "hypotheses": false,
+     "experiment": false,
+     "outcome": false,
+     "deny_list": true,
+     "stopped": true
+    },
+    "hypotheses": [],
+    "experiments": [],
+    "notes": [],
+    "pair_refusals": 0,
+    "say_do_mismatches": 0,
+    "proposals": [],
+    "validations": [],
+    "declared_result": null,
+    "calls": 60,
+    "cost_usd": 2.4292,
+    "prompt_tokens": 1666761,
+    "prompt_tokens_per_call": 27779,
+    "prompt_tokens_max": 34858,
+    "completion_tokens": 81358,
+    "reasoning_tokens": 69880
+   },
+   {
+    "run_id": "run-22009f5a",
+    "outcome": "no_outcome",
+    "stop": "budget_calls (60 calls)",
+    "note": "revision 6; reads only: 86 timeline pages, 26 intervals, the definition 24 times; 0 notes; no hypothesis in 60 calls",
+    "commitment": {
+     "hash": "d112937c83fe783643627ff749647fa2934b50d968b44bbc3b2a134e8d886452",
+     "revision": 6
+    },
+    "hashes": {
+     "prompt": "466d9adfecd58ca35ae7e571c691327cfb16abf4494424e13c093c7f27ca0a13",
+     "tools": "30bcac78964a92ca7bec804f02456b908ee892cd9c2b8e01161c64d9a58c9779"
+    },
+    "effort": "xhigh",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "check_discovery": "FAIL",
+    "needs": {
+     "hypotheses": false,
+     "experiment": false,
+     "outcome": false,
+     "deny_list": true,
+     "stopped": true
+    },
+    "hypotheses": [],
+    "experiments": [],
+    "notes": [],
+    "pair_refusals": 0,
+    "say_do_mismatches": 0,
+    "proposals": [],
+    "validations": [],
+    "declared_result": null,
+    "calls": 60,
+    "cost_usd": 2.4491,
+    "prompt_tokens": 1705978,
+    "prompt_tokens_per_call": 28433,
+    "prompt_tokens_max": 35377,
+    "completion_tokens": 74503,
+    "reasoning_tokens": 60382
    }
   ]
  }
