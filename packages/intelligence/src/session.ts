@@ -267,6 +267,12 @@ export class Session {
     return answer === UNKNOWN_ID ? UNKNOWN_ID : { ...answer, budget: this.budgetView() };
   }
 
+  // The loop calls this after repeated identical tool calls; the run ends as a declared negative with reason stalled.
+  stall(repeats: number): void {
+    this.log("session.result", { result: "stalled", note: `${repeats} identical tool calls in a row`, evidence_event_ids: [] });
+    this.stopWith("declared_negative", "stalled");
+  }
+
   private stopWith(reason: StopReason, detail: string): void {
     if (!this.stop) this.stop = { reason, detail };
   }

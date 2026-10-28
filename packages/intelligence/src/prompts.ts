@@ -40,6 +40,7 @@ const KICKOFF: Record<"records" | "prior", string> = {
 };
 const CYCLE_TWO = "This is a second cycle. The pool also holds verified outcomes of the adopted version. Hypotheses from the first cycle are not evidence; cite recorded events.";
 export const NUDGE = "Continue with the tools, or end the session with a result.";
+export const REPEAT_NOTE = "identical call already answered; use the result above or choose a different query";
 export const ELIDED = JSON.stringify({ elided: true, note: "Older tool result removed to save context; call the tool again if you need it." });
 
 export function kickoffTemplate(arm: Arm): string {
@@ -59,6 +60,7 @@ export function appTexts(arm: Arm): { label: string; text: string }[] {
     { label: "cycle_two", text: CYCLE_TWO },
     { label: "nudge", text: NUDGE },
     { label: "elided", text: ELIDED },
+    { label: "repeat_note", text: REPEAT_NOTE },
     ...Object.entries(DESCRIPTIONS).map(([k, v]) => ({ label: `tool.${k}`, text: v })),
     { label: `${arm}.tool_schemas`, text: JSON.stringify(toolDefs(arm, { insufficientEvidence: true })) },
     { label: "operation_vocabulary", text: JSON.stringify(OPERATION_VOCABULARY) }
@@ -69,5 +71,5 @@ export const ARMS: readonly Arm[] = ["adaptive", "a3", "a4", "prior"];
 
 // The hashes a run is reported under; the commitments file must carry them before a live run.
 export function armHashes(arm: Arm): { prompt: string; tools: string } {
-  return { prompt: sha256(`${systemPrompt(arm)}\n---\n${kickoffTemplate(arm)}\n---\n${CYCLE_TWO}\n---\n${NUDGE}\n---\n${ELIDED}`), tools: hashJson({ defs: toolDefs(arm), vocabulary: OPERATION_VOCABULARY }) };
+  return { prompt: sha256(`${systemPrompt(arm)}\n---\n${kickoffTemplate(arm)}\n---\n${CYCLE_TWO}\n---\n${NUDGE}\n---\n${ELIDED}\n---\n${REPEAT_NOTE}`), tools: hashJson({ defs: toolDefs(arm), vocabulary: OPERATION_VOCABULARY }) };
 }

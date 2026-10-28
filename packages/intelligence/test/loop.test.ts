@@ -4,7 +4,7 @@ import { openStream, readStream } from "@hey-pisgah/store";
 import { describe, expect, it } from "vitest";
 import { checkDiscovery } from "../src/check.js";
 import { appendCommitment, appendOnlyProblems, commitmentFor, currentContent, readCommitments } from "../src/commitments.js";
-import { ELIDED, systemPrompt } from "../src/prompts.js";
+import { ELIDED, REPEAT_NOTE, systemPrompt } from "../src/prompts.js";
 import { SETTINGS, compact, runLoop } from "../src/loop.js";
 import { scriptedInvestigator } from "../src/mock.js";
 import { STREAMS, Session, sessionStreamId, type Arm } from "../src/session.js";
@@ -79,6 +79,20 @@ describe("discovery loop in mock mode", () => {
     expect(r.out.stop).toBe("model_ended");
     expect(r.out.calls).toBe(2);
     expect(checkDiscovery(r.storeRoot, r.runId).pass).toBe(false);
+  });
+
+  it("answers a repeated identical call with a note and ends the run as stalled after three", async () => {
+    const same: MockResponder = ({ body }) => ({ id: "m", object: "chat.completion", created: 0, model: String(body.model), choices: [{ index: 0, message: { role: "assistant", content: null, refusal: null, tool_calls: [{ id: "c1", type: "function", function: { name: "compute_intervals", arguments: JSON.stringify({ case_ids: [...LONG], from: { kind: "step.completed", step_id: "st05" }, to: { kind: "step.completed", step_id: "st16" }, clock: "occurred" }) } }] }, finish_reason: "tool_calls", logprobs: null }], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } });
+    const r = await mockRun("adaptive", { mock: same });
+    expect(r.out.stop).toBe("declared_negative");
+    expect(r.out.detail).toBe("stalled");
+    expect(r.out.calls).toBe(4);
+    const tools = readStream(r.storeRoot, sessionStreamId(r.runId)).filter((e) => e.record_type === "tool.called").map((e) => e.payload as { ok: boolean; error: string | null; result: string });
+    expect(tools.map((t) => t.error)).toEqual([null, "repeated_call", "repeated_call", "repeated_call"]);
+    expect(JSON.parse(tools[1]!.result).message).toBe(REPEAT_NOTE);
+    const stopped = readStream(r.storeRoot, sessionStreamId(r.runId)).find((e) => e.record_type === "session.stopped")!.payload as { repeated_calls: number };
+    expect(stopped.repeated_calls).toBe(3);
+    expect(checkDiscovery(r.storeRoot, r.runId).lines.join("\n")).toContain("declared result stalled");
   });
 
   it("has the client refuse a planted Reasoning strength line", async () => {

@@ -35,6 +35,41 @@
         "insufficient_evidence_default": false
       },
       "hash": "1703fa91fa4489e45a0cbb60770bc9b8349afa537d81016eeea6ef3df6209dd6"
+    },
+    {
+      "revision": 2,
+      "at": "2026-10-28T05:28:41.307Z",
+      "reason": "Add the repeated-call note and the stall stop after the live adaptive run run-35859e64 ended at 15 calls with no hypothesis; the A-prior runs ran under revision 1, whose prior-arm prompt differs from revision 2 only by the repeat note.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "c80d2791d4e3a630ac503c5a7b3d6a85537d518ffc35f461b6ade3e4e9cadd6c",
+            "tools": "5b72fa248a7fa7bdb4f5991cf4dc59a3a299458ea0363f5650e72cc34b58cd8c"
+          },
+          "a3": {
+            "prompt": "abd00d939ec431ee20c1fcd53f872836a8cc1d20ba680121a3001f6105553b9f",
+            "tools": "09e0279f1f2ae14fe6bacae3f0a2ab385dd7108acd5163bc0e868e2dc2e3f657"
+          },
+          "a4": {
+            "prompt": "3a81325daac7d1d3ed63375fc452c9405a086d79600662879b258d6c43668d64",
+            "tools": "6e3328bf754fa0e3293a2b455cb5654759c254f50ced737fbe85acb9161473d4"
+          },
+          "prior": {
+            "prompt": "edd7a6d9a0697a2b1fb2f93241b301bb4732808679202558636420bef0e9c4d2",
+            "tools": "1e67a98d1c4a475740b0ef3145dec3174e305f5b9e64852a7c176619a44d256e"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 60000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "b317394e616d25a961601f218fca59e5b97de1548c86bcd6943b213059bd13dd"
     }
   ]
 }

@@ -1,11 +1,19 @@
 import { hashJson, sha256 } from "@hey-pisgah/contracts";
 import { ModelError, type ChatMessage, type ModelClient, type ProviderId } from "@hey-pisgah/model";
-import { ELIDED, NUDGE, armHashes, kickoff, systemPrompt } from "./prompts.js";
+import { ELIDED, NUDGE, REPEAT_NOTE, armHashes, kickoff, systemPrompt } from "./prompts.js";
 import type { Session } from "./session.js";
 import { dispatch, toolDefs } from "./tools.js";
 
 // Model settings every investigator call carries; they are part of the committed record.
 export const SETTINGS = { effort: "xhigh", parallel_tool_calls: true, max_completion_tokens: 32_000, context_chars: 60_000, provider: "modal", model: "meta-models/Muse-Spark-Open-816B-A42B" } as const;
+
+// After this many repeated identical calls in one run, the run ends as stalled.
+export const REPEAT_LIMIT = 3;
+
+// Name plus canonical arguments, so key order and spacing do not hide a repeat.
+function callKey(name: string, args: string): string {
+  try { return `${name} ${hashJson(JSON.parse(args || "{}"))}`; } catch { return `${name} ${args}`; }
+}
 
 export type LoopOptions = {
   client: ModelClient;
@@ -49,6 +57,8 @@ export async function runLoop(o: LoopOptions): Promise<LoopOutcome> {
   let turns = 0;
   let idle = 0;
   let maxCost = 0;
+  let previous: string | null = null;
+  let repeats = 0;
   let stop: { reason: string; detail: string } | null = null;
   const sleep = o.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   while (!stop) {
@@ -87,14 +97,19 @@ export async function runLoop(o: LoopOptions): Promise<LoopOutcome> {
     idle = 0;
     messages.push({ role: "assistant", content: msg?.content ?? null, tool_calls: calls.map((c) => ({ id: c.id, type: "function" as const, function: { name: c.name, arguments: c.arguments } })) });
     for (const [i, c] of calls.entries()) {
-      const result = await dispatch(s, c.name, c.arguments);
+      const key = callKey(c.name, c.arguments);
+      const repeated = key === previous;
+      previous = key;
+      if (repeated) repeats += 1;
+      const result = repeated ? { ok: false, error: "repeated_call", message: REPEAT_NOTE } : await dispatch(s, c.name, c.arguments);
       const text = JSON.stringify(result);
       s.log("tool.called", { turn: turns, index: i, call_id: c.id, name: c.name, args: c.arguments.slice(0, 8000), args_hash: sha256(c.arguments), result_hash: sha256(text), ok: result.ok !== false, error: result.ok === false ? String(result.error) : null, result: text.slice(0, 30_000) });
       messages.push({ role: "tool", tool_call_id: c.id, content: text });
     }
+    if (repeats >= REPEAT_LIMIT && !s.stop) s.stall(repeats);
   }
   const u = o.client.runUsage(s.runId);
   const out: LoopOutcome = { stop: stop!.reason, detail: stop!.detail, calls: u.calls, usd: Math.round(u.usd * 1e6) / 1e6, turns };
-  s.log("session.stopped", { ...out, counters: s.counters, hypotheses: s.hypotheses.size, experiments: s.experiments.size, proposals: [...s.proposals.keys()], transcript_hash: hashJson(messages) });
+  s.log("session.stopped", { ...out, counters: s.counters, repeated_calls: repeats, hypotheses: s.hypotheses.size, experiments: s.experiments.size, proposals: [...s.proposals.keys()], transcript_hash: hashJson(messages) });
   return out;
 }
