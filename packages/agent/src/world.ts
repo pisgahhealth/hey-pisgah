@@ -15,7 +15,9 @@ export const CaseWorld = z.strictObject({
   // The tool set the case runs with; v1 exists only so the L1.4 recording replays unchanged.
   tool_profile: z.enum(["v1", "v2"]).optional(),
   // Ward notes as people wrote them; the agent sees them only as untrusted_text once recorded.
-  notes: z.array(z.strictObject({ note_id: z.string().regex(/^[a-z0-9_-]+$/), author_role: z.string(), occurred_at: Minute, recorded_at: Minute, text: z.string().max(500) })).optional()
+  notes: z.array(z.strictObject({ note_id: z.string().regex(/^[a-z0-9_-]+$/), author_role: z.string(), occurred_at: Minute, recorded_at: Minute, text: z.string().max(500) })).optional(),
+  // The modelled staff answer to a case exception that names a source: the named role confirms it this many minutes later.
+  exception_confirm_after_min: z.number().int().min(1).max(240).optional()
 }).superRefine((w, ctx) => {
   if (w.schedule.case_id !== w.case_id) ctx.addIssue({ code: "custom", message: "schedule case_id differs from the case" });
   if (w.requirements[0]!.at !== 0) ctx.addIssue({ code: "custom", message: "the first requirement set applies from minute 0" });

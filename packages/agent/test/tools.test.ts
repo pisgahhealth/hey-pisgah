@@ -15,10 +15,13 @@ const DENY = [
 describe("execution tools and prompts", () => {
   it("exposes no tool for any prohibited kind", () => {
     const names = toolDefs().map((t) => (t.type === "function" ? t.function.name : ""));
-    expect(names).toEqual(["get_case_state", "get_ward_requirements", "get_workflow_definition", "get_record", "prepare_document", "revise_document", "request_check", "send_staff_message", "ask_staff", "apply_case_exception", "raise_workflow_conflict", "wait_until", "finish_task"]);
+    expect(names).toEqual(["get_case_state", "get_ward_requirements", "get_workflow_definition", "get_record", "prepare_document", "send_staff_message", "ask_staff", "apply_case_exception", "raise_workflow_conflict", "wait_until", "finish_task"]);
     const kinds = names.filter((n) => (ActionKind.options as readonly string[]).includes(n));
     expect(kinds.every((k) => AGENT_ALLOWED_KINDS.has(k as never))).toBe(true);
-    expect(kinds.length).toBe(AGENT_ALLOWED_KINDS.size);
+    // The engine revises and checks stages itself, so the current tool set drops the two tools that changed nothing.
+    expect([...AGENT_ALLOWED_KINDS].filter((k) => !kinds.includes(k)).sort()).toEqual(["request_check", "revise_document"]);
+    const v1 = toolDefs("v1").map((t) => (t.type === "function" ? t.function.name : ""));
+    expect(v1.filter((n) => (ActionKind.options as readonly string[]).includes(n)).length).toBe(AGENT_ALLOWED_KINDS.size);
   });
 
   it("opens the system prompt with the untrusted-text rule and the authority rule", () => {

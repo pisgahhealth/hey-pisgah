@@ -7,7 +7,7 @@ import { STORE_RECORD_TYPES, openStream, streamPaths, type Stream } from "@hey-p
 import { applyOperations, boundRecordKinds, deriveDataIntegrityFences, evalCondition, type Facts, type Registry } from "@hey-pisgah/workflow";
 import { eventIdFor, recordIdFor, shortHash } from "./ids.js";
 import { bindingFailures, checksInForce, loadRequirementChecks, type CheckFailure, type RequirementCheck } from "./monitor.js";
-import { TEMPLATES, argsFor, type ToolProfile } from "./schemas.js";
+import { ASK_LIMIT, TEMPLATES, argsFor, type ToolProfile } from "./schemas.js";
 import {
   HORIZON, PortError, agentSteps, engineRun, isAgentStep, requirementsAt, wardRequiresList,
   type CaseWorld, type EngineCommit, type OkRun, type ViewEvent
@@ -54,7 +54,7 @@ export class HospitalPort {
   private readonly writes: PortWrite[] = [];
   private refused = 0;
   private clock: number;
-  private cache: { n: number; run: OkRun } | null = null;
+  private cache: { n: string; run: OkRun } | null = null;
   private readonly confirmations: Confirmation[] = [];
   private caseDefCache: { n: number; def: WD } | null = null;
   readonly profile: ToolProfile;
@@ -95,6 +95,7 @@ export class HospitalPort {
         else if (e.record_type === "port.write") port.writes.push(e.payload as PortWrite);
         else if (e.record_type === "agent.refused") port.refused += 1;
         else if (e.record_type === "case_exception.confirmed") port.confirmations.push(e.payload as Confirmation);
+        else if (e.record_type === "case_exception.unconfirmed") port.unconfirmable.add(String((e.payload as { record_id: string }).record_id));
       }
       return port;
     } catch (e) {
@@ -149,22 +150,58 @@ export class HospitalPort {
     if (!x) return { ok: false, reason: "unknown_id" };
     if (x.status !== "pending_confirmation") return { ok: false, reason: `exception_${x.status}` };
     if (x.args["confirm_by_role"] !== by.role) return { ok: false, reason: "wrong_role" };
+    const docId = (x.args["op"] as { document_id: string }).document_id;
+    if (this.writes.some((w) => w.action_kind === "prepare_document" && w.args["document_id"] === docId)) return { ok: false, reason: "document_already_started" };
     const ops = this.exceptionOps([...this.confirmations.map((c) => c.record_id), recordId]);
     const r = applyOperations(this.def, ops);
     if (!r.ok) return { ok: false, reason: `exception_invalid: ${r.errors.map((e) => e.message).join("; ").slice(0, 200)}` };
     const c: Confirmation = { record_id: recordId, by: { kind: "person", staff_id: by.staff_id, role: by.role }, at: this.clock };
-    this.stream.append("case_exception.confirmed", c, { recorded_at: this.clock, occurred_at: this.clock });
+    // A confirmation may change what happens from now on, never what was already recorded.
+    const before = hashJson(this.engineEvents().map((e) => [e.event_id, e.kind, e.recorded_at, e.payload]));
     this.confirmations.push(c);
+    const after = hashJson(this.engineEvents().map((e) => [e.event_id, e.kind, e.recorded_at, e.payload]));
+    if (before !== after) {
+      this.confirmations.pop();
+      return { ok: false, reason: "exception_would_change_recorded_history" };
+    }
+    this.stream.append("case_exception.confirmed", c, { recorded_at: this.clock, occurred_at: this.clock });
     return { ok: true };
+  }
+
+  // The modelled staff answer: the named role confirms a pending case exception that names a recorded source a fixed number of minutes after it is recorded.
+  private confirmationDue(): { record_id: string; due: number; role: string }[] {
+    const after = this.world.exception_confirm_after_min;
+    if (after === undefined) return [];
+    return this.exceptions().filter((x) => x.status === "pending_confirmation" && !this.unconfirmable.has(x.record_id))
+      .map((x) => ({ record_id: x.record_id, due: x.at + after, role: String(x.args["confirm_by_role"]) }));
+  }
+  private readonly unconfirmable = new Set<string>();
+  // True while a case exception waits for its modelled staff answer.
+  confirmationPending(): boolean { return this.confirmationDue().some((d) => d.due > this.clock); }
+  private staffId(role: string): string {
+    if (role === "ward_manager") {
+      const ward = String(this.world.schedule.facts["ward_id"]);
+      return requirementsAt(this.world, this.clock).set.wards.find((w) => w.ward_id === ward)?.approver.staff_id ?? "ward_manager";
+    }
+    return (this.world.schedule.actors as Record<string, string | undefined>)[role] ?? role;
+  }
+  private applyDueConfirmations(): void {
+    for (const d of this.confirmationDue().filter((x) => x.due <= this.clock)) {
+      const r = this.confirmException(d.record_id, { kind: "person", staff_id: this.staffId(d.role), role: d.role });
+      if (!r.ok) {
+        this.unconfirmable.add(d.record_id);
+        this.stream.append("case_exception.unconfirmed", { record_id: d.record_id, reason: r.reason, at: this.clock }, { recorded_at: this.clock, occurred_at: this.clock });
+      }
+    }
   }
 
   private commits(): EngineCommit[] {
     return this.writes.filter((w) => w.action_kind === "prepare_document" && w.step_id !== null).map((w) => ({ step_id: w.step_id!, effect_at: w.effect_at }));
   }
-  // The full engine run under every write so far; events after now are never shown, only used to move the clock.
+  // The full engine run under every write and confirmed case exception so far; events after now are never shown, only used to move the clock.
   run(): OkRun {
-    const n = this.writes.length;
-    if (!this.cache || this.cache.n !== n) this.cache = { n, run: engineRun(this.world, this.def, this.commits(), this.engineRunId, this.rules) };
+    const n = `${this.writes.length}:${this.confirmations.length}`;
+    if (!this.cache || this.cache.n !== n) this.cache = { n, run: engineRun(this.world, this.caseDef, this.commits(), this.engineRunId, this.rules) };
     return this.cache.run;
   }
 
@@ -206,7 +243,8 @@ export class HospitalPort {
   nextEventTime(): number | null {
     const times = [
       ...this.run().events.map((e) => e.recorded_at),
-      ...this.world.requirements.slice(1).map((r) => r.at)
+      ...this.world.requirements.slice(1).map((r) => r.at),
+      ...this.confirmationDue().map((d) => d.due)
     ].filter((m) => m > this.clock);
     return times.length ? Math.min(...times) : null;
   }
@@ -217,6 +255,7 @@ export class HospitalPort {
     const to = Math.min(t, HORIZON);
     this.stream.append("clock.advanced", { from: this.clock, to }, { recorded_at: to, occurred_at: to });
     this.clock = to;
+    this.applyDueConfirmations();
   }
 
   // Facts as recorded by now: schedule start values, then each recorded completion's facts in order, with ward_requires from the requirements in force.
@@ -338,7 +377,8 @@ export class HospitalPort {
     return { record_id, kind: "record", version, status: "recorded", content, source_refs: [], produced_event_ids: produced, hash: hashJson({ record_id, version, content, produced }) };
   }
   private writeView(w: PortWrite): RecordView {
-    const status = w.action_kind === "apply_case_exception" ? (this.confirmations.some((c) => c.record_id === w.record_id) ? "confirmed" : "pending_confirmation") : "recorded";
+    const x = w.action_kind === "apply_case_exception" ? this.exceptions().find((e) => e.record_id === w.record_id) : undefined;
+    const status = x ? (x.status === "pending_confirmation" && this.unconfirmable.has(w.record_id) ? "not_confirmed" : x.status) : "recorded";
     const content = { action_kind: w.action_kind, args: w.args, target_record_id: w.target_record_id };
     return { record_id: w.record_id, kind: "agent_write", version: 1, status, content, source_refs: [], produced_event_ids: [w.event_id], hash: hashJson({ record_id: w.record_id, content, event_id: w.event_id }) };
   }
@@ -483,12 +523,17 @@ export class HospitalPort {
       : el.kind === "edge" ? d.edges.some((e) => e.edge_id === el.id)
       : el.kind === "trigger" ? d.triggers.some((t) => t.target.step === el.id)
       : d.documents.some((x) => x.sections.some((sec) => `${x.document_id}.${sec.section_id}` === el.id));
-    return exists ? null : { reason: "conflict_uncited", detail: { definition_element: el, note: "no such element in the adopted version" } };
+    if (!exists) return { reason: "conflict_uncited", detail: { definition_element: el, note: "no such element in the adopted version" } };
+    const seen = new Set(this.events().map((e) => e.event_id));
+    const unknown = (args["evidence"] as string[]).filter((id) => !seen.has(id));
+    return unknown.length ? { reason: "conflict_uncited", detail: { note: "evidence must name recorded event ids", unknown_count: unknown.length } } : null;
   }
-  // A question goes to a named role and reads as a question.
+  // A question goes to a named role, reads as a question, and a case gets at most ASK_LIMIT of them.
   private askGuard(args: Record<string, unknown>): { reason: string; detail: Record<string, unknown> } | null {
     const q = String(args["question"]).trim();
     if (!q.includes("?") || q.split(/\s+/).length < 3) return { reason: "not_a_question", detail: {} };
+    const asked = this.writes.filter((w) => w.action_kind === "ask_staff").length;
+    if (asked >= ASK_LIMIT) return { reason: "ask_limit_reached", detail: { limit: ASK_LIMIT } };
     return null;
   }
   // A case exception that names a source must name one the hospital records.
@@ -497,6 +542,7 @@ export class HospitalPort {
     const doc = this.def.documents.find((d) => d.document_id === op.document_id);
     if (!doc?.sections.some((x) => x.section_id === op.section_id)) return { reason: "unknown_section", detail: { document_id: op.document_id, section_id: op.section_id } };
     if (op.source && !this.producedKinds().has(op.source.record_kind)) return { reason: "unknown_source", detail: { record_kind: op.source.record_kind } };
+    if (op.source && this.writes.some((w) => w.action_kind === "prepare_document" && w.args["document_id"] === op.document_id)) return { reason: "document_already_started", detail: { document_id: op.document_id } };
     return null;
   }
 

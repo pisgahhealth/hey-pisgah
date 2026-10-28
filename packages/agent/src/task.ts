@@ -36,6 +36,13 @@ export type Projection = {
   pending_reason: TickReason | null;
   closed: Record<string, unknown> | null;
   head_seq: number;
+  // The version monitor's record for this task: failed checks, what they block, and the proposals they raised for a person.
+  monitor: {
+    checks_failed: number;
+    blocked: Map<string, { record_id: string; document_id: string; stage: string; check: "commit" | "outcome"; status: string; seq: number }>;
+    reported: Set<string>;
+    proposals: { proposal_id: string; kind: "suspension" | "revision"; version: number; seq: number }[];
+  };
 };
 
 export const TERMINAL: ReadonlySet<TaskState> = new Set(["done", "failed", "cancelled"]);
@@ -55,7 +62,8 @@ export function apply(p: Projection | null, e: Envelope): Projection | null {
       run_id: String(x["run_id"]), budget: { ...(x["budget"] as { max_calls: number; max_usd: number }), calls_used: 0, usd_used: 0 },
       created: clocks, updated: clocks, state: "running", reason: null, unmet: [], conditions: [], actions: new Map(), order: [], wakes: [], resumed: new Set(),
       cursor: { world_seq: 0, now: e.recorded_at }, ticks: [], counts: { agent_refused: 0, completion_refused: 0, retries: 0, model_calls: 0, tool_invalid: 0 },
-      last_resume: null, pending_reason: { kind: "opened" }, closed: null, head_seq: e.seq
+      last_resume: null, pending_reason: { kind: "opened" }, closed: null, head_seq: e.seq,
+      monitor: { checks_failed: 0, blocked: new Map(), reported: new Set(), proposals: [] }
     };
   }
   if (!p) throw new Error(`task stream starts with ${e.record_type}, not task.opened`);
@@ -111,6 +119,18 @@ export function apply(p: Projection | null, e: Envelope): Projection | null {
       break;
     case "person.input": if (tick && tick.ended === null) tick.ended = "interrupted"; p.pending_reason = { kind: "input", text: String(x["text"]) }; break;
     case "run.closed": p.closed = x; break;
+    case "version.check_failed": {
+      const a = x["action"] as { record_id: string; document_id: string; stage: string };
+      p.monitor.checks_failed += 1;
+      p.monitor.reported.add(String(x["report_key"]));
+      p.monitor.blocked.set(a.record_id, { record_id: a.record_id, document_id: a.document_id, stage: a.stage, check: x["check"] as "commit" | "outcome", status: String(x["status"]), seq: e.seq });
+      break;
+    }
+    case "version.check_cleared": p.monitor.blocked.delete(String(x["record_id"])); break;
+    case "version.suspension_proposed": case "version.revision_proposed":
+      p.monitor.reported.add(String(x["report_key"]));
+      p.monitor.proposals.push({ proposal_id: String(x["proposal_id"]), kind: e.record_type === "version.suspension_proposed" ? "suspension" : "revision", version: Number(x["version"]), seq: e.seq });
+      break;
     default: break;
   }
   return p;

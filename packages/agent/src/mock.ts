@@ -2,7 +2,7 @@ import type { ChatCompletion, MockResponder } from "@hey-pisgah/model";
 
 type Msg = { role: string; content?: unknown; tool_calls?: { id: string; function: { name: string; arguments: string } }[] };
 type Doc = { document_id: string; stage: string; required: boolean; status: string; ready: boolean };
-type State = { now: number; documents: Doc[]; agent_writes: { action_kind: string; args: Record<string, unknown> }[] };
+type State = { now: number; documents: Doc[]; agent_writes: { action_kind: string; args: Record<string, unknown> }[]; case_exceptions?: { status: string }[] };
 
 export type ScriptOptions = {
   // Send one document_ready message after each complete final, which gives crash tests a write the port cannot deduplicate.
@@ -17,6 +17,8 @@ export type ScriptOptions = {
   skip?: string[];
   // Ask for two tools in one turn on the first turn, to check that results come back in call order.
   pairFirst?: boolean;
+  // Before preparing this document, record one case exception that rebinds a section, then wait for its confirmation.
+  exception?: { document_id: string; section_id: string; source: { record_kind: string; field_path: string }; role: string };
 };
 
 function completion(hash: string, model: string, message: ChatCompletion["choices"][number]["message"], finish: "tool_calls" | "stop"): ChatCompletion {
@@ -55,7 +57,15 @@ export function scriptedAgent(opts: ScriptOptions = {}): MockResponder {
     const res = JSON.parse(String(last.content)) as { ok: boolean; state?: State };
     if (prevName !== "get_case_state" || !res.ok || !res.state) return call("get_case_state", { case_id: caseId });
     const st = res.state;
-    const ready = st.documents.find((d) => d.ready && !(opts.skip ?? []).includes(`${d.document_id}.${d.stage}`));
+    // A stage the monitor refused in this tick is not tried again until the next one.
+    const refused = msgs.filter((m) => m.role === "tool").map((m) => JSON.parse(String(m.content)) as { error?: string; detail?: { document_id?: string; stage?: string } })
+      .filter((r) => r.error === "requirement_check_failed").map((r) => `${r.detail?.document_id}.${r.detail?.stage}`);
+    const ready = st.documents.find((d) => d.ready && ![...(opts.skip ?? []), ...refused].includes(`${d.document_id}.${d.stage}`));
+    const x = opts.exception;
+    if (x && ready?.document_id === x.document_id && !st.agent_writes.some((w) => w.action_kind === "apply_case_exception")) {
+      return call("apply_case_exception", { case_id: caseId, op: { document_id: x.document_id, section_id: x.section_id, source: x.source, note: "Copy this section from the named record for this case only." }, reason: "The ward requirement in force names that record for this section.", confirm_by_role: x.role });
+    }
+    if (x && ready?.document_id === x.document_id && st.case_exceptions?.some((e) => e.status === "pending_confirmation")) return say("Waiting for the case exception to be confirmed.");
     if (ready) return call("prepare_document", { case_id: caseId, document_id: ready.document_id, stage: ready.stage });
     if (opts.notify) {
       const sent = new Set(st.agent_writes.filter((w) => w.action_kind === "send_staff_message").map((w) => `${String(w.args["document_id"])}.${String(w.args["stage"])}`));
