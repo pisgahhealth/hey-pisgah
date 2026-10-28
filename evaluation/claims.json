@@ -450,6 +450,31 @@
         "not_measured": "Not measured yet"
       },
       "evidence_links": []
+    },
+    {
+      "claim_id": "C-19",
+      "question": "Did it ever act on a wrong vitals value it heard?",
+      "demo_surface": {
+        "step": "results",
+        "component": "results tile; live in the EMR strip: a vitals action from speech waits for the second reading, and a one-word question shows both readings when they differ"
+      },
+      "evaluation_view": {
+        "tab": "Costs and instrumentation",
+        "table": "value errors on acted vitals per labelled run, with the questions asked and how often the two readings agreed"
+      },
+      "acceptance": {
+        "command": "talk --live for each run, then values.ts over every kept run",
+        "result_path": "evaluation/results/values.json",
+        "predicate": "value_errors == 0 && values_acted >= 1 && runs >= 1 ; amber: value_errors == 0",
+        "measured_on": "all_runs"
+      },
+      "wording": {
+        "pass": "No wrong value acted on: {values_acted} vitals values written across {runs} labelled runs, none wrong, with {questions} questions asked instead",
+        "partial": "No wrong value acted on, but no vitals value was written yet",
+        "fail": "{value_errors} of {values_acted} vitals values written were wrong",
+        "not_measured": "Not measured yet"
+      },
+      "evidence_links": []
     }
   ],
   "revisions": [
@@ -491,6 +516,15 @@
       ],
       "previous_predicates": {},
       "reason": "C-18 added for the journey: one patient from arrival to discharge administration with three owners' agents. Green needs every step and decision point as written before the run, no prohibited call, no model call while paused, a digest on return, no action done without proof, a hand-off picked up and an equal replay. Amber keeps the safety parts and the hand-off only."
+    },
+    {
+      "date": "2026-10-28",
+      "by": "M2.c",
+      "claims": [
+        "C-19"
+      ],
+      "previous_predicates": {},
+      "reason": "C-19 added after the first real-mic session: every vitals value written from the labelled talk is checked against the latest value the key says was settled at or before its utterance, summed over every kept run. Green needs no wrong value and at least one written; amber needs only no wrong value. Questions are reported beside it, since asking is how a wrong value is avoided. From M2.c on, a vitals value heard from audio is written only when a second reading of the clip has the same number."
     }
   ]
 }

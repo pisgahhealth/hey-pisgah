@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-28T10:52:02.423Z",
-  "commit": "c9f4b2f",
+  "generated_at": "2026-10-28T12:13:18.721Z",
+  "commit": "d42609e",
   "claims": [
     {
       "claim_id": "C-01",
@@ -235,7 +235,7 @@
         "actions_missed": 0,
         "wrong_actions": 0
       },
-      "measured_at": "2026-10-28T08:51:34.681Z"
+      "measured_at": "2026-10-28T11:45:47.228Z"
     },
     {
       "claim_id": "C-18",
@@ -255,6 +255,17 @@
         "fr1_missed": 0
       },
       "measured_at": "2026-10-28T10:48:40.724Z"
+    },
+    {
+      "claim_id": "C-19",
+      "status": "green",
+      "values": {
+        "value_errors": 0,
+        "values_acted": 41,
+        "runs": 5,
+        "questions": 7
+      },
+      "measured_at": "2026-10-28T12:10:16.388Z"
     }
   ]
 }

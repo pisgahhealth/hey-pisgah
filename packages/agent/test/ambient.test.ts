@@ -29,6 +29,9 @@ function boot(script: (said: string, user: string) => C[], ear: Transcriber, hol
   rt = new EmrRuntime({ storeRoot: root, client, port, holdMs, proofRetryMs: 1 });
   rt.start();
   const listen = new ListenSessions(rt, { transcribe: ear });
+  // A line that ends on a number waits for the next chunk; settling finishes it the way the end of listening does.
+  const settled = rt.settled.bind(rt);
+  rt.settled = async (ms?: number) => { await listen.flush("s1"); return settled(ms); };
   return { rt, port, listen, seen, client };
 }
 // An ear that reads a script by the chunk's speech length (its length less a 700 ms tail) or its whole length, and counts what it was sent.
@@ -155,7 +158,7 @@ describe("speech gate", () => {
     ]), earOf({ 1000: "Let's chart her observations. Temperature 37.9. Pulse 96. Thanks.", 1100: "Pulse 88. No wait, pulse 90." }));
     for (const [i, ms] of [1000, 1100].entries()) { await say(listen, i, chunkWav(ms, 700)); await rt.settled(); }
     expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, temp_c: "37.9", pulse: 96 }]);
-    expect(rt.views(OWNER)[0]!.asked.map((q) => q.text)).toEqual(["You gave two values for pulse: 88 and 90. Which one should I chart?"]);
+    expect(rt.views(OWNER)[0]!.asked.map((q) => q.text)).toEqual(['I heard "Pulse 88. pulse 90.". Say 88 or 90.']);
   });
 
   it("shows the gate only words said before the line, even when later lines are already heard", async () => {
@@ -218,9 +221,12 @@ describe("listening", () => {
     const { rt, port, listen, seen } = boot(() => [{ class: "instruction", kind: "record_observation", pulse: 90, confidence: 0.9 }], earOf({ 1000: "and pulse 90." }, sent));
     await say(listen, 0, chunkWav(6000, 0));
     const gap = await say(listen, 2, chunkWav(1000, 700));
-    expect(gap.outcome).toMatchObject({ why: "held_dropped_gap", utterance: { seqs: [2] } });
+    // The line after the gap ends on a number, so it waits; capped audio after it cannot carry the number on, so it goes alone.
+    expect(gap.outcome).toMatchObject({ why: "held_for_number", transcript: "and pulse 90." });
     expect(sent).toEqual([1700]);
-    for (let i = 3; i < 9; i++) await say(listen, i, chunkWav(6000, 0));
+    const next = await say(listen, 3, chunkWav(6000, 0));
+    expect(next.outcome).toMatchObject({ why: "held_for_join", utterance: { seqs: [2] } });
+    for (let i = 4; i < 9; i++) await say(listen, i, chunkWav(6000, 0));
     expect(listen.session("s1")).toMatchObject({ dropped: 2 });
     await rt.settled();
     expect(seen).toEqual(["and pulse 90."]);
