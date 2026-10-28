@@ -5,13 +5,15 @@ import { a1CommitmentBody } from "./arms/a1.js";
 import { a4CommitmentBody } from "./arms/experiments.js";
 import { hashJson } from "@hey-pisgah/contracts";
 import { commit, committedHash, sourceOf } from "./commitments.js";
+import { fr1CommitmentBody } from "./fr1.js";
 
 // The bodies of the evaluator's committed artifacts, computed from the code and data as they are now.
 export function artifactBodies(): Record<string, Record<string, unknown>> {
   const discovery = loadPool("discovery").map((c) => ({ case_id: c.case_id, facts: c.schedule.facts as Facts }));
   return {
     a1: a1CommitmentBody(sourceOf("./arms/a1.ts")),
-    a4: a4CommitmentBody(loadV1(), discovery)
+    a4: a4CommitmentBody(loadV1(), discovery),
+    fr1: fr1CommitmentBody(sourceOf("./fr1.ts"))
   };
 }
 

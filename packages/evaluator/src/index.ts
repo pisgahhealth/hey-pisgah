@@ -30,3 +30,8 @@ export { CommitmentFile, commit, commitmentsDir, committedHash, readCommitment }
 export { artifactBodies, staleCommitments } from "./commit-artifacts.js";
 export { disjoint, interval, predictionAfter, predictionBefore, summariseChecks, type CaseResult, type CheckHypothesis, type CheckedExperiment, type PredictionSummary } from "./prediction.js";
 export type { BaseRuns } from "./pipeline.js";
+export { FR1_RULES, fr1CommitmentBody, fr1Row, scoreCase, traceFromRun, type AgentAction, type DecisionTrace, type Effect, type Fr1Row, type Outcome, type PointScore } from "./fr1.js";
+export { diffEffects, effectsFromRun, rerunHarness, type ReliabilityCase, type ReliabilityTable, type RerunDiff, type RerunEffects, type RerunRunner } from "./fr4.js";
+export { draftUseSweep, draftUseWorld, injectedNoteCitations, injectedNotes, type CitationMetric, type InjectedNote, type SensitivityRow } from "./extras.js";
+export { PRIMARY_ARMS, markdownTable, median, pairedVsA1, primaryMarkdown, primaryRow, signTest, type Cost, type PairedMetric, type PairedRow, type PrimaryRow } from "./tables.js";
+export { CLAIM_RULES, sumTextClaims, turnTextVsProof, type TextClaimCount } from "./textclaims.js";

@@ -1,0 +1,621 @@
+{
+"note": "Trimmed from the replayed live v1 task stream (L1.4 recording): turn text, intents, proofs, tick ends and state changes only.",
+"events": [
+{
+"seq": 4,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-b6a63a6b",
+"content": "Your discharge paperwork is now open \u2014 I'll pull your case details and get started."
+}
+},
+{
+"seq": 6,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-b6a63a6b",
+"content": "I've got your basic case details \u2014 now I'll check the full requirements and workflow."
+}
+},
+{
+"seq": 10,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-b6a63a6b",
+"content": "I've mapped your discharge requirements \u2014 I'll follow up with the care team to move things forward."
+}
+},
+{
+"seq": 11,
+"record_type": "action.intent",
+"payload": {
+"action_id": "a-52fcece9",
+"action_kind": "ask_staff",
+"args": {}
+}
+},
+{
+"seq": 13,
+"record_type": "action.completed",
+"payload": {
+"action_id": "a-52fcece9"
+}
+},
+{
+"seq": 15,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-b6a63a6b",
+"content": ""
+}
+},
+{
+"seq": 20,
+"record_type": "task.state_changed",
+"payload": {
+"from": "running",
+"to": "waiting",
+"reason": "awaiting_recorded_events"
+}
+},
+{
+"seq": 21,
+"record_type": "tick.ended",
+"payload": {
+"tick_id": "k-b6a63a6b"
+}
+},
+{
+"seq": 25,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-060e1f66",
+"content": "Your discharge paperwork is in focus \u2014 I'll gather the latest case details to move it forward."
+}
+},
+{
+"seq": 29,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-060e1f66",
+"content": "No discharge documents are ready to be prepared at the moment \u2014 I'll keep monitoring until the next step clears."
+}
+},
+{
+"seq": 34,
+"record_type": "task.state_changed",
+"payload": {
+"from": "running",
+"to": "waiting",
+"reason": "awaiting_recorded_events"
+}
+},
+{
+"seq": 35,
+"record_type": "tick.ended",
+"payload": {
+"tick_id": "k-060e1f66"
+}
+},
+{
+"seq": 41,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-5a9f7db8",
+"content": "Checking your discharge case \u2014 I'll line up the remaining paperwork."
+}
+},
+{
+"seq": 43,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-5a9f7db8",
+"content": ""
+}
+},
+{
+"seq": 46,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-5a9f7db8",
+"content": "I've mapped what you need for discharge \u2014 now I'll get the first summary document ready."
+}
+},
+{
+"seq": 47,
+"record_type": "action.intent",
+"payload": {
+"action_id": "a-99a97ce5",
+"action_kind": "prepare_document",
+"args": {
+"document_id": "discharge_summary",
+"stage": "draft"
+}
+}
+},
+{
+"seq": 50,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-5a9f7db8",
+"content": ""
+}
+},
+{
+"seq": 55,
+"record_type": "task.state_changed",
+"payload": {
+"from": "running",
+"to": "waiting",
+"reason": "awaiting_recorded_events"
+}
+},
+{
+"seq": 56,
+"record_type": "tick.ended",
+"payload": {
+"tick_id": "k-5a9f7db8"
+}
+},
+{
+"seq": 60,
+"record_type": "action.completed",
+"payload": {
+"action_id": "a-99a97ce5"
+}
+},
+{
+"seq": 62,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-35f1c959",
+"content": "Draft verified \u2014 I'll assemble your remaining discharge paperwork now."
+}
+},
+{
+"seq": 66,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-35f1c959",
+"content": "I've mapped your required documents \u2014 now I'll finalize the discharge summary and resolve the remaining approvals."
+}
+},
+{
+"seq": 67,
+"record_type": "action.intent",
+"payload": {
+"action_id": "a-d9b5ae01",
+"action_kind": "prepare_document",
+"args": {
+"document_id": "discharge_summary",
+"stage": "final"
+}
+}
+},
+{
+"seq": 70,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-35f1c959",
+"content": ""
+}
+},
+{
+"seq": 71,
+"record_type": "action.intent",
+"payload": {
+"action_id": "a-89ee852a",
+"action_kind": "ask_staff",
+"args": {}
+}
+},
+{
+"seq": 73,
+"record_type": "action.completed",
+"payload": {
+"action_id": "a-89ee852a"
+}
+},
+{
+"seq": 75,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-35f1c959",
+"content": ""
+}
+},
+{
+"seq": 77,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-35f1c959",
+"content": ""
+}
+},
+{
+"seq": 82,
+"record_type": "task.state_changed",
+"payload": {
+"from": "running",
+"to": "waiting",
+"reason": "awaiting_recorded_events"
+}
+},
+{
+"seq": 83,
+"record_type": "tick.ended",
+"payload": {
+"tick_id": "k-35f1c959"
+}
+},
+{
+"seq": 87,
+"record_type": "action.completed",
+"payload": {
+"action_id": "a-d9b5ae01"
+}
+},
+{
+"seq": 89,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-0940722a",
+"content": "Your discharge paperwork is advancing \u2014 I'll pull the latest case state to prepare what's next."
+}
+},
+{
+"seq": 91,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-0940722a",
+"content": "Initial review complete \u2014 now I'll examine your discharge requirements in detail."
+}
+},
+{
+"seq": 95,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-0940722a",
+"content": "I've mapped your discharge milestones \u2014 now I'll monitor for the remaining required documents."
+}
+},
+{
+"seq": 100,
+"record_type": "task.state_changed",
+"payload": {
+"from": "running",
+"to": "waiting",
+"reason": "awaiting_recorded_events"
+}
+},
+{
+"seq": 101,
+"record_type": "tick.ended",
+"payload": {
+"tick_id": "k-0940722a"
+}
+},
+{
+"seq": 105,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-4f218358",
+"content": "Your discharge paperwork is mid-flight \u2014 I'll check the latest updates to push it forward."
+}
+},
+{
+"seq": 107,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-4f218358",
+"content": "The refund voucher is pending \u2014 I'll verify the ward requirements to prepare it."
+}
+},
+{
+"seq": 110,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-4f218358",
+"content": "I've identified a scheduling conflict holding up your refund \u2014 I'll raise it to get things moving."
+}
+},
+{
+"seq": 111,
+"record_type": "action.intent",
+"payload": {
+"action_id": "a-4f3252af",
+"action_kind": "raise_workflow_conflict",
+"args": {}
+}
+},
+{
+"seq": 113,
+"record_type": "action.completed",
+"payload": {
+"action_id": "a-4f3252af"
+}
+},
+{
+"seq": 115,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-4f218358",
+"content": ""
+}
+},
+{
+"seq": 117,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-4f218358",
+"content": "I've cleared the refund roadblock \u2014 now I'll monitor for the remaining items to finalize your discharge."
+}
+},
+{
+"seq": 122,
+"record_type": "task.state_changed",
+"payload": {
+"from": "running",
+"to": "waiting",
+"reason": "awaiting_recorded_events"
+}
+},
+{
+"seq": 123,
+"record_type": "tick.ended",
+"payload": {
+"tick_id": "k-4f218358"
+}
+},
+{
+"seq": 127,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-6dfb0c19",
+"content": "Your discharge is progressing \u2014 I'll review the current paperwork requirements."
+}
+},
+{
+"seq": 129,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-6dfb0c19",
+"content": ""
+}
+},
+{
+"seq": 133,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-6dfb0c19",
+"content": "I've confirmed the final clearance is ready \u2014 now I'll prepare your remaining refund documents."
+}
+},
+{
+"seq": 134,
+"record_type": "action.intent",
+"payload": {
+"action_id": "a-5e8787d2",
+"action_kind": "prepare_document",
+"args": {
+"document_id": "refund_voucher",
+"stage": "draft"
+}
+}
+},
+{
+"seq": 137,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-6dfb0c19",
+"content": ""
+}
+},
+{
+"seq": 138,
+"record_type": "action.intent",
+"payload": {
+"action_id": "a-4fbb2cd3",
+"action_kind": "ask_staff",
+"args": {}
+}
+},
+{
+"seq": 140,
+"record_type": "action.completed",
+"payload": {
+"action_id": "a-4fbb2cd3"
+}
+},
+{
+"seq": 142,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-6dfb0c19",
+"content": ""
+}
+},
+{
+"seq": 147,
+"record_type": "task.state_changed",
+"payload": {
+"from": "running",
+"to": "waiting",
+"reason": "awaiting_recorded_events"
+}
+},
+{
+"seq": 148,
+"record_type": "tick.ended",
+"payload": {
+"tick_id": "k-6dfb0c19"
+}
+},
+{
+"seq": 155,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-dddc7d2d",
+"content": "Discharge paperwork is almost complete \u2014 I'll check the latest case details to finalize the remaining vouchers."
+}
+},
+{
+"seq": 159,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-dddc7d2d",
+"content": "The remaining discharge documents are now cleared \u2014 I'll prepare the final refund vouchers."
+}
+},
+{
+"seq": 160,
+"record_type": "action.intent",
+"payload": {
+"action_id": "a-abd7da4b",
+"action_kind": "prepare_document",
+"args": {
+"document_id": "refund_voucher",
+"stage": "draft"
+}
+}
+},
+{
+"seq": 163,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-dddc7d2d",
+"content": ""
+}
+},
+{
+"seq": 168,
+"record_type": "task.state_changed",
+"payload": {
+"from": "running",
+"to": "waiting",
+"reason": "awaiting_recorded_events"
+}
+},
+{
+"seq": 169,
+"record_type": "tick.ended",
+"payload": {
+"tick_id": "k-dddc7d2d"
+}
+},
+{
+"seq": 173,
+"record_type": "action.completed",
+"payload": {
+"action_id": "a-abd7da4b"
+}
+},
+{
+"seq": 175,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-8ee40a33",
+"content": "Checking your in-progress discharge paperwork \u2014 I'll verify what remains to finalize it."
+}
+},
+{
+"seq": 177,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-8ee40a33",
+"content": "Your recent updates are in review \u2014 I'll determine the next document needed to complete the set."
+}
+},
+{
+"seq": 180,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-8ee40a33",
+"content": "I've identified the last required document \u2014 now I'll prepare it to finalize your paperwork."
+}
+},
+{
+"seq": 181,
+"record_type": "action.intent",
+"payload": {
+"action_id": "a-69ef5824",
+"action_kind": "prepare_document",
+"args": {
+"document_id": "refund_voucher",
+"stage": "final"
+}
+}
+},
+{
+"seq": 184,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-8ee40a33",
+"content": ""
+}
+},
+{
+"seq": 189,
+"record_type": "task.state_changed",
+"payload": {
+"from": "running",
+"to": "waiting",
+"reason": "awaiting_recorded_events"
+}
+},
+{
+"seq": 190,
+"record_type": "tick.ended",
+"payload": {
+"tick_id": "k-8ee40a33"
+}
+},
+{
+"seq": 194,
+"record_type": "action.completed",
+"payload": {
+"action_id": "a-69ef5824"
+}
+},
+{
+"seq": 196,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-976be3a2",
+"content": "Paperwork is advancing \u2014 I'll verify the remaining steps to complete discharge."
+}
+},
+{
+"seq": 198,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-976be3a2",
+"content": "Initial checks show key documents complete \u2014 I'll run a final verification of all discharge requirements."
+}
+},
+{
+"seq": 201,
+"record_type": "model.turn",
+"payload": {
+"tick_id": "k-976be3a2",
+"content": "All required discharge pieces check out \u2014 I'll finalize the paperwork now."
+}
+},
+{
+"seq": 204,
+"record_type": "task.state_changed",
+"payload": {
+"from": "running",
+"to": "done",
+"reason": "every_condition_proved"
+}
+},
+{
+"seq": 205,
+"record_type": "tick.ended",
+"payload": {
+"tick_id": "k-976be3a2"
+}
+}
+]
+}
