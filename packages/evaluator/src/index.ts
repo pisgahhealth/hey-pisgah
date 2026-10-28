@@ -9,3 +9,14 @@ export {
   PROPOSALS_STREAM, VALIDATIONS_STREAM, devGate, expectedRulesHash, loadValidationCases, proposalDefinition, runCase, runValidationStream, validateProposal, validationSummary,
   type CaseRow, type Gate, type PipelineOptions, type RepairHook, type ValidationCase, type ValidationReport
 } from "./pipeline.js";
+export {
+  RUNTIME_TYPES, claimedState, completionMatrix, recordStateFromRun, requiredStages, verifyCompletion,
+  type CompletionRow, type CompletionSummary, type RecordState, type RecordStateReader, type RuntimeEvent, type StageRecord, type TaskStreamReader, type Unmet, type Verdict
+} from "./completion.js";
+export {
+  ReservedRunRefused, UNKNOWN_ID, reservedRunFile, reservedRunRefusal, reservedRunsRoot, reservedTokens, runsRoot, sealedReservedCases, serveAllowlist, storeRoot, visibleLookup, writeReservedArtifact,
+  type Lookup
+} from "./reserved.js";
+export { TranscriptLeak, assertNoReservedLeak, scanFile, scanTranscripts, scanValue, type Channel, type Hit, type Tokens } from "./scan.js";
+export { checkG, runGChecks, type GLine, type GStatus } from "./gchecks.js";
+export { PredicateError, claimStatus, evaluate, fieldAt, identifiers, parseClaimPredicate, parsePredicate, type ClaimPredicate, type ClaimStatus, type Expr } from "./predicate.js";
