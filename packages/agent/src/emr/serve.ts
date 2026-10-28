@@ -3,10 +3,10 @@ import { z } from "zod";
 import { loadKeys, ModelClient, type Mode } from "@hey-pisgah/model";
 import { VoiceError, buildKeywords, transcribeWav, type FinalTranscript } from "@hey-pisgah/voice";
 import { EmrRuntime, type EmrRuntimeOptions } from "./runtime.js";
+import { ListenError, ListenSessions, type ListenOptions, type Transcriber } from "./listen.js";
 import { EmrId, EmrPortError, type EmrPort } from "./port.js";
 
 export const EMR_SERVE_PORT = 4100;
-export type Transcriber = (wav: Uint8Array, keywords: readonly string[], sessionId: string) => Promise<FinalTranscript>;
 
 // The default ear: Voice Transcribe REST with the key from the keys file, read only when audio arrives.
 export const voiceTranscriber: Transcriber = (wav, keywords, sessionId) =>
@@ -19,10 +19,12 @@ export type EmrServeOptions = {
   // The one browser origin allowed to call serve, the EMR page that hosts the strip.
   allowOrigin?: string;
   transcribe?: Transcriber;
+  // Continuous listening settings for POST /tasks/listen.
+  listen?: Omit<ListenOptions, "transcribe">;
   runtime?: Omit<EmrRuntimeOptions, "storeRoot" | "client" | "port">;
   log?: (line: string) => void;
 };
-export type EmrServe = { urls: string[]; url: string; runtime: EmrRuntime; client: ModelClient; close: () => Promise<void> };
+export type EmrServe = { urls: string[]; url: string; runtime: EmrRuntime; client: ModelClient; listening: ListenSessions; close: () => Promise<void> };
 
 const Owner = z.string().min(1).max(80).regex(/^[A-Za-z0-9_.:-]+$/);
 const hasTarget = (b: { admissionId?: string | undefined; patientId?: string | undefined }) => b.admissionId !== undefined || b.patientId !== undefined;
@@ -30,6 +32,10 @@ const AudioMeta = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), 
 const Say = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional(), text: z.string().min(1).max(1000), spokenAt: z.iso.datetime({ offset: true }).optional() })
   .refine(hasTarget, "admissionId or patientId is required");
 const FollowUp = z.strictObject({ text: z.string().min(1).max(1000), task_id: z.string().optional(), owner: Owner.optional(), spokenAt: z.iso.datetime({ offset: true }).optional() });
+const ListenMeta = z.strictObject({
+  owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional(),
+  session_id: z.string().min(1).max(80).regex(/^[A-Za-z0-9_.:-]+$/), seq: z.coerce.number().int().min(0).max(1_000_000)
+}).refine(hasTarget, "admissionId or patientId is required");
 const Interrupt = z.strictObject({ owner: Owner.optional(), task_id: z.string().optional() });
 const JSON_LIMIT = 64 * 1024;
 const AUDIO_LIMIT = 8 * 1024 * 1024;
@@ -67,6 +73,29 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   rt.start();
   const transcribe = o.transcribe ?? voiceTranscriber;
   const origin = o.allowOrigin ?? "http://localhost:3311";
+  const listening = new ListenSessions(rt, { ...(o.listen ?? {}), transcribe });
+
+  // One chunk of continuous listening; the answer says whether it finished an utterance and which line it became.
+  const listen = async (req: IncomingMessage): Promise<[number, unknown]> => {
+    const type = req.headers["content-type"] ?? "";
+    if (!type.startsWith("multipart/form-data")) throw new HttpError(415, "send multipart/form-data with an audio part");
+    const arrived = Date.now();
+    const form = await new Response(new Uint8Array(await raw(req, AUDIO_LIMIT)), { headers: { "content-type": type } }).formData().catch(() => { throw new HttpError(400, "the multipart body could not be read"); });
+    const audio = form.get("audio");
+    if (!audio || typeof audio === "string") throw new HttpError(400, "audio: a WAV file part is required");
+    const b = parse(ListenMeta, {
+      owner: field(form, "owner"), session_id: field(form, "session_id"), seq: field(form, "seq"),
+      ...(field(form, "admissionId") ? { admissionId: field(form, "admissionId") } : {}), ...(field(form, "patientId") ? { patientId: field(form, "patientId") } : {})
+    });
+    const target = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
+    try {
+      const wait = new URL(req.url ?? "/", "http://serve").searchParams.get("wait") === "1";
+      return [202, await listening.chunk({ owner: b.owner, target, session_id: b.session_id, seq: b.seq, wav: new Uint8Array(await audio.arrayBuffer()), arrived_at: arrived }, wait)];
+    } catch (e) {
+      if (e instanceof ListenError) throw new HttpError(e.status, e.message);
+      throw e;
+    }
+  };
 
   const sayAudio = async (req: IncomingMessage): Promise<[number, unknown]> => {
     const type = req.headers["content-type"] ?? "";
@@ -116,6 +145,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       return [202, await rt.say({ owner: b.owner, target, text: b.text, ...(b.spokenAt ? { spoken_at: b.spokenAt } : {}) })];
     }
     if (parts.length === 2 && parts[1] === "say-audio" && m === "POST") return sayAudio(req);
+    if (parts.length === 2 && parts[1] === "listen" && m === "POST") return listen(req);
     const id = parts[1] ?? "";
     const task = rt.task(id);
     if (parts.length === 2 && m === "GET") { if (!task) throw new HttpError(404, "unknown task"); return [200, rt.view(id)]; }
@@ -156,7 +186,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     if (typeof addr === "object" && addr) urls.push(`http://${host.includes(":") ? `[${host}]` : host}:${addr.port}`);
   }
   return {
-    urls, url: urls[0] ?? "", runtime: rt, client,
+    urls, url: urls[0] ?? "", runtime: rt, client, listening,
     close: async () => {
       await Promise.all(servers.map((s) => new Promise<void>((r) => s.close(() => r()))));
       await rt.stop();

@@ -40,7 +40,7 @@ describe("EMR runtime", () => {
     expect(v.state).toBe("done");
     expect(v.actions).toHaveLength(1);
     expect(v.actions[0]).toMatchObject({ state: "completed", kind: "record_observation", summary: "Record temperature 37.8 C, pulse 92, respiratory rate 20", proof: { record_id: "obs-1", record_version: 1, event_ids: ["observation:obs-1"] } });
-    expect(v.transcript).toEqual([{ id: r.line_id, text: "Chart temperature 37.8, pulse 92 and respiratory rate 20", at: expect.any(String) }]);
+    expect(v.transcript).toEqual([expect.objectContaining({ id: r.line_id, text: "Chart temperature 37.8, pulse 92 and respiratory rate 20", at: expect.any(String), source: "text", classes: [] })]);
     const types = readStream(root, `emr/${r.task_id}`).map((e) => e.record_type);
     expect(types.indexOf("action.intent")).toBeLessThan(types.indexOf("action.written"));
     const intent = readStream(root, `emr/${r.task_id}`).find((e) => e.record_type === "action.intent")!.payload as { intent_key: string; action_id: string };
