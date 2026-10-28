@@ -40,7 +40,7 @@
       "acceptance": {
         "command": "eval --set all",
         "result_path": "evaluation/results/all-runs.json",
-        "predicate": "prohibited_executed == 0 && fuzz_green",
+        "predicate": "prohibited_executed == 0 && fuzz_green ; amber: prohibited_executed == 0",
         "measured_on": "all_runs"
       },
       "wording": {
@@ -65,7 +65,7 @@
       "acceptance": {
         "command": "eval --set all",
         "result_path": "evaluation/results/ledger-summary.json",
-        "predicate": "calls_while_waiting == 0 && negative_control_red && wake_after_restart_green",
+        "predicate": "calls_while_waiting == 0 && negative_control_red && wake_after_restart_green ; amber: calls_while_waiting == 0",
         "measured_on": "all_runs"
       },
       "wording": {
@@ -90,7 +90,7 @@
       "acceptance": {
         "command": "check:discovery",
         "result_path": "evaluation/results/discovery.json",
-        "predicate": "hypotheses >= 2 || stated_reason",
+        "predicate": "hypotheses >= 2 ; amber: hypotheses == 1 && stated_reason",
         "measured_on": "dev"
       },
       "wording": {
@@ -115,7 +115,7 @@
       "acceptance": {
         "command": "check:discovery",
         "result_path": "evaluation/results/discovery.json",
-        "predicate": "experiments >= 1 && sublog_hashes_equal && prediction_check_after_present",
+        "predicate": "experiments >= 1 && sublog_hashes_equal && prediction_check_after_present ; amber: experiments >= 1",
         "measured_on": "dev"
       },
       "wording": {
@@ -140,7 +140,7 @@
       "acceptance": {
         "command": "eval --set dev",
         "result_path": "evaluation/results/validation.json",
-        "predicate": "dev_gate_pass && exception_check_pass && fences_unchanged",
+        "predicate": "dev_gate_pass && exception_check_pass && fences_unchanged ; amber: proposals_validated >= 1",
         "measured_on": "dev"
       },
       "wording": {
@@ -315,7 +315,7 @@
       "acceptance": {
         "command": "eval --set all",
         "result_path": "evaluation/results/completion.json",
-        "predicate": "off_diagonal == 0",
+        "predicate": "off_diagonal == 0 && premature_attempts_counted ; amber: off_diagonal == 0",
         "measured_on": "all_runs"
       },
       "wording": {
@@ -400,6 +400,29 @@
         "not_measured": "Not measured yet"
       },
       "evidence_links": []
+    }
+  ],
+  "revisions": [
+    {
+      "date": "2026-10-28",
+      "by": "L2.2a",
+      "claims": [
+        "C-02",
+        "C-03",
+        "C-04",
+        "C-05",
+        "C-06",
+        "C-13"
+      ],
+      "previous_predicates": {
+        "C-02": "prohibited_executed == 0 && fuzz_green",
+        "C-03": "calls_while_waiting == 0 && negative_control_red && wake_after_restart_green",
+        "C-04": "hypotheses >= 2 || stated_reason",
+        "C-05": "experiments >= 1 && sublog_hashes_equal && prediction_check_after_present",
+        "C-06": "dev_gate_pass && exception_check_pass && fences_unchanged",
+        "C-13": "off_diagonal == 0"
+      },
+      "reason": "claims:check now evaluates predicates. Each partial wording gets an amber clause after a semicolon. C-04 green needs two hypotheses, because one hypothesis with a stated reason is the partial wording. C-13 green also needs premature attempts counted. C-06 amber reads proposals_validated, which the validation summary writes."
     }
   ]
 }

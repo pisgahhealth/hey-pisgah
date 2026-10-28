@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "rules": [
+    {
+      "rule_id": "ward_b_r2_medicines_as_dispensed",
+      "ward_id": "B",
+      "from_requirement_version": "r2",
+      "document_id": "discharge_summary",
+      "section_id": "medicines",
+      "source": { "record_kind": "dispense_record", "field_path": "items" },
+      "applies_when": { "fact": "has_take_home_order", "eq": "true" },
+      "source_exists_before": "final"
+    }
+  ],
+  "clinical_record_kinds": ["take_home_order", "dispense_record", "signoff_record"],
+  "clinical_action_kinds": ["record_expected_discharge", "order_take_home", "amend_take_home", "pharmacy_review", "dispense", "resolve_screen", "clinical_discharge"],
+  "money_action_kinds": ["submit_claim", "insurer_response", "receive_payment", "approve_waiver", "approve_on_account", "financial_clearance", "refund_deposit"]
+}

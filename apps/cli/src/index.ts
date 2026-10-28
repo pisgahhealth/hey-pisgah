@@ -1,5 +1,6 @@
 import { serveCommand } from "@hey-pisgah/agent";
 import { describeCommand } from "@hey-pisgah/cases";
+import { checkG, reservedRunRefusal } from "@hey-pisgah/evaluator";
 import { claimsCheck } from "./claims-check.js";
 import { runProbe } from "./probe/index.js";
 
@@ -7,13 +8,24 @@ import { runProbe } from "./probe/index.js";
 const root = new URL("../../..", import.meta.url).pathname.replace(/\/$/, "");
 const command = process.argv[2] ?? "help";
 const commands: Record<string, (() => void) | null> = {
-  probe: () => { void runProbe(root, process.argv.slice(3)).then((code) => process.exit(code)); }, sim: null, discover: null, eval: null, replay: null,
+  probe: () => { void runProbe(root, process.argv.slice(3)).then((code) => process.exit(code)); }, sim: null, discover: null, eval: () => process.exit(evalCommand(process.argv.slice(3))), replay: null,
   serve: () => { void serveCommand(root, process.argv.slice(3)).then((code) => { if (code !== null) process.exit(code); }); },
-  "claims:check": () => claimsCheck(root), describe: () => process.exit(describeCommand(process.argv.slice(3))), "video:script": null, "check:discovery": null
+  "claims:check": () => claimsCheck(root), describe: () => process.exit(describeCommand(process.argv.slice(3))), "video:script": null, "check:discovery": null,
+  "check:g": () => process.exit(checkG(process.argv.slice(3)))
 };
 if (command === "help" || !(command in commands)) {
   console.log(`hey-pisgah <command>\n  ${Object.keys(commands).join("\n  ")}`);
   process.exit(command === "help" ? 0 : 2);
+}
+// The reserved set refuses before anything else; the arms themselves land with the evaluator's second part.
+function evalCommand(argv: string[]): number {
+  const set = argv[argv.indexOf("--set") + 1];
+  if (argv.includes("--set") && set === "reserved") {
+    const refused = reservedRunRefusal(root);
+    if (refused) { console.log(`eval --set reserved refused: ${refused.reason}`); return 4; }
+  }
+  console.log(`eval --set ${set ?? "?"}: not implemented yet (see docs/ARCHITECTURE.md)`);
+  return 3;
 }
 const run = commands[command];
 if (!run) { console.log(`${command}: not implemented yet (see docs/ARCHITECTURE.md)`); process.exit(3); }
