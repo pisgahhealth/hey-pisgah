@@ -37,7 +37,7 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
   for (const s of statuses) last.set(s.hypothesis_id as string, s.status as string);
   const competed = hyps.filter((h) => Array.isArray(h.competing) || hyps.some((o) => Array.isArray(o.competing) && o.competing.includes(h.hypothesis_id)));
   const reasoned = hyps.filter((h) => !Array.isArray(h.competing));
-  say(`run ${runId}  arm ${arm}  mode ${String(opened.mode)}  model ${String(opened.model)}  effort ${String((opened.settings as Row).effort)}`);
+  say(`run ${runId}  arm ${arm}  mode ${String(opened.mode)}  model ${String(opened.model)}  effort ${String(opened.effort ?? (opened.settings as Row).effort)}`);
   const c = opened.commitment as { revision: number | null; hash: string | null } | null;
   say(`commitment ${c?.revision ? `revision ${c.revision} ${String(c.hash).slice(0, 12)}` : "none"}  prompt ${String((opened.hashes as Row).prompt).slice(0, 12)}  tools ${String((opened.hashes as Row).tools).slice(0, 12)}`);
   say(`hypotheses ${hyps.length}: ${competed.length} in a competing pair, ${reasoned.length} with a stated reason`);

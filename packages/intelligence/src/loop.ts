@@ -33,6 +33,9 @@ export type LoopOptions = {
   model?: string;
   commitment?: { revision: number | null; hash: string | null };
   sleep?: (ms: number) => Promise<void>;
+  effort?: "low" | "medium" | "high" | "xhigh";
+  // A quarantined kickoff for oracle runs only; the session log marks the run as quarantined.
+  quarantinedKickoff?: string;
 };
 
 export type LoopOutcome = { stop: string; detail: string; calls: number; usd: number; turns: number };
@@ -143,9 +146,10 @@ export async function runLoop(o: LoopOptions): Promise<LoopOutcome> {
   const proposals = arm === "prior" ? 1 : 3;
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt(arm) },
-    { role: "user", content: kickoff(arm, { cases: s.pool.ids().length, calls: o.maxCalls, usd: o.budgetUsd, proposals, cycle: s.o.cycle ?? 1 }) }
+    { role: "user", content: o.quarantinedKickoff ?? kickoff(arm, { cases: s.pool.ids().length, calls: o.maxCalls, usd: o.budgetUsd, proposals, cycle: s.o.cycle ?? 1 }) }
   ];
-  s.log("session.opened", { run_id: s.runId, arm, cycle: s.o.cycle ?? 1, mode: o.client.mode, provider, model, settings: SETTINGS, max_calls: o.maxCalls, budget_usd: o.budgetUsd, hashes: armHashes(arm), commitment: o.commitment ?? null, insufficient_evidence: s.o.insufficientEvidence ?? false, system_prompt: messages[0]!.content, kickoff: messages[1]!.content });
+  const effort = o.effort ?? SETTINGS.effort;
+  s.log("session.opened", { run_id: s.runId, arm, cycle: s.o.cycle ?? 1, mode: o.client.mode, provider, model, settings: SETTINGS, max_calls: o.maxCalls, budget_usd: o.budgetUsd, hashes: armHashes(arm), commitment: o.commitment ?? null, effort, quarantined: o.quarantinedKickoff !== undefined, insufficient_evidence: s.o.insufficientEvidence ?? false, system_prompt: messages[0]!.content, kickoff: messages[1]!.content });
   let turns = 0;
   let idle = 0;
   let maxCost = 0;
@@ -166,7 +170,7 @@ export async function runLoop(o: LoopOptions): Promise<LoopOutcome> {
     for (;;) {
       try {
         res = await o.client.call({
-          provider, model, effort: SETTINGS.effort, messages: withNotes(dropOldTurns(compact(messages, SETTINGS.context_chars, digests, pinned), SETTINGS.history_chars, pinned), s.notes), tools, parallel_tool_calls: SETTINGS.parallel_tool_calls,
+          provider, model, effort, messages: withNotes(dropOldTurns(compact(messages, SETTINGS.context_chars, digests, pinned), SETTINGS.history_chars, pinned), s.notes), tools, parallel_tool_calls: SETTINGS.parallel_tool_calls,
           max_completion_tokens: SETTINGS.max_completion_tokens, purpose: `discovery.${arm}`, run_id: s.runId, task_id: null, task_state: null, thread: "main", affinity_key: s.runId
         });
         break;
