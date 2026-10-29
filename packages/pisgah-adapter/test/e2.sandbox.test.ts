@@ -6,11 +6,10 @@ import { describe, expect, it } from "vitest";
 import { startEmrServe, type EmrRuntime, type EmrTaskView, type Provenance } from "@hey-pisgah/agent";
 import { ModelClient } from "@hey-pisgah/model";
 import { readStream } from "@hey-pisgah/store";
-import type { DoorLog } from "../src/port.js";
 import { PisgahPort } from "../src/port.js";
 import { loadProfile } from "../src/profile.js";
-import { personCaller } from "../src/journey.sandbox.js";
-import { SandboxBlock, mintAgentBearer, sandboxQuery } from "../src/sandbox.js";
+import { mintAgentBearer, sandboxQuery } from "../src/sandbox.js";
+import { freshArrival } from "./sandbox-helpers.js";
 
 // Runs only with SANDBOX=1 against the loopback sandbox named in the private profile; record checks use read-only SQL.
 const RUN = process.env["SANDBOX"] === "1";
@@ -21,24 +20,6 @@ const noteIn = (v: unknown, has: string): Record<string, string> | null => {
   const hit = strings(v).find((x) => x.startsWith("{") && x.includes(has));
   return hit ? (JSON.parse(hit) as Record<string, string>) : null;
 };
-
-// A fresh synthetic arrival, registered and paid by the desk person, so no other run's patient is touched.
-export async function freshArrival(profile = loadProfile()): Promise<{ patient: string; visit: string; sb: SandboxBlock; person: ReturnType<typeof personCaller>; log: DoorLog[] }> {
-  const sb = SandboxBlock.parse(profile.sandbox);
-  const log: DoorLog[] = [];
-  const call = personCaller(profile, sb, new Map(), log);
-  // A keep-alive socket the app already closed resets once; the person step is tried again on a fresh one.
-  const person: typeof call = async (op, vars) => { try { return await call(op, vars); } catch { return call(op, vars); } };
-  const tag = Date.now().toString(36);
-  const reg = await person("register", { name: `${sb.scrub[0] ?? ""}E2 Child ${tag}`, phone: `0803${String(Date.now()).slice(-7)}` });
-  if (!reg.ok) throw new Error(`register failed: ${reg.status} ${reg.note ?? ""}`);
-  const patient = String((reg.json as { id: string }).id);
-  const visit = String(sandboxQuery(sb, "visit_for_patient", { patient })[0]?.["id"] ?? "");
-  if (!visit) throw new Error("the arrival has no visit");
-  const paid = await person("mark_paid", { visit_id: visit });
-  if (!paid.ok) throw new Error(`mark paid failed: ${paid.status} ${paid.note ?? ""}`);
-  return { patient, visit, sb, person, log };
-}
 
 describe.skipIf(!RUN)("E2 owner-aware consult holder on the sandbox EMR", () => {
   it("lets the doctor's agent open and draft on the owner's consultation, keeps it the person's, names the agent, and refuses another doctor's agent", async () => {

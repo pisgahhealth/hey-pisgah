@@ -51,6 +51,10 @@ describe("speech gate", () => {
     // The observation gate the labelled talk was scored on is unchanged by the clerking revision.
     const rev2 = JSON.parse(readFileSync(GATE_COMMITMENT_FILE, "utf8")).revisions[1].body;
     expect([last.prompt_sha256, last.tool_sha256]).toEqual([rev2.prompt_sha256, rev2.tool_sha256]);
+    // The clerking owner's full prompt is still revision 3's bytes; the first stage added in revision 4 is scanned too.
+    const rev3 = JSON.parse(readFileSync(GATE_COMMITMENT_FILE, "utf8")).revisions[2].body;
+    expect([last.clerking.prompt_sha256, last.clerking.tool_sha256]).toEqual([rev3.clerking.prompt_sha256, rev3.clerking.tool_sha256]);
+    expect(last.first_stage.deny_hits).toEqual([]);
     expect(gateCommitmentBody().prompt_sha256).toBe(rev2.prompt_sha256);
     expect(denyHits(gatePrompt(["record_observation"]))).toEqual([]);
     expect(denyHits("we did it earlier")).not.toEqual([]);
