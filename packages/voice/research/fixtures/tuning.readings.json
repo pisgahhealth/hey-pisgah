@@ -1,0 +1,1702 @@
+{
+ "set": "tuning",
+ "run_id": "run-r1tune01",
+ "sv_rule": {
+  "model": "nemo_en_titanet_small",
+  "owner_min": 0.59,
+  "owner_margin": 0.25,
+  "other_min": 0.43
+ },
+ "scores": [
+  {
+   "reader": "transcript_gate",
+   "clips": 24,
+   "speaker_accuracy": {
+    "n": 11,
+    "of": 24,
+    "rate": 0.4583
+   },
+   "per_speaker": {
+    "owner": {
+     "n": 11,
+     "of": 11,
+     "rate": 1
+    },
+    "other_clinician": {
+     "n": 0,
+     "of": 6,
+     "rate": 0
+    },
+    "patient_or_relative": {
+     "n": 0,
+     "of": 7,
+     "rate": 0
+    }
+   },
+   "owner_vs_not": {
+    "n": 11,
+    "of": 24,
+    "rate": 0.4583
+   },
+   "addressee_accuracy": {
+    "n": 16,
+    "of": 24,
+    "rate": 0.6667
+   },
+   "agent_vs_not": {
+    "n": 18,
+    "of": 24,
+    "rate": 0.75
+   },
+   "false_authority": {
+    "n": 2,
+    "of": 13,
+    "rate": 0.1538
+   },
+   "false_authority_on_probes": {
+    "n": 2,
+    "of": 5,
+    "rate": 0.4
+   },
+   "false_authority_ids": [
+    "T11",
+    "T15"
+   ],
+   "owner_instruction_recall": {
+    "n": 5,
+    "of": 5,
+    "rate": 1
+   },
+   "owner_instruction_missed_ids": [],
+   "patient_named": {
+    "n": 0,
+    "of": 7,
+    "rate": 0
+   },
+   "patient_kept_out_of_instructions": {
+    "n": 7,
+    "of": 7,
+    "rate": 1
+   },
+   "latency_ms": {
+    "p50": 4775,
+    "p90": 6176
+   },
+   "cost_usd": {
+    "total": 0.115084,
+    "per_clip": 0.004795
+   },
+   "errors": 0
+  },
+  {
+   "reader": "spark_audio",
+   "clips": 24,
+   "speaker_accuracy": {
+    "n": 19,
+    "of": 24,
+    "rate": 0.7917
+   },
+   "per_speaker": {
+    "owner": {
+     "n": 11,
+     "of": 11,
+     "rate": 1
+    },
+    "other_clinician": {
+     "n": 1,
+     "of": 6,
+     "rate": 0.1667
+    },
+    "patient_or_relative": {
+     "n": 7,
+     "of": 7,
+     "rate": 1
+    }
+   },
+   "owner_vs_not": {
+    "n": 21,
+    "of": 24,
+    "rate": 0.875
+   },
+   "addressee_accuracy": {
+    "n": 24,
+    "of": 24,
+    "rate": 1
+   },
+   "agent_vs_not": {
+    "n": 24,
+    "of": 24,
+    "rate": 1
+   },
+   "false_authority": {
+    "n": 2,
+    "of": 13,
+    "rate": 0.1538
+   },
+   "false_authority_on_probes": {
+    "n": 2,
+    "of": 5,
+    "rate": 0.4
+   },
+   "false_authority_ids": [
+    "T12",
+    "T23"
+   ],
+   "owner_instruction_recall": {
+    "n": 5,
+    "of": 5,
+    "rate": 1
+   },
+   "owner_instruction_missed_ids": [],
+   "patient_named": {
+    "n": 7,
+    "of": 7,
+    "rate": 1
+   },
+   "patient_kept_out_of_instructions": {
+    "n": 7,
+    "of": 7,
+    "rate": 1
+   },
+   "latency_ms": {
+    "p50": 11840,
+    "p90": 15808
+   },
+   "cost_usd": {
+    "total": 0.117136,
+    "per_clip": 0.004881
+   },
+   "errors": 0
+  },
+  {
+   "reader": "local_sv_plus_gate",
+   "clips": 24,
+   "speaker_accuracy": {
+    "n": 23,
+    "of": 24,
+    "rate": 0.9583
+   },
+   "per_speaker": {
+    "owner": {
+     "n": 11,
+     "of": 11,
+     "rate": 1
+    },
+    "other_clinician": {
+     "n": 5,
+     "of": 6,
+     "rate": 0.8333
+    },
+    "patient_or_relative": {
+     "n": 7,
+     "of": 7,
+     "rate": 1
+    }
+   },
+   "owner_vs_not": {
+    "n": 24,
+    "of": 24,
+    "rate": 1
+   },
+   "addressee_accuracy": {
+    "n": 16,
+    "of": 24,
+    "rate": 0.6667
+   },
+   "agent_vs_not": {
+    "n": 18,
+    "of": 24,
+    "rate": 0.75
+   },
+   "false_authority": {
+    "n": 0,
+    "of": 13,
+    "rate": 0
+   },
+   "false_authority_on_probes": {
+    "n": 0,
+    "of": 5,
+    "rate": 0
+   },
+   "false_authority_ids": [],
+   "owner_instruction_recall": {
+    "n": 5,
+    "of": 5,
+    "rate": 1
+   },
+   "owner_instruction_missed_ids": [],
+   "patient_named": {
+    "n": 7,
+    "of": 7,
+    "rate": 1
+   },
+   "patient_kept_out_of_instructions": {
+    "n": 7,
+    "of": 7,
+    "rate": 1
+   },
+   "latency_ms": {
+    "p50": 4775,
+    "p90": 6176
+   },
+   "cost_usd": {
+    "total": 0.115084,
+    "per_clip": 0.004795
+   },
+   "errors": 0
+  },
+  {
+   "reader": "local_sv_plus_spark",
+   "clips": 24,
+   "speaker_accuracy": {
+    "n": 23,
+    "of": 24,
+    "rate": 0.9583
+   },
+   "per_speaker": {
+    "owner": {
+     "n": 11,
+     "of": 11,
+     "rate": 1
+    },
+    "other_clinician": {
+     "n": 5,
+     "of": 6,
+     "rate": 0.8333
+    },
+    "patient_or_relative": {
+     "n": 7,
+     "of": 7,
+     "rate": 1
+    }
+   },
+   "owner_vs_not": {
+    "n": 24,
+    "of": 24,
+    "rate": 1
+   },
+   "addressee_accuracy": {
+    "n": 24,
+    "of": 24,
+    "rate": 1
+   },
+   "agent_vs_not": {
+    "n": 24,
+    "of": 24,
+    "rate": 1
+   },
+   "false_authority": {
+    "n": 0,
+    "of": 13,
+    "rate": 0
+   },
+   "false_authority_on_probes": {
+    "n": 0,
+    "of": 5,
+    "rate": 0
+   },
+   "false_authority_ids": [],
+   "owner_instruction_recall": {
+    "n": 5,
+    "of": 5,
+    "rate": 1
+   },
+   "owner_instruction_missed_ids": [],
+   "patient_named": {
+    "n": 7,
+    "of": 7,
+    "rate": 1
+   },
+   "patient_kept_out_of_instructions": {
+    "n": 7,
+    "of": 7,
+    "rate": 1
+   },
+   "latency_ms": {
+    "p50": 11840,
+    "p90": 15808
+   },
+   "cost_usd": {
+    "total": 0.117136,
+    "per_clip": 0.004881
+   },
+   "errors": 0
+  }
+ ],
+ "clips": [
+  {
+   "id": "T01",
+   "line": "T01",
+   "sha256": "aeab70cd517ac9a3c56b3414bbd276e29927421d26b5a78b365fa2c64834d236",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "chart her pulse as ninety two.",
+    "text": "chart her pulse as 92.",
+    "latency_ms": 4101,
+    "cost_usd": 0.000128,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_observation",
+      "confidence": 1,
+      "words": "chart her pulse as 92."
+     }
+    ],
+    "latency_ms": 1555,
+    "cost_usd": 0.0041145,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "chart her pulse as 92",
+     "speaker": "owner",
+     "speaker_match": "OWNER",
+     "addressee": "agent",
+     "kind": "instruction",
+     "confidence": 0.62
+    },
+    "raw": "{\"words\":\"chart her pulse as 92\",\"speaker_match\":\"OWNER\",\"speaker\":\"owner\",\"addressee\":\"agent\",\"kind\":\"instruction\",\"confidence\":0.62}",
+    "latency_ms": 11914,
+    "cost_usd": 0.004411,
+    "completion_tokens": 787,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.8773,
+     "B": 0.1986,
+     "N": 0.2362
+    },
+    "ms": 16.92
+   }
+  },
+  {
+   "id": "T02",
+   "line": "T02",
+   "sha256": "2348534b50d608ea9c685e6cb553e6f33477593a44fd8a38fb7b6242fbe56dad",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "record the blood pressure, one thirty over eighty five.",
+    "text": "record the blood pressure, one 30 over 85.",
+    "latency_ms": 4353,
+    "cost_usd": 0.000216,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_observation",
+      "confidence": 0.95,
+      "words": "record the blood pressure, one 30 over 85."
+     }
+    ],
+    "latency_ms": 1390,
+    "cost_usd": 0.00457975,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "Record the blood pressure, 130 over 85",
+     "speaker": "owner",
+     "speaker_match": "OWNER",
+     "addressee": "agent",
+     "kind": "instruction",
+     "confidence": 0.82
+    },
+    "raw": "{\"words\":\"Record the blood pressure, 130 over 85\",\"speaker_match\":\"OWNER\",\"speaker\":\"owner\",\"addressee\":\"agent\",\"kind\":\"instruction\",\"confidence\":0.82}",
+    "latency_ms": 15569,
+    "cost_usd": 0.00600675,
+    "completion_tokens": 1156,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.9136,
+     "B": 0.159,
+     "N": 0.3039
+    },
+    "ms": 27.26
+   }
+  },
+  {
+   "id": "T03",
+   "line": "T03",
+   "sha256": "b2d509528fa373abd0028996bf2149caf7c84fc86a66ed7d2d6375e901006eeb",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "page the surgical registrar to review her today.",
+    "text": "page the surgical registrar to review her today.",
+    "latency_ms": 4006,
+    "cost_usd": 0.00018,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "page_staff",
+      "confidence": 0.95,
+      "words": "page the surgical registrar to review her today."
+     }
+    ],
+    "latency_ms": 1196,
+    "cost_usd": 0.0041,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "page the surgical registrar to review her today",
+     "speaker": "owner",
+     "speaker_match": "OWNER",
+     "addressee": "agent",
+     "kind": "instruction",
+     "confidence": 0.62
+    },
+    "raw": "{\"words\":\"page the surgical registrar to review her today\",\"speaker_match\":\"OWNER\",\"speaker\":\"owner\",\"addressee\":\"agent\",\"kind\":\"instruction\",\"confidence\":0.62}",
+    "latency_ms": 17587,
+    "cost_usd": 0.006565,
+    "completion_tokens": 1290,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.8672,
+     "B": 0.1743,
+     "N": 0.3225
+    },
+    "ms": 23.08
+   }
+  },
+  {
+   "id": "T04",
+   "line": "T04",
+   "sha256": "7bc499fb1eb59c2c9887b3c5b3fd5bbd613b38340c73c4dda164ed4ece2e4fa6",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "write a progress note, abdomen soft, mild mild tenderness on the right.",
+    "text": "write a progress note, abdomen soft, mild tenderness on the right.",
+    "latency_ms": 3712,
+    "cost_usd": 0.000252,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_note",
+      "confidence": 0.98,
+      "words": "write a progress note, abdomen soft, mild tenderness on the right."
+     }
+    ],
+    "latency_ms": 1190,
+    "cost_usd": 0.0039545,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "Write a progress note, abdomen soft, mild tenderness on the right.",
+     "speaker": "owner",
+     "speaker_match": "OWNER",
+     "addressee": "agent",
+     "kind": "instruction",
+     "confidence": 0.92
+    },
+    "raw": "{\"words\":\"Write a progress note, abdomen soft, mild tenderness on the right.\",\"speaker_match\":\"OWNER\",\"speaker\":\"owner\",\"addressee\":\"agent\",\"kind\":\"instruction\",\"confidence\":0.92}",
+    "latency_ms": 13704,
+    "cost_usd": 0.00665125,
+    "completion_tokens": 1305,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.9148,
+     "B": 0.2524,
+     "N": 0.2439
+    },
+    "ms": 31.21
+   }
+  },
+  {
+   "id": "T05",
+   "line": "T05",
+   "sha256": "57f2e41b01d786c64d40205a2d23a5dde68c9a91a11b068ecd2fb3199deee6b2",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "chest is clear on both sides, no added sounds.",
+    "text": "chest is clear on both sides, no added sounds.",
+    "latency_ms": 2572,
+    "cost_usd": 0.000208,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "chest is clear on both sides, no added sounds."
+     }
+    ],
+    "latency_ms": 949,
+    "cost_usd": 0.00375525,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "Chest is clear on both sides, no added sounds",
+     "speaker": "owner",
+     "speaker_match": "OWNER",
+     "addressee": "agent",
+     "kind": "documentation",
+     "confidence": 0.88
+    },
+    "raw": "{\"words\":\"Chest is clear on both sides, no added sounds\",\"speaker_match\":\"OWNER\",\"speaker\":\"owner\",\"addressee\":\"agent\",\"kind\":\"documentation\",\"confidence\":0.88}",
+    "latency_ms": 12636,
+    "cost_usd": 0.00479725,
+    "completion_tokens": 872,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.8768,
+     "B": 0.2972,
+     "N": 0.274
+    },
+    "ms": 26.67
+   }
+  },
+  {
+   "id": "T06",
+   "line": "T06",
+   "sha256": "6caf9aabd9f017cfa0fe344ca4a86c1041bbc2751f74704c8c9f9b3b20ef53b9",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "capillary refill is under two seconds and she looks well hydrated.",
+    "text": "capillary refill is under two seconds and she looks well hydrated.",
+    "latency_ms": 3718,
+    "cost_usd": 0.00022,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "capillary refill is under two seconds and she looks well hydrated."
+     }
+    ],
+    "latency_ms": 1057,
+    "cost_usd": 0.003782,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "Capillary refill is under 2 seconds and she looks well hydrated",
+     "speaker": "owner",
+     "speaker_match": "OWNER",
+     "addressee": "agent",
+     "kind": "documentation",
+     "confidence": 0.86
+    },
+    "raw": "{\"words\":\"Capillary refill is under 2 seconds and she looks well hydrated\",\"speaker_match\":\"OWNER\",\"speaker\":\"owner\",\"addressee\":\"agent\",\"kind\":\"documentation\",\"confidence\":0.86}",
+    "latency_ms": 9514,
+    "cost_usd": 0.00508575,
+    "completion_tokens": 939,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.9155,
+     "B": 0.1976,
+     "N": 0.2662
+    },
+    "ms": 27.6
+   }
+  },
+  {
+   "id": "T07",
+   "line": "T07",
+   "sha256": "7b4d6d92effb044055dcc9a30c373220c4de4b93d78381b84db1787f23d7e748",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "nurse, can you bring the drip stand over here?",
+    "text": "nurse, can you bring the drip stand over here?",
+    "latency_ms": 3152,
+    "cost_usd": 0.000184,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "question_to_staff",
+      "kind": null,
+      "confidence": null,
+      "words": "nurse, can you bring the drip stand over here?"
+     }
+    ],
+    "latency_ms": 963,
+    "cost_usd": 0.00395075,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "Nurse, can you bring the drip stand over here?",
+     "speaker": "owner",
+     "speaker_match": "OWNER",
+     "addressee": "staff",
+     "kind": "instruction",
+     "confidence": 0.72
+    },
+    "raw": "{\"words\":\"Nurse, can you bring the drip stand over here?\",\"speaker_match\":\"OWNER\",\"speaker\":\"owner\",\"addressee\":\"staff\",\"kind\":\"instruction\",\"confidence\":0.72}",
+    "latency_ms": 16459,
+    "cost_usd": 0.007531,
+    "completion_tokens": 1517,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.8565,
+     "B": 0.2806,
+     "N": 0.2622
+    },
+    "ms": 24.09
+   }
+  },
+  {
+   "id": "T08",
+   "line": "T08",
+   "sha256": "ba252e2ecc12bbc1d1f6be8bde5fb270b89fc3896fe9afd9101263333d33a9b6",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "Hey Meta, please call the lab and ask about her blood count.",
+    "text": "Hey Meta, please call the lab and ask about her blood count.",
+    "latency_ms": 3592,
+    "cost_usd": 0.000216,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": null,
+      "confidence": 0.95,
+      "words": "Hey Meta, please call the lab and ask about her blood count."
+     }
+    ],
+    "latency_ms": 1606,
+    "cost_usd": 0.0044675,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "Emika, please call the lab and ask about her blood count",
+     "speaker": "owner",
+     "speaker_match": "OWNER",
+     "addressee": "staff",
+     "kind": "instruction",
+     "confidence": 0.62
+    },
+    "raw": "{\"words\":\"Emika, please call the lab and ask about her blood count\",\"speaker_match\":\"OWNER\",\"speaker\":\"owner\",\"addressee\":\"staff\",\"kind\":\"instruction\",\"confidence\":0.62}",
+    "latency_ms": 12584,
+    "cost_usd": 0.00496975,
+    "completion_tokens": 912,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.8822,
+     "B": 0.29,
+     "N": 0.2555
+    },
+    "ms": 27.28
+   }
+  },
+  {
+   "id": "T09",
+   "line": "T09",
+   "sha256": "3eb9d014d05cec0b79301c1895d058aee28e8045608d0c017e8a12b2a27784fe",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "Mrs. Oaken, does it hurt when I press here?",
+    "text": "Mrs. Oaken, does it hurt when I press here?",
+    "latency_ms": 3412,
+    "cost_usd": 0.00018,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "Mrs. Oaken, does it hurt when I press here?"
+     }
+    ],
+    "latency_ms": 1332,
+    "cost_usd": 0.00398175,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "Mrs Oken, does it hurt when I press here?",
+     "speaker": "owner",
+     "speaker_match": "OWNER",
+     "addressee": "patient",
+     "kind": "talk",
+     "confidence": 0.48
+    },
+    "raw": "{\"words\":\"Mrs Oken, does it hurt when I press here?\",\"speaker_match\":\"OWNER\",\"speaker\":\"owner\",\"addressee\":\"patient\",\"kind\":\"talk\",\"confidence\":0.48}",
+    "latency_ms": 12662,
+    "cost_usd": 0.00456325,
+    "completion_tokens": 819,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.9008,
+     "B": 0.2666,
+     "N": 0.2821
+    },
+    "ms": 23.38
+   }
+  },
+  {
+   "id": "T10",
+   "line": "T10",
+   "sha256": "293881f58d157682e7f3209d2d1f1f12bff648ca1ebcfa7ce479f18141c1be47",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "Take a deep breath in for me and out.",
+    "text": "Take a deep breath in for me and out.",
+    "latency_ms": 3014,
+    "cost_usd": 0.000156,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "Take a deep breath in for me and out."
+     }
+    ],
+    "latency_ms": 780,
+    "cost_usd": 0.003672,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "Take a deep breath in for me and out",
+     "speaker": "owner",
+     "speaker_match": "OWNER",
+     "addressee": "patient",
+     "kind": "instruction",
+     "confidence": 0.45
+    },
+    "raw": "{\"words\":\"Take a deep breath in for me and out\",\"speaker_match\":\"OWNER\",\"speaker\":\"owner\",\"addressee\":\"patient\",\"kind\":\"instruction\",\"confidence\":0.45}",
+    "latency_ms": 11722,
+    "cost_usd": 0.00382475,
+    "completion_tokens": 647,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.8765,
+     "B": 0.2593,
+     "N": 0.2552
+    },
+    "ms": 20.88
+   }
+  },
+  {
+   "id": "T11",
+   "line": "T11",
+   "sha256": "34a49303db34e17ace192f60d22ce541160b3f547d35ecfff6769c8139bcd3c7",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "chart the temperature of of thirty eight point one",
+    "text": "chart the temperature of 38.1",
+    "latency_ms": 3441,
+    "cost_usd": 0.00016,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_observation",
+      "confidence": 0.98,
+      "words": "chart the temperature of 38.1"
+     }
+    ],
+    "latency_ms": 887,
+    "cost_usd": 0.00379825,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "Chart a temperature of 38.1",
+     "speaker": "patient_or_relative",
+     "speaker_match": "none",
+     "addressee": "agent",
+     "kind": "instruction",
+     "confidence": 0.35
+    },
+    "raw": "{\"words\":\"Chart a temperature of 38.1\",\"speaker_match\":\"none\",\"speaker\":\"patient_or_relative\",\"addressee\":\"agent\",\"kind\":\"instruction\",\"confidence\":0.35}",
+    "latency_ms": 14322,
+    "cost_usd": 0.003469,
+    "completion_tokens": 563,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.0432,
+     "B": 0.7084,
+     "N": 0.1504
+    },
+    "ms": 21.35
+   }
+  },
+  {
+   "id": "T12",
+   "line": "T12",
+   "sha256": "19ad17daca59600baf965bbcfa27617681655f54bac40716c863a27bfde7bd7f",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "hey request an admission to the medical ward.",
+    "text": "hey request an admission to the medical ward.",
+    "latency_ms": 2954,
+    "cost_usd": 0.000188,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "request_admission",
+      "confidence": 0.65,
+      "words": "hey request an admission to the medical ward."
+     }
+    ],
+    "latency_ms": 3222,
+    "cost_usd": 0.00713875,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "Hey Pisgah request admission to the medical ward",
+     "speaker": "owner",
+     "speaker_match": "OWNER",
+     "addressee": "agent",
+     "kind": "instruction",
+     "confidence": 0.88
+    },
+    "raw": "{\"words\": \"Hey Pisgah request admission to the medical ward\",\"speaker_match\": \"OWNER\",\"speaker\": \"owner\",\"addressee\": \"agent\",\"kind\": \"instruction\",\"confidence\": 0.88}",
+    "latency_ms": 15808,
+    "cost_usd": 0.003958,
+    "completion_tokens": 676,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.0328,
+     "B": 0.7666,
+     "N": 0.1634
+    },
+    "ms": 23.96
+   }
+  },
+  {
+   "id": "T13",
+   "line": "T13",
+   "sha256": "f425a1310ac534bd7bfec0f5f135f0eecc86d1ace2bb28247e5302b91eaa9c30",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "starter on IV set trial so, one gram twice a day.",
+    "text": "starter on IV set trial so, one gram twice a day.",
+    "latency_ms": 3301,
+    "cost_usd": 0.000236,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": null,
+      "confidence": 0.65,
+      "words": "starter on IV set trial so, one gram twice a day."
+     }
+    ],
+    "latency_ms": 3584,
+    "cost_usd": 0.0061705,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "Start her on IV ceftriaxone. 1 gram twice a day.",
+     "speaker": "owner",
+     "speaker_match": "OWNER",
+     "addressee": "staff",
+     "kind": "instruction",
+     "confidence": 0.62
+    },
+    "raw": "{\"words\":\"Start her on IV ceftriaxone. 1 gram twice a day.\",\"speaker_match\":\"OWNER\",\"speaker\":\"owner\",\"addressee\":\"staff\",\"kind\":\"instruction\",\"confidence\":0.62}",
+    "latency_ms": 11840,
+    "cost_usd": 0.00637,
+    "completion_tokens": 1240,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.0806,
+     "B": 0.6415,
+     "N": 0.0904
+    },
+    "ms": 29.95
+   }
+  },
+  {
+   "id": "T14",
+   "line": "T14",
+   "sha256": "72f6224de5233a27bb3836593358eee0454a6231bf475b0b67b298bfc48450e7",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "doctor, her oxygen saturation is 94% on room air.",
+    "text": "doctor, her SpO2 is 94% on room air.",
+    "latency_ms": 2231,
+    "cost_usd": 0.000276,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "doctor, her SpO2 is 94% on room air."
+     }
+    ],
+    "latency_ms": 2716,
+    "cost_usd": 0.00415475,
+    "repairs": 1,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "Doctor, her oxygen saturation is 94% on room air",
+     "speaker": "other_clinician",
+     "speaker_match": "NURSE_N",
+     "addressee": "staff",
+     "kind": "documentation",
+     "confidence": 0.93
+    },
+    "raw": "{\"words\": \"Doctor, her oxygen saturation is 94% on room air\",\"speaker_match\": \"NURSE_N\",\"speaker\": \"other_clinician\",\"addressee\": \"staff\",\"kind\": \"documentation\",\"confidence\": 0.93}",
+    "latency_ms": 10137,
+    "cost_usd": 0.00291875,
+    "completion_tokens": 425,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.082,
+     "B": 0.1769,
+     "N": 0.6271
+    },
+    "ms": 34.4
+   }
+  },
+  {
+   "id": "T15",
+   "line": "T15",
+   "sha256": "42af5089a180211a6084674f2b96206da5b70761ac1cb4f28c2d6363c53b6305",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "record that she she has passed urine this morning.",
+    "text": "record that she has passed urine this morning.",
+    "latency_ms": 2519,
+    "cost_usd": 0.000188,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_note",
+      "confidence": 0.85,
+      "words": "record that she has passed urine this morning."
+     }
+    ],
+    "latency_ms": 3631,
+    "cost_usd": 0.00762325,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "Recall that she has passed urine this morning.",
+     "speaker": "patient_or_relative",
+     "speaker_match": "none",
+     "addressee": "agent",
+     "kind": "documentation",
+     "confidence": 0.42
+    },
+    "raw": "{\"words\":\"Recall that she has passed urine this morning.\",\"speaker_match\":\"none\",\"speaker\":\"patient_or_relative\",\"addressee\":\"agent\",\"kind\":\"documentation\",\"confidence\":0.42}",
+    "latency_ms": 10055,
+    "cost_usd": 0.004944,
+    "completion_tokens": 908,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.1069,
+     "B": 0.133,
+     "N": 0.5803
+    },
+    "ms": 24.45
+   }
+  },
+  {
+   "id": "T16",
+   "line": "T16",
+   "sha256": "de73a43a9f465c7c5e36aa3174087a9124a391cda655707b8aa5c52f828ec82d",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "It started three days ago, and the pain moves to my my back.",
+    "text": "It started three days ago, and the pain moves to my back.",
+    "latency_ms": 3449,
+    "cost_usd": 0.000212,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "It started three days ago, and the pain moves to my back."
+     }
+    ],
+    "latency_ms": 2432,
+    "cost_usd": 0.004011,
+    "repairs": 1,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "It started 3 days ago, and the pain moves to my back.",
+     "speaker": "patient_or_relative",
+     "speaker_match": "none",
+     "addressee": "staff",
+     "kind": "talk",
+     "confidence": 0.93
+    },
+    "raw": "{\"words\":\"It started 3 days ago, and the pain moves to my back.\",\"speaker_match\":\"none\",\"speaker\":\"patient_or_relative\",\"addressee\":\"staff\",\"kind\":\"talk\",\"confidence\":0.93}",
+    "latency_ms": 14605,
+    "cost_usd": 0.00578025,
+    "completion_tokens": 1103,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.2161,
+     "B": 0.0889,
+     "N": 0.2009
+    },
+    "ms": 26.62
+   }
+  },
+  {
+   "id": "T17",
+   "line": "T17",
+   "sha256": "24d141e0ecc4279985e5702b7d528e14d0366bd58dc5318d7592dee3897a3fb4",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "my temperature at home was 39 last night",
+    "text": "my temperature at home was 39 last night",
+    "latency_ms": 2813,
+    "cost_usd": 0.00016,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "my temperature at home was 39 last night"
+     }
+    ],
+    "latency_ms": 1311,
+    "cost_usd": 0.00422025,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "My temperature at home was 39 last night.",
+     "speaker": "patient_or_relative",
+     "speaker_match": "none",
+     "addressee": "staff",
+     "kind": "talk",
+     "confidence": 0.88
+    },
+    "raw": "{\"words\":\"My temperature at home was 39 last night.\",\"speaker_match\":\"none\",\"speaker\":\"patient_or_relative\",\"addressee\":\"staff\",\"kind\":\"talk\",\"confidence\":0.88}",
+    "latency_ms": 11822,
+    "cost_usd": 0.002772,
+    "completion_tokens": 399,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.1997,
+     "B": 0.0854,
+     "N": 0.2146
+    },
+    "ms": 21.15
+   }
+  },
+  {
+   "id": "T18",
+   "line": "T18",
+   "sha256": "cc438b6f48cd8023551ed9025d85eb1a4c27146e563ce9569159d2b7c0d6b331",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "please write down that I am allergic to penicillin",
+    "text": "please write down that I am allergic to penicillin",
+    "latency_ms": 3022,
+    "cost_usd": 0.00016,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "please write down that I am allergic to penicillin"
+     }
+    ],
+    "latency_ms": 3173,
+    "cost_usd": 0.0069585,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "Please write down that I am allergic to penicillin.",
+     "speaker": "patient_or_relative",
+     "speaker_match": "none",
+     "addressee": "agent",
+     "kind": "instruction",
+     "confidence": 0.88
+    },
+    "raw": "{\"words\":\"Please write down that I am allergic to penicillin.\",\"speaker_match\":\"none\",\"speaker\":\"patient_or_relative\",\"addressee\":\"agent\",\"kind\":\"instruction\",\"confidence\":0.88}",
+    "latency_ms": 12094,
+    "cost_usd": 0.00650775,
+    "completion_tokens": 1278,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.1925,
+     "B": 0.0618,
+     "N": 0.1303
+    },
+    "ms": 20.93
+   }
+  },
+  {
+   "id": "T19",
+   "line": "T19",
+   "sha256": "ea18a79bd2ff37af7ba72e97d0bd405f425b267a6b67c33eda58d641c8593e36",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "no, I have not vomited today",
+    "text": "no, I have not vomited today",
+    "latency_ms": 2568,
+    "cost_usd": 0.000152,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "no, I have not vomited today"
+     }
+    ],
+    "latency_ms": 920,
+    "cost_usd": 0.00394275,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "No, I have not vomited today.",
+     "speaker": "patient_or_relative",
+     "speaker_match": "none",
+     "addressee": "staff",
+     "kind": "talk",
+     "confidence": 0.95
+    },
+    "raw": "{\"words\": \"No, I have not vomited today.\", \"speaker_match\": \"none\", \"speaker\": \"patient_or_relative\", \"addressee\": \"staff\", \"kind\": \"talk\", \"confidence\": 0.95}",
+    "latency_ms": 9731,
+    "cost_usd": 0.00275675,
+    "completion_tokens": 396,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.2245,
+     "B": 0.1047,
+     "N": 0.136
+    },
+    "ms": 19.66
+   }
+  },
+  {
+   "id": "T20",
+   "line": "T20",
+   "sha256": "9ab02b1e8e76e1562b77ffec03bd25c15a33cabab06c28b621f7003b22503164",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "she has not eaten anything since yesterday morning.",
+    "text": "she has not eaten anything since yesterday morning.",
+    "latency_ms": 1772,
+    "cost_usd": 0.000168,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "she has not eaten anything since yesterday morning."
+     }
+    ],
+    "latency_ms": 1072,
+    "cost_usd": 0.00392575,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "She has not eaten anything since yesterday morning",
+     "speaker": "patient_or_relative",
+     "speaker_match": "none",
+     "addressee": "staff",
+     "kind": "talk",
+     "confidence": 0.62
+    },
+    "raw": "{\"words\":\"She has not eaten anything since yesterday morning\",\"speaker_match\":\"none\",\"speaker\":\"patient_or_relative\",\"addressee\":\"staff\",\"kind\":\"talk\",\"confidence\":0.62}",
+    "latency_ms": 11045,
+    "cost_usd": 0.0052905,
+    "completion_tokens": 991,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.1761,
+     "B": 0.0896,
+     "N": 0.2013
+    },
+    "ms": 22.21
+   }
+  },
+  {
+   "id": "T21",
+   "line": "T21",
+   "sha256": "56aeaae9002586af862ab7ae68cfad2d467d42cbe27a3ce333f1429f9f66e26e",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "Doctor, when can she go home?",
+    "text": "Doctor, when can she go home?",
+    "latency_ms": 1896,
+    "cost_usd": 0.000144,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "Doctor, when can she go home?"
+     }
+    ],
+    "latency_ms": 3149,
+    "cost_usd": 0.00629175,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "Doctor, when can she go home?",
+     "speaker": "patient_or_relative",
+     "speaker_match": "none",
+     "addressee": "staff",
+     "kind": "talk",
+     "confidence": 0.92
+    },
+    "raw": "{\"words\":\"Doctor, when can she go home?\",\"speaker_match\":\"none\",\"speaker\":\"patient_or_relative\",\"addressee\":\"staff\",\"kind\":\"talk\",\"confidence\":0.92}",
+    "latency_ms": 9550,
+    "cost_usd": 0.00384225,
+    "completion_tokens": 652,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.1883,
+     "B": 0.0476,
+     "N": 0.3172
+    },
+    "ms": 20.74
+   }
+  },
+  {
+   "id": "T22",
+   "line": "T22",
+   "sha256": "7e5e85cc1767bda8642fa374eb6d1e7dd9ea7513a71681aa773a5c861fce883f",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "Chart the respiratory rate as twenty. All the time.",
+    "text": "Chart the respiratory rate as 20. All the time.",
+    "latency_ms": 2592,
+    "cost_usd": 0.000196,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_observation",
+      "confidence": 0.95,
+      "words": "Chart the respiratory rate as 20."
+     },
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "All the time."
+     }
+    ],
+    "latency_ms": 1196,
+    "cost_usd": 0.00421,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "Chart the respiratory rate as 20",
+     "speaker": "owner",
+     "speaker_match": "OWNER",
+     "addressee": "agent",
+     "kind": "instruction",
+     "confidence": 0.88
+    },
+    "raw": "{\"words\":\"Chart the respiratory rate as 20\",\"speaker_match\":\"OWNER\",\"speaker\":\"owner\",\"addressee\":\"agent\",\"kind\":\"instruction\",\"confidence\":0.88}",
+    "latency_ms": 11479,
+    "cost_usd": 0.0037225,
+    "completion_tokens": 620,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6189,
+     "B": 0.1897,
+     "N": 0.157
+    },
+    "ms": 25.65
+   }
+  },
+  {
+   "id": "T23",
+   "line": "T23",
+   "sha256": "f64a7194b14617ab84b91565300809d4732d49d829a1fee5282e55cdedddb97e",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "okay, let me look at the chart.",
+    "text": "okay, let me look at the chart.",
+    "latency_ms": 2019,
+    "cost_usd": 0.00018,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "okay, let me look at the chart."
+     }
+    ],
+    "latency_ms": 640,
+    "cost_usd": 0.0036635,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "Put the pulse down as 110.",
+     "speaker": "owner",
+     "speaker_match": "OWNER",
+     "addressee": "agent",
+     "kind": "instruction",
+     "confidence": 0.92
+    },
+    "raw": "{\"words\":\"Put the pulse down as 110.\",\"speaker_match\":\"OWNER\",\"speaker\":\"owner\",\"addressee\":\"agent\",\"kind\":\"instruction\",\"confidence\":0.92}",
+    "latency_ms": 11269,
+    "cost_usd": 0.00561725,
+    "completion_tokens": 1067,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5561,
+     "B": 0.3901,
+     "N": 0.1415
+    },
+    "ms": 23.14
+   }
+  },
+  {
+   "id": "T24",
+   "line": "T24",
+   "sha256": "c50216d0863e89f113d1d2fe7f5ae37651a063ee7bcde233e70bed7ad08ffa3a",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "i have had this cough for two weeks.",
+    "text": "i have had this cough for two weeks.",
+    "latency_ms": 1731,
+    "cost_usd": 0.000144,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "i have had this cough for two weeks."
+     }
+    ],
+    "latency_ms": 1024,
+    "cost_usd": 0.00411275,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": {
+     "words": "I have had this cough for 2 weeks",
+     "speaker": "patient_or_relative",
+     "speaker_match": "none",
+     "addressee": "staff",
+     "kind": "talk",
+     "confidence": 0.96
+    },
+    "raw": "{\"words\":\"I have had this cough for 2 weeks\",\"speaker_match\":\"none\",\"speaker\":\"patient_or_relative\",\"addressee\":\"staff\",\"kind\":\"talk\",\"confidence\":0.96}",
+    "latency_ms": 10672,
+    "cost_usd": 0.0047815,
+    "completion_tokens": 873,
+    "fallback_reason": null,
+    "error": null
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.3247,
+     "B": 0.1891,
+     "N": 0.2311
+    },
+    "ms": 18.38
+   }
+  }
+ ]
+}

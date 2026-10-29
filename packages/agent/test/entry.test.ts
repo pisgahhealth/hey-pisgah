@@ -99,9 +99,9 @@ describe("the unidentified arrival through serve", () => {
     const v = s.runtime.view(r.body.task_id)!;
     expect(v).toMatchObject({ patient_id: PATIENT, visit_id: VISIT, unidentified: true, state: "done" });
     expect(v.actions[0]).toMatchObject({ state: "completed", proof: { record_id: PATIENT }, screen: { page: "doctor_workspace", href: "/worklist-page", command_id: r.body.action_id, owner_id: OWNER, encounter: { patient_id: PATIENT, visit_id: VISIT } } });
-    expect(v.speed).toHaveLength(1);
-    expect(v.speed[0]).toMatchObject({ action_id: r.body.action_id, from: spokenAt, outcome: "verified", error: null });
-    expect(v.speed[0]!.ms).toBeGreaterThanOrEqual(0);
+    expect(v.speed.rows).toHaveLength(1);
+    expect(v.speed.rows[0]).toMatchObject({ action_id: r.body.action_id, from: spokenAt });
+    expect(v.speed.rows[0]!.ms).toBeGreaterThanOrEqual(0);
     expect(calls()).toBe(0);
     expect((await post(`${s.url}/tasks/tracking?owner=${OWNER}`, {})).status).toBe(404);
     const tr = await (await fetch(`${s.url}/tasks/tracking?owner=${OWNER}`)).json();
@@ -118,7 +118,7 @@ describe("the unidentified arrival through serve", () => {
     expect(said.body.task_id).toBe(r.body.task_id);
     await s.runtime.settled();
     const v = s.runtime.view(r.body.task_id)!;
-    expect(v.obligations).toEqual([expect.objectContaining({ kind: "identity_pending", state: "open", name: "Grace Okafor", phone: "08031234567", said_by: OWNER, line_id: said.body.line_id, completes_by: "receptionist", encounter: { patient_id: PATIENT, visit_id: VISIT } })]);
+    expect(v.identities).toEqual([expect.objectContaining({ kind: "identity_pending", state: "open", name: "Grace Okafor", phone: "08031234567", said_by: OWNER, line_id: said.body.line_id, completes_by: "receptionist", encounter: { patient_id: PATIENT, visit_id: VISIT } })]);
     expect(v.transcript.find((x) => x.id === said.body.line_id)).toMatchObject({ kept: true, text: "Her name is Grace Okafor, phone 0803 123 4567" });
     expect(port.writes).toHaveLength(1);
     expect(calls()).toBe(0);

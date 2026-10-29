@@ -7,7 +7,7 @@ import { ModelClient } from "@hey-pisgah/model";
 import { encodeWav, type FinalTranscript } from "@hey-pisgah/voice";
 import { EmrRuntime } from "../src/emr/runtime.js";
 import { ListenSessions, recordingTranscriber, replayTranscriber, type Transcriber } from "../src/emr/listen.js";
-import { gateCommitmentBody, gateMessage, gatePrompt, denyHits } from "../src/emr/gate.js";
+import { gateCommitment, gateCommitmentBody, gateMessage, gatePrompt, denyHits } from "../src/emr/gate.js";
 import { GATE_COMMITMENT_FILE, committedGateHash } from "../src/emr/gate.commit.js";
 import { startEmrServe } from "../src/emr/serve.js";
 import { ADM, FakeEmr, OWNER, emrRoot, gater, type C } from "./emr-helpers.js";
@@ -44,8 +44,14 @@ const say = (l: ListenSessions, seq: number, wav: Uint8Array, session = "s1") =>
 
 describe("speech gate", () => {
   it("is frozen in its commitment, holds no denied term and never shows vitals or record ids", () => {
-    expect(committedGateHash()).toBe(hashJson(gateCommitmentBody()));
-    expect(JSON.parse(readFileSync(GATE_COMMITMENT_FILE, "utf8")).revisions.at(-1).body.deny_hits).toEqual([]);
+    expect(committedGateHash()).toBe(hashJson(gateCommitment()));
+    const last = JSON.parse(readFileSync(GATE_COMMITMENT_FILE, "utf8")).revisions.at(-1).body;
+    expect(last.deny_hits).toEqual([]);
+    expect(last.clerking.deny_hits).toEqual([]);
+    // The observation gate the labelled talk was scored on is unchanged by the clerking revision.
+    const rev2 = JSON.parse(readFileSync(GATE_COMMITMENT_FILE, "utf8")).revisions[1].body;
+    expect([last.prompt_sha256, last.tool_sha256]).toEqual([rev2.prompt_sha256, rev2.tool_sha256]);
+    expect(gateCommitmentBody().prompt_sha256).toBe(rev2.prompt_sha256);
     expect(denyHits(gatePrompt(["record_observation"]))).toEqual([]);
     expect(denyHits("we did it earlier")).not.toEqual([]);
     const m = gateMessage({

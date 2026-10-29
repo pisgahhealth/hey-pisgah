@@ -76,9 +76,11 @@ export class PisgahPort implements EmrPort {
   names(): SayableNames {
     return {
       page_targets: Object.fromEntries(Object.entries(this.profile.page_targets).map(([k, v]) => [k, v.words])),
-      clinics: Object.fromEntries(Object.entries(this.profile.clinics).map(([k, v]) => [k, v.words]))
+      clinics: Object.fromEntries(Object.entries(this.profile.clinics).map(([k, v]) => [k, v.words])),
+      wards: Object.fromEntries(Object.entries(this.profile.wards).map(([k, v]) => [k, v.words]))
     };
   }
+  resultFacts(owner: string): readonly string[] { return this.profile.result_facts[owner] ?? []; }
 
   refusedCount(): number { return this.refusals.length; }
   private now(): Date { return this.o.now?.() ?? new Date(); }
@@ -270,6 +272,16 @@ export class PisgahPort implements EmrPort {
       v["page_body"] = `${label ? `${label}: ` : ""}${String(a["text"])}`;
     }
     if (kind === "schedule_follow_up") v["clinic_id"] = this.profile.clinics[String(a["clinic"])]?.id;
+    if (kind === "admit_patient" || kind === "assign_bed") { const w = this.profile.wards[String(a["ward"])]; if (w) { v["ward_id"] = w.id; v["ward_class"] = w.class; } }
+    if (kind === "record_clerking") {
+      // The note goes as the EMR's encounter details, each spoken section under the key the profile names, and as plain text for the clinical notes.
+      const sections = this.profile.clerking?.sections ?? {};
+      const note = (a["note"] as Record<string, string> | undefined) ?? { [String(a["section"])]: String(a["text"]) };
+      const details = Object.fromEntries(Object.entries(note).filter(([k]) => sections[k]).map(([k, t]) => [sections[k]!, t]));
+      v["encounter_details_json"] = JSON.stringify(details);
+      v["clinical_notes"] = Object.entries(note).map(([k, t]) => `${k.charAt(0).toUpperCase()}${k.slice(1).replace(/_/g, " ")}: ${t}`).join("\n");
+    }
+    if (kind === "schedule_review") v["review_title"] = `Review: ${String(a["title"])}`.slice(0, 200);
     return v;
   }
 
@@ -326,7 +338,7 @@ export class PisgahPort implements EmrPort {
       if (visit && EmrId.safeParse(visit).success) this.learned.visit_by_patient.set(id, visit);
       this.learned.label.set(id, String(a["unidentified_ref"] ?? "the unnamed patient"));
     }
-    if (kind === "request_admission" && EmrId.safeParse(id).success && vars["patient_id"]) {
+    if ((kind === "request_admission" || kind === "admit_patient") && EmrId.safeParse(id).success && vars["patient_id"]) {
       this.learned.admission_by_patient.set(String(vars["patient_id"]), id);
       this.learned.patient_by_admission.set(id, String(vars["patient_id"]));
     }

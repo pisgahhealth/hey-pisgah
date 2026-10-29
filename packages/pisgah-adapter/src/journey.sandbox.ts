@@ -18,7 +18,7 @@ export type SandboxJourney = { results: JourneyResults; trace: JourneyTrace; req
 export const AUDITED_KINDS = new Set(["record_observation", "add_care_plan_item", "record_note", "request_admission", "schedule_follow_up", "page_staff"]);
 
 // A person's own call to the door for a step the agent never does; no agent headers, a fresh idempotency key per write.
-function personCaller(profile: DoorProfile, sb: SandboxBlock, bearers: Map<string, string>, log: DoorLog[]): PersonCall {
+export function personCaller(profile: DoorProfile, sb: SandboxBlock, bearers: Map<string, string>, log: DoorLog[]): PersonCall {
   return async (op, vars) => {
     const spec = sb.person_ops[op];
     if (!spec) return { ok: false, status: null, json: null, note: `no person step ${op}` };

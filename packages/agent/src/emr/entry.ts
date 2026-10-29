@@ -94,8 +94,8 @@ export function spokenPatient(line: string, known: readonly KnownPatient[]): Kno
   return unique.length === 1 ? unique[0]! : null;
 }
 
-// One open obligation the agent holds on an encounter: the spoken identity waits for the front desk to complete it.
-export type EmrObligation = {
+// A spoken identity held open on an encounter until the front desk completes the registration.
+export type EmrIdentityHold = {
   obligation_id: string; kind: "identity_pending"; state: "open" | "done" | "cancelled";
   encounter: { patient_id: string | null; visit_id: string | null };
   name: string; phone: string | null; said_by: string; line_id: string; at: string; completes_by: "receptionist";

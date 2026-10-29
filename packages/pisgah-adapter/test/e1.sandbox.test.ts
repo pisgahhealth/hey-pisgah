@@ -52,14 +52,14 @@ describe.skipIf(!RUN)("E1 on the sandbox EMR: the unidentified arrival by voice"
       expect(arrival).toMatchObject({ visit_id: v.visit_id, clinic, emergency: true, unnamed: true, consent_at: null, reason: "Emergency arrival: young man after a road crash" });
       const audit = sandboxQuery(sb, "e1_audit", { patient });
       expect(audit.find((a) => a["kind"] === checks.opened_kind)).toMatchObject({ agent: minted.agent, on_behalf_of: minted.owner, origin: profile.origin_value, evidence: `transcript:${lineId}` });
-      expect(v.speed[0]).toMatchObject({ outcome: "verified", from: spokenAt });
+      expect(v.speed.rows[0]).toMatchObject({ kind: EMERGENCY_KIND, from: spokenAt });
 
       // The clinician names the patient: held as an open obligation for the front desk, nothing written to the record.
       const before = requests.filter((r) => r.method === "POST").length;
       const named = await post("/tasks/say", { owner: minted.owner, patientId: patient, text: "Her name is Grace Okafor, phone 0803 123 4567" });
       expect(named.status).toBe(202);
       await s.runtime.settled();
-      expect(view(taskId).obligations).toEqual([expect.objectContaining({ kind: "identity_pending", state: "open", name: "Grace Okafor", phone: "08031234567", said_by: minted.owner, line_id: named.body["line_id"], encounter: { patient_id: patient, visit_id: v.visit_id } })]);
+      expect(view(taskId).identities).toEqual([expect.objectContaining({ kind: "identity_pending", state: "open", name: "Grace Okafor", phone: "08031234567", said_by: minted.owner, line_id: named.body["line_id"], encounter: { patient_id: patient, visit_id: v.visit_id } })]);
       expect(requests.filter((r) => r.method === "POST").length).toBe(before);
       expect(sandboxQuery(sb, "e1_arrival", { patient })[0]).toMatchObject({ unnamed: true, consent_at: null });
 

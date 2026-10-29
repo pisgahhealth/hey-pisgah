@@ -44,7 +44,7 @@ export type WatchRead = { facts: Record<string, string | null>; labels: Record<s
 export type WatchOffer = { fact: string; equals: string; kind: string; ask: string };
 export type InboxPage = { page_id: string; subject: string; at: string; patient_id: string | null };
 // Names the owner may say for page targets and clinics, so the gate and its guards know them.
-export type SayableNames = { page_targets: Record<string, readonly string[]>; clinics: Record<string, readonly string[]> };
+export type SayableNames = { page_targets: Record<string, readonly string[]>; clinics: Record<string, readonly string[]>; wards?: Record<string, readonly string[]> };
 
 // The hospital port for a live EMR: reads for context, journaled writes, and a fresh read that proves each write.
 export interface EmrPort {
@@ -65,4 +65,6 @@ export interface EmrPort {
   screenPage?(owner: string, kind: EmrWriteKind): string | undefined;
   // Where a page of the strip's registry lives in this EMR.
   pageHref?(page: string): string | undefined;
+  // The watched facts whose change means a result came back, for work held until then.
+  resultFacts?(owner: string): readonly string[];
 }
