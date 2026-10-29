@@ -41,7 +41,9 @@ for (const text of [SPARK_SYSTEM, gatePrompt(DOCTOR_KINDS, NAMES), "Clip LINE:",
 
 const keys = loadKeys();
 const client = new ModelClient({ storeRoot: ".hey-pisgah/r1/store", mode: "live", record: false, timeoutMs: 90_000 });
-const refs = (["S", "B", "N"] as const).map((p) => ({ name: REFERENCE_NAMES[p], b64: Buffer.from(wav(manifest.clips.find((c) => c.id === `E1-${p}`)!)).toString("base64") }));
+// The enrolment references load only when Spark reads, so a gate-only run works on a set with one enrolled voice.
+let refsCache: { name: string; b64: string }[] | null = null;
+const refs = () => (refsCache ??= (["S", "B", "N"] as const).map((p) => ({ name: REFERENCE_NAMES[p], b64: Buffer.from(wav(manifest.clips.find((c) => c.id === `E1-${p}`)!)).toString("base64") })));
 const keywords = buildKeywords({ vitals: VITALS_KEYWORDS, wards: [], documents: [], staff: [], beds: [] });
 
 async function transcript(c: ManifestClip, b: Uint8Array) {
@@ -70,7 +72,7 @@ async function spark(b: Uint8Array) {
   const line = Buffer.from(b).toString("base64");
   const once = async (route: typeof SPARK_ROUTE | typeof SPARK_FALLBACK, fallback_reason: string | null) => {
     const t0 = performance.now();
-    const messages = [{ role: "system", content: SPARK_SYSTEM }, { role: "user", content: sparkContent(route.provider, refs, line) }] as unknown as ChatMessage[];
+    const messages = [{ role: "system", content: SPARK_SYSTEM }, { role: "user", content: sparkContent(route.provider, refs(), line) }] as unknown as ChatMessage[];
     const r = await client.call({ provider: route.provider, model: route.model, effort: "low", max_completion_tokens: 2000, messages, purpose: "interpret_speech", run_id: runId, task_id: null, task_state: null, thread: "side", affinity_key: null });
     const text = String(r.completion.choices[0]?.message?.content ?? "");
     return { provider: route.provider, model: route.model, reading: parseSpark(text), raw: text.slice(0, 600), latency_ms: Math.round(performance.now() - t0), cost_usd: r.row.cost_usd, completion_tokens: r.row.completion_tokens, fallback_reason, error: null as string | null };

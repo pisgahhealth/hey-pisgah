@@ -1,0 +1,3611 @@
+{
+ "run_ids": [
+  "run-r1brtun1",
+  "run-r1brfin1"
+ ],
+ "readers": "Voice Transcribe then the shipped gate; Spark skipped",
+ "clips": [
+  {
+   "id": "H01",
+   "line": "H01",
+   "sha256": "181bf5e05811e16b265e6481c50664327941b27cd7b6414ec6f39dad08c64436",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "okay, chart the temperature at uh thirty seven point eight,",
+    "text": "okay, chart the temperature at uh 37.8,",
+    "latency_ms": 3733,
+    "cost_usd": 0.000368,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_observation",
+      "confidence": 0.95,
+      "words": "okay, chart the temperature at uh 37.8,"
+     }
+    ],
+    "latency_ms": 5198,
+    "cost_usd": 0.004428,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6688,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H02",
+   "line": "H02",
+   "sha256": "f3918e0f6d0bbff9866268f70a719de208c34d2a314b03417538abc0efd2f5f3",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "record pulse eighty eight and respiratory rate eighteen.",
+    "text": "record pulse 88 and respiratory rate 18.",
+    "latency_ms": 3838,
+    "cost_usd": 0.0004,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_observation",
+      "confidence": 0.98,
+      "words": "record pulse 88 and respiratory rate 18."
+     }
+    ],
+    "latency_ms": 4849,
+    "cost_usd": 0.004267,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6261,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H03",
+   "line": "H03",
+   "sha256": "bef1dfe39892086b1ff867b59f8af5a535534c4011fb38c23c31a1486a17b8a1",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "blood pressure is about 140 over 90, please put that down.",
+    "text": "blood pressure is about 140 over 90, please put that down.",
+    "latency_ms": 3177,
+    "cost_usd": 0.00036,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_observation",
+      "confidence": 0.92,
+      "words": "blood pressure is about 140 over 90, please put that down."
+     }
+    ],
+    "latency_ms": 4995,
+    "cost_usd": 0.00411175,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6582,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H04",
+   "line": "H04",
+   "sha256": "1604a925a9f9fd284ee230779916bcacfc35ac02d0912db2d9ccbe464a6ecd58",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "uhuh chart oxygen saturation it's about ninety six percent",
+    "text": "uhuh chart SpO2 it's about 96 percent",
+    "latency_ms": 4293,
+    "cost_usd": 0.000288,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_observation",
+      "confidence": 0.92,
+      "words": "uhuh chart SpO2 it's about 96 percent"
+     }
+    ],
+    "latency_ms": 2803,
+    "cost_usd": 0.00460525,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5332,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H05",
+   "line": "H05",
+   "sha256": "d444f64266bda65d35f641e9f5cd852b5bc4aecdaf365b91f8d02994b6f956c6",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "please pleaseplease please page the nurse in charge to come to bed four nurse would you please come to bed four",
+    "text": "please pleaseplease please page the nurse in charge to come to bed four nurse would you please come to bed four",
+    "latency_ms": 3531,
+    "cost_usd": 0.000404,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "page_staff",
+      "confidence": 0.95,
+      "words": "please pleaseplease please page the nurse in charge to come to bed four nurse would you please come to bed four"
+     }
+    ],
+    "latency_ms": 4573,
+    "cost_usd": 0.004772,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6246,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H06",
+   "line": "H06",
+   "sha256": "548d4931e35cd67a47f530378740f4dcad1ebca11359abb1dd71e63fcddf4e5b",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "uh we need to admit this patient to uh well we need the patient to be stable and then we can move them to the female medical ward. It's quite urgent but let them be stable in the emergency ward first.",
+    "text": "uh we need to admit this patient to uh well we need the patient to be stable and then we can move them to the female medical ward. It's quite urgent but let them be stable in the emergency ward first.",
+    "latency_ms": 5602,
+    "cost_usd": 0.000784,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "conditional",
+      "kind": null,
+      "confidence": null,
+      "words": "uh we need to admit this patient to uh well we need the patient to be stable and then we can move them to the female medical ward. It's quite urgent but let them be stable in the emergency ward first."
+     }
+    ],
+    "latency_ms": 5500,
+    "cost_usd": 0.005596,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6516,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H07",
+   "line": "H07",
+   "sha256": "d5c4853f9da5678ac3262ba51f3d44362a7d69b8b8aa888740cf426985d5bedd",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "and please book a follow up in the surgical surgical clinic in two weeks you can also invite come check her head",
+    "text": "and please book a follow up in the surgical clinic in two weeks you can also invite come check her head",
+    "latency_ms": 3143,
+    "cost_usd": 0.000412,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "schedule_follow_up",
+      "confidence": 0.92,
+      "words": "and please book a follow up in the surgical clinic in two weeks"
+     },
+     {
+      "class": "unclear",
+      "kind": null,
+      "confidence": null,
+      "words": "you can also invite come check her head"
+     }
+    ],
+    "latency_ms": 5164,
+    "cost_usd": 0.00556125,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5248,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H08",
+   "line": "H08",
+   "sha256": "b9a4ca097b82382e460cda3ee79ed9ad97cca3cc8f42e6c5e7df45c607684e5c",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "um for the round notes um she seems to be tolerating her updates uh particularly antibiotics, an examination she's quite alert and her abdomen is soft.",
+    "text": "um for the round notes um she seems to be tolerating her updates uh particularly antibiotics, an examination she's quite alert and her abdomen is soft.",
+    "latency_ms": 5592,
+    "cost_usd": 0.00082,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_note",
+      "confidence": 0.78,
+      "words": "um for the round notes um she seems to be tolerating her updates uh particularly antibiotics, an examination she's quite alert and her abdomen is soft."
+     }
+    ],
+    "latency_ms": 6181,
+    "cost_usd": 0.005859,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.4443,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H09",
+   "line": "H09",
+   "sha256": "673ec3b2dd579d869b66b2a70f4aa8ef473450374d944c6fa08b230272156184",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "I'm observing she's quite alert and abdomen is is quite soft.",
+    "text": "I'm observing she's quite alert and abdomen is quite soft.",
+    "latency_ms": 2882,
+    "cost_usd": 0.00028,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "I'm observing she's quite alert and abdomen is quite soft."
+     }
+    ],
+    "latency_ms": 1831,
+    "cost_usd": 0.00392825,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5586,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H10",
+   "line": "H10",
+   "sha256": "9eb70068805f81e07f0cfdc1fa393cec0ae725d2a2bfc2d64751b35087e6c982",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "uh there is mark pointing in both ankles, hmm.",
+    "text": "uh there is mark pointing in both ankles, hmm.",
+    "latency_ms": 2854,
+    "cost_usd": 0.000412,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "uh there is mark pointing in both ankles, hmm."
+     }
+    ],
+    "latency_ms": 3576,
+    "cost_usd": 0.0044365,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5898,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H11",
+   "line": "H11",
+   "sha256": "dce12aff40365336663e6611c816c9bebcc5f07ed4f7ad2bf41551815a105551",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "checking our heart, the heart sounds one and two, no murmur.",
+    "text": "checking our heart, the heart sounds one and two, no murmur.",
+    "latency_ms": 2505,
+    "cost_usd": 0.00038,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "checking our heart, the heart sounds one and two, no murmur."
+     }
+    ],
+    "latency_ms": 2812,
+    "cost_usd": 0.00414575,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.442,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H12",
+   "line": "H12",
+   "sha256": "10c355ec1792ba1c43ac22cc303a3ded454cc8a79870b549823f80be4973f5ff",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "social is five point and the conjunctiva appear two.",
+    "text": "social is five point and the conjunctiva appear two.",
+    "latency_ms": 3446,
+    "cost_usd": 0.00042,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "social is five point and the conjunctiva appear two."
+     }
+    ],
+    "latency_ms": 5843,
+    "cost_usd": 0.00456275,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5335,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H13",
+   "line": "H13",
+   "sha256": "38e819068035b75c05cc30892c39774c0d627b878f4207d4f2f614ea4a6496b7",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "uh nurse please check her blood sugar now now it's very important so we can record that",
+    "text": "uh nurse please check her blood sugar now it's very important so we can record that",
+    "latency_ms": 2603,
+    "cost_usd": 0.000336,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "question_to_staff",
+      "kind": null,
+      "confidence": null,
+      "words": "uh nurse please check her blood sugar now it's very important so we can record that"
+     }
+    ],
+    "latency_ms": 6623,
+    "cost_usd": 0.004416,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5016,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H14",
+   "line": "H14",
+   "sha256": "1d8842270bf20cd75696ab62afc210d508889780b880c167c1455a3df329d46c",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "please can someone bring the ECG machine to bed four please be quick",
+    "text": "please can someone bring the ECG machine to bed four please be quick",
+    "latency_ms": 3374,
+    "cost_usd": 0.000328,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "question_to_staff",
+      "kind": null,
+      "confidence": null,
+      "words": "please can someone bring the ECG machine to bed four please be quick"
+     }
+    ],
+    "latency_ms": 5895,
+    "cost_usd": 0.0047735,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6468,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H15",
+   "line": "H15",
+   "sha256": "78b81cf405c5cb11b9c190d2d51a13ae4474c1c2ec0c066e2d87af33e993c3a1",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "uhuh Emeka did the laps and you you rear and the electrolyte yet yet. Please check them they should be a point of care machine there please be fast. It's very important.",
+    "text": "uhuh Emeka did the laps and you rear and the electrolyte yet. Please check them they should be a point of care machine there please be fast. It's very important.",
+    "latency_ms": 4364,
+    "cost_usd": 0.000544,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": null,
+      "confidence": 0.9,
+      "words": "uhuh Emeka did the laps and you rear and the electrolyte yet. Please check them they should be a point of care machine there please be fast. It's very important."
+     }
+    ],
+    "latency_ms": 5610,
+    "cost_usd": 0.00584525,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6845,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H16",
+   "line": "H16",
+   "sha256": "ee493ec493a948662d455b0de2d379286299534e470bc926d288a2c6058cbb6a",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "it gets high chest x-ray it's it's also very important um",
+    "text": "it gets high chest x-ray it's also very important um",
+    "latency_ms": 2965,
+    "cost_usd": 0.000404,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "it gets high chest x-ray it's also very important um"
+     }
+    ],
+    "latency_ms": 3995,
+    "cost_usd": 0.00427375,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6332,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H17",
+   "line": "H17",
+   "sha256": "76e33dfd903721a3747a7f8931f828f07059f781223506d5b0293bd27490da8b",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "uh please would you mind looking at me Mrs. Okun how many times did you pass through yesterday",
+    "text": "uh please would you mind looking at me Mrs. Okun how many times did you pass through yesterday",
+    "latency_ms": 3671,
+    "cost_usd": 0.000464,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "question_to_staff",
+      "kind": null,
+      "confidence": null,
+      "words": "uh please would you mind looking at me Mrs. Okun how many times did you pass through yesterday"
+     }
+    ],
+    "latency_ms": 3428,
+    "cost_usd": 0.0047695,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.694,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H18",
+   "line": "H18",
+   "sha256": "cbaa6960fe85f940d753417d9bc62541b93d096b940c0a1a106adaa2c99927b0",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "is I'm also going to try to press your stomach please tell me if it hurts and where it hurts",
+    "text": "is I'm also going to try to press your stomach please tell me if it hurts and where it hurts",
+    "latency_ms": 3578,
+    "cost_usd": 0.00038,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "is I'm also going to try to press your stomach please tell me if it hurts and where it hurts"
+     }
+    ],
+    "latency_ms": 1427,
+    "cost_usd": 0.003775,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6855,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H19",
+   "line": "H19",
+   "sha256": "8fad53822e1d3d46ca75a8d9b6249909a26cb283405370fb76a9d40a54976093",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "also can you lift your right leg for me oh seems seems to be painful okay that's fine",
+    "text": "also can you lift your right leg for me oh seems to be painful okay that's fine",
+    "latency_ms": 2995,
+    "cost_usd": 0.00042,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "also can you lift your right leg for me oh seems to be painful okay that's fine"
+     }
+    ],
+    "latency_ms": 3755,
+    "cost_usd": 0.00399225,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5858,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H20",
+   "line": "H20",
+   "sha256": "aeaf6117ca99fac14028440972533aef7b28271bb2ca4e39ac063b048dd15e46",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "okay so we're just going to try to keep you stable but we'll have to keep you for for tonight and watch you closely um if you're stable tomorrow we'll move you to to one of the medical wards",
+    "text": "okay so we're just going to try to keep you stable but we'll have to keep you for tonight and watch you closely um if you're stable tomorrow we'll move you to one of the medical wards",
+    "latency_ms": 5329,
+    "cost_usd": 0.000648,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "okay so we're just going to try to keep you stable but we'll have to keep you for tonight and watch you closely"
+     },
+     {
+      "class": "conditional",
+      "kind": null,
+      "confidence": null,
+      "words": "um if you're stable tomorrow we'll move you to one of the medical wards"
+     }
+    ],
+    "latency_ms": 12644,
+    "cost_usd": 0.005299,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.7095,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H21",
+   "line": "H21",
+   "sha256": "49a77a8b3fdb115c8da8f86b2257d571847c1f0ac998c569eba256d11730c0b8",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "The pause of 104. And uh her blood pressure is 160 over 100. This is quite high.",
+    "text": "The pulse of 104. And uh her blood pressure is 160 over 100. This is quite high.",
+    "latency_ms": 6770,
+    "cost_usd": 0.000868,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_observation",
+      "confidence": 0.95,
+      "words": "The pulse of 104."
+     },
+     {
+      "class": "instruction",
+      "kind": "record_observation",
+      "confidence": 0.95,
+      "words": "And uh her blood pressure is 160 over 100."
+     },
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "This is quite high."
+     }
+    ],
+    "latency_ms": 10077,
+    "cost_usd": 0.0053075,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5349,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H22",
+   "line": "H22",
+   "sha256": "e5e7f91ae77e081bdf4ddcd9dc3a696259fc5f31dece87c527cbb5c0a486d44d",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "so about one sixty over hundred this is high",
+    "text": "so about one 60 over hundred this is high",
+    "latency_ms": 6385,
+    "cost_usd": 0.000464,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_observation",
+      "confidence": 0.62,
+      "words": "so about one 60 over hundred this is high"
+     }
+    ],
+    "latency_ms": 10109,
+    "cost_usd": 0.00551775,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.3528,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H23",
+   "line": "H23",
+   "sha256": "dd5e09d300b32c6428c556cd0ee93ef1c139f02967c7d4b336fa8304dec88181",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "who managed to do a minute surgery for her. Please prepare the mini theater and call the anesthetist. Quickly. Quickly.",
+    "text": "who managed to do a minute surgery for her. Please prepare the mini theater and call the anesthetist. Quickly.",
+    "latency_ms": 4175,
+    "cost_usd": 0.000584,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "who managed to do a minute surgery for her."
+     },
+     {
+      "class": "instruction",
+      "kind": null,
+      "confidence": 0.9,
+      "words": "Please prepare the mini theater"
+     },
+     {
+      "class": "instruction",
+      "kind": "page_staff",
+      "confidence": 0.92,
+      "words": "and call the anesthetist."
+     },
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "Quickly."
+     }
+    ],
+    "latency_ms": 6411,
+    "cost_usd": 0.0058145,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5248,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H24",
+   "line": "H24",
+   "sha256": "1d1f8ed9e974bc8d3c33021acf64103a77c576e6ee89c1c9e4f2b92abdb672d8",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "oh please forgive me I i think the last century was wrong um i think the temperature is about 38.5 instead yeah i think that's wrong",
+    "text": "oh please forgive me I i think the last century was wrong um i think the temperature is about 38.5 instead yeah i think that's wrong",
+    "latency_ms": 4207,
+    "cost_usd": 0.000784,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "correction",
+      "kind": "record_observation",
+      "confidence": 0.85,
+      "words": "oh please forgive me I i think the last century was wrong um i think the temperature is about 38.5 instead yeah i think that's wrong"
+     }
+    ],
+    "latency_ms": 6496,
+    "cost_usd": 0.005601,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6165,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H25",
+   "line": "H25",
+   "sha256": "8ae3a354cf00d6149c6d6a6a31fe9c7393f8a204843a353a820a8db74f772ed0",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "give me five hundred milliliters of now. Give her five hundred milligrams of paracetamol now.",
+    "text": "give me 500 milliliters of now. Give her 500 milligrams of paracetamol now.",
+    "latency_ms": 7847,
+    "cost_usd": 0.000968,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "unclear",
+      "kind": null,
+      "confidence": null,
+      "words": "give me 500 milliliters of now."
+     },
+     {
+      "class": "instruction",
+      "kind": null,
+      "confidence": 0.92,
+      "words": "Give her 500 milligrams of paracetamol now."
+     }
+    ],
+    "latency_ms": 6727,
+    "cost_usd": 0.0065975,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5188,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H26",
+   "line": "H26",
+   "sha256": "6695272f948d1902602280d1145cd88c71cd5da719a80cd813005e7c68b4dbc0",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "Okay, I think I think we should start with uh uh I think we should start metronidazole as well",
+    "text": "Okay, I think I think we should start with uh I think we should start metronidazole as well",
+    "latency_ms": 3599,
+    "cost_usd": 0.000472,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": null,
+      "confidence": 0.7,
+      "words": "Okay, I think I think we should start with uh I think we should start metronidazole as well"
+     }
+    ],
+    "latency_ms": 3979,
+    "cost_usd": 0.00527775,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5947,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H27",
+   "line": "H27",
+   "sha256": "c9b84a5f27ff596cc69c79257ce44fca25b06ed55d1d5c6b3a80ca9a8f991058",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "please we need to set out for abdominal x-ray it's very important but let's keep our stable first",
+    "text": "please we need to set out for abdominal x-ray it's very important but let's keep our stable first",
+    "latency_ms": 4678,
+    "cost_usd": 0.00078,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": null,
+      "confidence": 0.85,
+      "words": "please we need to set out for abdominal x-ray it's very important"
+     },
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "but let's keep our stable first"
+     }
+    ],
+    "latency_ms": 9111,
+    "cost_usd": 0.00687625,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.2655,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H28",
+   "line": "H28",
+   "sha256": "de1da1516b1af92515da29f65dad2089a29159f3d493b20866e9eb80b0e803cb",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "uh doctor pulse is pulse is now hundred and twelve",
+    "text": "uh doctor pulse is pulse is now hundred and 12",
+    "latency_ms": 1811,
+    "cost_usd": 0.00018,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "uh doctor pulse is pulse is now hundred and 12"
+     }
+    ],
+    "latency_ms": 3705,
+    "cost_usd": 0.00454575,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.4975,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H29",
+   "line": "H29",
+   "sha256": "e61160b69c02e215b98b3c6fccc02bc072f9250dae47ed17562eb3c4d9f4967d",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "The blood pressure last I checked is about 90 over 60.",
+    "text": "The blood pressure last I checked is about 90 over 60.",
+    "latency_ms": 2355,
+    "cost_usd": 0.000312,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "The blood pressure last I checked is about 90 over 60."
+     }
+    ],
+    "latency_ms": 2313,
+    "cost_usd": 0.00402125,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5447,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H30",
+   "line": "H30",
+   "sha256": "77673887c8e4734fa0d601d5491bd60d98d9ae26547200dc3d95332261f15d89",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "uh she also has 200 miles miles of urine since midnight.",
+    "text": "uh she also has 200 miles of urine since midnight.",
+    "latency_ms": 2586,
+    "cost_usd": 0.000268,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "unclear",
+      "kind": null,
+      "confidence": null,
+      "words": "uh she also has 200 miles of urine since midnight."
+     }
+    ],
+    "latency_ms": 6863,
+    "cost_usd": 0.00664525,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5598,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H31",
+   "line": "H31",
+   "sha256": "885f5b13a85925d1e02dd6f3622917c69505b504fb7ff8d5579a3673d7861834",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "and i think according temperature is 38.2",
+    "text": "and i think according temperature is 38.2",
+    "latency_ms": 1768,
+    "cost_usd": 0.000148,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "unclear",
+      "kind": null,
+      "confidence": null,
+      "words": "and i think according temperature is 38.2"
+     }
+    ],
+    "latency_ms": 5018,
+    "cost_usd": 0.00557725,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.4178,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H32",
+   "line": "H32",
+   "sha256": "de2e301d47169084aa7fbced84a9759117565f926ca57e1b53e3b2898506cc4a",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "we need to add a camp we need to update our care plan for four hourly observation we need to observe try and observe the patient every four hours",
+    "text": "we need to add a camp we need to update our care plan for four hourly observation we need to observe try and observe the patient every four hours",
+    "latency_ms": 3091,
+    "cost_usd": 0.000372,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": null,
+      "confidence": 0.85,
+      "words": "we need to add a camp we need to update our care plan for four hourly observation we need to observe try and observe the patient every four hours"
+     }
+    ],
+    "latency_ms": 5365,
+    "cost_usd": 0.00586875,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5181,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H33",
+   "line": "H33",
+   "sha256": "03661098ee13f48ef134e9411a79b318324d7c3b5a471c4d54f407a10d4a147a",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "Doctor that will be about seven oh",
+    "text": "Doctor that will be about seven oh",
+    "latency_ms": 1598,
+    "cost_usd": 0.000088,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "Doctor that will be about seven oh"
+     }
+    ],
+    "latency_ms": 8490,
+    "cost_usd": 0.00565425,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.4732,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H34",
+   "line": "H34",
+   "sha256": "e5800bf90b4131503f098da313f6250964f141bbc1bd5eca696c3a1ca4ddea88",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "before now, I even tried to take my my brother gave me metformin five hundred twice a day",
+    "text": "before now, I even tried to take my brother gave me metformin 500 twice a day",
+    "latency_ms": 3336,
+    "cost_usd": 0.000448,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "before now, I even tried to take my brother gave me metformin 500 twice a day"
+     }
+    ],
+    "latency_ms": 4765,
+    "cost_usd": 0.00411375,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.548,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H35",
+   "line": "H35",
+   "sha256": "aac01ad5072c1d761c09db1049811a749a7107bcc16c7f0330a04f875a7a6eb7",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "the fever has been on and off for one week.",
+    "text": "the fever has been on and off for one week.",
+    "latency_ms": 3452,
+    "cost_usd": 0.000148,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "the fever has been on and off for one week."
+     }
+    ],
+    "latency_ms": 4402,
+    "cost_usd": 0.0050375,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6028,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H36",
+   "line": "H36",
+   "sha256": "18e9c0cd6e22a5291e65c324de3db5e499d95a8c511aeb905f865c310654c1cc",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "but it hurts more when I breathe in",
+    "text": "but it hurts more when I breathe in",
+    "latency_ms": 2565,
+    "cost_usd": 0.000172,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "but it hurts more when I breathe in"
+     }
+    ],
+    "latency_ms": 2830,
+    "cost_usd": 0.0040405,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6433,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H37",
+   "line": "H37",
+   "sha256": "863934dc13f4ef1c2de33e8437534920d5d6a35e8ea759092ad25e9f5ea43703",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "i think that i mark it on Tuesday hmm",
+    "text": "i think that i mark it on Tuesday hmm",
+    "latency_ms": 1952,
+    "cost_usd": 0.000136,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "i think that i mark it on Tuesday hmm"
+     }
+    ],
+    "latency_ms": 3082,
+    "cost_usd": 0.004145,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5082,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H38",
+   "line": "H38",
+   "sha256": "1b9d17bd81637b0c3e34b77150e360b55a52f50e08d88c657ea71be65b3bcf3b",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "Well, my pain is better now.",
+    "text": "Well, my pain is better now.",
+    "latency_ms": 1811,
+    "cost_usd": 0.000088,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "Well, my pain is better now."
+     }
+    ],
+    "latency_ms": 1211,
+    "cost_usd": 0.003525,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5065,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H40",
+   "line": "H40",
+   "sha256": "86da21862938f2d8bd5c1d65915ec48d5db959520de29ae5447d5c15283b567b",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "and doctor he has he has been managing he has been managing diabetes for ten years.",
+    "text": "and doctor he has he has been managing he has been managing diabetes for 10 years.",
+    "latency_ms": 3180,
+    "cost_usd": 0.000232,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "and doctor he has he has been managing he has been managing diabetes for 10 years."
+     }
+    ],
+    "latency_ms": 3214,
+    "cost_usd": 0.00397525,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.3247,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H41",
+   "line": "H41",
+   "sha256": "d5c76002f0f77de69a1ce4f5e2899a44884d14f2b0b848384ec110f3a67caf11",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "sheshe was so confused this morning she didn't even know my name can you imagine doctor",
+    "text": "sheshe was so confused this morning she didn't even know my name can you imagine doctor",
+    "latency_ms": 3069,
+    "cost_usd": 0.000344,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "sheshe was so confused this morning she didn't even know my name can you imagine doctor"
+     }
+    ],
+    "latency_ms": 4599,
+    "cost_usd": 0.00505175,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.3999,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H42",
+   "line": "H42",
+   "sha256": "86d235de314af7f64ee63a1afbce739b42f6056b9b80f63057d8dee1486182b3",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "doctor, hope you don't need any surgery. surgery. Hope she will not need any surgery.",
+    "text": "doctor, hope you don't need any surgery. Hope she will not need any surgery.",
+    "latency_ms": 3242,
+    "cost_usd": 0.000332,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "doctor, hope you don't need any surgery. Hope she will not need any surgery."
+     }
+    ],
+    "latency_ms": 3363,
+    "cost_usd": 0.00413125,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.295,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H43",
+   "line": "H43",
+   "sha256": "211d040c58309464c39f31b86ee8bf2c3e36b73e91077444d58df7d7fcca70d6",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "okay, put it, charge the pulse as 90, charge the pulse as 90. since morning",
+    "text": "okay, put it, charge the pulse as 90, charge the pulse as 90. since morning",
+    "latency_ms": 6294,
+    "cost_usd": 0.000768,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_observation",
+      "confidence": 0.95,
+      "words": "okay, put it, charge the pulse as 90, charge the pulse as 90."
+     },
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "since morning"
+     }
+    ],
+    "latency_ms": 6791,
+    "cost_usd": 0.004823,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.4517,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H45",
+   "line": "H45",
+   "sha256": "7c6be224ea35d1ab096d2a0311d61c9fc3b4cfeaeea435056b7f8747194f183c",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "How blood pressure is even one fifty over ninety five fifty yes go on have fun have fun have fun i'm not tired the the hospital just busy today",
+    "text": "How blood pressure is even one 50 over 95 50 yes go on have fun have fun have fun i'm not tired the hospital just busy today",
+    "latency_ms": 5361,
+    "cost_usd": 0.000748,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "How blood pressure is even one 50 over 95 50 yes go on have fun have fun have fun i'm not tired the hospital just busy today"
+     }
+    ],
+    "latency_ms": 11235,
+    "cost_usd": 0.00680925,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.4899,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H46",
+   "line": "H46",
+   "sha256": "33537f43bda27262c36e5ee9cab00d3a24016851bfc252dc62ed1a26c369bebd",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "uh I think we need to invite the surgical team to come and review",
+    "text": "uh I think we need to invite the surgical team to come and review",
+    "latency_ms": 3574,
+    "cost_usd": 0.00038,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "page_staff",
+      "confidence": 0.82,
+      "words": "uh I think we need to invite the surgical team to come and review"
+     }
+    ],
+    "latency_ms": 8369,
+    "cost_usd": 0.004864,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5996,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H47",
+   "line": "H47",
+   "sha256": "66b6f3887f01cc9efbe6c0d2a3420b85626d4d074d40ca378985faa8e3d5e31e",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "Doctor can I go home please I want to go home today oh please. don't worry let's just get you stable eh let me finish this and get the surgical team we need to evaluate the surgical department come and review your case",
+    "text": "Doctor can I go home please I want to go home today oh please. don't worry let's just get you stable eh let me finish this and get the surgical team we need to evaluate the surgical department come and review your case",
+    "latency_ms": 5486,
+    "cost_usd": 0.000792,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "Doctor can I go home please I want to go home today oh please."
+     },
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "don't worry let's just get you stable eh let me finish this and get the surgical team"
+     },
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "we need to evaluate the surgical department come and review your case"
+     }
+    ],
+    "latency_ms": 7713,
+    "cost_usd": 0.0063635,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6666,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "H48",
+   "line": "H48",
+   "sha256": "495b6a28469ece6f4e41c0184015a4d64a95681ead1d18003aab67b5c3c3c42d",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "doctor, this what's the what's the sugar? sugar? Okay, oh no sorry I didn't mean doctor I mean nurse nurse what's the sugar? Eh doctor it's about four point two okay that's fine thank you",
+    "text": "doctor, this what's the what's the sugar? Okay, oh no sorry I didn't mean doctor I mean nurse what's the sugar? Eh doctor it's about 4.2 okay that's fine thank you",
+    "latency_ms": 7052,
+    "cost_usd": 0.001004,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "question_to_staff",
+      "kind": null,
+      "confidence": null,
+      "words": "doctor, this what's the what's the sugar?"
+     },
+     {
+      "class": "question_to_staff",
+      "kind": null,
+      "confidence": null,
+      "words": "Okay, oh no sorry I didn't mean doctor I mean nurse what's the sugar?"
+     },
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "Eh doctor it's about 4.2 okay that's fine thank you"
+     }
+    ],
+    "latency_ms": 5339,
+    "cost_usd": 0.00586725,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6025,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T01",
+   "line": "T01",
+   "sha256": "4ab634f4d6a5f178e1f1248ed141a95e1566ace758011032d0c34529decf8e8f",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "chart her pulse at ninety-two.",
+    "text": "chart her pulse at 92.",
+    "latency_ms": 5020,
+    "cost_usd": 0.0003,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_observation",
+      "confidence": 0.99,
+      "words": "chart her pulse at 92."
+     }
+    ],
+    "latency_ms": 3063,
+    "cost_usd": 0.00380425,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.4586,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T02",
+   "line": "T02",
+   "sha256": "dc36dd5ab991b1adc970621ffb7d85f1b229cb705ee68a003007623479951862",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "record her blood pressure one thirty over eighty five",
+    "text": "record her blood pressure one 30 over 85",
+    "latency_ms": 3825,
+    "cost_usd": 0.000308,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_observation",
+      "confidence": 0.95,
+      "words": "record her blood pressure one 30 over 85"
+     }
+    ],
+    "latency_ms": 4682,
+    "cost_usd": 0.00465075,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6459,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T03",
+   "line": "T03",
+   "sha256": "d5274d1215b26a02c1d375acc02e571738ff08fbf6db426d1b4edc6f633a8d5b",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "page thepediatric surgical registrar to review her today.",
+    "text": "page thepediatric surgical registrar to review her today.",
+    "latency_ms": 3522,
+    "cost_usd": 0.000268,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "page_staff",
+      "confidence": 0.9,
+      "words": "page thepediatric surgical registrar to review her today."
+     }
+    ],
+    "latency_ms": 5963,
+    "cost_usd": 0.0051225,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5099,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T04",
+   "line": "T04",
+   "sha256": "5358f3cf5655378ef05c4936155e6c84423f0f1b44ef1e00853a3930bb66b5e3",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "write a progress note abdomen abdomen soft mild tenderness on the right",
+    "text": "write a progress note abdomen soft mild tenderness on the right",
+    "latency_ms": 3240,
+    "cost_usd": 0.000372,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_note",
+      "confidence": 0.95,
+      "words": "write a progress note abdomen soft mild tenderness on the right"
+     }
+    ],
+    "latency_ms": 2368,
+    "cost_usd": 0.004394,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6638,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T05",
+   "line": "T05",
+   "sha256": "74ee31777c2e43c00991285b8090ec188d36a7fcdc2104254003bbb086a713d7",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "just disclaim both sides there is no other sound",
+    "text": "just disclaim both sides there is no other sound",
+    "latency_ms": 4703,
+    "cost_usd": 0.00074,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "just disclaim both sides there is no other sound"
+     }
+    ],
+    "latency_ms": 8563,
+    "cost_usd": 0.0039155,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.476,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T06",
+   "line": "T06",
+   "sha256": "763f91c56427ceb38fc897feb2c043b754244aad2f7135ddf2c1ee067f13a88a",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "capillary refuse under two seconds and she looks well hydrated though.",
+    "text": "capillary refuse under two seconds and she looks well hydrated though.",
+    "latency_ms": 3175,
+    "cost_usd": 0.000336,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "capillary refuse under two seconds and she looks well hydrated though."
+     }
+    ],
+    "latency_ms": 10584,
+    "cost_usd": 0.004785,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5507,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T07",
+   "line": "T07",
+   "sha256": "0a30ad4e4f8ebd04caeaaa9d731ba871182bb612b820ba84331ceee9e399ef10",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "um Nos can you bring the drip stand over here?",
+    "text": "um Nos can you bring the drip stand over here?",
+    "latency_ms": 2799,
+    "cost_usd": 0.000308,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "question_to_staff",
+      "kind": null,
+      "confidence": null,
+      "words": "um Nos can you bring the drip stand over here?"
+     }
+    ],
+    "latency_ms": 5201,
+    "cost_usd": 0.003992,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5984,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T08",
+   "line": "T08",
+   "sha256": "d1d100340810dc1de2e517c7d2c5315fc806ecd55387e6825c37df95f23ea9b8",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "Hey meta, please call the lab and ask about her blood counts.",
+    "text": "Hey meta, please call the lab and ask about her blood counts.",
+    "latency_ms": 2995,
+    "cost_usd": 0.000308,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": null,
+      "confidence": 0.9,
+      "words": "Hey meta, please call the lab and ask about her blood counts."
+     }
+    ],
+    "latency_ms": 2784,
+    "cost_usd": 0.00460775,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5595,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T09",
+   "line": "T09",
+   "sha256": "202fc5aa5ee2bdae4bd96dc0322c9e34a0a987e77b45bc91c963c8bb4b47db51",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "Mrs. Okon, does it hurt when I press here? Please could you answer?",
+    "text": "Mrs. Okon, does it hurt when I press here? Please could you answer?",
+    "latency_ms": 3817,
+    "cost_usd": 0.00042,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "question_to_staff",
+      "kind": null,
+      "confidence": null,
+      "words": "Mrs. Okon, does it hurt when I press here? Please could you answer?"
+     }
+    ],
+    "latency_ms": 3369,
+    "cost_usd": 0.0047105,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6771,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T10",
+   "line": "T10",
+   "sha256": "e3eb39127d3c2be9c97bcec7e4abe1a7c75393ec9645f9025026e3764a4f63a0",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "okay uh would you mind please take a deep breath in for me and out",
+    "text": "okay uh would you mind please take a deep breath in for me and out",
+    "latency_ms": 3715,
+    "cost_usd": 0.000484,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "okay uh would you mind please take a deep breath in for me and out"
+     }
+    ],
+    "latency_ms": 2677,
+    "cost_usd": 0.003685,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6884,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T11",
+   "line": "T11",
+   "sha256": "3d34d43facd1cdb122a8f4d9037b51d1b2e959c12bcb610a10f1647c15c69d8d",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "uh chart the temperature of thirty eight point one",
+    "text": "uh chart the temperature of 38.1",
+    "latency_ms": 2125,
+    "cost_usd": 0.000376,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_observation",
+      "confidence": 0.98,
+      "words": "uh chart the temperature of 38.1"
+     }
+    ],
+    "latency_ms": 1396,
+    "cost_usd": 0.003774,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.4281,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T12",
+   "line": "T12",
+   "sha256": "e618e7756c608f3036d26d7f307e5a3b243b31a48fe6bc906b8a852c78e393bd",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "hey Pascal we need to admit this patient to the medical ward. We need to admit this patient right now, it's very important.",
+    "text": "hey Pascal we need to admit this patient to the medical ward. We need to admit this patient right now, it's very important.",
+    "latency_ms": 4649,
+    "cost_usd": 0.000724,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "request_admission",
+      "confidence": 0.85,
+      "words": "hey Pascal we need to admit this patient to the medical ward."
+     },
+     {
+      "class": "instruction",
+      "kind": "request_admission",
+      "confidence": 0.88,
+      "words": "We need to admit this patient right now, it's very important."
+     }
+    ],
+    "latency_ms": 20005,
+    "cost_usd": 0.008911,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5304,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T13",
+   "line": "T13",
+   "sha256": "f3be5678c1f5c737b89ae0e0c8e89cb66983c07b63539c2d93d28ccf8f3f497c",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "uh loss we need to start here on um on IV cefitriaxone um and give her one gram twice a a day.",
+    "text": "uh loss we need to start here on um on IV cefitriaxone um and give her one gram twice a a day.",
+    "latency_ms": 4778,
+    "cost_usd": 0.000908,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": null,
+      "confidence": 0.92,
+      "words": "uh loss we need to start here on um on IV cefitriaxone um and give her one gram twice a a day."
+     }
+    ],
+    "latency_ms": 9995,
+    "cost_usd": 0.00438175,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6091,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T14",
+   "line": "T14",
+   "sha256": "13b156cc77dc52e6551fc85368f308af103990f77daf0d622ec40b917418a0f5",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "Doctor, how such saturation Doctor, what's the saturation is in 94 percent on one air.",
+    "text": "Doctor, how such saturation Doctor, what's the saturation is in 94 percent on one air.",
+    "latency_ms": 5189,
+    "cost_usd": 0.000996,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "question_to_staff",
+      "kind": null,
+      "confidence": null,
+      "words": "Doctor, how such saturation Doctor, what's the saturation is in 94 percent on one air."
+     }
+    ],
+    "latency_ms": 10743,
+    "cost_usd": 0.005549,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.3111,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T15",
+   "line": "T15",
+   "sha256": "661da2c18698b54c8ebc228f2c20ed5d7ab2e1b694d00577b5aafa39fa7f4629",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "record that she passed during this morning. it's very important the relative said she passed urine urine this morning",
+    "text": "record that she passed during this morning. it's very important the relative said she passed urine this morning",
+    "latency_ms": 4418,
+    "cost_usd": 0.000588,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_note",
+      "confidence": 0.85,
+      "words": "record that she passed during this morning. it's very important the relative said she passed urine this morning"
+     }
+    ],
+    "latency_ms": 8530,
+    "cost_usd": 0.006498,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.3628,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T16",
+   "line": "T16",
+   "sha256": "7b48c6c3d0037a0313d971e5061ba38726f6885ce5f2acc66c05eaeb32e8e18b",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "uh it's not that three days ago doctor um the pain moves to my back",
+    "text": "uh it's not that three days ago doctor um the pain moves to my back",
+    "latency_ms": 2909,
+    "cost_usd": 0.000308,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "uh it's not that three days ago doctor um the pain moves to my back"
+     }
+    ],
+    "latency_ms": 2982,
+    "cost_usd": 0.00422775,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5679,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T17",
+   "line": "T17",
+   "sha256": "809661dab4dc1a751aeffeef953693533a89a706591b51ac4b2651338a0e2ded",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "my temperature at home was very high last night i was just hot but i don't know the number",
+    "text": "my temperature at home was very high last night i was just hot but i don't know the number",
+    "latency_ms": 3798,
+    "cost_usd": 0.000348,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "my temperature at home was very high last night i was just hot but i don't know the number"
+     }
+    ],
+    "latency_ms": 1887,
+    "cost_usd": 0.0038715,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5727,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T18",
+   "line": "T18",
+   "sha256": "7a83876afe509a559afb8f1f467a3523a469561d00becb77944b865069c0ba09",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "i also uh i'm i'm allergic to penicillin oh please",
+    "text": "i also uh i'm allergic to penicillin oh please",
+    "latency_ms": 2792,
+    "cost_usd": 0.000296,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "i also uh i'm allergic to penicillin oh please"
+     }
+    ],
+    "latency_ms": 3639,
+    "cost_usd": 0.00493125,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5882,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T19",
+   "line": "T19",
+   "sha256": "cb5a02694ee481e9ab2c044315b81064f95dd59386837c234c8255c51d1705d7",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "I have not vomited I have not vomited today.",
+    "text": "I have not vomited I have not vomited today.",
+    "latency_ms": 3322,
+    "cost_usd": 0.000492,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "I have not vomited I have not vomited today."
+     }
+    ],
+    "latency_ms": 2331,
+    "cost_usd": 0.00405275,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.3753,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T20",
+   "line": "T20",
+   "sha256": "2dcea670e466c3ffb4b5351d2dabe4433227eaedab2d2b1248a7e20d71ec1263",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "Doctor she has no anything since yesterday morning oh.",
+    "text": "Doctor she has no anything since yesterday morning oh.",
+    "latency_ms": 1852,
+    "cost_usd": 0.00018,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "Doctor she has no anything since yesterday morning oh."
+     }
+    ],
+    "latency_ms": 2080,
+    "cost_usd": 0.003893,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.6294,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T21",
+   "line": "T21",
+   "sha256": "f36f942af002d36de7cc70a90062c76d5865b68475709939c1b833b535f05c0b",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "please we don't have too much money so can we cash when can she when can we get her well so she can go home",
+    "text": "please we don't have too much money so can we cash when can she when can we get her well so she can go home",
+    "latency_ms": 4033,
+    "cost_usd": 0.000384,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "please we don't have too much money so can we cash when can she when can we get her well so she can go home"
+     }
+    ],
+    "latency_ms": 5236,
+    "cost_usd": 0.00599975,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.4525,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T22",
+   "line": "T22",
+   "sha256": "74afd6d1aaac6484c54c01eabfdf8190f074a5decf6b193f5f209154886e8a0a",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "uh check the respiratory the respiratory rate at uh twenty. I just feel I just feel feel so tired all the time.",
+    "text": "uh check the respiratory the respiratory rate at uh 20. I just feel I just feel so tired all the time.",
+    "latency_ms": 6061,
+    "cost_usd": 0.000616,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_observation",
+      "confidence": 0.92,
+      "words": "uh check the respiratory the respiratory rate at uh 20."
+     },
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "I just feel I just feel so tired all the time."
+     }
+    ],
+    "latency_ms": 4460,
+    "cost_usd": 0.0045395,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5839,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T23",
+   "line": "T23",
+   "sha256": "bc6e56866b50ccb36183ba410bb9da3948f2ca8ef88281f5301d1137bda5a51a",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "uh put put the pulse down to 110 please can you put the chart let me look at it because i think i don't remember what we did before",
+    "text": "uh put the pulse down to 110 please can you put the chart let me look at it because i think i don't remember what we did before",
+    "latency_ms": 4307,
+    "cost_usd": 0.000696,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "instruction",
+      "kind": "record_observation",
+      "confidence": 0.88,
+      "words": "uh put the pulse down to 110 please"
+     },
+     {
+      "class": "unclear",
+      "kind": null,
+      "confidence": null,
+      "words": "can you put the chart let me look at it because i think i don't remember what we did before"
+     }
+    ],
+    "latency_ms": 12508,
+    "cost_usd": 0.008848,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.4428,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  },
+  {
+   "id": "T24",
+   "line": "T24",
+   "sha256": "3821c1ac0ccb355855b1b35f0083fa7692fb2f10f33ca48f66e7bebbfa3c3926",
+   "transcript": {
+    "model": "muse-voice-transcribe-1.0",
+    "raw": "I've had this cough for two weeks. Hmm, okay.",
+    "text": "I've had this cough for two weeks. Hmm, okay.",
+    "latency_ms": 4007,
+    "cost_usd": 0.000332,
+    "error": null
+   },
+   "gate": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "clauses": [
+     {
+      "class": "aside",
+      "kind": null,
+      "confidence": null,
+      "words": "I've had this cough for two weeks. Hmm, okay."
+     }
+    ],
+    "latency_ms": 4131,
+    "cost_usd": 0.0042325,
+    "repairs": 0,
+    "fallback_reason": null,
+    "error": null
+   },
+   "spark": {
+    "provider": "modal",
+    "model": "meta-models/Muse-Spark-Open-816B-A42B",
+    "reading": null,
+    "raw": "",
+    "latency_ms": 0,
+    "cost_usd": 0,
+    "completion_tokens": 0,
+    "fallback_reason": null,
+    "error": "skipped"
+   },
+   "sv": {
+    "model": "nemo_en_titanet_small",
+    "scores": {
+     "S": 0.5328,
+     "B": 0,
+     "N": 0
+    },
+    "ms": 0
+   }
+  }
+ ]
+}

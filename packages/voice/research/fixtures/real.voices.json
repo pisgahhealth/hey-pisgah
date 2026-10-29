@@ -1,0 +1,451 @@
+{
+ "model": "nemo_en_titanet_small",
+ "template": "mean of E1 to E3, the owner only",
+ "two_cluster_split": "average-linkage cosine on every clip, cut at two, labels unseen",
+ "clips": {
+  "E1": {
+   "who": "S",
+   "cos_owner": 0.8805,
+   "pitch_hz": 109.2,
+   "cluster": "main"
+  },
+  "E2": {
+   "who": "S",
+   "cos_owner": 0.8661,
+   "pitch_hz": 101.9,
+   "cluster": "main"
+  },
+  "E3": {
+   "who": "S",
+   "cos_owner": 0.8265,
+   "pitch_hz": 135,
+   "cluster": "main"
+  },
+  "H01": {
+   "who": "S",
+   "cos_owner": 0.6688,
+   "pitch_hz": 123.1,
+   "cluster": "main"
+  },
+  "H02": {
+   "who": "S",
+   "cos_owner": 0.6261,
+   "pitch_hz": 116.8,
+   "cluster": "main"
+  },
+  "H03": {
+   "who": "S",
+   "cos_owner": 0.6582,
+   "pitch_hz": 110.3,
+   "cluster": "main"
+  },
+  "H04": {
+   "who": "S",
+   "cos_owner": 0.5332,
+   "pitch_hz": 106,
+   "cluster": "main"
+  },
+  "H05": {
+   "who": "S",
+   "cos_owner": 0.6246,
+   "pitch_hz": 123.6,
+   "cluster": "main"
+  },
+  "H06": {
+   "who": "S",
+   "cos_owner": 0.6516,
+   "pitch_hz": 103.9,
+   "cluster": "main"
+  },
+  "H07": {
+   "who": "S",
+   "cos_owner": 0.5248,
+   "pitch_hz": 106,
+   "cluster": "main"
+  },
+  "H08": {
+   "who": "S",
+   "cos_owner": 0.4443,
+   "pitch_hz": 400,
+   "cluster": "main"
+  },
+  "H09": {
+   "who": "S",
+   "cos_owner": 0.5586,
+   "pitch_hz": 114.7,
+   "cluster": "main"
+  },
+  "H10": {
+   "who": "S",
+   "cos_owner": 0.5898,
+   "pitch_hz": 400,
+   "cluster": "main"
+  },
+  "H11": {
+   "who": "S",
+   "cos_owner": 0.442,
+   "pitch_hz": 400,
+   "cluster": "main"
+  },
+  "H12": {
+   "who": "S",
+   "cos_owner": 0.5335,
+   "pitch_hz": 97,
+   "cluster": "main"
+  },
+  "H13": {
+   "who": "S",
+   "cos_owner": 0.5016,
+   "pitch_hz": 131.1,
+   "cluster": "main"
+  },
+  "H14": {
+   "who": "S",
+   "cos_owner": 0.6468,
+   "pitch_hz": 156.9,
+   "cluster": "main"
+  },
+  "H15": {
+   "who": "S",
+   "cos_owner": 0.6845,
+   "pitch_hz": 113.5,
+   "cluster": "main"
+  },
+  "H16": {
+   "who": "S",
+   "cos_owner": 0.6332,
+   "pitch_hz": 113.5,
+   "cluster": "main"
+  },
+  "H17": {
+   "who": "S",
+   "cos_owner": 0.694,
+   "pitch_hz": 136.2,
+   "cluster": "main"
+  },
+  "H18": {
+   "who": "S",
+   "cos_owner": 0.6855,
+   "pitch_hz": 134.5,
+   "cluster": "main"
+  },
+  "H19": {
+   "who": "S",
+   "cos_owner": 0.5858,
+   "pitch_hz": 142.9,
+   "cluster": "main"
+  },
+  "H20": {
+   "who": "S",
+   "cos_owner": 0.7095,
+   "pitch_hz": 106.7,
+   "cluster": "main"
+  },
+  "H21": {
+   "who": "B",
+   "cos_owner": 0.5349,
+   "pitch_hz": 144.1,
+   "cluster": "main"
+  },
+  "H22": {
+   "who": "B",
+   "cos_owner": 0.3528,
+   "pitch_hz": 134.5,
+   "cluster": "main"
+  },
+  "H23": {
+   "who": "B",
+   "cos_owner": 0.5248,
+   "pitch_hz": 146.8,
+   "cluster": "main"
+  },
+  "H24": {
+   "who": "B",
+   "cos_owner": 0.6165,
+   "pitch_hz": 131.1,
+   "cluster": "main"
+  },
+  "H25": {
+   "who": "B",
+   "cos_owner": 0.5188,
+   "pitch_hz": 168.4,
+   "cluster": "main"
+  },
+  "H26": {
+   "who": "B",
+   "cos_owner": 0.5947,
+   "pitch_hz": 183.9,
+   "cluster": "main"
+  },
+  "H27": {
+   "who": "B",
+   "cos_owner": 0.2655,
+   "pitch_hz": 363.6,
+   "cluster": "second"
+  },
+  "H28": {
+   "who": "N",
+   "cos_owner": 0.4975,
+   "pitch_hz": 181.8,
+   "cluster": "main"
+  },
+  "H29": {
+   "who": "N",
+   "cos_owner": 0.5447,
+   "pitch_hz": 177.8,
+   "cluster": "main"
+  },
+  "H30": {
+   "who": "N",
+   "cos_owner": 0.5598,
+   "pitch_hz": 174.9,
+   "cluster": "main"
+  },
+  "H31": {
+   "who": "N",
+   "cos_owner": 0.4178,
+   "pitch_hz": 177.8,
+   "cluster": "main"
+  },
+  "H32": {
+   "who": "N",
+   "cos_owner": 0.5181,
+   "pitch_hz": 186,
+   "cluster": "main"
+  },
+  "H33": {
+   "who": "P",
+   "cos_owner": 0.4732,
+   "pitch_hz": 141.6,
+   "cluster": "main"
+  },
+  "H34": {
+   "who": "P",
+   "cos_owner": 0.548,
+   "pitch_hz": 158.4,
+   "cluster": "main"
+  },
+  "H35": {
+   "who": "P",
+   "cos_owner": 0.6028,
+   "pitch_hz": 164.9,
+   "cluster": "main"
+  },
+  "H36": {
+   "who": "P",
+   "cos_owner": 0.6433,
+   "pitch_hz": 152.4,
+   "cluster": "main"
+  },
+  "H37": {
+   "who": "P",
+   "cos_owner": 0.5082,
+   "pitch_hz": 183.9,
+   "cluster": "main"
+  },
+  "H38": {
+   "who": "P",
+   "cos_owner": 0.5065,
+   "pitch_hz": 163.3,
+   "cluster": "main"
+  },
+  "H40": {
+   "who": "R",
+   "cos_owner": 0.3247,
+   "pitch_hz": 262.3,
+   "cluster": "second"
+  },
+  "H41": {
+   "who": "R",
+   "cos_owner": 0.3999,
+   "pitch_hz": 285.7,
+   "cluster": "second"
+  },
+  "H42": {
+   "who": "R",
+   "cos_owner": 0.295,
+   "pitch_hz": 271.2,
+   "cluster": "second"
+  },
+  "H43": {
+   "who": "S",
+   "cos_owner": 0.4517,
+   "pitch_hz": 205.1,
+   "cluster": "main"
+  },
+  "H45": {
+   "who": "B",
+   "cos_owner": 0.4899,
+   "pitch_hz": 231.9,
+   "cluster": "main"
+  },
+  "H46": {
+   "who": "B",
+   "cos_owner": 0.5996,
+   "pitch_hz": 153.8,
+   "cluster": "main"
+  },
+  "H47": {
+   "who": "P",
+   "cos_owner": 0.6666,
+   "pitch_hz": 190.5,
+   "cluster": "main"
+  },
+  "H48": {
+   "who": "N",
+   "cos_owner": 0.6025,
+   "pitch_hz": 210.5,
+   "cluster": "main"
+  },
+  "T01": {
+   "who": "S",
+   "cos_owner": 0.4586,
+   "pitch_hz": 106.7,
+   "cluster": "main"
+  },
+  "T02": {
+   "who": "S",
+   "cos_owner": 0.6459,
+   "pitch_hz": 105.3,
+   "cluster": "main"
+  },
+  "T03": {
+   "who": "S",
+   "cos_owner": 0.5099,
+   "pitch_hz": 103.2,
+   "cluster": "main"
+  },
+  "T04": {
+   "who": "S",
+   "cos_owner": 0.6638,
+   "pitch_hz": 98.8,
+   "cluster": "main"
+  },
+  "T05": {
+   "who": "S",
+   "cos_owner": 0.476,
+   "pitch_hz": 104.6,
+   "cluster": "main"
+  },
+  "T06": {
+   "who": "S",
+   "cos_owner": 0.5507,
+   "pitch_hz": 103.9,
+   "cluster": "main"
+  },
+  "T07": {
+   "who": "S",
+   "cos_owner": 0.5984,
+   "pitch_hz": 132.8,
+   "cluster": "main"
+  },
+  "T08": {
+   "who": "S",
+   "cos_owner": 0.5595,
+   "pitch_hz": 107.7,
+   "cluster": "main"
+  },
+  "T09": {
+   "who": "S",
+   "cos_owner": 0.6771,
+   "pitch_hz": 155.3,
+   "cluster": "main"
+  },
+  "T10": {
+   "who": "S",
+   "cos_owner": 0.6884,
+   "pitch_hz": 128,
+   "cluster": "main"
+  },
+  "T11": {
+   "who": "B",
+   "cos_owner": 0.4281,
+   "pitch_hz": 152.4,
+   "cluster": "main"
+  },
+  "T12": {
+   "who": "B",
+   "cos_owner": 0.5304,
+   "pitch_hz": 142.9,
+   "cluster": "main"
+  },
+  "T13": {
+   "who": "B",
+   "cos_owner": 0.6091,
+   "pitch_hz": 128,
+   "cluster": "main"
+  },
+  "T14": {
+   "who": "N",
+   "cos_owner": 0.3111,
+   "pitch_hz": 320,
+   "cluster": "second"
+  },
+  "T15": {
+   "who": "N",
+   "cos_owner": 0.3628,
+   "pitch_hz": 280.7,
+   "cluster": "second"
+  },
+  "T16": {
+   "who": "P",
+   "cos_owner": 0.5679,
+   "pitch_hz": 163.3,
+   "cluster": "main"
+  },
+  "T17": {
+   "who": "P",
+   "cos_owner": 0.5727,
+   "pitch_hz": 155.3,
+   "cluster": "main"
+  },
+  "T18": {
+   "who": "P",
+   "cos_owner": 0.5882,
+   "pitch_hz": 179.8,
+   "cluster": "main"
+  },
+  "T19": {
+   "who": "P",
+   "cos_owner": 0.3753,
+   "pitch_hz": 181.8,
+   "cluster": "main"
+  },
+  "T20": {
+   "who": "R",
+   "cos_owner": 0.6294,
+   "pitch_hz": 181.8,
+   "cluster": "main"
+  },
+  "T21": {
+   "who": "R",
+   "cos_owner": 0.4525,
+   "pitch_hz": 170.2,
+   "cluster": "main"
+  },
+  "T22": {
+   "who": "S",
+   "cos_owner": 0.5839,
+   "pitch_hz": 149.5,
+   "cluster": "main"
+  },
+  "T23": {
+   "who": "B",
+   "cos_owner": 0.4428,
+   "pitch_hz": 170.2,
+   "cluster": "main"
+  },
+  "T24": {
+   "who": "P",
+   "cos_owner": 0.5328,
+   "pitch_hz": 183.9,
+   "cluster": "main"
+  },
+  "X01": {
+   "who": "S",
+   "cos_owner": 0.6092,
+   "pitch_hz": 153.8,
+   "cluster": "main"
+  }
+ }
+}
