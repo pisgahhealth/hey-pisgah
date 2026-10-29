@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { DelegationRead, DelegationTeam } from "./delegate.js";
 
 // The one write kind an EMR agent holds in M1, and the shape of its arguments.
 export const OBSERVATION_KIND = "record_observation" as const;
@@ -67,4 +68,10 @@ export interface EmrPort {
   pageHref?(page: string): string | undefined;
   // The watched facts whose change means a result came back, for work held until then.
   resultFacts?(owner: string): readonly string[];
+  // Which side of a delegation this owner's agent follows, the teams it may hand work to, and the reads of a delegation.
+  delegationSide?(owner: string): "none" | "assignee" | "delegator" | "both";
+  delegationOwners?(): readonly string[];
+  delegationTeams?(owner: string): Record<string, DelegationTeam>;
+  delegations?(owner: string, as: "assignee" | "delegator", prov: Provenance): Promise<DelegationRead[]>;
+  delegation?(owner: string, id: string, prov: Provenance): Promise<DelegationRead | null>;
 }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DELEGATION_RULE_KINDS, delegationSummary } from "./delegate.js";
 import { EmrId, OBSERVATION_KIND } from "./port.js";
 
 // Every kind of work an EMR agent can hold; an owner holds only the kinds its profile grants.
@@ -8,6 +9,8 @@ export const WORK_KINDS = [
   "open_consult", "record_clerking", "record_allergy", "admit_patient", "assign_bed", "schedule_review"
 ] as const;
 export type WorkKind = (typeof WORK_KINDS)[number];
+// The delegation kinds an owner may also hold; each is taken by rule, so the gate never lists them.
+export const DELEGATION_KINDS: readonly string[] = [...DELEGATION_RULE_KINDS];
 // Kinds that only read the record and report back; they change nothing in it.
 export const READ_ONLY_KINDS: ReadonlySet<string> = new Set(["draft_handover", "prepare_bill"]);
 
@@ -136,7 +139,7 @@ export function summariseWork(kind: string, a: Record<string, unknown>): string 
     case "admit_patient": return `Admit, ${t(a["admission_type"])}, to the ${String(a["ward"]).replace(/_/g, " ")} ward on your authority: ${t(a["reason"], 60)}`;
     case "assign_bed": return `Put the patient on a free bed in the ${String(a["ward"]).replace(/_/g, " ")} ward`;
     case "schedule_review": return `Review due ${String(a["due_at"]).slice(11, 16)} UTC on the ward board: ${t(a["title"], 60)}`;
-    default: return kind;
+    default: return delegationSummary(kind, a) ?? kind;
   }
 }
 
