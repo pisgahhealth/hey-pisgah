@@ -40,6 +40,8 @@ export const TOOL_ARGS = {
   get_derived_statistics: z.object({ top: z.number().int().optional() }),
   choose_question: z.object({ hypothesis_ids: z.array(z.string()), question: z.string(), expected_change: z.object({ step: z.string(), behaviour: z.enum(["start_time", "eligibility", "event_order"]) }) }),
   next_cycle: z.object({ reason: z.string() }),
+  get_precondition_table: z.object({}),
+  run_sweep: z.object({ op_kinds: z.array(z.enum(["remove_soft_edge", "add_soft_edge", "move_step_after", "set_prep_trigger", "add_condition", "rebind_section"])), case_ids: z.array(z.string()), top_k: z.number().int().optional(), target_steps: z.array(z.string()).optional(), pairs: z.boolean().optional() }),
   set_hypothesis_status: z.object({ hypothesis_id: z.string(), status: z.enum(["retained", "rejected"]), experiment_ids: z.array(z.string()), evidence_event_ids: z.array(z.string()), note: z.string() }),
   run_experiment: z.object({
     hypothesis_id: z.string(), distinguishes: z.array(z.string()), base: z.object({ version: z.number().int().optional(), proposal_id: z.string().optional() }),
@@ -83,6 +85,8 @@ export const DESCRIPTIONS: Record<ToolName, string> = {
   get_derived_statistics: "Derived from every recorded case in the pool: each step's median wait (from its latest-finishing predecessor's completion to its start) and work, how often it lies on the critical path from the clinical sign-off to departure, the critical segments ranked by total minutes with example event ids, and each case's critical path.",
   choose_question: "Name the question this cycle's experiment must answer: at least two hypothesis ids it must tell apart and expected_change, the step behaviour you expect the experiment to move. Two hypotheses can be told apart when their if_true predictions name the same metric, share an experimentable pool case, and allow delta ranges that do not overlap: intervention_lt_control with tolerance t allows deltas of -t or less, intervention_gt_control allows t or more, and no_difference allows -t to t. A refusal lists each pair's ranges and overlap.",
   next_cycle: "Close this cycle with a reason; the next cycle opens with a fresh conversation that holds the ledger.",
+  get_precondition_table: "The engine's start, completion and trigger rules, and for each operation kind the rule it edits and the condition under which that edit can change what the engine does; the same table for every definition.",
+  run_sweep: "Run every legal single operation of the named op_kinds that touches the scope steps, and every pair of them, on the same 1 to 6 pool cases and seeds; the scope is both steps of each of the top_k critical segments from get_derived_statistics (default 3), or target_steps. An operation touches the scope when its target is a scope step, or, for an edge removal, either end of the edge is. Cells the definition rules refuse are skipped, and cells the static test calls a no-op are not run. Returns counts, the 20 best cells by summed wait delta and up to 10 delivered cells whose wait did not move, each with its operations, whether a targeted step's start or completion moved, the median and summed wait deltas, cases better and worse, and the steps whose minutes shifted. A sweep takes 1 to 60 single operations, uses no experiment, and runs at most 3 times a session.",
   record_note: "Save a short free-text note, up to 600 characters, for later turns. Saved notes are shown as a numbered list at the top of every later turn; at most 20 notes are kept.",
   end_session: "End the session with a result, a note and the recorded event ids inspected. no_change_warranted is a valid result."
 };
@@ -94,7 +98,7 @@ const CLOSE: ToolName[] = ["submit_proposal", "get_validation_report", "list_led
 // The tool set of each arm; A3 differs from the adaptive arm only by the experiment tools.
 export function armTools(arm: Arm): ToolName[] {
   switch (arm) {
-    case "adaptive": return [...READS, "get_derived_statistics", "record_hypothesis", "set_hypothesis_status", "choose_question", "run_experiment", "get_experiment", ...CLOSE, "next_cycle"];
+    case "adaptive": return [...READS, "get_derived_statistics", "record_hypothesis", "set_hypothesis_status", "choose_question", "get_precondition_table", "run_sweep", "run_experiment", "get_experiment", ...CLOSE, "next_cycle"];
     case "a3": return [...READS, ...RECORDS, ...CLOSE];
     case "a4": return [...READS, ...RECORDS, "get_listed_experiment", "get_experiment", ...CLOSE];
     case "prior": return ["get_ward_requirements", "get_workflow_definition", "submit_proposal", "end_session"];
@@ -151,6 +155,8 @@ export async function dispatch(s: Session, name: string, argText: string, o: { p
     case "get_derived_statistics": return s.statistics(a);
     case "choose_question": return s.chooseQuestion(args);
     case "next_cycle": return s.nextCycle(args);
+    case "get_precondition_table": return s.preconditions();
+    case "run_sweep": return s.runSweep(args);
     case "record_note": return s.recordNote(args);
     case "end_session": return s.endSession(args);
   }

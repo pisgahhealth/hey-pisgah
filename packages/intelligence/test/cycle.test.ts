@@ -46,7 +46,7 @@ describe("the investigation cycle", () => {
     expect(stages.slice(0, 3)).toEqual(["prior", "construct", "interpret"]);
     expect(toolNames(r.bodies[0]!)).toEqual([...STAGE_TOOLS.prior].sort());
     const construct = r.bodies.find((b) => msgs(b).at(-1)!.content.startsWith("Stage: construct"))!;
-    expect(toolNames(construct)).toEqual(["get_workflow_definition", "list_cases", "run_experiment"]);
+    expect(toolNames(construct)).toEqual(["get_precondition_table", "get_workflow_definition", "list_cases", "run_experiment", "run_sweep"]);
     expect(msgs(r.bodies[0]!).map((m) => m.role)).toEqual(["system", "user", "user", "user"]);
     expect(msgs(r.bodies[0]!)[3]!.content.startsWith("Stage: observe, cycle 0. Start from what you would propose without the records")).toBe(true);
   });

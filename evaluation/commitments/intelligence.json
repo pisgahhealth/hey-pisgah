@@ -331,6 +331,48 @@
         "insufficient_evidence_default": false
       },
       "hash": "49bc8a852e91f701196d61000e80fd55ce39f4fe5efaab0a57a68993ee3aed33"
+    },
+    {
+      "revision": 10,
+      "at": "2026-10-29T23:22:27.713Z",
+      "reason": "Revision 10 (lane E6.d, step 2). Tool interface only, keeping all of revision 9: run_sweep runs every legal single operation of the kinds the investigator names that touches the scope steps (both steps of the top_k critical segments, or target_steps) and every pair of them on the same cases and seeds, skipping cells the definition rules refuse and not running cells the static test calls a no-op, and returns counts, the best cells by summed wait delta and delivered cells whose wait did not move, each with a delivered flag; it treats every operation alike, takes at most 60 singles, runs at most three times a session and uses no experiment, and it is reported as an assisted system. get_precondition_table publishes the engine's start, completion and trigger rules and, per operation kind, when its edit can reach the engine; the run_experiment lint applies the same test, and a test checks the static no-op verdict against the simulator over every edge removal, trigger and move on the pool. Both join the construct stage. Evaluation logic: three simulator variants with planted answers of one, two and three operations on different steps (claim cover, discharge summary, refund voucher) and an answer-invariance test asserting that every prompt, tool description, stage text and generated table the model sees is byte-identical across them; the deny-list scan stays and now also covers the statistics, sweep, precondition, experiment and question outputs. Step 1 ran under revision 9 before this revision existed: 6 runs, 3 at medium and 3 at high.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "704058ab0a77fc3307bc9f22ab5e2e81fa1ba28957edc948981def44a969ed0b",
+            "tools": "bad02e99b1b3c70a373c9405f0c36f6d0920cb3fd276de3ebfc9091a5982c35d"
+          },
+          "a3": {
+            "prompt": "99a85b831d4a0926333e57f3398d5c4c0652f9ccc816944ffb05d1cf74d645db",
+            "tools": "7dc5b916fff8223bdec7ac38b22f1533f890e71f61631d97861214bea963a9d5"
+          },
+          "a4": {
+            "prompt": "55a3398a6533072bfc44dbe93d194fe90667d511c413f1c18884fb056f769cf3",
+            "tools": "2535fa876f2aff71eaf70f1db86b8dbb356a5392107cdb4b920583263bce3e95"
+          },
+          "prior": {
+            "prompt": "f3f1869f55cf864b9efb8aa0ca202a3aac135c7c5f358d2e1fb2d06ebb7e8712",
+            "tools": "2fd590e02488a003e8deb611346c1209fc6a604d9cb9138f4867447bb975b514"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "adaptive_controller": "cycle",
+          "adaptive_efforts": [
+            "medium",
+            "high"
+          ],
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 30000,
+          "history_chars": 70000,
+          "turn_result_chars": 20000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "dc797151472c5b10fcbfb889b8bc1c2e326967cbaacf3bc9e69129d941d14c48"
     }
   ]
 }

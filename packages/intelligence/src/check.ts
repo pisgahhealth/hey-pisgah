@@ -4,9 +4,17 @@ import { denyScan } from "./deny.js";
 import { appTexts } from "./prompts.js";
 import { STREAMS, sessionStreamId, type Arm, type StoredExperiment } from "./session.js";
 
-const READ_TOOLS = new Set(["list_cases", "get_case_timeline", "get_record", "compute_intervals", "get_queue_snapshot", "get_staff_activity", "get_ward_requirements", "get_workflow_definition"]);
+const READ_TOOLS = new Set(["list_cases", "get_case_timeline", "get_record", "compute_intervals", "get_queue_snapshot", "get_staff_activity", "get_ward_requirements", "get_workflow_definition", "get_derived_statistics", "get_precondition_table", "run_sweep", "run_experiment", "choose_question"]);
 type Row = Record<string, unknown>;
 const payloads = (root: string, id: string, type: string): Row[] => readStream(root, id).filter((e) => e.record_type === type).map((e) => e.payload as Row);
+
+// The fields of a tool result that echo the model's own words, dropped before the scan of app-written text.
+const ECHOED: Record<string, string[]> = { run_experiment: ["request"], choose_question: ["question"] };
+function appPart(name: string, text: string): string {
+  const keys = ECHOED[name];
+  if (!keys) return text;
+  try { const v = JSON.parse(text) as Row; for (const k of keys) delete v[k]; return JSON.stringify(v); } catch { return text; }
+}
 
 export type DiscoveryCheck = { pass: boolean; lines: string[]; summary: Row };
 
@@ -84,7 +92,7 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
     ...appTexts(arm),
     { label: "session.system", text: String(opened.system_prompt) },
     { label: "session.kickoff", text: String(opened.kickoff) },
-    ...tools.filter((t) => READ_TOOLS.has(t.name as string)).map((t, i) => ({ label: `tool_output.${String(t.name)}.${i}`, text: String(t.result) }))
+    ...tools.filter((t) => READ_TOOLS.has(t.name as string)).map((t, i) => ({ label: `tool_output.${String(t.name)}.${i}`, text: appPart(String(t.name), String(t.result)) }))
   ];
   const hits = denyScan(scanned);
   say(`deny-list scan: ${scanned.length} texts, ${hits.length} hits${hits.length ? `: ${hits.slice(0, 5).map((h) => `${h.label} /${h.pattern}/`).join("; ")}` : ""}`);

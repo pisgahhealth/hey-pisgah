@@ -12,6 +12,7 @@ import { runMatched, summarise, type Behaviour, type CaseResult, type Receipt, t
 import { lintExperiment, type LintResult } from "./lint.js";
 import { preconditionTable } from "./preconditions.js";
 import { derivedStatistics } from "./stats.js";
+import { OP_KINDS, SWEEP_LIMITS, scopedOperations, sweep, sweepView } from "./sweep.js";
 import { DiscoveryPool } from "./pool.js";
 import { checkAfter, checkBefore, pairDiagnostics, type Deltas } from "./prediction.js";
 import { LEDGER_SHAPES, expectedShapes } from "./shapes.js";
@@ -101,6 +102,14 @@ const LEDGER_KEYS = ["predicted_magnitude_min", "falsifying_experiment", "if_nul
 export const QuestionInput = z.strictObject({ hypothesis_ids: z.array(z.string()).min(2).max(4), question: z.string().trim().min(1).max(300), expected_change: ExpectedChange });
 export type Question = z.infer<typeof QuestionInput>;
 
+export const SweepInput = z.strictObject({
+  op_kinds: z.array(z.enum(OP_KINDS)).min(1).max(OP_KINDS.length),
+  case_ids: z.array(z.string()).min(1).max(SWEEP_LIMITS.cases),
+  top_k: z.number().int().min(1).max(8).optional(),
+  target_steps: z.array(z.string().max(12)).min(1).max(6).optional(),
+  pairs: z.boolean().optional()
+});
+
 export const DEFINITION_UNCHANGED = "The workflow definition is unchanged since your first read of it in this cycle; its short form stays in this conversation.";
 
 export const EndInput = z.strictObject({
@@ -168,7 +177,7 @@ export class Session {
   question: Question | null = null;
   cycle = 0;
   private definitionRead: { turn: number; hash: string; cycle: number } | null = null;
-  counters = { hypothesis_schema_errors: 0, definition_unchanged: 0, timeline_pages: 0, experiments_used: 0, invalid_requests: 0, lint_refusals: 0, question_refusals: 0, not_delivered: 0, delivered: 0, informative: 0, zod_streak: 0, repairs: 0, listed_used: 0, proposals_used: 0, say_do_mismatches: 0, retains: 0, rejects: 0, stage_refusals: 0, statistics_reads: 0 };
+  counters = { hypothesis_schema_errors: 0, definition_unchanged: 0, timeline_pages: 0, experiments_used: 0, invalid_requests: 0, lint_refusals: 0, question_refusals: 0, not_delivered: 0, delivered: 0, informative: 0, zod_streak: 0, repairs: 0, listed_used: 0, proposals_used: 0, say_do_mismatches: 0, retains: 0, rejects: 0, stage_refusals: 0, statistics_reads: 0, sweeps: 0, sweep_refusals: 0, simulations: 0 };
   stop: { reason: StopReason; detail: string } | null = null;
   private readonly streams: { hypotheses: Stream; experiments: Stream; proposals: Stream; log: Stream };
   private serial = 0;
@@ -281,6 +290,44 @@ export class Session {
   }
 
   preconditions(): Result { return { ok: true, ...preconditionTable() }; }
+
+  // The neutral sweep: every legal single operation of the named kinds touching the scope steps and every pair of them, on matched cases.
+  runSweep(raw: unknown): Result {
+    if (this.o.arm !== "adaptive") return refusal("not_available", "This tool is not available in this session.");
+    const parsed = SweepInput.safeParse(raw);
+    if (!parsed.success) { this.counters.repairs += 1; return refusal("invalid_arguments", "The arguments do not match the schema.", { issues: zodIssues(parsed.error) }); }
+    if (this.counters.sweeps >= SWEEP_LIMITS.sweeps) return refusal("budget_exhausted", `At most ${SWEEP_LIMITS.sweeps} sweeps run in a session.`);
+    const a = parsed.data;
+    const files = a.case_ids.map((id) => this.pool.experimentable(id));
+    const bad = files.findIndex((f) => f === null);
+    if (bad >= 0 || new Set(a.case_ids).size !== a.case_ids.length) return unknownField(`case_ids[${Math.max(0, bad)}]`);
+    let scope: string[];
+    if (a.target_steps) {
+      const miss = a.target_steps.findIndex((st) => !this.base.steps.some((x) => x.step_id === st));
+      if (miss >= 0) return unknownField(`target_steps[${miss}]`);
+      scope = [...new Set(a.target_steps)].sort();
+    } else {
+      const cases = this.pool.ids().map((id) => this.pool.get(id)!).filter((c) => c.events.length > 0);
+      const ranking = derivedStatistics(this.base, cases, a.top_k ?? 3).ranking as { from: string | null; to: string }[];
+      scope = [...new Set(ranking.flatMap((r) => [r.from, r.to]).filter((x): x is string => x !== null))].sort();
+    }
+    const wards = [...new Set(this.pool.caseFacts().map((f) => String(f["ward_id"])))];
+    const singles = scopedOperations(this.base, new Set(scope), a.op_kinds, wards);
+    if (singles.length > SWEEP_LIMITS.singles || singles.length === 0) {
+      this.counters.sweep_refusals += 1;
+      const per = Object.fromEntries(a.op_kinds.map((k) => [k, scopedOperations(this.base, new Set(scope), [k], wards).length]));
+      return refusal("sweep_size", `A sweep takes 1 to ${SWEEP_LIMITS.singles} single operations; this scope gives ${singles.length}. Narrow op_kinds or target_steps, or lower top_k.`, { scope_steps: scope, singles_per_kind: per });
+    }
+    this.counters.sweeps += 1;
+    const out = sweep(this.base, singles, files as NonNullable<(typeof files)[number]>[], { caseFacts: this.pool.caseFacts(), ...(this.o.world ? { world: this.o.world } : {}), pairs: a.pairs ?? true });
+    this.counters.simulations += out.simulations;
+    for (const c of a.case_ids) this.view(c);
+    const view = sweepView(out, scope);
+    this.streams.experiments.append("sweep.completed", { session_id: this.o.runId, request: a, ...view }, { recorded_at: 0, occurred_at: 0 });
+    const best = (view.best_by_wait as { ops: unknown; sum_wait_delta: number; delivered: boolean }[]).slice(0, 3);
+    this.observe(`sweep ${this.counters.sweeps} over ${scope.join(",")} (${a.op_kinds.join(",")}) on ${a.case_ids.length} cases: ${out.singles} singles, ${out.pairs} pairs; best ${best.map((b) => `${JSON.stringify(b.ops)} sum ${b.sum_wait_delta}${b.delivered ? "" : " not delivered"}`).join("; ")}`);
+    return { ok: true, ...view, budget: { ...this.budgetView(), sweeps_left: SWEEP_LIMITS.sweeps - this.counters.sweeps } };
+  }
 
   // One line the ledger keeps from a tool result, written by the session, never by the model.
   observe(line: string): void {
@@ -475,6 +522,7 @@ export class Session {
       return this.invalid(m.stage, request, m.errors, refusal("invalid_request", "The change breaks a definition rule.", { stage: m.stage, errors: m.errors }));
     }
     if (source === "request") this.counters.experiments_used += 1;
+    this.counters.simulations += 2 * caseIds.length;
     for (const c of caseIds) this.view(c);
     const hashes: Record<string, string> = {};
     for (const id of new Set([...cited, ...before.speaks_to])) {
