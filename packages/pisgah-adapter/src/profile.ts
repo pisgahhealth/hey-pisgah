@@ -82,6 +82,12 @@ export const DoorProfile = z.strictObject({
   inbox: ReadSpec.extend({ list_path: Dotted, id: Dotted, subject: Dotted, at: Dotted, detail: ReadSpec.extend({ patient: Dotted }).optional() }).optional(),
   page_targets: z.record(z.string(), z.strictObject({ words: Words, vars: z.record(z.string(), z.string()) })).default({}),
   clinics: z.record(z.string(), z.strictObject({ words: Words, id: EmrId })).default({}),
+  // Wards the owner may name for an admission or a bed, with the ward's class.
+  wards: z.record(z.string(), z.strictObject({ words: Words, id: EmrId, class: z.string().regex(/^[a-z_]{1,30}$/) })).default({}),
+  // Where each spoken section of the clerking note is kept in the EMR's encounter details.
+  clerking: z.strictObject({ sections: z.record(z.string(), z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,60}$/)) }).optional(),
+  // Watched facts whose change means a result came back, per owner id.
+  result_facts: z.record(z.string(), z.array(z.string().min(1).max(80))).default({}),
   targets: z.strictObject({ admission_by_patient: z.record(EmrId, EmrId), episode_by_admission: z.record(EmrId, EmrId) }),
   vocabulary: z.array(z.string().min(1).max(60)).max(60).default([]),
   // Only the sandbox integration test reads this block.
