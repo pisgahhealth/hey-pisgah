@@ -3,6 +3,7 @@ import { hashJson, sha256 } from "@hey-pisgah/contracts";
 import { ModelError, callStructured, type ChatMessage, type ChatTool, type ModelClient, type ProviderId } from "@hey-pisgah/model";
 import { DEFAULT_INTENT_ROUTE, FALLBACK_INTENT_ROUTE, type IntentRoute } from "./intent.js";
 import { OBSERVATION_KIND, type EmrContext, type EmrWriteKind, type SayableNames } from "./port.js";
+import { FIRST_STAGE_PROMPT, firstLook, firstStageCommitment, firstStageTool, type FirstStageResult } from "./speed.js";
 import { ADMISSION_TYPES, ALLERGY_SEVERITIES, CLERKING_SECTIONS, ITEM_KINDS, NOTE_TYPES, OBLIGATION_AFTER, PRIORITIES, WARD_CLASSES, WORK_TEXT, type WorkField } from "./work.js";
 
 export const SPEECH_CLASSES = ["instruction", "correction", "option", "conditional", "question_to_staff", "aside", "unclear"] as const;
@@ -202,7 +203,8 @@ export function gateCommitment(): Record<string, unknown> {
   const tool = gateTool(kinds);
   return {
     ...gateCommitmentBody(),
-    clerking: { kinds, prompt, prompt_sha256: sha256(prompt), tool_sha256: hashJson(tool), classes: [...CLERK_CLASSES], rules: [...CLERKING_RULES], deny_hits: denyHits(`${prompt}\n${JSON.stringify(tool)}`) }
+    clerking: { kinds, prompt, prompt_sha256: sha256(prompt), tool_sha256: hashJson(tool), classes: [...CLERK_CLASSES], rules: [...CLERKING_RULES], deny_hits: denyHits(`${prompt}\n${JSON.stringify(tool)}`) },
+    first_stage: { ...firstStageCommitment(), settings: { effort: GATE_SETTINGS.effort, route: GATE_SETTINGS.route, confidence_floor: GATE_SETTINGS.confidence_floor }, deny_hits: denyHits(`${FIRST_STAGE_PROMPT}\n${JSON.stringify(firstStageTool())}`) }
   };
 }
 
@@ -230,4 +232,33 @@ export async function gateUtterance(client: ModelClient, input: GateInput, meta:
     if (!(e instanceof ModelError) || !settings.fallback || (e.code !== "provider_error" && e.code !== "no_key")) throw e;
     return run(settings.fallback, `${settings.route.provider}_${e.code}`);
   }
+}
+
+// The first stage's chart look as the one clause the runtime applies; anything else is null and goes to the full prompt.
+export function firstClause(r: FirstStageResult, said: string, floor: number): GateClause | null {
+  const v = r.look;
+  if (v.look !== "chart" || (v.confidence ?? 0) < floor) return null;
+  if (v.temp_c == null && v.pulse == null && v.resp_rate == null && v.bp == null) return null;
+  return { words: said.slice(0, 400), class: "instruction", kind: OBSERVATION_KIND, temp_c: v.temp_c ?? null, pulse: v.pulse ?? null, resp_rate: v.resp_rate ?? null, bp: v.bp ?? null, confidence: v.confidence ?? null };
+}
+
+// The clerking owner's two-stage gate: the short first look settles a plain vitals line, and every other line goes to the full prompt as before.
+export async function gateTwoStage(client: ModelClient, input: GateInput, meta: { run_id: string; task_id: string }, settings: GateSettings = GATE_SETTINGS): Promise<GateResult> {
+  if (denyHits(FIRST_STAGE_PROMPT).length) throw new Error("the first-stage prompt holds a denied term");
+  const first = await firstLook(client, input.said, meta, settings.route, settings.effort);
+  const clause = "look" in first ? firstClause(first, input.said, settings.confidence_floor) : null;
+  if ("look" in first && clause) {
+    return {
+      value: { clauses: [clause] }, provider: first.provider, model: first.model, response_id: first.response_id, cost_usd: first.cost_usd, ledger: first.ledger, repairs: first.calls - 1,
+      fallback_reason: null, prompt_sha256: sha256(FIRST_STAGE_PROMPT), stage: "first", first_look: first.look.look, calls: first.calls, stage_ms: { first: first.ms, full: null }
+    };
+  }
+  const t0 = Date.now();
+  const full = await gateUtterance(client, input, meta, settings);
+  const firstCost = "look" in first ? first.cost_usd : 0;
+  const firstCalls = "look" in first ? first.calls : 1;
+  return {
+    ...full, cost_usd: full.cost_usd + firstCost, stage: "first+full", first_look: "look" in first ? first.look.look : `error_${first.error}`,
+    calls: firstCalls + 1 + full.repairs, stage_ms: { first: first.ms, full: Date.now() - t0 }
+  };
 }

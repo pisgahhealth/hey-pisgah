@@ -5,7 +5,7 @@ import type { Envelope } from "@hey-pisgah/contracts";
 import { shortHash } from "../ids.js";
 import { DEFAULT_INTENT_ROUTE, FALLBACK_INTENT_ROUTE, decideIntent, tempText, type Decide, type IntentRoute } from "./intent.js";
 import { primaryClass } from "./classes.js";
-import { CLERKING_KIND, GATE_SETTINGS, gateUtterance, isWide, type ClerkClause, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type SpeechClass } from "./gate.js";
+import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type ClerkClause, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type Provenance, type WorkArgs } from "./port.js";
 import { READ_ONLY_KINDS, WORK_ARGS, afterSaid, cadenceSaid, dateSaid, minutesSaid, summariseWork, wordSaid, type WorkKind } from "./work.js";
@@ -743,7 +743,7 @@ export class EmrRuntime {
     };
   }
 
-  // One gate call for a line, with the gate as committed.
+  // One gate call for a line: the two-stage gate under lever 2 for a clerking owner, else the gate as committed.
   private callGate(l: Live, line: { id: string; text: string }, ctx: EmrContext, early: boolean, timesKey = line.id): Promise<GateResult> {
     const t = l.task;
     const input = this.gateInput(t, line, ctx, early);
@@ -751,7 +751,8 @@ export class EmrRuntime {
     const tm = this.timesOf(timesKey);
     tm.gate_start ??= Date.now();
     l.inflight += 1;
-    const p = gateUtterance(this.o.client, input, { run_id: t.run_id, task_id: t.task_id }, settings);
+    const call = this.lv.firstStage && holdsClerking(input.kinds) ? gateTwoStage : gateUtterance;
+    const p = call(this.o.client, input, { run_id: t.run_id, task_id: t.task_id }, settings);
     // The bookkeeping hangs off the call rather than wrapping it, so an awaited call answers as soon as it did before.
     const done = () => { l.inflight -= 1; tm.gate_end = Date.now(); this.pump(l); };
     p.then(done, done);
