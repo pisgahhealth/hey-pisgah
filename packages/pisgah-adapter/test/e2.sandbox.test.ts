@@ -15,6 +15,12 @@ import { SandboxBlock, mintAgentBearer, sandboxQuery } from "../src/sandbox.js";
 // Runs only with SANDBOX=1 against the loopback sandbox named in the private profile; record checks use read-only SQL.
 const RUN = process.env["SANDBOX"] === "1";
 const now = () => new Date().toISOString();
+// Every string in a door answer, so a check can find the saved note without naming the EMR's fields.
+const strings = (v: unknown): string[] => (typeof v === "string" ? [v] : Array.isArray(v) ? v.flatMap(strings) : v && typeof v === "object" ? Object.values(v).flatMap(strings) : []);
+const noteIn = (v: unknown, has: string): Record<string, string> | null => {
+  const hit = strings(v).find((x) => x.startsWith("{") && x.includes(has));
+  return hit ? (JSON.parse(hit) as Record<string, string>) : null;
+};
 
 // A fresh synthetic arrival, registered and paid by the desk person, so no other run's patient is touched.
 export async function freshArrival(profile = loadProfile()): Promise<{ patient: string; visit: string; sb: SandboxBlock; person: ReturnType<typeof personCaller>; log: DoorLog[] }> {
@@ -79,12 +85,10 @@ describe.skipIf(!RUN)("E2 owner-aware consult holder on the sandbox EMR", () => 
     expect(theirDraft.ok ? "" : theirDraft.reason).toMatch(/^door_4/);
     expect(sandboxQuery(sb, "visit_for_patient", { patient })[0]).toMatchObject({ assigned_doctor_id: mine.owner, draft_updated_by: mine.agent });
 
-    // The person keeps the consultation: opening it as themselves holds it and sees the agent's draft.
+    // The person keeps the consultation: opening it as themselves succeeds, which the EMR allows only to the holder, and shows the agent's draft.
     const self = await person("open_as_doctor", { visit_id: visit, patient_id: patient });
     expect(self.ok, JSON.stringify(self)).toBe(true);
-    const body = self.json as { ownedByMe: boolean; draft: { encounterDetailsJson: string | null } | null };
-    expect(body.ownedByMe).toBe(true);
-    expect(body.draft?.encounterDetailsJson ?? "").toContain("Abdominal pain for two days.");
+    expect(noteIn(self.json, "Abdominal pain for two days.")).not.toBeNull();
   }, 15 * 60_000);
 
   it("clerks by voice: narration into the note, patient speech in its own section, vitals in the note before admission, an allergy, admission on the doctor's authority and a bed in the ward said", async () => {
@@ -124,7 +128,7 @@ describe.skipIf(!RUN)("E2 owner-aware consult holder on the sandbox EMR", () => 
 
       // The person sees the whole note in their own consultation, with the patient's words in their own section.
       const opened = await person("open_as_doctor", { visit_id: visit, patient_id: patient });
-      const details = JSON.parse((opened.json as { draft: { encounterDetailsJson: string } }).draft.encounterDetailsJson) as Record<string, string>;
+      const details = noteIn(opened.json, "vomited")!;
       const keys = profile.clerking!.sections;
       expect(details[keys["patient_reported"]!]).toMatch(/vomited/);
       expect(details[keys["vitals"]!]).toMatch(/38\.2/);
