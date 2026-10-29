@@ -206,7 +206,11 @@ export function gateCommitment(): Record<string, unknown> {
   };
 }
 
-export type GateResult = { value: GateOutput; provider: ProviderId; model: string; response_id: string | null; cost_usd: number; ledger: { stream_id: string; seq: number }; repairs: number; fallback_reason: string | null; prompt_sha256: string };
+export type GateResult = {
+  value: GateOutput; provider: ProviderId; model: string; response_id: string | null; cost_usd: number; ledger: { stream_id: string; seq: number }; repairs: number; fallback_reason: string | null; prompt_sha256: string;
+  // Which stage decided, what the first stage said, the calls made in all, and how long each stage took.
+  stage?: "first" | "full" | "first+full"; first_look?: string | null; calls?: number; stage_ms?: { first: number | null; full: number | null };
+};
 
 // One gate call at effort low per finalised utterance; a provider error moves once to the fallback route and says so.
 export async function gateUtterance(client: ModelClient, input: GateInput, meta: { run_id: string; task_id: string }, settings: GateSettings = GATE_SETTINGS): Promise<GateResult> {

@@ -5,7 +5,8 @@ import type { Envelope } from "@hey-pisgah/contracts";
 import { shortHash } from "../ids.js";
 import { DEFAULT_INTENT_ROUTE, FALLBACK_INTENT_ROUTE, decideIntent, tempText, type Decide, type IntentRoute } from "./intent.js";
 import { primaryClass } from "./classes.js";
-import { CLERKING_KIND, GATE_SETTINGS, gateUtterance, isWide, type ClerkClause, type GateAction, type GateClause, type GateSettings, type SpeechClass } from "./gate.js";
+import { CLERKING_KIND, GATE_SETTINGS, gateUtterance, isWide, type ClerkClause, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type SpeechClass } from "./gate.js";
+import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type Provenance, type WorkArgs } from "./port.js";
 import { READ_ONLY_KINDS, WORK_ARGS, afterSaid, cadenceSaid, dateSaid, minutesSaid, summariseWork, wordSaid, type WorkKind } from "./work.js";
 import { measuresIn, type Measure, type Rewrite } from "@hey-pisgah/voice";
@@ -47,7 +48,7 @@ export type EmrObligation = {
   held_at: string; fired_at: string | null; fired_by: string | null; action_id: string | null; anchor_action_id: string | null; reason: string;
 };
 // One verified action timed from the end of the words that asked for it; parts are the milestones on the way.
-export type SpeedRow = { action_id: string; kind: string; line_id: string; from: string; verified_at: string; ms: number; parts: Record<string, number | null> };
+export type SpeedRow = { action_id: string; kind: string; line_id: string; from: string; verified_at: string; ms: number; parts: Record<string, number | null>; gate?: string | null; levers?: number[] };
 export type EmrTask = {
   task_id: string; owner: string; admission_id: string; patient_id: string | null; visit_id: string | null; run_id: string; goal: string;
   state: TaskState; reason: string | null; actions: Map<string, EmrAction>; order: string[];
@@ -109,6 +110,8 @@ export type EmrRuntimeOptions = {
   versions?: VersionWiring;
   // How often held work is checked for its time or condition; the runtime's own timer, since nothing else calls it.
   obligationTickMs?: number;
+  // The speed levers in force; each is off unless named, so a recorded run replays as it was made.
+  speed?: Partial<SpeedLevers>;
   wallNow?: () => Date;
   log?: (line: string) => void;
 };
@@ -173,6 +176,8 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       t.calls += Number(x["calls"] ?? 0); t.usd += Number(x["cost_usd"] ?? 0);
       if (x["fallback_reason"]) t.fallbacks += 1;
       break;
+    // A second reading or a gate call started early that no decision used is still paid for.
+    case "ears.unused": case "gate.unused": t.calls += Number(x["calls"] ?? 0); t.usd += Number(x["cost_usd"] ?? 0); break;
     case "task.note": t.notes.push({ id: String(x["note_id"]), text: String(x["text"]), at: e.wall_at }); break;
     case "action.proposed":
       t.actions.set(String(x["action_id"]), {
@@ -350,7 +355,15 @@ export const emrIntentKey = (taskId: string, actionId: string, args: unknown) =>
 export const SPOKEN_PAUSE = /^(?:(?:ok(?:ay)?|right|sorry|wait)[,.!]?\s+)?(?:stop|hold on|hang on|pause)\b(?:[\s,.!-]+(?:i'?ll|i will|we'?ll|let me)\s+come back to (?:this|that|it|her|him)(?:\s+later)?)?[\s.!]*$|\bi'?ll come back to (?:this|that|it)\b/i;
 export const SPOKEN_RESUME = /\bwhere were we\b|\b(?:let'?s|we can) (?:carry on|continue|pick (?:this|it|that) (?:back )?up)\b|^(?:ok(?:ay)?,?\s+)?i'?m back\b/i;
 
-type Live = { stream: Stream; task: EmrTask; queue: Promise<void> };
+// One open task: its decision queue, its write chain, the gate calls started before their turn, and the context each gated line was said in.
+type Live = {
+  stream: Stream; task: EmrTask; queue: Promise<void>; writes: Promise<void>; inflight: number; pre: Map<string, Promise<GateResult>>; ctxOf: Map<string, EmrContext>; calling: string | null;
+  // Decisions started for a line still waiting at a number cut, by listening session and words.
+  spec: Map<string, { gate: Promise<GateResult>; ear: EarlyEar | null }>;
+};
+// When a line reached each step, in memory only, for the speed rows.
+type LineTimes = { asr_at?: number; delivered?: number; gate_start?: number; gate_end?: number; ear_done?: number };
+type EarlyEar = { p: Promise<{ reading: EarReading | null; error: string | null }>; uses: number };
 type AnyClause = Omit<GateClause, "class"> & { class: SpeechClass } & Partial<Omit<ClerkClause, keyof GateClause>>;
 const RELATIVE_WORDS = /\b(mother|mum|mom|father|dad|husband|wife|son|daughter|sister|brother|relative|family|aunt|uncle|guardian|grandmother|grandfather)\b/i;
 export type SayInput = {
@@ -365,6 +378,8 @@ export type SayInput = {
   clip?: Uint8Array;
   // Words the vitals vocabulary pass rewrote; a guessed measure word must be confirmed by the second ear.
   rewrites?: readonly Rewrite[];
+  // When the words came back from speech recognition, for the speed rows; never stored.
+  heard_at?: number;
 };
 type EarsOutcome = { check: EarsCheck; reading: EarReading | null; error: string | null };
 
@@ -382,8 +397,17 @@ export class EmrRuntime {
   // The runtime's own clock for held work, and the obligations already queued to fire.
   private obTick: NodeJS.Timeout | null = null;
   private readonly firing = new Set<string>();
+  // The levers in force, the line whose clauses are being applied now, second readings started with the gate, timings, and side work to wait for.
+  private readonly lv: SpeedLevers;
+  private fresh: string | null = null;
+  private readonly early = new Map<string, EarlyEar>();
+  private readonly times = new Map<string, LineTimes>();
+  private readonly side = new Set<Promise<unknown>>();
+  private readonly gateStage = new Map<string, string>();
+  private readonly holdEnds = new Map<string, string>();
 
-  constructor(private readonly o: EmrRuntimeOptions) {}
+  constructor(private readonly o: EmrRuntimeOptions) { this.lv = { ...LEVERS_OFF, ...(o.speed ?? {}) }; }
+  get levers(): SpeedLevers { return { ...this.lv }; }
 
   private wall(): Date { return this.o.wallNow?.() ?? new Date(); }
   private log(s: string) { this.o.log?.(s); }
@@ -400,6 +424,22 @@ export class EmrRuntime {
       .sort((a, b) => (a.updated_at < b.updated_at ? 1 : a.updated_at > b.updated_at ? -1 : 0)).map(viewOf);
   }
 
+  private liveOf(stream: Stream): Live {
+    return { stream, task: projectEmr(stream.records()), queue: Promise.resolve(), writes: Promise.resolve(), inflight: 0, pre: new Map(), ctxOf: new Map(), calling: null, spec: new Map() };
+  }
+  private timesOf(lineId: string): LineTimes {
+    let x = this.times.get(lineId);
+    if (!x) { x = {}; this.times.set(lineId, x); if (this.times.size > 2000) this.times.delete(this.times.keys().next().value!); }
+    return x;
+  }
+  // Side work, such as a second reading nobody used yet, that settled and stop wait for.
+  private track<T>(p: Promise<T>): Promise<T> {
+    const q = p.finally(() => this.side.delete(q));
+    q.catch(() => undefined);
+    this.side.add(q);
+    return p;
+  }
+
   private append(l: Live, type: string, payload: unknown): void {
     applyEmr(l.task, l.stream.append(type, payload, Z));
   }
@@ -414,12 +454,12 @@ export class EmrRuntime {
       const id = sid.slice("emr/".length);
       if (this.live.has(id)) continue;
       const stream = openStream(this.o.storeRoot, sid, { writer: true });
-      const l: Live = { stream, task: projectEmr(stream.records()), queue: Promise.resolve() };
+      const l: Live = this.liveOf(stream);
       this.live.set(id, l);
       if (CLOSED_TASK.has(l.task.state)) continue;
       for (const aid of l.task.order) {
         const a = l.task.actions.get(aid)!;
-        if (a.state === "sent" || (a.state === "acknowledged" && !a.unverified)) this.enqueue(l, () => this.execute(l, aid));
+        if (a.state === "sent" || (a.state === "acknowledged" && !a.unverified)) this.enqueueExec(l, () => this.execute(l, aid));
         else if (a.state === "proposed" && l.task.state === "running") this.hold(l, aid);
       }
       if (l.task.state === "running" && l.task.lines.some((x) => !x.decided)) {
@@ -442,7 +482,8 @@ export class EmrRuntime {
     this.obTick = null;
     for (const t of this.timers) clearTimeout(t);
     this.timers.clear();
-    await Promise.all([...this.live.values()].map((l) => l.queue));
+    await Promise.all([...this.live.values()].flatMap((l) => [l.queue, l.writes]));
+    await Promise.all([...this.side]);
     for (const l of this.live.values()) l.stream.close();
     this.live.clear();
   }
@@ -451,8 +492,13 @@ export class EmrRuntime {
   async settled(timeoutMs = 60_000): Promise<void> {
     const end = Date.now() + timeoutMs;
     for (;;) {
-      await Promise.all([...this.live.values()].map((l) => l.queue));
-      if (this.timers.size === 0) return;
+      // A hold timer may fire while an earlier write waits, so the queues are read again after the wait and must not have moved.
+      const seen = [...this.live.values()].flatMap((l) => [l.queue, l.writes]);
+      await Promise.all(seen);
+      await Promise.all([...this.side]);
+      const now = [...this.live.values()].flatMap((l) => [l.queue, l.writes]);
+      const moved = now.length !== seen.length || now.some((p, i) => p !== seen[i]);
+      if (!moved && this.timers.size === 0 && [...this.live.values()].every((l) => l.inflight === 0)) return;
       if (Date.now() > end) throw new Error("runtime did not settle in time");
       await new Promise((r) => setTimeout(r, 20));
     }
@@ -462,6 +508,16 @@ export class EmrRuntime {
     l.queue = l.queue.then(fn).catch((e: unknown) => {
       const msg = e instanceof Error ? e.message : String(e);
       this.log(`emr task ${l.task.task_id} error: ${msg}`);
+      try { this.setState(l, "failed", `runtime_error: ${msg.slice(0, 200)}`); } catch { /* the stream may be closed during shutdown */ }
+    });
+  }
+
+  // A write and its proof go on the task's write chain under lever 3, so decisions of later lines never wait behind them; otherwise on the one queue.
+  private enqueueExec(l: Live, fn: () => Promise<void>): void {
+    if (!this.lv.proofBeside) return this.enqueue(l, fn);
+    l.writes = l.writes.then(fn).catch((e: unknown) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.log(`emr task ${l.task.task_id} write error: ${msg}`);
       try { this.setState(l, "failed", `runtime_error: ${msg.slice(0, 200)}`); } catch { /* the stream may be closed during shutdown */ }
     });
   }
@@ -476,7 +532,7 @@ export class EmrRuntime {
     const id = `t-${shortHash(owner, ctx.admission_id, n, this.wall().toISOString())}`;
     const stream = openStream(this.o.storeRoot, `emr/${id}`, { writer: true });
     stream.append("emr.task.opened", { task_id: id, owner, admission_id: ctx.admission_id, patient_id: ctx.patient_id, ...(ctx.visit_id ? { visit_id: ctx.visit_id } : {}), run_id: `run-${shortHash(id, "run")}` }, Z);
-    const l: Live = { stream, task: projectEmr(stream.records()), queue: Promise.resolve() };
+    const l: Live = this.liveOf(stream);
     this.live.set(id, l);
     return l;
   }
@@ -529,6 +585,12 @@ export class EmrRuntime {
     this.append(live, "utterance.heard", { line_id: lineId, ...stored, source: s.source ?? "text", spoken_at: spokenAt, ...(s.audio ? { audio: s.audio } : {}), ...(viaGate && !s.ambient ? { via: "gate" } : {}) });
     if (withhold) { const ln = live.task.lines.find((x) => x.id === lineId)!; ln.text = text; ln.ambient = { ...s.ambient! }; }
     if (s.clip && this.o.secondEar) this.clips.set(lineId, { wav: s.clip, guessed: new Set((s.rewrites ?? []).filter((r) => r.guessed && r.measure).map((r) => r.measure!)) });
+    const spec = s.ambient ? this.takeSpeculation(live, s.ambient.session_id, text, lineId) : false;
+    const tm = this.timesOf(lineId);
+    tm.delivered = Date.now();
+    if (s.heard_at !== undefined) tm.asr_at = s.heard_at;
+    // Lever 4: the second reading starts now, beside the gate, when the line names a measure and a number.
+    if (!spec && s.clip && this.o.secondEar && this.lv.earWithGate && willWriteNumber(text)) this.earEarly(live, lineId, s.clip);
     // A spoken pause or return is handled by rule; while called away nothing heard is decided, so no model is called.
     if (SPOKEN_PAUSE.test(text) && !CLOSED_TASK.has(live.task.state) && live.task.state !== "paused") { this.pauseSpoken(live, lineId, ctx); this.afterLine(live, lineId, true); return { task_id: live.task.task_id, line_id: lineId }; }
     if (live.task.state === "paused" && live.task.reason === "called_away") {
@@ -537,17 +599,22 @@ export class EmrRuntime {
       return { task_id: live.task.task_id, line_id: lineId };
     }
     if (live.task.state !== "running") this.setState(live, "running", `heard_${lineId}`);
+    if (viaGate) live.ctxOf.set(lineId, ctx);
     this.enqueue(live, async () => {
       try {
         if (!this.answerByRule(live, lineId)) await (viaGate ? this.gate(live, lineId, ctx, prov) : this.decide(live, lineId, ctx, prov));
-      } finally { this.afterLine(live, lineId, false); }
+      } finally { live.ctxOf.delete(lineId); this.afterLine(live, lineId, false); }
     });
+    this.pump(live);
     return { task_id: live.task.task_id, line_id: lineId };
   }
 
   // After a line is decided its audio is let go, and an ambient line's words are stored only when an action or a question rests on them.
   private afterLine(l: Live, lineId: string, keep: boolean): void {
     this.clips.delete(lineId);
+    this.dropEarly(l, lineId);
+    const pre = l.pre.get(lineId);
+    if (pre) { l.pre.delete(lineId); this.chargeUnused(l, lineId, pre); }
     const t = l.task;
     const line = t.lines.find((x) => x.id === lineId);
     if (!line || line.kept) return;
@@ -555,6 +622,140 @@ export class EmrRuntime {
     if (rests) { this.append(l, "line.kept", { line_id: lineId, text: line.text, raw_text: line.ambient?.raw_text ?? null }); return; }
     line.text = "";
     if (line.ambient) line.ambient.raw_text = "";
+  }
+
+  // Starts the second reading of a line's audio as the line arrives; the values to compare come later from the gate.
+  private earEarly(l: Live, lineId: string, wav: Uint8Array): void {
+    if (!this.o.secondEar || this.early.has(lineId)) return;
+    this.early.set(lineId, this.startEar(l, lineId, wav));
+  }
+  private startEar(l: Live, key: string, wav: Uint8Array): EarlyEar {
+    const t = l.task;
+    const tm = this.timesOf(key);
+    const p = this.track(this.o.secondEar!(wav, { run_id: t.run_id, task_id: t.task_id, line_id: key })
+      .then((reading) => ({ reading, error: null }), (e: unknown) => ({ reading: null, error: e instanceof ModelError ? e.code : "ear_failed" }))
+      .finally(() => { tm.ear_done = Date.now(); }));
+    return { p, uses: 0 };
+  }
+
+  // The owner's open task for this context, found without linking anything.
+  private findTask(owner: string, ctx: EmrContext): Live | null {
+    const open = [...this.live.values()].filter((l) => l.task.owner === owner && !CLOSED_TASK.has(l.task.state));
+    const newest = (ls: Live[]) => ls.sort((a, b) => (a.task.created_at < b.task.created_at ? 1 : -1))[0] ?? null;
+    return (ctx.admission_id ? newest(open.filter((l) => l.task.admission_id === ctx.admission_id)) : null)
+      ?? (ctx.patient_id ? newest(open.filter((l) => l.task.patient_id === ctx.patient_id && (!l.task.admission_id || !ctx.admission_id))) : null);
+  }
+
+  // Lever 6: while a line that ends on a number waits for the next chunk, its gate call and second reading start; they are used only if the line is delivered with the same words.
+  speculate(s: { owner: string; ctx: EmrContext; session_id: string; text: string; clip?: Uint8Array }): boolean {
+    if (!this.lv.decideWhileJoining || this.stopped) return false;
+    const text = s.text.trim().slice(0, 1000);
+    const l = this.findTask(s.owner, s.ctx);
+    if (!l || !text || l.task.state === "paused" || SPOKEN_PAUSE.test(text)) return false;
+    const key = `${s.session_id}|${text}`;
+    if (l.spec.has(key) || l.inflight >= Math.max(1, this.lv.parallelLines) || !this.mayDecideBeside(l.task, text, l.task.lines.filter((x) => !x.decided))) return false;
+    if (l.task.state === "waiting") return false;
+    const gate = this.callGate(l, { id: key, text }, s.ctx, true, key);
+    gate.catch(() => undefined);
+    const ear = s.clip && this.o.secondEar && this.lv.earWithGate ? this.startEar(l, key, s.clip) : null;
+    l.spec.set(key, { gate, ear });
+    return true;
+  }
+
+  // Hands a line its decision started at the cut when its words are the same; any other one of the session was joined into a longer line and is let go.
+  private takeSpeculation(l: Live, sessionId: string, text: string, lineId: string): boolean {
+    const key = `${sessionId}|${text}`;
+    for (const [k, v] of [...l.spec]) {
+      if (k === key || !k.startsWith(`${sessionId}|`)) continue;
+      l.spec.delete(k);
+      this.chargeUnused(l, lineId, v.gate);
+      if (v.ear) { this.early.set(`${k}#unused`, v.ear); this.dropEarly(l, `${k}#unused`); }
+    }
+    const sp = l.spec.get(key);
+    if (!sp) return false;
+    l.spec.delete(key);
+    l.pre.set(lineId, sp.gate);
+    const tm = this.times.get(key);
+    if (tm) { this.times.delete(key); this.times.set(lineId, tm); }
+    if (sp.ear) this.early.set(lineId, sp.ear);
+    return true;
+  }
+
+  // A second reading no action used is let go, and its cost is still put on the task.
+  private dropEarly(l: Live, lineId: string): void {
+    const e = this.early.get(lineId);
+    if (!e) return;
+    this.early.delete(lineId);
+    if (e.uses > 0) return;
+    void this.track(e.p.then((r) => {
+      if (!r.reading || this.stopped) return;
+      try { this.append(l, "ears.unused", { line_id: lineId, cost_usd: r.reading.cost_usd, calls: r.reading.calls ?? 1, provider: r.reading.provider, model: r.reading.model }); } catch { /* closed */ }
+    }));
+  }
+
+  // A gate call started early whose answer no decision used is still put on the task.
+  private chargeUnused(l: Live, lineId: string, p: Promise<GateResult>): void {
+    void this.track(p.then((r) => {
+      if (this.stopped) return;
+      try { this.append(l, "gate.unused", { line_id: lineId, cost_usd: r.cost_usd, calls: r.calls ?? 1 + r.repairs, model: r.model }); } catch { /* closed */ }
+    }, () => undefined));
+  }
+
+  // True when a short answer to the open choice would settle this line by rule, so no gate call should start for it.
+  private answersByRule(t: EmrTask, text: string): boolean {
+    const q = t.questions.filter((y) => y.answered_by === null).at(-1);
+    return !!q?.choice && answerChoice(text, q.choice) !== null;
+  }
+
+  // Lever 5: starts the gate call early for lines still waiting their turn, up to the lever's count, when no earlier undecided line names a measure they name.
+  private pump(l: Live): void {
+    if (this.lv.parallelLines <= 1 || this.stopped) return;
+    const t = l.task;
+    if (CLOSED_TASK.has(t.state) || t.state === "paused") return;
+    const waiting = t.lines.filter((x) => !x.decided);
+    for (const [i, line] of waiting.entries()) {
+      if (l.inflight >= this.lv.parallelLines) return;
+      const ctx = l.ctxOf.get(line.id);
+      if (!ctx || l.pre.has(line.id) || l.calling === line.id || !this.mayDecideBeside(t, line.text, waiting.slice(0, i))) continue;
+      const p = this.callGate(l, line, ctx, true);
+      p.catch(() => undefined);
+      l.pre.set(line.id, p);
+    }
+  }
+
+  // A line may be decided beside earlier undecided lines only when it names a measure, none of them names it too, and no rule answer would settle it.
+  private mayDecideBeside(t: EmrTask, text: string, earlier: readonly EmrLine[]): boolean {
+    if (!willWriteNumber(text) || this.answersByRule(t, text)) return false;
+    return earlier.every((e) => sharedMeasures(e.text, text).length === 0);
+  }
+
+  // The gate input for a line as the task stands now; a call started before its turn leaves undecided lines out of the recent words.
+  private gateInput(t: EmrTask, line: { id: string; text: string }, ctx: EmrContext, early: boolean): GateInput {
+    const kinds = this.kinds(t.owner);
+    const openQ = t.questions.filter((q) => q.answered_by === null).at(-1) ?? null;
+    const wide = isWide(kinds);
+    const names = wide ? this.o.port.names?.() : undefined;
+    const at = t.lines.findIndex((x) => x.id === line.id);
+    return {
+      kinds, context: ctx, actions: this.gateActions(t), openQuestion: openQ?.text ?? null,
+      recent: t.lines.slice(0, at < 0 ? t.lines.length : at).filter((x) => x.text && (!early || x.decided)).slice(-6).map((x) => x.text), said: line.text,
+      ...(wide ? { today: this.wall().toISOString().slice(0, 10), ...(names ? { names } : {}) } : {})
+    };
+  }
+
+  // One gate call for a line, with the gate as committed.
+  private callGate(l: Live, line: { id: string; text: string }, ctx: EmrContext, early: boolean, timesKey = line.id): Promise<GateResult> {
+    const t = l.task;
+    const input = this.gateInput(t, line, ctx, early);
+    const settings = this.o.gate ?? GATE_SETTINGS;
+    const tm = this.timesOf(timesKey);
+    tm.gate_start ??= Date.now();
+    l.inflight += 1;
+    const p = gateUtterance(this.o.client, input, { run_id: t.run_id, task_id: t.task_id }, settings);
+    // The bookkeeping hangs off the call rather than wrapping it, so an awaited call answers as soon as it did before.
+    const done = () => { l.inflight -= 1; tm.gate_end = Date.now(); this.pump(l); };
+    p.then(done, done);
+    return p;
   }
 
   // A short answer to the latest open choice ("88", "yes", "no") settles it by rule with no model call; anything else goes to the gate.
@@ -569,7 +770,12 @@ export class EmrRuntime {
     if (q.answered_by === null) this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
     this.append(l, "line.ruled", { line_id: lineId, classes: ["instruction"], as: "answer", question_id: q.question_id });
     if (a === "no") { this.note(l, "Left it unwritten, as you said."); this.settle(l, "answered_no"); return true; }
-    const c = q.choice;
+    this.fresh = lineId;
+    try { return this.applyAnswer(l, lineId, line, a, q.choice); } finally { this.fresh = null; }
+  }
+
+  private applyAnswer(l: Live, lineId: string, line: EmrLine, a: Record<string, string>, c: QuestionChoice): boolean {
+    const t = l.task;
     const raw: Record<string, unknown> = { ...c.base, ...Object.fromEntries(Object.entries(a).map(([k, v]) => [k, k === "temp_c" ? tempText(v) ?? v : k === "bp" ? v : Number(v)])) };
     const own = Object.fromEntries(Object.entries(a).filter(([, v]) => line.text.includes(String(v).split("/")[0]!)));
     if (c.kind === OBSERVATION_KIND) {
@@ -700,22 +906,19 @@ export class EmrRuntime {
     if (t.state !== "running") this.setState(l, "running", `heard_${lineId}`);
     const settings = this.o.gate ?? GATE_SETTINGS;
     const kinds = this.kinds(t.owner);
-    const openQ = t.questions.filter((q) => q.answered_by === null).at(-1) ?? null;
-    const wide = isWide(kinds);
-    const names = wide ? this.o.port.names?.() : undefined;
-    let r;
+    // A call started before this line's turn is used when it answered; one that failed is made again now, in order.
+    const pre = l.pre.get(lineId);
+    l.pre.delete(lineId);
+    let r: GateResult;
+    l.calling = lineId;
     try {
-      r = await gateUtterance(this.o.client, {
-        kinds, context: ctx, actions: this.gateActions(t), openQuestion: openQ?.text ?? null,
-        recent: t.lines.slice(0, t.lines.indexOf(line)).filter((x) => x.text).slice(-6).map((x) => x.text), said: line.text,
-        ...(wide ? { today: this.wall().toISOString().slice(0, 10), ...(names ? { names } : {}) } : {})
-      }, { run_id: t.run_id, task_id: t.task_id }, settings);
+      r = pre ? await pre.catch(() => this.callGate(l, line, ctx, false)) : await this.callGate(l, line, ctx, false);
     } catch (e) {
       const code = e instanceof ModelError ? e.code : "error";
       this.append(l, "intent.failed", { line_id: lineId, reason: `model_${code}` });
       if (l.task.state === "running") this.setState(l, "needs_input", `model_${code}`);
       return;
-    }
+    } finally { l.calling = null; }
     // A clause is applied only when its words come from this line; the model sometimes classes the recent words it was shown again.
     const all = r.value.clauses as AnyClause[];
     const clauses = all.filter((c) => fromLine(c.words, line.text));
@@ -724,14 +927,19 @@ export class EmrRuntime {
     const bare = (cs: readonly AnyClause[]) => (line.kept ? cs : cs.map(({ words, ...c }) => ({ ...c, words: "", word_count: words.split(/\s+/).filter(Boolean).length })));
     this.append(l, "gate.decided", {
       line_id: lineId, clauses: bare(clauses), ...(outside.length ? { outside_line: bare(outside) } : {}), provider: r.provider, model: r.model, response_id: r.response_id, ledger: r.ledger, cost_usd: r.cost_usd,
-      calls: 1 + r.repairs, repairs: r.repairs, fallback_reason: r.fallback_reason, prompt_sha256: r.prompt_sha256
+      calls: r.calls ?? 1 + r.repairs, repairs: r.repairs, fallback_reason: r.fallback_reason, prompt_sha256: r.prompt_sha256,
+      ...(r.stage ? { stage: r.stage, first_look: r.first_look ?? null, stage_ms: r.stage_ms ?? null } : {}), ...(pre ? { started_early: true } : {})
     });
+    this.gateStage.set(lineId, r.stage ?? "full");
     if (l.task.state !== "running") return;
     // Words meant for the agent answer its open question before they are acted on.
     if (clauses.some((c) => c.class === "instruction" || c.class === "correction")) {
       for (const q of t.questions.filter((y) => y.answered_by === null)) this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
     }
-    for (const c of oneUnclear(mergeInstructions(clauses, settings.confidence_floor, kinds))) this.applyClause(l, lineId, c, settings.confidence_floor, kinds, prov);
+    this.fresh = lineId;
+    try {
+      for (const c of oneUnclear(mergeInstructions(clauses, settings.confidence_floor, kinds))) this.applyClause(l, lineId, c, settings.confidence_floor, kinds, prov);
+    } finally { this.fresh = null; }
     this.settle(l, "heard");
   }
 
@@ -1042,9 +1250,11 @@ export class EmrRuntime {
     const t = l.task;
     const actionId = `a-${shortHash(t.task_id, lineId, t.order.length + 1)}`;
     const ears = this.startCheck(l, actionId, lineId, own);
-    this.append(l, "action.proposed", { action_id: actionId, kind, args, summary: kind === OBSERVATION_KIND ? summarise(args as ObservationArgs, correctsId) : summariseWork(kind, args), line_id: lineId, corrects_action_id: correctsId, hold_ms: this.o.holdMs ?? 0, ...(ears ? { ears: true } : {}) });
+    const anchor = this.anchorOf(t, lineId);
+    this.append(l, "action.proposed", { action_id: actionId, kind, args, summary: kind === OBSERVATION_KIND ? summarise(args as ObservationArgs, correctsId) : summariseWork(kind, args), line_id: lineId, corrects_action_id: correctsId, hold_ms: this.o.holdMs ?? 0, ...this.holdUntil(anchor), ...(ears ? { ears: true } : {}) });
     this.settle(l, "proposed");
-    if (t.state === "running") this.hold(l, actionId);
+    this.noteHold(actionId, anchor);
+    if (t.state === "running") this.hold(l, actionId, anchor);
   }
 
   private note(l: Live, text: string): void {
@@ -1109,9 +1319,11 @@ export class EmrRuntime {
     const t = l.task;
     const actionId = `a-${shortHash(t.task_id, lineId, t.order.length + 1)}`;
     const ears = this.startCheck(l, actionId, lineId, own);
-    this.append(l, "action.proposed", { action_id: actionId, kind: OBSERVATION_KIND, args, summary: summarise(args, correctsId), line_id: lineId, corrects_action_id: correctsId, hold_ms: this.o.holdMs ?? 0, ...(ears ? { ears: true } : {}) });
+    const anchor = this.anchorOf(t, lineId);
+    this.append(l, "action.proposed", { action_id: actionId, kind: OBSERVATION_KIND, args, summary: summarise(args, correctsId), line_id: lineId, corrects_action_id: correctsId, hold_ms: this.o.holdMs ?? 0, ...this.holdUntil(anchor), ...(ears ? { ears: true } : {}) });
     this.settle(l, "proposed");
-    this.hold(l, actionId);
+    this.noteHold(actionId, anchor);
+    this.hold(l, actionId, anchor);
   }
 
   // Starts the second reading of a line's audio for the values said in it; nothing starts without audio, a second ear or a value.
@@ -1120,12 +1332,25 @@ export class EmrRuntime {
     const vals = Object.fromEntries(Object.entries(own).filter(([k, v]) => (["temp_c", "pulse", "resp_rate", "bp", "spo2"] as string[]).includes(k) && v !== null && v !== undefined && v !== "")) as Partial<Record<Measure, unknown>>;
     if (!clip || !this.o.secondEar || !Object.keys(vals).length) return false;
     const t = l.task;
+    const failed = (error: string): EarsOutcome => ({
+      check: { agree: false, measures: Object.entries(vals).map(([m, v]) => ({ measure: m as Measure, first: normValue(m as Measure, v), second: null, agree: false })) },
+      reading: null, error
+    });
+    // A reading started with the gate is compared now; it is charged to the first action that uses it.
+    const early = this.early.get(lineId);
+    if (early) {
+      const first = early.uses === 0;
+      early.uses += 1;
+      this.checks.set(actionId, early.p.then(({ reading, error }) => reading
+        ? { check: compareReadings(vals, reading.text, clip.guessed), reading: first ? reading : { ...reading, cost_usd: 0, calls: 0 }, error: null }
+        : failed(error ?? "ear_failed")));
+      return true;
+    }
+    const tm = this.timesOf(lineId);
     const p = this.o.secondEar(clip.wav, { run_id: t.run_id, task_id: t.task_id, line_id: lineId })
       .then((reading): EarsOutcome => ({ check: compareReadings(vals, reading.text, clip.guessed), reading, error: null }))
-      .catch((e: unknown): EarsOutcome => ({
-        check: { agree: false, measures: Object.entries(vals).map(([m, v]) => ({ measure: m as Measure, first: normValue(m as Measure, v), second: null, agree: false })) },
-        reading: null, error: e instanceof ModelError ? e.code : "ear_failed"
-      }));
+      .catch((e: unknown): EarsOutcome => failed(e instanceof ModelError ? e.code : "ear_failed"))
+      .finally(() => { tm.ear_done = Date.now(); });
     this.checks.set(actionId, p);
     return true;
   }
@@ -1233,8 +1458,22 @@ export class EmrRuntime {
     }
   }
 
-  private hold(l: Live, actionId: string): void {
-    const timer = setTimeout(() => { this.timers.delete(timer); if (!this.stopped) this.enqueue(l, () => this.execute(l, actionId)); }, this.o.holdMs ?? 0);
+  // Under lever 1 an action proposed while its own line is decided is held from the end of that line; held work, a resume or a restart gets the whole hold again.
+  private anchorOf(t: EmrTask, lineId: string): number | null {
+    if (!this.lv.holdFromSpeech || this.fresh !== lineId) return null;
+    const line = t.lines.find((x) => x.id === lineId);
+    const at = Date.parse(line?.ambient?.ended_at ?? line?.at ?? "");
+    return Number.isFinite(at) ? at : null;
+  }
+  private holdUntil(anchor: number | null): Record<string, string> {
+    return anchor === null ? {} : { hold_until: new Date(anchor + (this.o.holdMs ?? 0)).toISOString() };
+  }
+  private noteHold(actionId: string, anchor: number | null): void {
+    if (anchor !== null) this.holdEnds.set(actionId, new Date(anchor + (this.o.holdMs ?? 0)).toISOString());
+  }
+
+  private hold(l: Live, actionId: string, anchor: number | null = null): void {
+    const timer = setTimeout(() => { this.timers.delete(timer); if (!this.stopped) this.enqueueExec(l, () => this.execute(l, actionId)); }, holdLeftMs(this.o.holdMs ?? 0, anchor, this.wall().getTime()));
     this.timers.add(timer);
   }
 
@@ -1272,10 +1511,15 @@ export class EmrRuntime {
     }
     const w = a.written!;
     const v0 = Date.now();
-    let proof = await this.o.port.prove(a.kind, a.args, w, prov);
-    if (!proof) {
-      await new Promise((r) => setTimeout(r, this.o.proofRetryMs ?? 500));
+    let proof: EmrProof | null;
+    // Lever 3: a second read starts at 500 ms when the first is slow or finds nothing, and the first proof found wins.
+    if (this.lv.proofBeside) proof = await hedgedRead(() => this.o.port.prove(a.kind, a.args, w, prov), PROOF_HEDGE_MS);
+    else {
       proof = await this.o.port.prove(a.kind, a.args, w, prov);
+      if (!proof) {
+        await new Promise((r) => setTimeout(r, this.o.proofRetryMs ?? 500));
+        proof = await this.o.port.prove(a.kind, a.args, w, prov);
+      }
     }
     const verifyMs = Date.now() - v0;
     if (!proof && this.o.port.unverifiable?.(a.kind)) {
@@ -1318,9 +1562,16 @@ export class EmrRuntime {
     const from = fired?.fired_at ?? line?.ambient?.ended_at ?? line?.at ?? a.proposed_at;
     const verified = this.wall().toISOString();
     const d = (x: string | null | undefined) => (x ? Date.parse(x) - Date.parse(from) : null);
+    const n = (x: number | undefined) => (x === undefined || fired ? null : x - Date.parse(from));
+    const tm = this.times.get(a.line_id) ?? {};
+    const gate = this.gateStage.get(a.line_id) ?? null;
     return {
       action_id: a.action_id, kind: a.kind, line_id: a.line_id, from, verified_at: verified, ms: Date.parse(verified) - Date.parse(from),
-      parts: { heard: fired ? null : d(line?.ambient?.final_at), proposed: d(a.proposed_at), written: d(a.written_at), verified: d(verified), verify_ms: verifyMs, hold_ms: this.o.holdMs ?? 0 }
+      parts: {
+        heard: fired ? null : d(line?.ambient?.final_at), asr: n(tm.asr_at), delivered: n(tm.delivered), gate_start: n(tm.gate_start), gate_end: n(tm.gate_end), ear_done: n(tm.ear_done),
+        proposed: d(a.proposed_at), hold_until: this.holdEnds.has(a.action_id) ? d(this.holdEnds.get(a.action_id)) : null, written: d(a.written_at), verified: d(verified), verify_ms: verifyMs, hold_ms: this.o.holdMs ?? 0
+      },
+      gate: fired ? null : gate, levers: leverList(this.lv)
     };
   }
 

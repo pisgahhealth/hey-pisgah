@@ -32,7 +32,7 @@ type Held = { samples: Float32Array[]; seqs: number[]; audio_ms: number; rate: n
 // One transcribed stretch of audio, either finished or waiting for the next chunk because it ends mid-number.
 type Heard = {
   samples: Float32Array[]; seqs: number[]; rate: number; audio_ms: number; trailing_ms: number; arrived: number;
-  text: string; raw: string; cost_usd: number; keywords_dropped: boolean; rewrites: Rewrite[]; strong: boolean; joined: boolean;
+  text: string; raw: string; cost_usd: number; keywords_dropped: boolean; rewrites: Rewrite[]; strong: boolean; joined: boolean; heard_at: number;
 };
 type Session = {
   owner: string; ctx: EmrContext; next: number; held: Held | null; waiting: Heard | null; timer: NodeJS.Timeout | null; outcomes: Map<number, ListenOutcome>;
@@ -202,6 +202,8 @@ export class ListenSessions {
     if (!end || this.closed) return this.deliver(s, sessionId, h, why);
     h.strong = end === "strong";
     s.waiting = h;
+    // A line that ends on a number may be complete, so its decision starts while it waits; the runtime uses it only if these same words are delivered.
+    if (!h.strong) this.rt.speculate({ owner: s.owner, ctx: s.ctx, session_id: sessionId, text: h.text, clip: encodeWav(concat(h.samples), h.rate) });
     const timer = setTimeout(() => {
       s.timer = null;
       s.chain = s.chain.then(async () => { if (s.waiting === h) { s.waiting = null; await this.deliver(s, sessionId, h, "number_alone"); } })
@@ -229,7 +231,7 @@ export class ListenSessions {
       heard = await this.o.transcribe(joined, [], `${asrId}-nk`.slice(0, 64));
     }
     const v = vitalsVocabulary(cleanTranscript(heard.text));
-    return { samples: parts, seqs, rate, audio_ms: totalMs(parts, rate), trailing_ms: silence, arrived, text: v.text, raw: heard.text, cost_usd: heard.cost_usd, keywords_dropped: dropped, rewrites: v.rewrites, strong: false, joined: false };
+    return { samples: parts, seqs, rate, audio_ms: totalMs(parts, rate), trailing_ms: silence, arrived, text: v.text, raw: heard.text, cost_usd: heard.cost_usd, keywords_dropped: dropped, rewrites: v.rewrites, strong: false, joined: false, heard_at: Date.now() };
   }
 
   // Hands one finished utterance to the runtime as an ambient line, with its audio kept in memory for the second ear.
@@ -240,7 +242,7 @@ export class ListenSessions {
       owner: s.owner, target: { admission_id: s.ctx.admission_id }, text: h.text, source: "audio", spoken_at: new Date(h.arrived - h.audio_ms).toISOString(),
       audio: { audio_ms: h.audio_ms, cost_usd: h.cost_usd, session_id: sessionId },
       ambient: { session_id: sessionId, seqs: h.seqs, raw_text: h.raw.slice(0, 2000), ended_at: new Date(h.arrived - h.trailing_ms).toISOString(), final_at: new Date(h.arrived).toISOString(), trailing_silence_ms: h.trailing_ms, finished_by: finished },
-      context: s.ctx, clip: encodeWav(concat(h.samples), h.rate), rewrites: h.rewrites
+      context: s.ctx, clip: encodeWav(concat(h.samples), h.rate), rewrites: h.rewrites, heard_at: h.heard_at
     });
     const u: ListenUtterance = { id: r.line_id, line_id: r.line_id, task_id: r.task_id, text: h.text, seqs: h.seqs, class: null, classes: [] };
     s.unreported.push(u);
