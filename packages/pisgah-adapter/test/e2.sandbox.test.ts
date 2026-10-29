@@ -1,5 +1,9 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { Provenance } from "@hey-pisgah/agent";
+import { startEmrServe, type EmrRuntime, type EmrTaskView, type Provenance } from "@hey-pisgah/agent";
+import { ModelClient } from "@hey-pisgah/model";
 import type { DoorLog } from "../src/port.js";
 import { PisgahPort } from "../src/port.js";
 import { loadProfile } from "../src/profile.js";
@@ -14,7 +18,9 @@ const now = () => new Date().toISOString();
 export async function freshArrival(profile = loadProfile()): Promise<{ patient: string; visit: string; sb: SandboxBlock; person: ReturnType<typeof personCaller>; log: DoorLog[] }> {
   const sb = SandboxBlock.parse(profile.sandbox);
   const log: DoorLog[] = [];
-  const person = personCaller(profile, sb, new Map(), log);
+  const call = personCaller(profile, sb, new Map(), log);
+  // A keep-alive socket the app already closed resets once; the person step is tried again on a fresh one.
+  const person: typeof call = async (op, vars) => { try { return await call(op, vars); } catch { return call(op, vars); } };
   const tag = Date.now().toString(36);
   const reg = await person("register", { name: `${sb.scrub[0] ?? ""}E2 Child ${tag}`, phone: `0803${String(Date.now()).slice(-7)}` });
   if (!reg.ok) throw new Error(`register failed: ${reg.status} ${reg.note ?? ""}`);
@@ -78,4 +84,69 @@ describe.skipIf(!RUN)("E2 owner-aware consult holder on the sandbox EMR", () => 
     expect(body.ownedByMe).toBe(true);
     expect(body.draft?.encounterDetailsJson ?? "").toContain("Abdominal pain for two days.");
   }, 15 * 60_000);
+
+  it("clerks by voice: narration into the note, patient speech in its own section, vitals in the note before admission, an allergy, admission on the doctor's authority and a bed in the ward said", async () => {
+    const profile = loadProfile();
+    const { patient, visit, sb, person } = await freshArrival(profile);
+    const mine = mintAgentBearer(sb);
+    const port = new PisgahPort(profile, { bearers: { [mine.owner]: mine.bearer } });
+    const root = mkdtempSync(join(tmpdir(), "hp-e2-"));
+    let rt: EmrRuntime | null = null;
+    const client = new ModelClient({ storeRoot: root, mode: "live", recordingsDir: join(root, "recordings"), taskStateOf: (id) => rt?.stateOf(id) ?? null });
+    const s = await startEmrServe({ storeRoot: root, port, client, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4107), runtime: { holdMs: 4000, proofRetryMs: 1500 }, log: (x) => process.stderr.write(`serve: ${x}\n`) });
+    rt = s.runtime;
+    const say = async (text: string) => {
+      process.stderr.write(`say: ${text}\n`);
+      const r = await fetch(`${s.url}/tasks/say`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ owner: mine.owner, patientId: patient, text }) });
+      expect(r.status).toBe(202);
+      const b = (await r.json()) as { task_id: string; line_id: string };
+      await s.runtime.settled(8 * 60_000);
+      return b;
+    };
+    try {
+      const first = await say("He has had pain around the belly button moving to the right side since yesterday.");
+      await say("Doctor, it really hurts and I have vomited twice this morning.");
+      await say("Temperature 38.2, pulse 118.");
+      await say("He is allergic to penicillin, it gives him a rash.");
+      await say("On examination he is tender in the right iliac fossa with guarding.");
+      const adm = await say("Admit him as an emergency to the children's ward for suspected appendicitis.");
+      await say("Put him on a bed in the children's ward.");
+      const v = s.runtime.view(first.task_id)!;
+      const done = (k: string) => v.actions.filter((a) => a.kind === k && a.state === "completed");
+      expect(v.actions.filter((a) => a.state !== "completed"), JSON.stringify(v.actions)).toEqual([]);
+      expect(done("open_consult")).toHaveLength(1);
+      const sections = done("record_clerking").map((a) => a.args["section"]);
+      expect(sections).toEqual(expect.arrayContaining(["presenting_complaint", "patient_reported", "vitals", "examination"]));
+      expect(v.actions.some((a) => a.kind === "record_clerking" && a.args["section"] === "patient_reported" && /vomited/.test(String(a.args["text"])))).toBe(true);
+      expect(v.transcript.find((l) => /vomited/.test(l.text))?.classes).toEqual(["patient_reported"]);
+
+      // The person sees the whole note in their own consultation, with the patient's words in their own section.
+      const opened = await person("open_as_doctor", { visit_id: visit, patient_id: patient });
+      const details = JSON.parse((opened.json as { draft: { encounterDetailsJson: string } }).draft.encounterDetailsJson) as Record<string, string>;
+      const keys = profile.clerking!.sections;
+      expect(details[keys["patient_reported"]!]).toMatch(/vomited/);
+      expect(details[keys["vitals"]!]).toMatch(/38\.2/);
+      expect(details[keys["examination"]!]).toMatch(/iliac fossa/);
+      expect(details[keys["presenting_complaint"]!] ?? details[keys["history"]!]).toMatch(/belly button/);
+
+      // The allergy is on the list with the patient as its source, written by the agent for its owner.
+      const allergies = sandboxQuery(sb, "allergies_for", { patient });
+      expect(allergies).toMatchObject([{ substance: expect.stringMatching(/penicillin/i), source: "patient", recorded_by: mine.agent }]);
+
+      // The admission was requested and accepted in one step on the doctor's authority, and the bed is in the ward said.
+      const admission = sandboxQuery(sb, "admission_for_visit", { visit })[0]!;
+      expect(admission["accepted_by"]).toBe(mine.agent);
+      expect(admission["bed_id"]).not.toBeNull();
+      expect(v.admission_id).toBe(admission["id"]);
+      const audit = sandboxQuery(sb, "audit_for_visit", { visit });
+      expect(audit.find((a) => a["action_type"] === "admission.accepted_on_owner_authority")).toMatchObject({ actor: mine.agent, on_behalf_of: mine.owner, evidence: `transcript:${adm.line_id}` });
+
+      // Every verified action has a speed row from the end of its words, and no model call was made at another effort.
+      expect(v.speed.rows.length).toBe(v.actions.length);
+      expect(v.speed.errors).toEqual({ failed: 0, refused: 0, unverified: 0 });
+    } finally {
+      await s.close();
+      client.close();
+    }
+  }, 30 * 60_000);
 });

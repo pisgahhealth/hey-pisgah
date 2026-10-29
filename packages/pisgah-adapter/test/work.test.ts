@@ -78,7 +78,7 @@ describe("profile-driven work over the door", () => {
     try {
       const port = new PisgahPort(profile(d.base), { bearers: { [DOC]: "b-doc", [ACC]: "b-acc" }, onRequest: (l) => log.push(l) });
       expect(port.kindsFor(ACC)).toEqual(["prepare_bill", "send_pay_link"]);
-      expect(port.names()).toEqual({ page_targets: { accounts: ["accounts"] }, clinics: { gopd: ["GOPD"] } });
+      expect(port.names()).toEqual({ page_targets: { accounts: ["accounts"] }, clinics: { gopd: ["GOPD"] }, wards: {} });
       const before = await port.resolve({ patient_id: PAT }, prov(DOC));
       expect(before).toMatchObject({ admission_id: "", visit_id: VIS, label: "Journey Patient" });
 
