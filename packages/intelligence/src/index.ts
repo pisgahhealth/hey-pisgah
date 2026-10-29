@@ -22,4 +22,5 @@ export { appendCommitment, appendOnlyProblems, commitmentFor, commitmentsPath, c
 export { checkDiscovery, type DiscoveryCheck } from "./check.js";
 export { INTELLIGENCE_RECORDINGS_DIR, checkDiscoveryCommand, discoverCommand, type DiscoverDeps } from "./cli.js";
 export { adoptionClaims, citedEventCount, cycle2Result, discoveryClaims } from "./claims-results.js";
+export { runRecord, publishRuns } from "./publish.js";
 export { searchBaseline, longestWaitCases, type BaselineResult } from "./baseline.js";
