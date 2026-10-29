@@ -1,0 +1,3715 @@
+{
+ "set": "Samuel's recordings, 29 Oct 2026",
+ "model": "nemo_en_titanet_small",
+ "held_out": [
+  {
+   "id": "H01",
+   "sha256": "181bf5e05811e16b265e6481c50664327941b27cd7b6414ec6f39dad08c64436"
+  },
+  {
+   "id": "H02",
+   "sha256": "f3918e0f6d0bbff9866268f70a719de208c34d2a314b03417538abc0efd2f5f3"
+  },
+  {
+   "id": "H03",
+   "sha256": "bef1dfe39892086b1ff867b59f8af5a535534c4011fb38c23c31a1486a17b8a1"
+  },
+  {
+   "id": "H04",
+   "sha256": "1604a925a9f9fd284ee230779916bcacfc35ac02d0912db2d9ccbe464a6ecd58"
+  },
+  {
+   "id": "H05",
+   "sha256": "d444f64266bda65d35f641e9f5cd852b5bc4aecdaf365b91f8d02994b6f956c6"
+  },
+  {
+   "id": "H06",
+   "sha256": "548d4931e35cd67a47f530378740f4dcad1ebca11359abb1dd71e63fcddf4e5b"
+  },
+  {
+   "id": "H07",
+   "sha256": "d5c4853f9da5678ac3262ba51f3d44362a7d69b8b8aa888740cf426985d5bedd"
+  },
+  {
+   "id": "H08",
+   "sha256": "b9a4ca097b82382e460cda3ee79ed9ad97cca3cc8f42e6c5e7df45c607684e5c"
+  },
+  {
+   "id": "H09",
+   "sha256": "673ec3b2dd579d869b66b2a70f4aa8ef473450374d944c6fa08b230272156184"
+  },
+  {
+   "id": "H10",
+   "sha256": "9eb70068805f81e07f0cfdc1fa393cec0ae725d2a2bfc2d64751b35087e6c982"
+  },
+  {
+   "id": "H11",
+   "sha256": "dce12aff40365336663e6611c816c9bebcc5f07ed4f7ad2bf41551815a105551"
+  },
+  {
+   "id": "H12",
+   "sha256": "10c355ec1792ba1c43ac22cc303a3ded454cc8a79870b549823f80be4973f5ff"
+  },
+  {
+   "id": "H13",
+   "sha256": "38e819068035b75c05cc30892c39774c0d627b878f4207d4f2f614ea4a6496b7"
+  },
+  {
+   "id": "H14",
+   "sha256": "1d8842270bf20cd75696ab62afc210d508889780b880c167c1455a3df329d46c"
+  },
+  {
+   "id": "H15",
+   "sha256": "78b81cf405c5cb11b9c190d2d51a13ae4474c1c2ec0c066e2d87af33e993c3a1"
+  },
+  {
+   "id": "H16",
+   "sha256": "ee493ec493a948662d455b0de2d379286299534e470bc926d288a2c6058cbb6a"
+  },
+  {
+   "id": "H17",
+   "sha256": "76e33dfd903721a3747a7f8931f828f07059f781223506d5b0293bd27490da8b"
+  },
+  {
+   "id": "H18",
+   "sha256": "cbaa6960fe85f940d753417d9bc62541b93d096b940c0a1a106adaa2c99927b0"
+  },
+  {
+   "id": "H19",
+   "sha256": "8fad53822e1d3d46ca75a8d9b6249909a26cb283405370fb76a9d40a54976093"
+  },
+  {
+   "id": "H20",
+   "sha256": "aeaf6117ca99fac14028440972533aef7b28271bb2ca4e39ac063b048dd15e46"
+  },
+  {
+   "id": "H21",
+   "sha256": "49a77a8b3fdb115c8da8f86b2257d571847c1f0ac998c569eba256d11730c0b8"
+  },
+  {
+   "id": "H22",
+   "sha256": "e5e7f91ae77e081bdf4ddcd9dc3a696259fc5f31dece87c527cbb5c0a486d44d"
+  },
+  {
+   "id": "H23",
+   "sha256": "dd5e09d300b32c6428c556cd0ee93ef1c139f02967c7d4b336fa8304dec88181"
+  },
+  {
+   "id": "H24",
+   "sha256": "1d1f8ed9e974bc8d3c33021acf64103a77c576e6ee89c1c9e4f2b92abdb672d8"
+  },
+  {
+   "id": "H25",
+   "sha256": "8ae3a354cf00d6149c6d6a6a31fe9c7393f8a204843a353a820a8db74f772ed0"
+  },
+  {
+   "id": "H26",
+   "sha256": "6695272f948d1902602280d1145cd88c71cd5da719a80cd813005e7c68b4dbc0"
+  },
+  {
+   "id": "H27",
+   "sha256": "c9b84a5f27ff596cc69c79257ce44fca25b06ed55d1d5c6b3a80ca9a8f991058"
+  },
+  {
+   "id": "H28",
+   "sha256": "de1da1516b1af92515da29f65dad2089a29159f3d493b20866e9eb80b0e803cb"
+  },
+  {
+   "id": "H29",
+   "sha256": "e61160b69c02e215b98b3c6fccc02bc072f9250dae47ed17562eb3c4d9f4967d"
+  },
+  {
+   "id": "H30",
+   "sha256": "77673887c8e4734fa0d601d5491bd60d98d9ae26547200dc3d95332261f15d89"
+  },
+  {
+   "id": "H31",
+   "sha256": "885f5b13a85925d1e02dd6f3622917c69505b504fb7ff8d5579a3673d7861834"
+  },
+  {
+   "id": "H32",
+   "sha256": "de2e301d47169084aa7fbced84a9759117565f926ca57e1b53e3b2898506cc4a"
+  },
+  {
+   "id": "H33",
+   "sha256": "03661098ee13f48ef134e9411a79b318324d7c3b5a471c4d54f407a10d4a147a"
+  },
+  {
+   "id": "H34",
+   "sha256": "e5800bf90b4131503f098da313f6250964f141bbc1bd5eca696c3a1ca4ddea88"
+  },
+  {
+   "id": "H35",
+   "sha256": "aac01ad5072c1d761c09db1049811a749a7107bcc16c7f0330a04f875a7a6eb7"
+  },
+  {
+   "id": "H36",
+   "sha256": "18e9c0cd6e22a5291e65c324de3db5e499d95a8c511aeb905f865c310654c1cc"
+  },
+  {
+   "id": "H37",
+   "sha256": "863934dc13f4ef1c2de33e8437534920d5d6a35e8ea759092ad25e9f5ea43703"
+  },
+  {
+   "id": "H38",
+   "sha256": "1b9d17bd81637b0c3e34b77150e360b55a52f50e08d88c657ea71be65b3bcf3b"
+  },
+  {
+   "id": "H40",
+   "sha256": "86da21862938f2d8bd5c1d65915ec48d5db959520de29ae5447d5c15283b567b"
+  },
+  {
+   "id": "H41",
+   "sha256": "d5c76002f0f77de69a1ce4f5e2899a44884d14f2b0b848384ec110f3a67caf11"
+  },
+  {
+   "id": "H42",
+   "sha256": "86d235de314af7f64ee63a1afbce739b42f6056b9b80f63057d8dee1486182b3"
+  },
+  {
+   "id": "H43",
+   "sha256": "211d040c58309464c39f31b86ee8bf2c3e36b73e91077444d58df7d7fcca70d6"
+  },
+  {
+   "id": "H45",
+   "sha256": "7c6be224ea35d1ab096d2a0311d61c9fc3b4cfeaeea435056b7f8747194f183c"
+  },
+  {
+   "id": "H46",
+   "sha256": "33537f43bda27262c36e5ee9cab00d3a24016851bfc252dc62ed1a26c369bebd"
+  },
+  {
+   "id": "H47",
+   "sha256": "66b6f3887f01cc9efbe6c0d2a3420b85626d4d074d40ca378985faa8e3d5e31e"
+  },
+  {
+   "id": "H48",
+   "sha256": "495b6a28469ece6f4e41c0184015a4d64a95681ead1d18003aab67b5c3c3c42d"
+  }
+ ],
+ "voices": {
+  "local_model_ms": {
+   "p50": 100.87,
+   "p90": 285.03,
+   "clips": 74
+  },
+  "groups": {
+   "S": {
+    "n": 33,
+    "cos_owner_median": 0.5984,
+    "cos_owner_min": 0.442,
+    "cos_owner_max": 0.7095,
+    "pitch_median_hz": 114,
+    "second_voice": []
+   },
+   "B": {
+    "n": 13,
+    "cos_owner_median": 0.5248,
+    "cos_owner_min": 0.2655,
+    "cos_owner_max": 0.6165,
+    "pitch_median_hz": 152,
+    "second_voice": [
+     "H27"
+    ]
+   },
+   "N": {
+    "n": 8,
+    "cos_owner_median": 0.5078,
+    "cos_owner_min": 0.3111,
+    "cos_owner_max": 0.6025,
+    "pitch_median_hz": 184,
+    "second_voice": [
+     "T14",
+     "T15"
+    ]
+   },
+   "P": {
+    "n": 12,
+    "cos_owner_median": 0.5579,
+    "cos_owner_min": 0.3753,
+    "cos_owner_max": 0.6666,
+    "pitch_median_hz": 164,
+    "second_voice": []
+   },
+   "R": {
+    "n": 5,
+    "cos_owner_median": 0.3999,
+    "cos_owner_min": 0.295,
+    "cos_owner_max": 0.6294,
+    "pitch_median_hz": 262,
+    "second_voice": [
+     "H40",
+     "H41",
+     "H42"
+    ]
+   }
+  },
+  "second_voice": [
+   "H27",
+   "H40",
+   "H41",
+   "H42",
+   "T14",
+   "T15"
+  ],
+  "tuned_rule": {
+   "model": "nemo_en_titanet_small",
+   "owner_min": 0.41,
+   "owner_margin": 0,
+   "other_min": 1,
+   "owner_low": 0.4586,
+   "second_high": 0.3628
+  },
+  "frozen_rule": {
+   "model": "nemo_en_titanet_small",
+   "owner_min": 0.59,
+   "owner_margin": 0.25,
+   "other_min": 0.43
+  },
+  "held_out_frozen": {
+   "owner_min": 0.59,
+   "owner_lines_passed": {
+    "n": 11,
+    "of": 21,
+    "refused": [
+     "H04",
+     "H07",
+     "H08",
+     "H09",
+     "H10",
+     "H11",
+     "H12",
+     "H13",
+     "H19",
+     "H43"
+    ]
+   },
+   "second_voice_passed": {
+    "n": 0,
+    "of": 4,
+    "ids": []
+   },
+   "owner_acting_other_parts_passed": {
+    "n": 7,
+    "of": 21
+   }
+  },
+  "held_out_tuned": {
+   "owner_min": 0.41,
+   "owner_lines_passed": {
+    "n": 21,
+    "of": 21,
+    "refused": []
+   },
+   "second_voice_passed": {
+    "n": 0,
+    "of": 4,
+    "ids": []
+   },
+   "owner_acting_other_parts_passed": {
+    "n": 20,
+    "of": 21
+   }
+  },
+  "tuning_tuned": {
+   "owner_min": 0.41,
+   "owner_lines_passed": {
+    "n": 11,
+    "of": 11,
+    "refused": []
+   },
+   "second_voice_passed": {
+    "n": 0,
+    "of": 2,
+    "ids": []
+   },
+   "owner_acting_other_parts_passed": {
+    "n": 10,
+    "of": 11
+   }
+  }
+ },
+ "gate": {
+  "held_out": {
+   "reader": "transcript_gate",
+   "clips": 46,
+   "speaker_accuracy": {
+    "n": 21,
+    "of": 46,
+    "rate": 0.4565
+   },
+   "per_speaker": {
+    "owner": {
+     "n": 21,
+     "of": 21,
+     "rate": 1
+    },
+    "other_clinician": {
+     "n": 0,
+     "of": 15,
+     "rate": 0
+    },
+    "patient_or_relative": {
+     "n": 0,
+     "of": 10,
+     "rate": 0
+    }
+   },
+   "owner_vs_not": {
+    "n": 21,
+    "of": 46,
+    "rate": 0.4565
+   },
+   "addressee_accuracy": {
+    "n": 30,
+    "of": 46,
+    "rate": 0.6522
+   },
+   "agent_vs_not": {
+    "n": 34,
+    "of": 46,
+    "rate": 0.7391
+   },
+   "false_authority": {
+    "n": 8,
+    "of": 25,
+    "rate": 0.32
+   },
+   "false_authority_on_probes": {
+    "n": 3,
+    "of": 3,
+    "rate": 1
+   },
+   "false_authority_ids": [
+    "H21",
+    "H23",
+    "H24",
+    "H25",
+    "H26",
+    "H27",
+    "H32",
+    "H46"
+   ],
+   "owner_instruction_recall": {
+    "n": 7,
+    "of": 8,
+    "rate": 0.875
+   },
+   "owner_instruction_missed_ids": [
+    "H06"
+   ],
+   "patient_named": {
+    "n": 0,
+    "of": 10,
+    "rate": 0
+   },
+   "patient_kept_out_of_instructions": {
+    "n": 10,
+    "of": 10,
+    "rate": 1
+   },
+   "latency_ms": {
+    "p50": 8307,
+    "p90": 14574
+   },
+   "cost_usd": {
+    "total": 0.250202,
+    "per_clip": 0.005439
+   },
+   "errors": 0
+  },
+  "tuning": {
+   "reader": "transcript_gate",
+   "clips": 24,
+   "speaker_accuracy": {
+    "n": 11,
+    "of": 24,
+    "rate": 0.4583
+   },
+   "per_speaker": {
+    "owner": {
+     "n": 11,
+     "of": 11,
+     "rate": 1
+    },
+    "other_clinician": {
+     "n": 0,
+     "of": 6,
+     "rate": 0
+    },
+    "patient_or_relative": {
+     "n": 0,
+     "of": 7,
+     "rate": 0
+    }
+   },
+   "owner_vs_not": {
+    "n": 11,
+    "of": 24,
+    "rate": 0.4583
+   },
+   "addressee_accuracy": {
+    "n": 17,
+    "of": 24,
+    "rate": 0.7083
+   },
+   "agent_vs_not": {
+    "n": 19,
+    "of": 24,
+    "rate": 0.7917
+   },
+   "false_authority": {
+    "n": 5,
+    "of": 13,
+    "rate": 0.3846
+   },
+   "false_authority_on_probes": {
+    "n": 4,
+    "of": 4,
+    "rate": 1
+   },
+   "false_authority_ids": [
+    "T11",
+    "T12",
+    "T13",
+    "T15",
+    "T23"
+   ],
+   "owner_instruction_recall": {
+    "n": 5,
+    "of": 5,
+    "rate": 1
+   },
+   "owner_instruction_missed_ids": [],
+   "patient_named": {
+    "n": 0,
+    "of": 7,
+    "rate": 0
+   },
+   "patient_kept_out_of_instructions": {
+    "n": 7,
+    "of": 7,
+    "rate": 1
+   },
+   "latency_ms": {
+    "p50": 8083,
+    "p90": 15932
+   },
+   "cost_usd": {
+    "total": 0.128465,
+    "per_clip": 0.005353
+   },
+   "errors": 0
+  },
+  "intent_held_out": {
+   "clips": 46,
+   "right": 38,
+   "instructions_acted": {
+    "n": 10,
+    "of": 11,
+    "missed": [
+     "H06"
+    ]
+   },
+   "acted_on_non_instructions": {
+    "n": 7,
+    "of": 35,
+    "ids": [
+     "H08",
+     "H15",
+     "H21",
+     "H25",
+     "H26",
+     "H27",
+     "H46"
+    ],
+    "with_an_action_kind": [
+     "H08",
+     "H21",
+     "H46"
+    ]
+   }
+  },
+  "intent_tuning": {
+   "clips": 24,
+   "right": 22,
+   "instructions_acted": {
+    "n": 9,
+    "of": 9,
+    "missed": []
+   },
+   "acted_on_non_instructions": {
+    "n": 2,
+    "of": 15,
+    "ids": [
+     "T08",
+     "T13"
+    ],
+    "with_an_action_kind": []
+   }
+  }
+ },
+ "asr": {
+  "reference": "what was said, reconstructed from both transcribers and the script without listening; the unsure lines are left out of the sure count",
+  "voice_transcribe": {
+   "all": {
+    "clips": 70,
+    "ref_words": 1022,
+    "errors": 207,
+    "wer": 0.2025,
+    "misheard": [
+     {
+      "heard": "her -> our",
+      "n": 3,
+      "ids": [
+       "H11",
+       "H27",
+       "H32"
+      ]
+     },
+     {
+      "heard": "a -> the",
+      "n": 2,
+      "ids": [
+       "T11",
+       "H21"
+      ]
+     },
+     {
+      "heard": "chart -> charge",
+      "n": 2,
+      "ids": [
+       "H43",
+       "H43"
+      ]
+     },
+     {
+      "heard": "her -> how",
+      "n": 2,
+      "ids": [
+       "T14",
+       "H45"
+      ]
+     },
+     {
+      "heard": "her -> is",
+      "n": 2,
+      "ids": [
+       "T14",
+       "H28"
+      ]
+     },
+     {
+      "heard": "a -> high",
+      "n": 1,
+      "ids": [
+       "H16"
+      ]
+     },
+     {
+      "heard": "abdomen -> is",
+      "n": 1,
+      "ids": [
+       "H09"
+      ]
+     },
+     {
+      "heard": "added -> other",
+      "n": 1,
+      "ids": [
+       "T05"
+      ]
+     },
+     {
+      "heard": "also -> so",
+      "n": 1,
+      "ids": [
+       "H22"
+      ]
+     },
+     {
+      "heard": "anaesthetist -> anesthetist",
+      "n": 1,
+      "ids": [
+       "H23"
+      ]
+     },
+     {
+      "heard": "as -> at",
+      "n": 1,
+      "ids": [
+       "H01"
+      ]
+     },
+     {
+      "heard": "at -> i",
+      "n": 1,
+      "ids": [
+       "H37"
+      ]
+     },
+     {
+      "heard": "bring -> put",
+      "n": 1,
+      "ids": [
+       "T23"
+      ]
+     },
+     {
+      "heard": "care -> camp",
+      "n": 1,
+      "ids": [
+       "H32"
+      ]
+     },
+     {
+      "heard": "ceftriaxone -> cefitriaxone",
+      "n": 1,
+      "ids": [
+       "T13"
+      ]
+     },
+     {
+      "heard": "chart -> check",
+      "n": 1,
+      "ids": [
+       "T22"
+      ]
+     },
+     {
+      "heard": "chart -> uhuh",
+      "n": 1,
+      "ids": [
+       "H04"
+      ]
+     },
+     {
+      "heard": "clear -> just",
+      "n": 1,
+      "ids": [
+       "T05"
+      ]
+     },
+     {
+      "heard": "conjunctivae -> conjunctiva",
+      "n": 1,
+      "ids": [
+       "H12"
+      ]
+     },
+     {
+      "heard": "current -> according",
+      "n": 1,
+      "ids": [
+       "H31"
+      ]
+     },
+     {
+      "heard": "eaten -> no",
+      "n": 1,
+      "ids": [
+       "T20"
+      ]
+     },
+     {
+      "heard": "electrolytes -> yet",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "emeka -> meta",
+      "n": 1,
+      "ids": [
+       "T08"
+      ]
+     },
+     {
+      "heard": "entry -> century",
+      "n": 1,
+      "ids": [
+       "H24"
+      ]
+     },
+     {
+      "heard": "fainted -> that",
+      "n": 1,
+      "ids": [
+       "H37"
+      ]
+     },
+     {
+      "heard": "fluids -> updates",
+      "n": 1,
+      "ids": [
+       "H08"
+      ]
+     },
+     {
+      "heard": "get -> it",
+      "n": 1,
+      "ids": [
+       "H16"
+      ]
+     },
+     {
+      "heard": "her -> abdomen",
+      "n": 1,
+      "ids": [
+       "H09"
+      ]
+     },
+     {
+      "heard": "her -> chart",
+      "n": 1,
+      "ids": [
+       "H04"
+      ]
+     },
+     {
+      "heard": "her -> gets",
+      "n": 1,
+      "ids": [
+       "H16"
+      ]
+     },
+     {
+      "heard": "her -> me",
+      "n": 1,
+      "ids": [
+       "H25"
+      ]
+     },
+     {
+      "heard": "her -> on",
+      "n": 1,
+      "ids": [
+       "T13"
+      ]
+     },
+     {
+      "heard": "her -> out",
+      "n": 1,
+      "ids": [
+       "H27"
+      ]
+     },
+     {
+      "heard": "hospital -> the",
+      "n": 1,
+      "ids": [
+       "H45"
+      ]
+     },
+     {
+      "heard": "i -> surgery",
+      "n": 1,
+      "ids": [
+       "H42"
+      ]
+     },
+     {
+      "heard": "is -> hospital",
+      "n": 1,
+      "ids": [
+       "H45"
+      ]
+     },
+     {
+      "heard": "is -> refuse",
+      "n": 1,
+      "ids": [
+       "T06"
+      ]
+     },
+     {
+      "heard": "it -> seems",
+      "n": 1,
+      "ids": [
+       "H19"
+      ]
+     },
+     {
+      "heard": "lab -> and",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "looks -> social",
+      "n": 1,
+      "ids": [
+       "H12"
+      ]
+     },
+     {
+      "heard": "market -> it",
+      "n": 1,
+      "ids": [
+       "H37"
+      ]
+     },
+     {
+      "heard": "may -> who",
+      "n": 1,
+      "ids": [
+       "H23"
+      ]
+     },
+     {
+      "heard": "milligrams -> milliliters",
+      "n": 1,
+      "ids": [
+       "H25"
+      ]
+     },
+     {
+      "heard": "mils -> miles",
+      "n": 1,
+      "ids": [
+       "H30"
+      ]
+     },
+     {
+      "heard": "mini -> minute",
+      "n": 1,
+      "ids": [
+       "H23"
+      ]
+     },
+     {
+      "heard": "need -> managed",
+      "n": 1,
+      "ids": [
+       "H23"
+      ]
+     },
+     {
+      "heard": "nurse -> loss",
+      "n": 1,
+      "ids": [
+       "T13"
+      ]
+     },
+     {
+      "heard": "nurse -> nos",
+      "n": 1,
+      "ids": [
+       "T07"
+      ]
+     },
+     {
+      "heard": "observation -> observing",
+      "n": 1,
+      "ids": [
+       "H09"
+      ]
+     },
+     {
+      "heard": "observations -> observation",
+      "n": 1,
+      "ids": [
+       "H32"
+      ]
+     },
+     {
+      "heard": "oedema -> pointing",
+      "n": 1,
+      "ids": [
+       "H10"
+      ]
+     },
+     {
+      "heard": "okay -> tired",
+      "n": 1,
+      "ids": [
+       "H45"
+      ]
+     },
+     {
+      "heard": "okon -> is",
+      "n": 1,
+      "ids": [
+       "H18"
+      ]
+     },
+     {
+      "heard": "okon -> okun",
+      "n": 1,
+      "ids": [
+       "H17"
+      ]
+     },
+     {
+      "heard": "okon -> so",
+      "n": 1,
+      "ids": [
+       "H20"
+      ]
+     },
+     {
+      "heard": "on -> am",
+      "n": 1,
+      "ids": [
+       "H09"
+      ]
+     },
+     {
+      "heard": "on -> an",
+      "n": 1,
+      "ids": [
+       "H08"
+      ]
+     },
+     {
+      "heard": "on -> disclaim",
+      "n": 1,
+      "ids": [
+       "T05"
+      ]
+     },
+     {
+      "heard": "oral -> her",
+      "n": 1,
+      "ids": [
+       "H08"
+      ]
+     },
+     {
+      "heard": "oxygen -> such",
+      "n": 1,
+      "ids": [
+       "T14"
+      ]
+     },
+     {
+      "heard": "oxygen -> the",
+      "n": 1,
+      "ids": [
+       "T14"
+      ]
+     },
+     {
+      "heard": "pale -> is",
+      "n": 1,
+      "ids": [
+       "H12"
+      ]
+     },
+     {
+      "heard": "pisgah -> pascal",
+      "n": 1,
+      "ids": [
+       "T12"
+      ]
+     },
+     {
+      "heard": "pitting -> mark",
+      "n": 1,
+      "ids": [
+       "H10"
+      ]
+     },
+     {
+      "heard": "please -> the",
+      "n": 1,
+      "ids": [
+       "H48"
+      ]
+     },
+     {
+      "heard": "pulse -> pause",
+      "n": 1,
+      "ids": [
+       "H21"
+      ]
+     },
+     {
+      "heard": "send -> set",
+      "n": 1,
+      "ids": [
+       "H27"
+      ]
+     },
+     {
+      "heard": "send -> you",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "she -> sheshe",
+      "n": 1,
+      "ids": [
+       "H41"
+      ]
+     },
+     {
+      "heard": "she -> you",
+      "n": 1,
+      "ids": [
+       "H42"
+      ]
+     },
+     {
+      "heard": "started -> that",
+      "n": 1,
+      "ids": [
+       "T16"
+      ]
+     },
+     {
+      "heard": "stool -> through",
+      "n": 1,
+      "ids": [
+       "H17"
+      ]
+     },
+     {
+      "heard": "the -> mark",
+      "n": 1,
+      "ids": [
+       "H37"
+      ]
+     },
+     {
+      "heard": "the -> thepediatric",
+      "n": 1,
+      "ids": [
+       "T03"
+      ]
+     },
+     {
+      "heard": "the -> you",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "theatre -> theater",
+      "n": 1,
+      "ids": [
+       "H23"
+      ]
+     },
+     {
+      "heard": "there -> they",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "urea -> rear",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "urine -> during",
+      "n": 1,
+      "ids": [
+       "T15"
+      ]
+     },
+     {
+      "heard": "will -> do",
+      "n": 1,
+      "ids": [
+       "H42"
+      ]
+     },
+     {
+      "heard": "would -> will",
+      "n": 1,
+      "ids": [
+       "H33"
+      ]
+     }
+    ]
+   },
+   "sure": {
+    "clips": 61,
+    "ref_words": 859,
+    "errors": 151,
+    "wer": 0.1758,
+    "misheard": [
+     {
+      "heard": "her -> our",
+      "n": 3,
+      "ids": [
+       "H11",
+       "H27",
+       "H32"
+      ]
+     },
+     {
+      "heard": "a -> the",
+      "n": 2,
+      "ids": [
+       "T11",
+       "H21"
+      ]
+     },
+     {
+      "heard": "a -> high",
+      "n": 1,
+      "ids": [
+       "H16"
+      ]
+     },
+     {
+      "heard": "abdomen -> is",
+      "n": 1,
+      "ids": [
+       "H09"
+      ]
+     },
+     {
+      "heard": "added -> other",
+      "n": 1,
+      "ids": [
+       "T05"
+      ]
+     },
+     {
+      "heard": "also -> so",
+      "n": 1,
+      "ids": [
+       "H22"
+      ]
+     },
+     {
+      "heard": "anaesthetist -> anesthetist",
+      "n": 1,
+      "ids": [
+       "H23"
+      ]
+     },
+     {
+      "heard": "as -> at",
+      "n": 1,
+      "ids": [
+       "H01"
+      ]
+     },
+     {
+      "heard": "bring -> put",
+      "n": 1,
+      "ids": [
+       "T23"
+      ]
+     },
+     {
+      "heard": "care -> camp",
+      "n": 1,
+      "ids": [
+       "H32"
+      ]
+     },
+     {
+      "heard": "ceftriaxone -> cefitriaxone",
+      "n": 1,
+      "ids": [
+       "T13"
+      ]
+     },
+     {
+      "heard": "chart -> check",
+      "n": 1,
+      "ids": [
+       "T22"
+      ]
+     },
+     {
+      "heard": "chart -> uhuh",
+      "n": 1,
+      "ids": [
+       "H04"
+      ]
+     },
+     {
+      "heard": "clear -> just",
+      "n": 1,
+      "ids": [
+       "T05"
+      ]
+     },
+     {
+      "heard": "current -> according",
+      "n": 1,
+      "ids": [
+       "H31"
+      ]
+     },
+     {
+      "heard": "eaten -> no",
+      "n": 1,
+      "ids": [
+       "T20"
+      ]
+     },
+     {
+      "heard": "electrolytes -> yet",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "emeka -> meta",
+      "n": 1,
+      "ids": [
+       "T08"
+      ]
+     },
+     {
+      "heard": "entry -> century",
+      "n": 1,
+      "ids": [
+       "H24"
+      ]
+     },
+     {
+      "heard": "get -> it",
+      "n": 1,
+      "ids": [
+       "H16"
+      ]
+     },
+     {
+      "heard": "her -> abdomen",
+      "n": 1,
+      "ids": [
+       "H09"
+      ]
+     },
+     {
+      "heard": "her -> chart",
+      "n": 1,
+      "ids": [
+       "H04"
+      ]
+     },
+     {
+      "heard": "her -> gets",
+      "n": 1,
+      "ids": [
+       "H16"
+      ]
+     },
+     {
+      "heard": "her -> is",
+      "n": 1,
+      "ids": [
+       "H28"
+      ]
+     },
+     {
+      "heard": "her -> me",
+      "n": 1,
+      "ids": [
+       "H25"
+      ]
+     },
+     {
+      "heard": "her -> on",
+      "n": 1,
+      "ids": [
+       "T13"
+      ]
+     },
+     {
+      "heard": "her -> out",
+      "n": 1,
+      "ids": [
+       "H27"
+      ]
+     },
+     {
+      "heard": "i -> surgery",
+      "n": 1,
+      "ids": [
+       "H42"
+      ]
+     },
+     {
+      "heard": "is -> refuse",
+      "n": 1,
+      "ids": [
+       "T06"
+      ]
+     },
+     {
+      "heard": "it -> seems",
+      "n": 1,
+      "ids": [
+       "H19"
+      ]
+     },
+     {
+      "heard": "lab -> and",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "may -> who",
+      "n": 1,
+      "ids": [
+       "H23"
+      ]
+     },
+     {
+      "heard": "milligrams -> milliliters",
+      "n": 1,
+      "ids": [
+       "H25"
+      ]
+     },
+     {
+      "heard": "mils -> miles",
+      "n": 1,
+      "ids": [
+       "H30"
+      ]
+     },
+     {
+      "heard": "mini -> minute",
+      "n": 1,
+      "ids": [
+       "H23"
+      ]
+     },
+     {
+      "heard": "need -> managed",
+      "n": 1,
+      "ids": [
+       "H23"
+      ]
+     },
+     {
+      "heard": "nurse -> loss",
+      "n": 1,
+      "ids": [
+       "T13"
+      ]
+     },
+     {
+      "heard": "nurse -> nos",
+      "n": 1,
+      "ids": [
+       "T07"
+      ]
+     },
+     {
+      "heard": "observation -> observing",
+      "n": 1,
+      "ids": [
+       "H09"
+      ]
+     },
+     {
+      "heard": "observations -> observation",
+      "n": 1,
+      "ids": [
+       "H32"
+      ]
+     },
+     {
+      "heard": "oedema -> pointing",
+      "n": 1,
+      "ids": [
+       "H10"
+      ]
+     },
+     {
+      "heard": "okon -> is",
+      "n": 1,
+      "ids": [
+       "H18"
+      ]
+     },
+     {
+      "heard": "okon -> so",
+      "n": 1,
+      "ids": [
+       "H20"
+      ]
+     },
+     {
+      "heard": "on -> am",
+      "n": 1,
+      "ids": [
+       "H09"
+      ]
+     },
+     {
+      "heard": "on -> disclaim",
+      "n": 1,
+      "ids": [
+       "T05"
+      ]
+     },
+     {
+      "heard": "pisgah -> pascal",
+      "n": 1,
+      "ids": [
+       "T12"
+      ]
+     },
+     {
+      "heard": "pitting -> mark",
+      "n": 1,
+      "ids": [
+       "H10"
+      ]
+     },
+     {
+      "heard": "please -> the",
+      "n": 1,
+      "ids": [
+       "H48"
+      ]
+     },
+     {
+      "heard": "pulse -> pause",
+      "n": 1,
+      "ids": [
+       "H21"
+      ]
+     },
+     {
+      "heard": "send -> set",
+      "n": 1,
+      "ids": [
+       "H27"
+      ]
+     },
+     {
+      "heard": "send -> you",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "she -> sheshe",
+      "n": 1,
+      "ids": [
+       "H41"
+      ]
+     },
+     {
+      "heard": "she -> you",
+      "n": 1,
+      "ids": [
+       "H42"
+      ]
+     },
+     {
+      "heard": "started -> that",
+      "n": 1,
+      "ids": [
+       "T16"
+      ]
+     },
+     {
+      "heard": "the -> thepediatric",
+      "n": 1,
+      "ids": [
+       "T03"
+      ]
+     },
+     {
+      "heard": "the -> you",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "theatre -> theater",
+      "n": 1,
+      "ids": [
+       "H23"
+      ]
+     },
+     {
+      "heard": "there -> they",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "urea -> rear",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "urine -> during",
+      "n": 1,
+      "ids": [
+       "T15"
+      ]
+     },
+     {
+      "heard": "will -> do",
+      "n": 1,
+      "ids": [
+       "H42"
+      ]
+     },
+     {
+      "heard": "would -> will",
+      "n": 1,
+      "ids": [
+       "H33"
+      ]
+     }
+    ]
+   }
+  },
+  "parakeet_offline": {
+   "all": {
+    "clips": 70,
+    "ref_words": 1022,
+    "errors": 208,
+    "wer": 0.2035,
+    "misheard": [
+     {
+      "heard": "her -> our",
+      "n": 3,
+      "ids": [
+       "H11",
+       "H31",
+       "H32"
+      ]
+     },
+     {
+      "heard": "mrs -> mr",
+      "n": 3,
+      "ids": [
+       "T09",
+       "H17",
+       "H20"
+      ]
+     },
+     {
+      "heard": "pulse -> pause",
+      "n": 3,
+      "ids": [
+       "T23",
+       "H43",
+       "H43"
+      ]
+     },
+     {
+      "heard": "urine -> during",
+      "n": 3,
+      "ids": [
+       "T15",
+       "T15",
+       "H30"
+      ]
+     },
+     {
+      "heard": "chart -> chat",
+      "n": 2,
+      "ids": [
+       "T22",
+       "T23"
+      ]
+     },
+     {
+      "heard": "chart -> chuck",
+      "n": 2,
+      "ids": [
+       "H43",
+       "H43"
+      ]
+     },
+     {
+      "heard": "have -> am",
+      "n": 2,
+      "ids": [
+       "T19",
+       "T19"
+      ]
+     },
+     {
+      "heard": "her -> charter",
+      "n": 2,
+      "ids": [
+       "T01",
+       "H04"
+      ]
+     },
+     {
+      "heard": "surgery -> such",
+      "n": 2,
+      "ids": [
+       "H42",
+       "H42"
+      ]
+     },
+     {
+      "heard": "a -> to",
+      "n": 1,
+      "ids": [
+       "H21"
+      ]
+     },
+     {
+      "heard": "a -> writer",
+      "n": 1,
+      "ids": [
+       "T04"
+      ]
+     },
+     {
+      "heard": "abdominal -> terminal",
+      "n": 1,
+      "ids": [
+       "H27"
+      ]
+     },
+     {
+      "heard": "air -> women",
+      "n": 1,
+      "ids": [
+       "T14"
+      ]
+     },
+     {
+      "heard": "an -> a",
+      "n": 1,
+      "ids": [
+       "H27"
+      ]
+     },
+     {
+      "heard": "and -> been",
+      "n": 1,
+      "ids": [
+       "H40"
+      ]
+     },
+     {
+      "heard": "and -> department",
+      "n": 1,
+      "ids": [
+       "H47"
+      ]
+     },
+     {
+      "heard": "appear -> they",
+      "n": 1,
+      "ids": [
+       "H12"
+      ]
+     },
+     {
+      "heard": "as -> at",
+      "n": 1,
+      "ids": [
+       "H01"
+      ]
+     },
+     {
+      "heard": "bisi -> nosbisi",
+      "n": 1,
+      "ids": [
+       "H13"
+      ]
+     },
+     {
+      "heard": "blood -> our",
+      "n": 1,
+      "ids": [
+       "H22"
+      ]
+     },
+     {
+      "heard": "bring -> in",
+      "n": 1,
+      "ids": [
+       "T23"
+      ]
+     },
+     {
+      "heard": "ceftriaxone -> cefitrazone",
+      "n": 1,
+      "ids": [
+       "T13"
+      ]
+     },
+     {
+      "heard": "chest -> just",
+      "n": 1,
+      "ids": [
+       "T05"
+      ]
+     },
+     {
+      "heard": "come -> social",
+      "n": 1,
+      "ids": [
+       "H47"
+      ]
+     },
+     {
+      "heard": "conjunctivae -> conjunctive",
+      "n": 1,
+      "ids": [
+       "H12"
+      ]
+     },
+     {
+      "heard": "cough -> call",
+      "n": 1,
+      "ids": [
+       "T24"
+      ]
+     },
+     {
+      "heard": "do -> did",
+      "n": 1,
+      "ids": [
+       "T23"
+      ]
+     },
+     {
+      "heard": "doctor -> managing",
+      "n": 1,
+      "ids": [
+       "H40"
+      ]
+     },
+     {
+      "heard": "electrolytes -> electrolyte",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "emeka -> emika",
+      "n": 1,
+      "ids": [
+       "T08"
+      ]
+     },
+     {
+      "heard": "emeka -> mecha",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "entry -> sentry",
+      "n": 1,
+      "ids": [
+       "H24"
+      ]
+     },
+     {
+      "heard": "fainted -> they're",
+      "n": 1,
+      "ids": [
+       "H37"
+      ]
+     },
+     {
+      "heard": "fluids -> it",
+      "n": 1,
+      "ids": [
+       "H08"
+      ]
+     },
+     {
+      "heard": "head -> here",
+      "n": 1,
+      "ids": [
+       "H07"
+      ]
+     },
+     {
+      "heard": "heart -> hearts",
+      "n": 1,
+      "ids": [
+       "H11"
+      ]
+     },
+     {
+      "heard": "her -> an",
+      "n": 1,
+      "ids": [
+       "H09"
+      ]
+     },
+     {
+      "heard": "her -> how",
+      "n": 1,
+      "ids": [
+       "T14"
+      ]
+     },
+     {
+      "heard": "her -> such",
+      "n": 1,
+      "ids": [
+       "T14"
+      ]
+     },
+     {
+      "heard": "her -> wow",
+      "n": 1,
+      "ids": [
+       "H22"
+      ]
+     },
+     {
+      "heard": "high -> higher",
+      "n": 1,
+      "ids": [
+       "H22"
+      ]
+     },
+     {
+      "heard": "hurting -> hotting",
+      "n": 1,
+      "ids": [
+       "H43"
+      ]
+     },
+     {
+      "heard": "i -> a",
+      "n": 1,
+      "ids": [
+       "H42"
+      ]
+     },
+     {
+      "heard": "is -> are",
+      "n": 1,
+      "ids": [
+       "H24"
+      ]
+     },
+     {
+      "heard": "is -> as",
+      "n": 1,
+      "ids": [
+       "T05"
+      ]
+     },
+     {
+      "heard": "is -> refills",
+      "n": 1,
+      "ids": [
+       "T06"
+      ]
+     },
+     {
+      "heard": "it -> been",
+      "n": 1,
+      "ids": [
+       "H43"
+      ]
+     },
+     {
+      "heard": "lab -> lapse",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "looks -> described",
+      "n": 1,
+      "ids": [
+       "H12"
+      ]
+     },
+     {
+      "heard": "metformin -> me",
+      "n": 1,
+      "ids": [
+       "H34"
+      ]
+     },
+     {
+      "heard": "metronidazole -> maturidazo",
+      "n": 1,
+      "ids": [
+       "H26"
+      ]
+     },
+     {
+      "heard": "mils -> meals",
+      "n": 1,
+      "ids": [
+       "H30"
+      ]
+     },
+     {
+      "heard": "more -> me",
+      "n": 1,
+      "ids": [
+       "H36"
+      ]
+     },
+     {
+      "heard": "mrs -> in",
+      "n": 1,
+      "ids": [
+       "H18"
+      ]
+     },
+     {
+      "heard": "murmur -> more",
+      "n": 1,
+      "ids": [
+       "H11"
+      ]
+     },
+     {
+      "heard": "note -> notes",
+      "n": 1,
+      "ids": [
+       "T04"
+      ]
+     },
+     {
+      "heard": "nurse -> nos",
+      "n": 1,
+      "ids": [
+       "T07"
+      ]
+     },
+     {
+      "heard": "oedema -> malpetinodema",
+      "n": 1,
+      "ids": [
+       "H10"
+      ]
+     },
+     {
+      "heard": "okay -> tire",
+      "n": 1,
+      "ids": [
+       "H45"
+      ]
+     },
+     {
+      "heard": "okon -> kone",
+      "n": 1,
+      "ids": [
+       "H17"
+      ]
+     },
+     {
+      "heard": "okon -> kun",
+      "n": 1,
+      "ids": [
+       "H20"
+      ]
+     },
+     {
+      "heard": "okon -> zakone",
+      "n": 1,
+      "ids": [
+       "T09"
+      ]
+     },
+     {
+      "heard": "okon -> zokon",
+      "n": 1,
+      "ids": [
+       "H18"
+      ]
+     },
+     {
+      "heard": "on -> an",
+      "n": 1,
+      "ids": [
+       "H09"
+      ]
+     },
+     {
+      "heard": "on -> un",
+      "n": 1,
+      "ids": [
+       "H08"
+      ]
+     },
+     {
+      "heard": "over -> of",
+      "n": 1,
+      "ids": [
+       "H22"
+      ]
+     },
+     {
+      "heard": "oxygen -> a",
+      "n": 1,
+      "ids": [
+       "T14"
+      ]
+     },
+     {
+      "heard": "oxygen -> oxid",
+      "n": 1,
+      "ids": [
+       "H04"
+      ]
+     },
+     {
+      "heard": "oxygen -> searching",
+      "n": 1,
+      "ids": [
+       "T14"
+      ]
+     },
+     {
+      "heard": "pale -> appealed",
+      "n": 1,
+      "ids": [
+       "H12"
+      ]
+     },
+     {
+      "heard": "pale -> peel",
+      "n": 1,
+      "ids": [
+       "H12"
+      ]
+     },
+     {
+      "heard": "paracetamol -> parastoma",
+      "n": 1,
+      "ids": [
+       "H25"
+      ]
+     },
+     {
+      "heard": "paracetamol -> stoma",
+      "n": 1,
+      "ids": [
+       "H25"
+      ]
+     },
+     {
+      "heard": "particularly -> is",
+      "n": 1,
+      "ids": [
+       "H08"
+      ]
+     },
+     {
+      "heard": "penicillin -> penicillino",
+      "n": 1,
+      "ids": [
+       "T18"
+      ]
+     },
+     {
+      "heard": "pisgah -> pisga",
+      "n": 1,
+      "ids": [
+       "T12"
+      ]
+     },
+     {
+      "heard": "pulse -> polls",
+      "n": 1,
+      "ids": [
+       "T01"
+      ]
+     },
+     {
+      "heard": "pulse -> poss",
+      "n": 1,
+      "ids": [
+       "H28"
+      ]
+     },
+     {
+      "heard": "pulse -> posts",
+      "n": 1,
+      "ids": [
+       "H02"
+      ]
+     },
+     {
+      "heard": "rate -> rates",
+      "n": 1,
+      "ids": [
+       "H02"
+      ]
+     },
+     {
+      "heard": "rate -> repository",
+      "n": 1,
+      "ids": [
+       "T22"
+      ]
+     },
+     {
+      "heard": "respiratory -> respiration",
+      "n": 1,
+      "ids": [
+       "T22"
+      ]
+     },
+     {
+      "heard": "review -> view",
+      "n": 1,
+      "ids": [
+       "H47"
+      ]
+     },
+     {
+      "heard": "room -> of",
+      "n": 1,
+      "ids": [
+       "T14"
+      ]
+     },
+     {
+      "heard": "round -> the",
+      "n": 1,
+      "ids": [
+       "H08"
+      ]
+     },
+     {
+      "heard": "send -> in",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "soft -> short",
+      "n": 1,
+      "ids": [
+       "H09"
+      ]
+     },
+     {
+      "heard": "stand -> dripstand",
+      "n": 1,
+      "ids": [
+       "T07"
+      ]
+     },
+     {
+      "heard": "stool -> through",
+      "n": 1,
+      "ids": [
+       "H17"
+      ]
+     },
+     {
+      "heard": "surgical -> eliosurgical",
+      "n": 1,
+      "ids": [
+       "H07"
+      ]
+     },
+     {
+      "heard": "surgical -> thing",
+      "n": 1,
+      "ids": [
+       "H47"
+      ]
+     },
+     {
+      "heard": "team -> going",
+      "n": 1,
+      "ids": [
+       "H47"
+      ]
+     },
+     {
+      "heard": "temperature -> temperatures",
+      "n": 1,
+      "ids": [
+       "H24"
+      ]
+     },
+     {
+      "heard": "the -> a",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "the -> at",
+      "n": 1,
+      "ids": [
+       "H11"
+      ]
+     },
+     {
+      "heard": "the -> on",
+      "n": 1,
+      "ids": [
+       "H08"
+      ]
+     },
+     {
+      "heard": "the -> quite",
+      "n": 1,
+      "ids": [
+       "H08"
+      ]
+     },
+     {
+      "heard": "the -> your",
+      "n": 1,
+      "ids": [
+       "H14"
+      ]
+     },
+     {
+      "heard": "theatre -> therapy",
+      "n": 1,
+      "ids": [
+       "H23"
+      ]
+     },
+     {
+      "heard": "today -> burned",
+      "n": 1,
+      "ids": [
+       "H45"
+      ]
+     },
+     {
+      "heard": "today -> do",
+      "n": 1,
+      "ids": [
+       "T19"
+      ]
+     },
+     {
+      "heard": "tolerating -> televising",
+      "n": 1,
+      "ids": [
+       "H08"
+      ]
+     },
+     {
+      "heard": "too -> to",
+      "n": 1,
+      "ids": [
+       "H12"
+      ]
+     },
+     {
+      "heard": "vomited -> permitted",
+      "n": 1,
+      "ids": [
+       "T19"
+      ]
+     },
+     {
+      "heard": "vomited -> to",
+      "n": 1,
+      "ids": [
+       "T19"
+      ]
+     },
+     {
+      "heard": "well -> work",
+      "n": 1,
+      "ids": [
+       "T21"
+      ]
+     }
+    ]
+   },
+   "sure": {
+    "clips": 61,
+    "ref_words": 859,
+    "errors": 139,
+    "wer": 0.1618,
+    "misheard": [
+     {
+      "heard": "her -> our",
+      "n": 3,
+      "ids": [
+       "H11",
+       "H31",
+       "H32"
+      ]
+     },
+     {
+      "heard": "urine -> during",
+      "n": 3,
+      "ids": [
+       "T15",
+       "T15",
+       "H30"
+      ]
+     },
+     {
+      "heard": "chart -> chat",
+      "n": 2,
+      "ids": [
+       "T22",
+       "T23"
+      ]
+     },
+     {
+      "heard": "have -> am",
+      "n": 2,
+      "ids": [
+       "T19",
+       "T19"
+      ]
+     },
+     {
+      "heard": "her -> charter",
+      "n": 2,
+      "ids": [
+       "T01",
+       "H04"
+      ]
+     },
+     {
+      "heard": "mrs -> mr",
+      "n": 2,
+      "ids": [
+       "T09",
+       "H20"
+      ]
+     },
+     {
+      "heard": "surgery -> such",
+      "n": 2,
+      "ids": [
+       "H42",
+       "H42"
+      ]
+     },
+     {
+      "heard": "a -> to",
+      "n": 1,
+      "ids": [
+       "H21"
+      ]
+     },
+     {
+      "heard": "a -> writer",
+      "n": 1,
+      "ids": [
+       "T04"
+      ]
+     },
+     {
+      "heard": "abdominal -> terminal",
+      "n": 1,
+      "ids": [
+       "H27"
+      ]
+     },
+     {
+      "heard": "an -> a",
+      "n": 1,
+      "ids": [
+       "H27"
+      ]
+     },
+     {
+      "heard": "and -> been",
+      "n": 1,
+      "ids": [
+       "H40"
+      ]
+     },
+     {
+      "heard": "as -> at",
+      "n": 1,
+      "ids": [
+       "H01"
+      ]
+     },
+     {
+      "heard": "bisi -> nosbisi",
+      "n": 1,
+      "ids": [
+       "H13"
+      ]
+     },
+     {
+      "heard": "blood -> our",
+      "n": 1,
+      "ids": [
+       "H22"
+      ]
+     },
+     {
+      "heard": "bring -> in",
+      "n": 1,
+      "ids": [
+       "T23"
+      ]
+     },
+     {
+      "heard": "ceftriaxone -> cefitrazone",
+      "n": 1,
+      "ids": [
+       "T13"
+      ]
+     },
+     {
+      "heard": "chest -> just",
+      "n": 1,
+      "ids": [
+       "T05"
+      ]
+     },
+     {
+      "heard": "cough -> call",
+      "n": 1,
+      "ids": [
+       "T24"
+      ]
+     },
+     {
+      "heard": "do -> did",
+      "n": 1,
+      "ids": [
+       "T23"
+      ]
+     },
+     {
+      "heard": "doctor -> managing",
+      "n": 1,
+      "ids": [
+       "H40"
+      ]
+     },
+     {
+      "heard": "electrolytes -> electrolyte",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "emeka -> emika",
+      "n": 1,
+      "ids": [
+       "T08"
+      ]
+     },
+     {
+      "heard": "emeka -> mecha",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "entry -> sentry",
+      "n": 1,
+      "ids": [
+       "H24"
+      ]
+     },
+     {
+      "heard": "heart -> hearts",
+      "n": 1,
+      "ids": [
+       "H11"
+      ]
+     },
+     {
+      "heard": "her -> an",
+      "n": 1,
+      "ids": [
+       "H09"
+      ]
+     },
+     {
+      "heard": "her -> wow",
+      "n": 1,
+      "ids": [
+       "H22"
+      ]
+     },
+     {
+      "heard": "high -> higher",
+      "n": 1,
+      "ids": [
+       "H22"
+      ]
+     },
+     {
+      "heard": "i -> a",
+      "n": 1,
+      "ids": [
+       "H42"
+      ]
+     },
+     {
+      "heard": "is -> are",
+      "n": 1,
+      "ids": [
+       "H24"
+      ]
+     },
+     {
+      "heard": "is -> as",
+      "n": 1,
+      "ids": [
+       "T05"
+      ]
+     },
+     {
+      "heard": "is -> refills",
+      "n": 1,
+      "ids": [
+       "T06"
+      ]
+     },
+     {
+      "heard": "lab -> lapse",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "metformin -> me",
+      "n": 1,
+      "ids": [
+       "H34"
+      ]
+     },
+     {
+      "heard": "metronidazole -> maturidazo",
+      "n": 1,
+      "ids": [
+       "H26"
+      ]
+     },
+     {
+      "heard": "mils -> meals",
+      "n": 1,
+      "ids": [
+       "H30"
+      ]
+     },
+     {
+      "heard": "more -> me",
+      "n": 1,
+      "ids": [
+       "H36"
+      ]
+     },
+     {
+      "heard": "mrs -> in",
+      "n": 1,
+      "ids": [
+       "H18"
+      ]
+     },
+     {
+      "heard": "murmur -> more",
+      "n": 1,
+      "ids": [
+       "H11"
+      ]
+     },
+     {
+      "heard": "note -> notes",
+      "n": 1,
+      "ids": [
+       "T04"
+      ]
+     },
+     {
+      "heard": "nurse -> nos",
+      "n": 1,
+      "ids": [
+       "T07"
+      ]
+     },
+     {
+      "heard": "oedema -> malpetinodema",
+      "n": 1,
+      "ids": [
+       "H10"
+      ]
+     },
+     {
+      "heard": "okon -> kun",
+      "n": 1,
+      "ids": [
+       "H20"
+      ]
+     },
+     {
+      "heard": "okon -> zakone",
+      "n": 1,
+      "ids": [
+       "T09"
+      ]
+     },
+     {
+      "heard": "okon -> zokon",
+      "n": 1,
+      "ids": [
+       "H18"
+      ]
+     },
+     {
+      "heard": "on -> an",
+      "n": 1,
+      "ids": [
+       "H09"
+      ]
+     },
+     {
+      "heard": "over -> of",
+      "n": 1,
+      "ids": [
+       "H22"
+      ]
+     },
+     {
+      "heard": "oxygen -> oxid",
+      "n": 1,
+      "ids": [
+       "H04"
+      ]
+     },
+     {
+      "heard": "paracetamol -> parastoma",
+      "n": 1,
+      "ids": [
+       "H25"
+      ]
+     },
+     {
+      "heard": "paracetamol -> stoma",
+      "n": 1,
+      "ids": [
+       "H25"
+      ]
+     },
+     {
+      "heard": "penicillin -> penicillino",
+      "n": 1,
+      "ids": [
+       "T18"
+      ]
+     },
+     {
+      "heard": "pisgah -> pisga",
+      "n": 1,
+      "ids": [
+       "T12"
+      ]
+     },
+     {
+      "heard": "pulse -> pause",
+      "n": 1,
+      "ids": [
+       "T23"
+      ]
+     },
+     {
+      "heard": "pulse -> polls",
+      "n": 1,
+      "ids": [
+       "T01"
+      ]
+     },
+     {
+      "heard": "pulse -> poss",
+      "n": 1,
+      "ids": [
+       "H28"
+      ]
+     },
+     {
+      "heard": "pulse -> posts",
+      "n": 1,
+      "ids": [
+       "H02"
+      ]
+     },
+     {
+      "heard": "rate -> rates",
+      "n": 1,
+      "ids": [
+       "H02"
+      ]
+     },
+     {
+      "heard": "rate -> repository",
+      "n": 1,
+      "ids": [
+       "T22"
+      ]
+     },
+     {
+      "heard": "respiratory -> respiration",
+      "n": 1,
+      "ids": [
+       "T22"
+      ]
+     },
+     {
+      "heard": "send -> in",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "soft -> short",
+      "n": 1,
+      "ids": [
+       "H09"
+      ]
+     },
+     {
+      "heard": "stand -> dripstand",
+      "n": 1,
+      "ids": [
+       "T07"
+      ]
+     },
+     {
+      "heard": "temperature -> temperatures",
+      "n": 1,
+      "ids": [
+       "H24"
+      ]
+     },
+     {
+      "heard": "the -> a",
+      "n": 1,
+      "ids": [
+       "H15"
+      ]
+     },
+     {
+      "heard": "the -> at",
+      "n": 1,
+      "ids": [
+       "H11"
+      ]
+     },
+     {
+      "heard": "the -> your",
+      "n": 1,
+      "ids": [
+       "H14"
+      ]
+     },
+     {
+      "heard": "theatre -> therapy",
+      "n": 1,
+      "ids": [
+       "H23"
+      ]
+     },
+     {
+      "heard": "today -> do",
+      "n": 1,
+      "ids": [
+       "T19"
+      ]
+     },
+     {
+      "heard": "vomited -> permitted",
+      "n": 1,
+      "ids": [
+       "T19"
+      ]
+     },
+     {
+      "heard": "vomited -> to",
+      "n": 1,
+      "ids": [
+       "T19"
+      ]
+     },
+     {
+      "heard": "well -> work",
+      "n": 1,
+      "ids": [
+       "T21"
+      ]
+     }
+    ]
+   }
+  },
+  "said_vs_script": {
+   "clips": 70,
+   "ref_words": 545,
+   "errors": 586,
+   "wer": 1.0752,
+   "misheard": [
+    {
+     "heard": "the -> her",
+     "n": 3,
+     "ids": [
+      "T02",
+      "H09",
+      "H45"
+     ]
+    },
+    {
+     "heard": "a -> has",
+     "n": 1,
+     "ids": [
+      "H35"
+     ]
+    },
+    {
+     "heard": "a -> she",
+     "n": 1,
+     "ids": [
+      "H08"
+     ]
+    },
+    {
+     "heard": "a -> the",
+     "n": 1,
+     "ids": [
+      "H46"
+     ]
+    },
+    {
+     "heard": "about -> would",
+     "n": 1,
+     "ids": [
+      "H33"
+     ]
+    },
+    {
+     "heard": "admission -> patient",
+     "n": 1,
+     "ids": [
+      "T12"
+     ]
+    },
+    {
+     "heard": "admission -> them",
+     "n": 1,
+     "ids": [
+      "H06"
+     ]
+    },
+    {
+     "heard": "afternoon -> first",
+     "n": 1,
+     "ids": [
+      "H27"
+     ]
+    },
+    {
+     "heard": "an -> any",
+     "n": 1,
+     "ids": [
+      "H42"
+     ]
+    },
+    {
+     "heard": "an -> move",
+     "n": 1,
+     "ids": [
+      "H06"
+     ]
+    },
+    {
+     "heard": "an -> this",
+     "n": 1,
+     "ids": [
+      "T12"
+     ]
+    },
+    {
+     "heard": "anaesthetist -> need",
+     "n": 1,
+     "ids": [
+      "H23"
+     ]
+    },
+    {
+     "heard": "and -> doctor",
+     "n": 1,
+     "ids": [
+      "T16"
+     ]
+    },
+    {
+     "heard": "and -> is",
+     "n": 1,
+     "ids": [
+      "H24"
+     ]
+    },
+    {
+     "heard": "are -> appear",
+     "n": 1,
+     "ids": [
+      "H12"
+     ]
+    },
+    {
+     "heard": "as -> about",
+     "n": 1,
+     "ids": [
+      "H22"
+     ]
+    },
+    {
+     "heard": "as -> at",
+     "n": 1,
+     "ids": [
+      "T01"
+     ]
+    },
+    {
+     "heard": "as -> even",
+     "n": 1,
+     "ids": [
+      "H45"
+     ]
+    },
+    {
+     "heard": "as -> is",
+     "n": 1,
+     "ids": [
+      "H31"
+     ]
+    },
+    {
+     "heard": "as -> time",
+     "n": 1,
+     "ids": [
+      "T22"
+     ]
+    },
+    {
+     "heard": "as -> to",
+     "n": 1,
+     "ids": [
+      "T23"
+     ]
+    },
+    {
+     "heard": "before -> mini",
+     "n": 1,
+     "ids": [
+      "H23"
+     ]
+    },
+    {
+     "heard": "book -> please",
+     "n": 1,
+     "ids": [
+      "H07"
+     ]
+    },
+    {
+     "heard": "can -> need",
+     "n": 1,
+     "ids": [
+      "H27"
+     ]
+    },
+    {
+     "heard": "cancel -> think",
+     "n": 1,
+     "ids": [
+      "H24"
+     ]
+    },
+    {
+     "heard": "chart -> about",
+     "n": 1,
+     "ids": [
+      "H24"
+     ]
+    },
+    {
+     "heard": "chart -> has",
+     "n": 1,
+     "ids": [
+      "H21"
+     ]
+    },
+    {
+     "heard": "chart -> her",
+     "n": 1,
+     "ids": [
+      "H31"
+     ]
+    },
+    {
+     "heard": "chart -> that",
+     "n": 1,
+     "ids": [
+      "H03"
+     ]
+    },
+    {
+     "heard": "check -> is",
+     "n": 1,
+     "ids": [
+      "H29"
+     ]
+    },
+    {
+     "heard": "comes -> important",
+     "n": 1,
+     "ids": [
+      "H16"
+     ]
+    },
+    {
+     "heard": "continue -> particularly",
+     "n": 1,
+     "ids": [
+      "H08"
+     ]
+    },
+    {
+     "heard": "count -> counts",
+     "n": 1,
+     "ids": [
+      "T08"
+     ]
+    },
+    {
+     "heard": "doctor -> she",
+     "n": 1,
+     "ids": [
+      "T21"
+     ]
+    },
+    {
+     "heard": "down -> i",
+     "n": 1,
+     "ids": [
+      "T18"
+     ]
+    },
+    {
+     "heard": "examination -> observation",
+     "n": 1,
+     "ids": [
+      "H09"
+     ]
+    },
+    {
+     "heard": "fever -> been",
+     "n": 1,
+     "ids": [
+      "H35"
+     ]
+    },
+    {
+     "heard": "for -> review",
+     "n": 1,
+     "ids": [
+      "H46"
+     ]
+    },
+    {
+     "heard": "going -> will",
+     "n": 1,
+     "ids": [
+      "H42"
+     ]
+    },
+    {
+     "heard": "had -> fever",
+     "n": 1,
+     "ids": [
+      "H35"
+     ]
+    },
+    {
+     "heard": "had -> has",
+     "n": 1,
+     "ids": [
+      "H30"
+     ]
+    },
+    {
+     "heard": "had -> managing",
+     "n": 1,
+     "ids": [
+      "H40"
+     ]
+    },
+    {
+     "heard": "has -> also",
+     "n": 1,
+     "ids": [
+      "H30"
+     ]
+    },
+    {
+     "heard": "has -> she",
+     "n": 1,
+     "ids": [
+      "T15"
+     ]
+    },
+    {
+     "heard": "have -> the",
+     "n": 1,
+     "ids": [
+      "H35"
+     ]
+    },
+    {
+     "heard": "her -> book",
+     "n": 1,
+     "ids": [
+      "H07"
+     ]
+    },
+    {
+     "heard": "in -> for",
+     "n": 1,
+     "ids": [
+      "H20"
+     ]
+    },
+    {
+     "heard": "is -> hope",
+     "n": 1,
+     "ids": [
+      "H42"
+     ]
+    },
+    {
+     "heard": "is -> that",
+     "n": 1,
+     "ids": [
+      "H33"
+     ]
+    },
+    {
+     "heard": "it -> down",
+     "n": 1,
+     "ids": [
+      "H03"
+     ]
+    },
+    {
+     "heard": "item -> plan",
+     "n": 1,
+     "ids": [
+      "H32"
+     ]
+    },
+    {
+     "heard": "last -> checked",
+     "n": 1,
+     "ids": [
+      "H29"
+     ]
+    },
+    {
+     "heard": "no -> vomited",
+     "n": 1,
+     "ids": [
+      "T19"
+     ]
+    },
+    {
+     "heard": "note -> be",
+     "n": 1,
+     "ids": [
+      "H08"
+     ]
+    },
+    {
+     "heard": "of -> about",
+     "n": 1,
+     "ids": [
+      "H33"
+     ]
+    },
+    {
+     "heard": "on -> last",
+     "n": 1,
+     "ids": [
+      "H29"
+     ]
+    },
+    {
+     "heard": "on -> your",
+     "n": 1,
+     "ids": [
+      "H18"
+     ]
+    },
+    {
+     "heard": "operation -> surgery",
+     "n": 1,
+     "ids": [
+      "H42"
+     ]
+    },
+    {
+     "heard": "out -> be",
+     "n": 1,
+     "ids": [
+      "H33"
+     ]
+    },
+    {
+     "heard": "page -> we",
+     "n": 1,
+     "ids": [
+      "H23"
+     ]
+    },
+    {
+     "heard": "pain -> doctor",
+     "n": 1,
+     "ids": [
+      "H33"
+     ]
+    },
+    {
+     "heard": "pisgah -> to",
+     "n": 1,
+     "ids": [
+      "H32"
+     ]
+    },
+    {
+     "heard": "plan -> care",
+     "n": 1,
+     "ids": [
+      "H32"
+     ]
+    },
+    {
+     "heard": "porter -> very",
+     "n": 1,
+     "ids": [
+      "H16"
+     ]
+    },
+    {
+     "heard": "request -> admit",
+     "n": 1,
+     "ids": [
+      "T12"
+     ]
+    },
+    {
+     "heard": "request -> can",
+     "n": 1,
+     "ids": [
+      "H06"
+     ]
+    },
+    {
+     "heard": "request -> invite",
+     "n": 1,
+     "ids": [
+      "H46"
+     ]
+    },
+    {
+     "heard": "review -> and",
+     "n": 1,
+     "ids": [
+      "H46"
+     ]
+    },
+    {
+     "heard": "round -> to",
+     "n": 1,
+     "ids": [
+      "H08"
+     ]
+    },
+    {
+     "heard": "see -> for",
+     "n": 1,
+     "ids": [
+      "H23"
+     ]
+    },
+    {
+     "heard": "sounds -> sound",
+     "n": 1,
+     "ids": [
+      "T05"
+     ]
+    },
+    {
+     "heard": "that -> also",
+     "n": 1,
+     "ids": [
+      "T18"
+     ]
+    },
+    {
+     "heard": "that -> the",
+     "n": 1,
+     "ids": [
+      "H24"
+     ]
+    },
+    {
+     "heard": "that -> well",
+     "n": 1,
+     "ids": [
+      "H38"
+     ]
+    },
+    {
+     "heard": "the -> also",
+     "n": 1,
+     "ids": [
+      "H16"
+     ]
+    },
+    {
+     "heard": "the -> current",
+     "n": 1,
+     "ids": [
+      "H31"
+     ]
+    },
+    {
+     "heard": "the -> i",
+     "n": 1,
+     "ids": [
+      "H29"
+     ]
+    },
+    {
+     "heard": "the -> may",
+     "n": 1,
+     "ids": [
+      "H23"
+     ]
+    },
+    {
+     "heard": "this -> stable",
+     "n": 1,
+     "ids": [
+      "H27"
+     ]
+    },
+    {
+     "heard": "to -> not",
+     "n": 1,
+     "ids": [
+      "H42"
+     ]
+    },
+    {
+     "heard": "tummy -> please",
+     "n": 1,
+     "ids": [
+      "H18"
+     ]
+    },
+    {
+     "heard": "ultrasound -> her",
+     "n": 1,
+     "ids": [
+      "H27"
+     ]
+    },
+    {
+     "heard": "ward -> seems",
+     "n": 1,
+     "ids": [
+      "H08"
+     ]
+    },
+    {
+     "heard": "was -> about",
+     "n": 1,
+     "ids": [
+      "H29"
+     ]
+    },
+    {
+     "heard": "when -> is",
+     "n": 1,
+     "ids": [
+      "H16"
+     ]
+    },
+    {
+     "heard": "write -> notes",
+     "n": 1,
+     "ids": [
+      "H08"
+     ]
+    },
+    {
+     "heard": "yes -> but",
+     "n": 1,
+     "ids": [
+      "H36"
+     ]
+    },
+    {
+     "heard": "you -> to",
+     "n": 1,
+     "ids": [
+      "H27"
+     ]
+    },
+    {
+     "heard": "your -> stomach",
+     "n": 1,
+     "ids": [
+      "H18"
+     ]
+    }
+   ]
+  },
+  "numbers_voice_transcribe": {
+   "clips": 22,
+   "values": 30,
+   "heard": 30,
+   "right_after_normaliser": 25,
+   "wrong_after_normaliser": 5,
+   "lost_by_normaliser": 5,
+   "failures": [
+    {
+     "id": "T02",
+     "said": [
+      "130",
+      "85"
+     ],
+     "got": [
+      "30",
+      "85"
+     ],
+     "missed": [
+      "130"
+     ],
+     "normaliser_lost": [
+      "130"
+     ]
+    },
+    {
+     "id": "H22",
+     "said": [
+      "160",
+      "100"
+     ],
+     "got": [
+      "60"
+     ],
+     "missed": [
+      "160",
+      "100"
+     ],
+     "normaliser_lost": [
+      "160",
+      "100"
+     ]
+    },
+    {
+     "id": "H28",
+     "said": [
+      "112"
+     ],
+     "got": [
+      "12"
+     ],
+     "missed": [
+      "112"
+     ],
+     "normaliser_lost": [
+      "112"
+     ]
+    },
+    {
+     "id": "H45",
+     "said": [
+      "150",
+      "95"
+     ],
+     "got": [
+      "50",
+      "95",
+      "50"
+     ],
+     "missed": [
+      "150"
+     ],
+     "normaliser_lost": [
+      "150"
+     ]
+    }
+   ]
+  },
+  "numbers_parakeet": {
+   "clips": 22,
+   "values": 30,
+   "heard": 30,
+   "right_after_normaliser": 25,
+   "wrong_after_normaliser": 5,
+   "lost_by_normaliser": 5,
+   "failures": [
+    {
+     "id": "H03",
+     "said": [
+      "140",
+      "90"
+     ],
+     "got": [
+      "40",
+      "90"
+     ],
+     "missed": [
+      "140"
+     ],
+     "normaliser_lost": [
+      "140"
+     ]
+    },
+    {
+     "id": "H22",
+     "said": [
+      "160",
+      "100"
+     ],
+     "got": [
+      "60"
+     ],
+     "missed": [
+      "160",
+      "100"
+     ],
+     "normaliser_lost": [
+      "160",
+      "100"
+     ]
+    },
+    {
+     "id": "H28",
+     "said": [
+      "112"
+     ],
+     "got": [
+      "12"
+     ],
+     "missed": [
+      "112"
+     ],
+     "normaliser_lost": [
+      "112"
+     ]
+    },
+    {
+     "id": "H45",
+     "said": [
+      "150",
+      "95"
+     ],
+     "got": [
+      "50",
+      "95"
+     ],
+     "missed": [
+      "150"
+     ],
+     "normaliser_lost": [
+      "150"
+     ]
+    }
+   ]
+  },
+  "voice_transcribe_rerun": {
+   "clips": 70,
+   "words_differ": [
+    "T03",
+    "T04",
+    "T05",
+    "T06",
+    "T07",
+    "T09",
+    "T10",
+    "T12",
+    "T13",
+    "T14",
+    "T15",
+    "T16",
+    "T17",
+    "T20",
+    "T21",
+    "T22",
+    "T23",
+    "T24",
+    "H02",
+    "H04",
+    "H05",
+    "H07",
+    "H08",
+    "H09",
+    "H10",
+    "H11",
+    "H12",
+    "H13",
+    "H15",
+    "H16",
+    "H17",
+    "H18",
+    "H19",
+    "H20",
+    "H21",
+    "H22",
+    "H23",
+    "H24",
+    "H25",
+    "H27",
+    "H28",
+    "H31",
+    "H32",
+    "H36",
+    "H37",
+    "H40",
+    "H41",
+    "H42",
+    "H43",
+    "H45",
+    "H46",
+    "H47",
+    "H48"
+   ]
+  }
+ }
+}

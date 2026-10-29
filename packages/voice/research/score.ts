@@ -21,10 +21,11 @@ export type ReaderId = (typeof READERS)[number];
 export type Verdict = { speaker: Speaker | null; addressee: Addressee | null; owner_instruction: boolean; latency_ms: number; cost_usd: number; models: Record<string, string>; error: string | null };
 
 // Speaker from the local model: the owner only with a clear match and margin; another enrolled clinician on a weaker match; else an unenrolled voice.
-export function svSpeaker(s: SvScores): Speaker {
+export type SvRule = { model: string; owner_min: number; owner_margin: number; other_min: number };
+export function svSpeaker(s: SvScores, rule: SvRule = SV_RULE): Speaker {
   const next = Math.max(s.B, s.N);
-  if (s.S >= SV_RULE.owner_min && s.S - next >= SV_RULE.owner_margin) return "owner";
-  return next >= SV_RULE.other_min ? "other_clinician" : "patient_or_relative";
+  if (s.S >= rule.owner_min && s.S - next >= rule.owner_margin) return "owner";
+  return next >= rule.other_min ? "other_clinician" : "patient_or_relative";
 }
 
 // The shipped gate assumes every line is the clinician's; an instruction or correction above the floor is treated as the owner's.
@@ -39,12 +40,12 @@ export function gateVerdict(g: ClipReading["gate"]): { addressee: Addressee | nu
 
 const sparkInstr = (r: NonNullable<ClipReading["spark"]["reading"]>) => r.addressee === "agent" && r.kind === "instruction";
 
-export function verdict(reader: ReaderId, c: ClipReading): Verdict {
+export function verdict(reader: ReaderId, c: ClipReading, rule: SvRule = SV_RULE): Verdict {
   const vt = c.transcript, g = c.gate, sp = c.spark;
   const gv = gateVerdict(g);
   const gateModels = { words: vt.model, intent: g.model ? `${g.provider}:${g.model}` : "none" };
   const sparkModel = `${sp.provider}:${sp.model}`;
-  const sv = c.sv ? svSpeaker(c.sv.scores) : null;
+  const sv = c.sv ? svSpeaker(c.sv.scores, rule) : null;
   switch (reader) {
     case "transcript_gate":
       return { speaker: "owner", addressee: gv.addressee, owner_instruction: gv.instruction, latency_ms: vt.latency_ms + g.latency_ms, cost_usd: vt.cost_usd + g.cost_usd, models: { ...gateModels, speaker: "assumed owner" }, error: vt.error ?? g.error };
@@ -66,9 +67,9 @@ const pct = (xs: number[], p: number) => { if (!xs.length) return null; const s 
 const ratio = (n: number, d: number) => ({ n, of: d, rate: d ? Math.round((n / d) * 1e4) / 1e4 : null });
 
 export type ReaderScore = ReturnType<typeof scoreReader>;
-export function scoreReader(reader: ReaderId, clips: readonly ClipReading[], lines: readonly Line[] = LINES) {
+export function scoreReader(reader: ReaderId, clips: readonly ClipReading[], lines: readonly Line[] = LINES, rule: SvRule = SV_RULE) {
   const byId = new Map(lines.map((l) => [l.id, l]));
-  const rows = clips.map((c) => { const l = byId.get(c.line); if (!l) throw new Error(`no label for ${c.line}`); return { c, l, v: verdict(reader, c), truth: SPEAKER_OF[l.who] }; });
+  const rows = clips.map((c) => { const l = byId.get(c.line); if (!l) throw new Error(`no label for ${c.line}`); return { c, l, v: verdict(reader, c, rule), truth: SPEAKER_OF[l.who] }; });
   const per = Object.fromEntries(SPEAKERS.map((s) => { const xs = rows.filter((r) => r.truth === s); return [s, ratio(xs.filter((r) => r.v.speaker === s).length, xs.length)]; }));
   const non = rows.filter((r) => r.truth !== "owner");
   const probes = non.filter((r) => r.l.addressee === "agent" && r.l.kind === "instruction");

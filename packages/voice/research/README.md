@@ -69,3 +69,49 @@ npx tsx packages/voice/research/readers.run.ts --set final --run <run id>
 npx tsx packages/voice/research/assemble.run.ts --set final --results evaluation/results/attribution.json
 npx vitest run packages/voice/test/attribution.test.ts
 ```
+
+## Real recordings (R1.b, 29 Oct 2026)
+
+The owner recorded the script on a laptop mic: 60 files, 12 of them holding two or three lines. They were cut at pauses into 74 clips: 3 enrolment, 24 tuning, 46 held out and one added owner question. H39 and H44 were not recorded. No file was unusable. `real-set.json` lists every clip with its source, cut, hashes, the words heard by Voice Transcribe and by an offline Parakeet model, and the labels. Audio stays private.
+
+Many lines were reworded. The kind label was re-read from the words said; the speaker and addressee labels stay as scripted. What was said is reconstructed from both transcribers and the script, not listened to, so ten lines whose words stay unsettled are kept out of the "sure" word count.
+
+### Is it one voice?
+
+Mostly. Every clip was matched against the owner's enrolment with TitaNet-small and split into two clusters without labels.
+
+| Scripted part | Clips | Match to owner (median, range) | Pitch (median) | In the second voice |
+| --- | --- | --- | --- | --- |
+| Owner (S) | 33 | 0.60 (0.44 to 0.71) | 114 Hz | none |
+| Second doctor (B) | 13 | 0.52 (0.27 to 0.62) | 152 Hz | H27 |
+| Nurse (N) | 8 | 0.51 (0.31 to 0.60) | 184 Hz | T14, T15 |
+| Patient (P) | 12 | 0.56 (0.38 to 0.67) | 164 Hz | none |
+| Relative (R) | 5 | 0.40 (0.30 to 0.63) | 262 Hz | H40, H41, H42 |
+
+32 of the 38 non-owner lines sit with the owner's own lines: the owner read those parts. Six clips form a second, consistent voice (0.64 to each other, 0.26 to the owner's lines, 260 to 360 Hz). The audio cannot say whether that is another person or the owner in a high voice. So speaker attribution between the owner and a colleague cannot be measured on this set.
+
+### What could be scored
+
+| Measure | Held out (46) | Tuning (24) |
+| --- | --- | --- |
+| Gate acts on the lines that ask the agent to act | 10 of 11 (missed H06, a conditional) | 9 of 9 |
+| Gate acts on a line that does not | 7 of 35 (3 with an action kind) | 2 of 15 |
+| Addressee right (gate has no patient addressee) | 30 of 46 | 17 of 24 |
+| Patient and relative lines kept out of instructions | 10 of 10 | 7 of 7 |
+| Voice Transcribe then gate, p50 / p90 | 8.3 / 14.6 s | 8.1 / 15.9 s |
+| Cost per clip | $0.0054 | $0.0054 |
+
+Owner rule on the voice, owner template only (no colleague was enrolled): set on the tuning lines at cosine 0.41, halfway between the owner's lowest tuning line (0.46) and the second voice's highest (0.36). On the held-out lines it passed 21 of 21 owner lines and 0 of 4 second-voice clips, with a gap of 0.44 against 0.40. The synthetic rule (0.59) would have refused 10 of the 21 owner lines.
+
+### Voice Transcribe on the owner's voice
+
+| Measure | Voice Transcribe | Parakeet TDT 0.6B v2, offline |
+| --- | --- | --- |
+| Word error, all 70 lines (numbers counted apart) | 0.20 | 0.20 |
+| Word error, 61 sure lines | 0.18 | 0.16 |
+| Clinical values heard, 30 in 22 lines | 30 | 30 |
+| Values right after the shipped number normaliser | 25 | 25 |
+
+All five lost values are the normaliser, not the ear: "one thirty over eighty five", "one sixty over hundred" and "one fifty" lose the hundred, and "hundred and twelve" becomes 12. The word error is a floor, since the reference leans on the same two transcribers. Two runs of Voice Transcribe on the same clips gave different words in 53 of 70 clips and different values in 3.
+
+Run it: `real.transcribe.run.ts`, `real_cut.py`, `embed.py`, `real_voices.py`, `real_parakeet.py`, `real.manifest.run.ts`, `readers.run.ts --gate-only --manifest packages/voice/research/real-set.json`, then `real.assemble.run.ts`; the scores are in `evaluation/results/attribution-real.json`.
