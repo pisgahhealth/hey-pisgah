@@ -54,5 +54,5 @@ export function clerkBoot(script: (said: string) => W[], o: { root?: string; por
   const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater((s) => script(s) as unknown as C[]), taskStateOf: (id) => rt?.stateOf(id) ?? null });
   rt = new EmrRuntime({ storeRoot: root, client, port, holdMs: 0, proofRetryMs: 1, obligationTickMs: 20, wallNow: () => new Date(clock.now), ...(o.watchMs ? { watchMs: o.watchMs } : {}) });
   rt.start();
-  return { rt, port, root, clock };
+  return { rt, port, root, clock, client };
 }

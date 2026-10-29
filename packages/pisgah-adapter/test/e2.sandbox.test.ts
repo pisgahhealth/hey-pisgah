@@ -1,9 +1,11 @@
-import { mkdtempSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { startEmrServe, type EmrRuntime, type EmrTaskView, type Provenance } from "@hey-pisgah/agent";
 import { ModelClient } from "@hey-pisgah/model";
+import { readStream } from "@hey-pisgah/store";
 import type { DoorLog } from "../src/port.js";
 import { PisgahPort } from "../src/port.js";
 import { loadProfile } from "../src/profile.js";
@@ -149,4 +151,102 @@ describe.skipIf(!RUN)("E2 owner-aware consult holder on the sandbox EMR", () => 
       client.close();
     }
   }, 30 * 60_000);
+
+  it("holds work for the admission and a review for a time, anchors the review on the ward board, fires once from its own timer across restarts, and times the vitals path from speech", async () => {
+    const profile = loadProfile();
+    const { patient, visit, sb } = await freshArrival(profile);
+    const mine = mintAgentBearer(sb);
+    const port = new PisgahPort(profile, { bearers: { [mine.owner]: mine.bearer } });
+    const root = mkdtempSync(join(tmpdir(), "hp-e2-ob-"));
+    const listenPort = Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4107);
+    const boot = async () => {
+      let rt: EmrRuntime | null = null;
+      const client = new ModelClient({ storeRoot: root, mode: "live", recordingsDir: join(root, "recordings"), taskStateOf: (id) => rt?.stateOf(id) ?? null });
+      const s = await startEmrServe({ storeRoot: root, port, client, listenPort, ears: "spark", runtime: { holdMs: 4000, proofRetryMs: 1500, obligationTickMs: 1000 } });
+      rt = s.runtime;
+      return { s, close: async () => { await s.close(); client.close(); } };
+    };
+    const say = async (s: Awaited<ReturnType<typeof boot>>["s"], text: string) => {
+      const r = await fetch(`${s.url}/tasks/say`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ owner: mine.owner, patientId: patient, text }) });
+      expect(r.status).toBe(202);
+      const b = (await r.json()) as { task_id: string; line_id: string };
+      await s.runtime.settled(8 * 60_000);
+      return b;
+    };
+    const firedCount = (taskId: string) => readStream(root, `emr/${taskId}`).filter((e) => e.record_type === "obligation.fired").length;
+    const a = await boot();
+    let taskId = "";
+    let review: { due_at: string; title: string } | null = null;
+    try {
+      const held = await say(a.s, "Once he is admitted, start four hourly observations.");
+      taskId = held.task_id;
+      expect(a.s.runtime.view(taskId)!.obligations).toMatchObject([{ after: "admission", state: "held" }]);
+      await say(a.s, "Admit him as an emergency to the children's ward for abdominal pain.");
+      for (let i = 0; i < 60 && a.s.runtime.view(taskId)!.obligations[0]!.state !== "done"; i++) await new Promise((r) => setTimeout(r, 1000));
+      await a.s.runtime.settled(5 * 60_000);
+      const v = a.s.runtime.view(taskId)!;
+      expect(v.obligations[0]).toMatchObject({ state: "done", fired_by: "condition" });
+      const admission = String(sandboxQuery(sb, "admission_for_visit", { visit })[0]!["id"]);
+      expect(v.admission_id).toBe(admission);
+      expect(sandboxQuery(sb, "care_items_for", { admission }).map((x) => x["cadence_code"])).toContain("q4h");
+
+      await say(a.s, "Review him again in one minute.");
+      const ob = a.s.runtime.view(taskId)!.obligations.find((o) => o.kind === "schedule_review")!;
+      expect(ob).toMatchObject({ state: "held" });
+      review = { due_at: ob.due_at!, title: ob.title };
+      // The review is on the ward board at its due time as a STAT item.
+      const items = sandboxQuery(sb, "care_items_for", { admission });
+      const stat = items.find((x) => x["cadence_code"] === "STAT")!;
+      expect(stat, JSON.stringify(items)).toBeDefined();
+      expect(Math.abs(Date.parse(String(stat["start_at"])) - Date.parse(review.due_at))).toBeLessThan(60_000);
+      expect(stat["created_by"]).toBe(mine.agent);
+    } finally {
+      await a.close();
+    }
+
+    // Nothing runs while the time passes; a new serve on the same store fires the review from its own timer.
+    await new Promise((r) => setTimeout(r, Math.max(0, Date.parse(review!.due_at) - Date.now()) + 2000));
+    const b = await boot();
+    const speed: Record<string, unknown> = {};
+    try {
+      for (let i = 0; i < 30 && b.s.runtime.view(taskId)!.obligations.find((o) => o.kind === "schedule_review")!.state !== "done"; i++) await new Promise((r) => setTimeout(r, 500));
+      const ob = b.s.runtime.view(taskId)!.obligations.find((o) => o.kind === "schedule_review")!;
+      expect(ob).toMatchObject({ state: "done", fired_by: "timer" });
+      expect(firedCount(taskId)).toBe(2);
+
+      // The vitals path from speech: rendered lines through the listen endpoint, timed from the end of each line to the verified record.
+      const lines = ["Chart his pulse 116.", "Chart his temperature 38.3.", "Chart his respiratory rate 24.", "Chart his blood pressure 104 over 62.", "Chart his pulse 112.", "Chart his temperature 37.9.", "Chart his respiratory rate 22.", "Chart his pulse 108."];
+      const before = b.s.runtime.view(taskId)!.speed.rows.length;
+      for (const [seq, text] of lines.entries()) {
+        const wav = join(root, `v${seq}.wav`);
+        execFileSync("say", ["-o", wav, "--file-format=WAVE", "--data-format=LEI16@24000", `${text} [[slnc 900]]`], { stdio: "ignore", timeout: 30_000 });
+        const form = new FormData();
+        form.append("audio", new Blob([readFileSync(wav)], { type: "audio/wav" }), `v${seq}.wav`);
+        form.append("owner", mine.owner); form.append("patientId", patient); form.append("session_id", `e2-vitals-${taskId}`); form.append("seq", String(seq));
+        const r = await fetch(`${b.s.url}/tasks/listen?wait=1`, { method: "POST", body: form });
+        expect(r.status).toBe(202);
+        await new Promise((x) => setTimeout(x, Number(process.env["HEY_PISGAH_E2_SPACING_MS"] ?? 2500)));
+      }
+      await b.s.runtime.settled(8 * 60_000);
+      const v = b.s.runtime.view(taskId)!;
+      const obs = v.speed.rows.slice(before).filter((x) => x.kind === "record_observation");
+      const acts = v.actions.filter((x) => x.kind === "record_observation");
+      speed["rows"] = obs; speed["by_kind"] = v.speed.by_kind; speed["errors"] = v.speed.errors; speed["actions"] = acts.map((x) => ({ state: x.state, args: x.args, reason: x.reason }));
+      speed["questions"] = v.asked.slice(-8); speed["ears"] = v.ears; speed["usd"] = v.usd; speed["calls"] = v.calls;
+      expect(obs.length).toBeGreaterThanOrEqual(6);
+    } finally {
+      const out = process.env["HEY_PISGAH_E2_SPEED"];
+      if (out) writeFileSync(out, JSON.stringify(speed, null, 1));
+      await b.close();
+    }
+
+    // Negative control: one more restart later fires nothing again.
+    const c = await boot();
+    try {
+      await new Promise((r) => setTimeout(r, 3000));
+      expect(firedCount(taskId)).toBe(2);
+    } finally {
+      await c.close();
+    }
+  }, 40 * 60_000);
 });
