@@ -61,6 +61,10 @@ export interface EmrPort {
   // Why a kind's write cannot be checked by any read the EMR offers, or null when it can.
   unverifiable?(kind: EmrWriteKind): string | null;
   names?(): SayableNames;
+  // The page an owner sees a kind of work on, when it is not the kind's usual page.
+  screenPage?(owner: string, kind: EmrWriteKind): string | undefined;
+  // Where a page of the strip's registry lives in this EMR.
+  pageHref?(page: string): string | undefined;
   // The watched facts whose change means a result came back, for work held until then.
   resultFacts?(owner: string): readonly string[];
 }
