@@ -55,17 +55,36 @@ export function holds(p: Prediction, caseIds: readonly string[], deltas: Deltas,
   return observed.every((d) => d >= iv.lo && d <= iv.hi);
 }
 
-// Where each spoken-to hypothesis landed after the run; inconclusive covers neither, both, or an unobserved metric.
-export function checkAfter(hs: readonly HypothesisRecord[], before: PredictionCheck["before"], caseIds: readonly string[], deltas: Deltas, factsOf: (id: string) => Facts | null): NonNullable<PredictionCheck["after"]> {
+// Where each spoken-to hypothesis landed after the run; inconclusive covers neither, both, an unobserved metric, or an intervention that was not delivered.
+export function checkAfter(hs: readonly HypothesisRecord[], before: PredictionCheck["before"], caseIds: readonly string[], deltas: Deltas, factsOf: (id: string) => Facts | null, delivered = true): NonNullable<PredictionCheck["after"]> {
   const per: Record<string, { landed: "if_true" | "if_false" | "inconclusive" }> = {};
   const contradicted: string[] = [];
   for (const id of before.speaks_to) {
     const h = hs.find((x) => x.hypothesis_id === id);
     if (!h) continue;
+    if (!delivered) { per[id] = { landed: "inconclusive" }; continue; }
     const t = holds(h.if_true, caseIds, deltas, factsOf);
     const f = holds(h.if_false, caseIds, deltas, factsOf);
     per[id] = { landed: t === true && f !== true ? "if_true" : f === true && t !== true ? "if_false" : "inconclusive" };
     if (t === false) contradicted.push(id);
   }
   return { per_hypothesis: per, contradicted };
+}
+
+const finite = (x: number): number | null => (Number.isFinite(x) ? x : null);
+
+// Why each pair of hypotheses can or cannot be told apart: the delta range each if_true allows, their overlap, and the cases both are about.
+export function pairDiagnostics(hs: readonly HypothesisRecord[], caseIds: readonly string[], factsOf: (id: string) => Facts | null): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  for (let i = 0; i < hs.length; i++) {
+    for (let j = i + 1; j < hs.length; j++) {
+      const a = hs[i]!, b = hs[j]!;
+      const ia = interval(a.if_true), ib = interval(b.if_true);
+      const sa = new Set(scopedCases(a.if_true, caseIds, factsOf));
+      const shared = scopedCases(b.if_true, caseIds, factsOf).filter((c) => sa.has(c)).length;
+      const lo = Math.max(ia.lo, ib.lo), hi = Math.min(ia.hi, ib.hi);
+      out.push({ pair: [a.hypothesis_id, b.hypothesis_id], same_metric: a.if_true.metric === b.if_true.metric, shared_cases: shared, [`${a.hypothesis_id}_allows`]: [finite(ia.lo), finite(ia.hi)], [`${b.hypothesis_id}_allows`]: [finite(ib.lo), finite(ib.hi)], overlap: lo <= hi ? [finite(lo), finite(hi)] : null });
+    }
+  }
+  return out;
 }

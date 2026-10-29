@@ -6,7 +6,7 @@ import type { Session } from "./session.js";
 import { dispatch, toolDefs } from "./tools.js";
 
 // Model settings every investigator call carries; they are part of the committed record.
-export const SETTINGS = { effort: "xhigh", parallel_tool_calls: true, max_completion_tokens: 32_000, context_chars: 30_000, history_chars: 70_000, turn_result_chars: 20_000, provider: "modal", model: "meta-models/Muse-Spark-Open-816B-A42B" } as const;
+export const SETTINGS = { effort: "xhigh", adaptive_controller: "cycle", adaptive_efforts: ["medium", "high"], parallel_tool_calls: true, max_completion_tokens: 32_000, context_chars: 30_000, history_chars: 70_000, turn_result_chars: 20_000, provider: "modal", model: "meta-models/Muse-Spark-Open-816B-A42B" } as const;
 
 // After this many repeated identical calls in one run, the run ends as stalled.
 export const REPEAT_LIMIT = 3;

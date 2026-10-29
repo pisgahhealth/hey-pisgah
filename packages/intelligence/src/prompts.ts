@@ -1,8 +1,8 @@
 import { hashJson, sha256 } from "@hey-pisgah/contracts";
 import type { Arm } from "./session.js";
 import { ARGS_NOTE, DEFINITION_NOTE, DIGEST_NOTE, DROPPED_NOTE } from "./digest.js";
-import { DEFINITION_UNCHANGED, EXPERIMENT_BUDGET_MESSAGE, READ_BUDGET_MESSAGE } from "./session.js";
-import { HYPOTHESIS_SHAPES } from "./shapes.js";
+import { DEFINITION_UNCHANGED } from "./session.js";
+import { HYPOTHESIS_SHAPES, LEDGER_SHAPES } from "./shapes.js";
 import { DESCRIPTIONS, toolDefs } from "./tools.js";
 import { ENGINE_SEMANTICS, OPERATION_VOCABULARY } from "./views.js";
 
@@ -26,7 +26,7 @@ const CORE = [
 
 // The one sentence that names the experiment tool; the A3 and prior arms drop it and nothing else.
 const EXPERIMENT_SENTENCE: Record<Arm, string | null> = {
-  adaptive: "run_experiment runs the base version and your changed version on the same recorded world for up to six cases; you have eight experiments, three refused requests end access to it, and from the second experiment on it needs two active hypotheses whose if_true predictions do not overlap on one metric for a shared case, or a no_pair_reason saying why no such pair can be formed.",
+  adaptive: "run_experiment runs the base version and your changed version on the same recorded world for up to six cases; you have eight experiments and three refused requests end access to it. Each request names expected_change, the step behaviour you expect the change to move. A deterministic lint runs first and refuses a change that leaves every step's start and completion rule equivalent, one that cannot tell its cited hypotheses apart on its cases, or one already run; the refusal says why and uses no experiment. Each result carries a receipt: the rules changed, the named behaviour per case in both versions, the first event where the runs diverge, and the outcome. An experiment whose named behaviour moved in no case was not delivered, and it neither supports nor counts against a hypothesis.",
   a4: "get_listed_experiment runs the next experiment from a committed list that you do not choose; you may read up to eight.",
   a3: null,
   prior: null
@@ -37,7 +37,8 @@ export function systemPrompt(arm: Arm): string {
   return CORE.flatMap((l) => (l === "@EXPERIMENT@" ? (s ? [s] : []) : [l])).join("\n");
 }
 
-const KICKOFF: Record<"records" | "prior", string> = {
+const KICKOFF: Record<"records" | "prior" | "cycle", string> = {
+  cycle: "Session start. The pool holds {cases} recorded discharge cases. Budget: {calls} model calls, {usd} US dollars, {proposals} proposals, 8 experiments. The session runs in cycles: observe (read, record hypotheses, choose a question), construct and run (one experiment that answers it), interpret (update hypotheses, propose, end, or open the next cycle). Each cycle starts with a fresh conversation holding this message, the ledger the session keeps from tool results, and the stage. The controller offers the tools of the current stage only.",
   records: "Session start. The pool holds {cases} recorded discharge cases. Budget: {calls} model calls, {usd} US dollars, {proposals} proposals. Study the records, then propose one workflow change the evidence supports, or end the session with no_change_warranted.",
   prior: "Session start. No case records and no experiments are available in this session. Budget: {calls} model calls, {usd} US dollars, 1 proposal. From the workflow definition and the ward requirements alone, propose one workflow change you expect to serve the hospital's aim, or end the session with no_change_warranted."
 };
@@ -48,7 +49,22 @@ export const REPEAT_NOTE = "identical call already answered; use the result abov
 export const ELIDED = JSON.stringify({ elided: true, note: "Older tool result removed to save context; call the tool again if you need it." });
 
 export function kickoffTemplate(arm: Arm): string {
-  return arm === "prior" ? KICKOFF.prior : KICKOFF.records;
+  return arm === "prior" ? KICKOFF.prior : arm === "adaptive" ? KICKOFF.cycle : KICKOFF.records;
+}
+
+// The stage messages of the investigation cycle; the same text for every pool and every definition.
+export const STAGES = {
+  prior: "Stage: observe, cycle {cycle}. Start from what you would propose without the records: state as hypothesis one the change you would make from the workflow definition and the ward requirements alone, with a competing hypothesis whose if_true prediction does not overlap it, cite recorded events for both (get_derived_statistics lists event ids), then call choose_question with the two ids and the step behaviour the change should move. This stage has {turns} turns. Tools: {tools}.",
+  observe: "Stage: observe, cycle {cycle}. Read what you need, record or revise hypotheses, then call choose_question naming at least two hypotheses this cycle's experiment must tell apart and the step behaviour you expect it to move. This stage has {turns} turns. Tools: {tools}.",
+  decide: "Stage: choose a question, cycle {cycle}. Reading has closed for this cycle. Record a hypothesis if you need one, then call choose_question, or end the session with a result. This stage has {turns} turns. Tools: {tools}.",
+  construct: "Stage: construct and run, cycle {cycle}. Question: {question} Hypotheses to tell apart: {hypotheses}. Expected change: {expected}. Build one experiment that answers it and run it with run_experiment, citing those hypotheses; the lint runs first and a refusal says why. This stage has {turns} turns. Tools: {tools}.",
+  interpret: "Stage: interpret, cycle {cycle}. Read the receipt of {experiment}: whether the named behaviour moved, where the runs first diverged, and the outcome. Set hypothesis statuses, revise or record hypotheses, submit a proposal, end the session with a result, or call next_cycle. This stage has {turns} turns. Tools: {tools}."
+} as const;
+export const LEDGER_HEADER = "Ledger at the start of cycle {cycle}, kept by the session from tool results; the definition short form follows it once the definition has been read.";
+export const CYCLE_CLOSED = "The cycle closed: {reason}";
+
+export function fill(t: string, v: Record<string, string | number>): string {
+  return t.replace(/\{(\w+)\}/g, (m, k: string) => (k in v ? String(v[k]) : m));
 }
 
 export function kickoff(arm: Arm, v: { cases: number; calls: number; usd: number; proposals: number; cycle: 1 | 2 }): string {
@@ -64,10 +80,12 @@ export function appTexts(arm: Arm): { label: string; text: string }[] {
     { label: "cycle_two", text: CYCLE_TWO },
     { label: "nudge", text: NUDGE },
     { label: "notes_header", text: NOTES_HEADER },
-    { label: "read_budget", text: READ_BUDGET_MESSAGE },
     { label: "definition_unchanged", text: DEFINITION_UNCHANGED },
-    { label: "experiment_budget", text: EXPERIMENT_BUDGET_MESSAGE },
     { label: "hypothesis_shapes", text: JSON.stringify(HYPOTHESIS_SHAPES) },
+    { label: "ledger_shapes", text: JSON.stringify(LEDGER_SHAPES) },
+    ...Object.entries(STAGES).map(([k, v]) => ({ label: `stage.${k}`, text: v })),
+    { label: "ledger_header", text: LEDGER_HEADER },
+    { label: "cycle_closed", text: CYCLE_CLOSED },
     { label: "elided", text: ELIDED },
     { label: "repeat_note", text: REPEAT_NOTE },
     { label: "digest_note", text: DIGEST_NOTE },
@@ -85,5 +103,5 @@ export const ARMS: readonly Arm[] = ["adaptive", "a3", "a4", "prior"];
 
 // The hashes a run is reported under; the commitments file must carry them before a live run.
 export function armHashes(arm: Arm): { prompt: string; tools: string } {
-  return { prompt: sha256(`${systemPrompt(arm)}\n---\n${kickoffTemplate(arm)}\n---\n${CYCLE_TWO}\n---\n${NUDGE}\n---\n${ELIDED}\n---\n${REPEAT_NOTE}\n---\n${DIGEST_NOTE}\n---\n${DEFINITION_NOTE}\n---\n${ARGS_NOTE}\n---\n${DROPPED_NOTE}\n---\n${NOTES_HEADER}\n---\n${READ_BUDGET_MESSAGE}\n---\n${DEFINITION_UNCHANGED}\n---\n${EXPERIMENT_BUDGET_MESSAGE}\n---\n${JSON.stringify(HYPOTHESIS_SHAPES)}`), tools: hashJson({ defs: toolDefs(arm), vocabulary: OPERATION_VOCABULARY, semantics: ENGINE_SEMANTICS }) };
+  return { prompt: sha256(`${systemPrompt(arm)}\n---\n${kickoffTemplate(arm)}\n---\n${CYCLE_TWO}\n---\n${NUDGE}\n---\n${ELIDED}\n---\n${REPEAT_NOTE}\n---\n${DIGEST_NOTE}\n---\n${DEFINITION_NOTE}\n---\n${ARGS_NOTE}\n---\n${DROPPED_NOTE}\n---\n${NOTES_HEADER}\n---\n${DEFINITION_UNCHANGED}\n---\n${JSON.stringify(HYPOTHESIS_SHAPES)}\n---\n${JSON.stringify(LEDGER_SHAPES)}\n---\n${JSON.stringify(STAGES)}\n---\n${LEDGER_HEADER}\n---\n${CYCLE_CLOSED}`), tools: hashJson({ defs: toolDefs(arm), vocabulary: OPERATION_VOCABULARY, semantics: ENGINE_SEMANTICS }) };
 }

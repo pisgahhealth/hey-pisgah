@@ -37,10 +37,14 @@ export const TOOL_ARGS = {
     evidence: z.array(z.object({ event_id: z.string(), case_id: z.string(), stance: z.enum(["supports", "contradicts", "context"]), note: z.string() })),
     if_true: PredictionT, if_false: PredictionT, refuted_if: z.string(), revises: z.string().nullable().optional()
   }),
+  get_derived_statistics: z.object({ top: z.number().int().optional() }),
+  choose_question: z.object({ hypothesis_ids: z.array(z.string()), question: z.string(), expected_change: z.object({ step: z.string(), behaviour: z.enum(["start_time", "eligibility", "event_order"]) }) }),
+  next_cycle: z.object({ reason: z.string() }),
   set_hypothesis_status: z.object({ hypothesis_id: z.string(), status: z.enum(["retained", "rejected"]), experiment_ids: z.array(z.string()), evidence_event_ids: z.array(z.string()), note: z.string() }),
   run_experiment: z.object({
     hypothesis_id: z.string(), distinguishes: z.array(z.string()), base: z.object({ version: z.number().int().optional(), proposal_id: z.string().optional() }),
-    ops: z.array(Loose).min(1).max(3), case_ids: z.array(z.string()).min(1).max(6), note: z.string(), no_pair_reason: z.string().optional()
+    ops: z.array(Loose).min(1).max(3), case_ids: z.array(z.string()).min(1).max(6), note: z.string(),
+    expected_change: z.object({ step: z.string(), behaviour: z.enum(["start_time", "eligibility", "event_order"]) }).optional()
   }),
   get_experiment: z.object({ experiment_id: z.string() }),
   get_listed_experiment: z.object({}),
@@ -53,7 +57,7 @@ export const TOOL_ARGS = {
   }),
   get_validation_report: z.object({ proposal_id: z.string() }),
   list_ledger: z.object({}),
-  record_note: z.object({ note: z.string(), no_hypothesis_reason: z.string().optional(), no_experiment_reason: z.string().optional() }),
+  record_note: z.object({ note: z.string() }),
   end_session: z.object({ result: z.enum(["no_change_warranted"]), note: z.string(), evidence_event_ids: z.array(z.string()) })
 } as const;
 export type ToolName = keyof typeof TOOL_ARGS;
@@ -61,22 +65,25 @@ export type ToolName = keyof typeof TOOL_ARGS;
 // Descriptions say what each tool returns or records, never what to look for.
 export const DESCRIPTIONS: Record<ToolName, string> = {
   list_cases: "List the recorded discharge cases in this session's pool: case id, ward, payer, requirement version, event and note counts, and the facts recorded when each case opened.",
-  get_case_timeline: "Read one page of a case's recorded events and staff notes, ordered by the occurred clock or the recorded clock. Every event carries both clocks; a late entry carries its reason. Note text arrives inside untrusted_text. Page with offset and next_offset; kinds filters by event kind, and note.recorded selects notes. Until a hypothesis is recorded, reads share a window of 25 timeline pages or 12 model calls.",
-  get_record: "Read the recorded versions of one record kind in a case, with content where the record holds any, or every event that names one document_id. Until a hypothesis is recorded, reads share a window of 25 timeline pages or 12 model calls.",
+  get_case_timeline: "Read one page of a case's recorded events and staff notes, ordered by the occurred clock or the recorded clock. Every event carries both clocks; a late entry carries its reason. Note text arrives inside untrusted_text. Page with offset and next_offset; kinds filters by event kind, and note.recorded selects notes. ",
+  get_record: "Read the recorded versions of one record kind in a case, with content where the record holds any, or every event that names one document_id.",
   compute_intervals: "Minutes between two selected events in each listed case, on one clock. A selector names an event kind, may narrow by step_id, record_kind, document_id, stage or role, and takes the first or last match. Returns per-case minutes with the event ids used, and the median, min and max.",
   get_queue_snapshot: "The state of each staff role in a case at one minute on the occurred clock: other patients' work that had arrived, this case's queued, running and finished jobs, and any busy block in progress.",
   get_staff_activity: "Every job one role did on a case, per staff member, with queue, start and completion minutes, and that role's busy blocks.",
   get_ward_requirements: "The ward requirements in force: required documents with their conditions, the approver, and each ward's procedure text, for one ward or all.",
   get_workflow_definition: "The current workflow definition (steps, edges, triggers, documents, permissions), the full action-kind and event-kind registries, the condition facts and their values, the record kinds a section may bind to, the rules the engine applies when it runs a definition, and the operation vocabulary with its limits.",
-  record_hypothesis: "Record a hypothesis: statement, mechanism, subject refs, competing hypothesis ids or the reason none were identified, at least 3 evidence events from at least 2 cases with a stance each, if_true and if_false predictions (metric, comparison of intervention to control, tolerance, and cases or a condition) that differ, and what would refute it. Tolerance is capped at 60 for minute metrics and 3 for counts. A record never changes; set revises to replace an older one. Returns the id and hash; a schema error lists each failing field with its expected type and an example. In this session, once 3 active hypotheses have been recorded since the last experiment, record_hypothesis and the case reads (timeline, record, intervals, queue, staff) wait for run_experiment or a record_note with a no_experiment_reason.",
-  set_hypothesis_status: "Set a hypothesis status. retained needs a cited experiment whose result matches its if_true prediction. rejected needs a cited experiment whose result matches its if_false prediction or contradicts its if_true prediction, or recorded events when no experiment is cited. A refused change is counted.",
-  run_experiment: "Run the base version and a changed version (1 to 3 operations) on the same recorded world for 1 to 6 pool cases. Returns per-case metrics for both versions, their deltas, step time differences, action differences, warnings, the median deltas and the budget left. When a case's event log is identical in both versions, the result says so and lists the edges, derived gates and triggers on each step the operations target. Checks run in order: schema, ids, two recorded hypotheses or one with a stated reason, from the second experiment on a distinguishable pair (two active hypotheses whose if_true predictions do not overlap on one metric for a shared pool case) or a no_pair_reason, definition rules, schedule hashes. A refused request is counted, and the third ends access; a request refused for want of a pair is counted apart and uses no experiment.",
+  record_hypothesis: "Record a hypothesis: statement, mechanism, subject refs, competing hypothesis ids or the reason none were identified, at least 3 evidence events from at least 2 cases with a stance each, if_true and if_false predictions (metric, comparison of intervention to control, tolerance, and cases or a condition) that differ, and what would refute it. Tolerance is capped at 60 for minute metrics and 3 for counts. A record never changes; set revises to replace an older one. Returns the id and hash; a schema error lists each failing field with its expected type and an example. In the investigation cycle it also takes predicted_magnitude_min, falsifying_experiment and if_null (what you conclude if the change is delivered and the outcome does not move), which the ledger keeps.",
+  set_hypothesis_status: "Set a hypothesis status. retained needs a cited delivered experiment whose result matches its if_true prediction on the cases where the named behaviour moved. rejected needs a cited delivered experiment whose result matches its if_false prediction or contradicts its if_true prediction there, or recorded events when no experiment is cited. An experiment that was not delivered supports and rejects nothing. A refused change is counted.",
+  run_experiment: "Run the base version and a changed version (1 to 3 operations) on the same recorded world for 1 to 6 pool cases, naming expected_change: the step and the behaviour (start_time, eligibility or event_order) you expect the change to move. Checks run in order: schema, ids, definition rules, then a deterministic lint that refuses a change leaving every step's start and completion rule equivalent, one whose cited hypotheses (hypothesis_id and distinguishes) cannot be told apart on these cases, or one already run; a lint refusal says why, uses no experiment and is not counted as a refused request. Returns a receipt (rules changed, the named behaviour per case in both versions, delivered k of n cases, the first event where the logs diverge, the outcome), per-case metrics and deltas, step time and action differences, and the median deltas. A refused request is counted, and the third ends access.",
   get_experiment: "Read a stored experiment result by id.",
   get_listed_experiment: "Run the next experiment from this session's committed list on the same recorded world and return its result in the experiment result shape.",
   submit_proposal: "Submit a workflow change: base version, 1 to 3 operations, scope (wards and an optional condition), rationale, evidence (hypothesis, experiment and event ids), expected effects and known exceptions. The server adds the id, the cases viewed and a hash. Validation runs on cases outside the pool; the reply says whether the report is ready.",
   get_validation_report: "Read the validation report for a proposal: status, pass or fail per case on both versions with failing check ids, deltas, and the gate result.",
-  list_ledger: "List this session's hypotheses, experiments, proposals and the budget left.",
-  record_note: "Save a short free-text note, up to 600 characters, for later turns. Saved notes are shown as a numbered list at the top of every later turn; at most 20 notes are kept. A no_hypothesis_reason, given while no hypothesis is recorded, opens a new reading window; a no_experiment_reason opens a new hypothesis window.",
+  list_ledger: "The investigation ledger the session keeps from tool results: observations, hypotheses with their predictions and ledger fields, experiments with their receipts, the current question, proposals and the budget left.",
+  get_derived_statistics: "Derived from every recorded case in the pool: each step's median wait (from its latest-finishing predecessor's completion to its start) and work, how often it lies on the critical path from the clinical sign-off to departure, the critical segments ranked by total minutes with example event ids, and each case's critical path.",
+  choose_question: "Name the question this cycle's experiment must answer: at least two hypothesis ids it must tell apart and expected_change, the step behaviour you expect the experiment to move. Two hypotheses can be told apart when their if_true predictions name the same metric, share an experimentable pool case, and allow delta ranges that do not overlap: intervention_lt_control with tolerance t allows deltas of -t or less, intervention_gt_control allows t or more, and no_difference allows -t to t. A refusal lists each pair's ranges and overlap.",
+  next_cycle: "Close this cycle with a reason; the next cycle opens with a fresh conversation that holds the ledger.",
+  record_note: "Save a short free-text note, up to 600 characters, for later turns. Saved notes are shown as a numbered list at the top of every later turn; at most 20 notes are kept.",
   end_session: "End the session with a result, a note and the recorded event ids inspected. no_change_warranted is a valid result."
 };
 
@@ -87,7 +94,7 @@ const CLOSE: ToolName[] = ["submit_proposal", "get_validation_report", "list_led
 // The tool set of each arm; A3 differs from the adaptive arm only by the experiment tools.
 export function armTools(arm: Arm): ToolName[] {
   switch (arm) {
-    case "adaptive": return [...READS, ...RECORDS, "run_experiment", "get_experiment", ...CLOSE];
+    case "adaptive": return [...READS, "get_derived_statistics", "record_hypothesis", "set_hypothesis_status", "choose_question", "run_experiment", "get_experiment", ...CLOSE, "next_cycle"];
     case "a3": return [...READS, ...RECORDS, ...CLOSE];
     case "a4": return [...READS, ...RECORDS, "get_listed_experiment", "get_experiment", ...CLOSE];
     case "prior": return ["get_ward_requirements", "get_workflow_definition", "submit_proposal", "end_session"];
@@ -95,16 +102,19 @@ export function armTools(arm: Arm): ToolName[] {
 }
 
 // Optional statuses join the schema only when the insufficient_evidence flag is on.
-function argsFor(name: ToolName, flags: { insufficientEvidence?: boolean | undefined }): z.ZodType {
+const LEDGER_ARGS = { predicted_magnitude_min: z.number().int(), falsifying_experiment: z.string(), if_null: z.string() };
+
+function argsFor(name: ToolName, flags: { insufficientEvidence?: boolean | undefined; arm?: Arm }): z.ZodType {
+  if (name === "record_hypothesis" && flags.arm === "adaptive") return TOOL_ARGS.record_hypothesis.extend(LEDGER_ARGS);
   if (!flags.insufficientEvidence) return TOOL_ARGS[name];
   if (name === "set_hypothesis_status") return TOOL_ARGS.set_hypothesis_status.extend({ status: z.enum(["retained", "rejected", "insufficient_evidence"]), insufficient: Insufficient.optional() });
   if (name === "end_session") return TOOL_ARGS.end_session.extend({ result: z.enum(["no_change_warranted", "insufficient_evidence"]), insufficient: Insufficient.optional() });
   return TOOL_ARGS[name];
 }
 
-export function toolDefs(arm: Arm, flags: { insufficientEvidence?: boolean | undefined } = {}): ChatTool[] {
-  return armTools(arm).map((name) => {
-    const { $schema: _drop, ...parameters } = z.toJSONSchema(argsFor(name, flags)) as Record<string, unknown>;
+export function toolDefs(arm: Arm, flags: { insufficientEvidence?: boolean | undefined } = {}, only?: ReadonlySet<string>): ChatTool[] {
+  return armTools(arm).filter((n) => !only || only.has(n)).map((name) => {
+    const { $schema: _drop, ...parameters } = z.toJSONSchema(argsFor(name, { ...flags, arm })) as Record<string, unknown>;
     return { type: "function" as const, function: { name, description: DESCRIPTIONS[name], parameters } };
   });
 }
@@ -112,9 +122,10 @@ export function toolDefs(arm: Arm, flags: { insufficientEvidence?: boolean | und
 // Runs one tool call; unknown tools and unparseable arguments come back as data the model can read, and pageChars shortens timeline pages.
 export async function dispatch(s: Session, name: string, argText: string, o: { pageChars?: number; turn?: number } = {}): Promise<Record<string, unknown>> {
   if (!(armTools(s.o.arm) as string[]).includes(name)) return { ok: false, error: "no_such_tool", message: "No tool has that name in this session." };
+  if (s.allowedTools && !s.allowedTools.has(name)) { s.counters.stage_refusals += 1; return { ok: false, error: "not_in_this_stage", message: "That tool is not offered in the current stage of the cycle.", tools: [...s.allowedTools].sort() }; }
   let args: unknown;
   try { args = argText.trim() ? JSON.parse(argText) : {}; } catch { s.counters.repairs += 1; return { ok: false, error: "invalid_arguments", message: "The arguments are not valid JSON." }; }
-  const loose = argsFor(name as ToolName, { insufficientEvidence: s.o.insufficientEvidence }).safeParse(args);
+  const loose = argsFor(name as ToolName, { insufficientEvidence: s.o.insufficientEvidence, arm: s.o.arm }).safeParse(args);
   if (!loose.success && name !== "run_experiment" && name !== "record_hypothesis") {
     s.counters.repairs += 1;
     return { ok: false, error: "invalid_arguments", message: "The arguments do not match the schema.", issues: loose.error.issues.slice(0, 8).map((i) => `${i.path.join(".") || "$"}: ${i.message}`) };
@@ -137,6 +148,9 @@ export async function dispatch(s: Session, name: string, argText: string, o: { p
     case "submit_proposal": return s.submitProposal(args);
     case "get_validation_report": return s.validationReport(a);
     case "list_ledger": return s.ledger();
+    case "get_derived_statistics": return s.statistics(a);
+    case "choose_question": return s.chooseQuestion(args);
+    case "next_cycle": return s.nextCycle(args);
     case "record_note": return s.recordNote(args);
     case "end_session": return s.endSession(args);
   }

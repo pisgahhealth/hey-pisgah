@@ -52,6 +52,10 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
     say(`    after: ${per || "nothing landed"}; contradicted ${pc.after?.contradicted.join(", ") || "none"}`);
     if (x.behaviour) say(`    behaviour: event logs identical to control in ${x.behaviour.event_logs_identical_to_control}${x.behaviour.note ? "; behaviour unchanged" : ""}`);
   }
+  const lintRefused = exps.filter((e) => e.record_type === "experiment.lint_refused").length;
+  const process = processCompletion(done, aborted, lintRefused, statuses, refused);
+  say(`process: valid patches ${process.valid_patches}  delivered ${process.delivered}  informative ${process.informative}  status updates accepted ${process.updates_accepted} refused ${process.updates_refused}  lint refusals ${lintRefused}`);
+  for (const x of done) if (x.receipt) say(`  ${x.experiment_id} expected ${x.expected_change?.step} ${x.expected_change?.behaviour}: delivered ${x.receipt.delivered_cases} of ${x.receipt.target.length}, ${x.outcome_class}`);
   const pairRefused = exps.filter((e) => e.record_type === "experiment.refused_pair").length;
   const reasons = done.filter((x) => x.no_pair_reason).map((x) => `${x.experiment_id}: ${String(x.no_pair_reason).slice(0, 120)}`);
   say(`pair gate: ${pairRefused} refused, ${reasons.length} run on a stated no_pair_reason${reasons.length ? ` (${reasons.join("; ")})` : ""}`);
@@ -94,5 +98,18 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
   };
   const pass = Object.values(needs).every(Boolean);
   say(`check: ${Object.entries(needs).map(([k, v]) => `${k} ${v ? "pass" : "FAIL"}`).join("  ")}  => ${pass ? "PASS" : "FAIL"}`);
-  return { pass, lines, summary: { run_id: runId, arm, needs, calls: rows.length, usd, prompt_tokens: promptTokens, prompt_tokens_per_call: promptPerCall, prompt_tokens_max: promptMax, hypotheses: hyps.length, experiments: done.length, aborted, invalid, pair_refusals: pairRefused, no_pair_reasons: reasons.length, say_do_mismatches: refused.length, notes: notes.length, definition_unchanged: Number(counters.definition_unchanged ?? 0), read_refusals: Number(counters.read_refusals ?? 0), experiment_budget_refusals: Number(counters.experiment_budget_refusals ?? 0), hypothesis_schema_errors: Number(counters.hypothesis_schema_errors ?? 0), proposals: props.map((p) => p.proposal_id), validations: reports.map((r) => r.status), stop: stopped?.stop ?? null, deny_hits: hits.length } };
+  return { pass, lines, summary: { run_id: runId, arm, needs, calls: rows.length, usd, prompt_tokens: promptTokens, prompt_tokens_per_call: promptPerCall, prompt_tokens_max: promptMax, hypotheses: hyps.length, experiments: done.length, aborted, invalid, pair_refusals: pairRefused, no_pair_reasons: reasons.length, say_do_mismatches: refused.length, notes: notes.length, definition_unchanged: Number(counters.definition_unchanged ?? 0), read_refusals: Number(counters.read_refusals ?? 0), experiment_budget_refusals: Number(counters.experiment_budget_refusals ?? 0), hypothesis_schema_errors: Number(counters.hypothesis_schema_errors ?? 0), proposals: props.map((p) => p.proposal_id), validations: reports.map((r) => r.status), stop: stopped?.stop ?? null, deny_hits: hits.length, process, lint_refusals: lintRefused, cycles: stopped?.cycles ?? null } };
+}
+
+export type ProcessCompletion = { valid_patches: number; delivered: number; informative: number; updates_accepted: number; updates_refused: number };
+
+// The process columns: patches that passed the definition rules, interventions delivered, results that told a cited pair apart, and status updates the checker accepted or refused.
+export function processCompletion(done: readonly StoredExperiment[], aborted: number, lintRefused: number, statuses: readonly Row[], refused: readonly Row[]): ProcessCompletion {
+  const delivered = done.filter((x) => x.delivered === true || (x.delivered === undefined && x.behaviour?.note === null));
+  const informative = delivered.filter((x) => {
+    const per = x.prediction_check.after?.per_hypothesis ?? {};
+    return x.prediction_check.before.distinguishes.some(([a, b]) => per[a]?.landed !== "inconclusive" && per[b]?.landed !== "inconclusive" && per[a]?.landed !== per[b]?.landed);
+  });
+  const updates = statuses.filter((s) => s.status === "retained" || s.status === "rejected");
+  return { valid_patches: done.length + aborted + lintRefused, delivered: delivered.length, informative: informative.length, updates_accepted: updates.length, updates_refused: refused.length };
 }

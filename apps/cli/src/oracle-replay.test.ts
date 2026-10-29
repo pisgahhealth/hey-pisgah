@@ -12,6 +12,7 @@ const LONG = ["c-491dbab0", "c-8c9cd194", "c-ed324a69"];
 const SHORT = "c-11060afa";
 
 type R = Record<string, unknown>;
+const LF = { predicted_magnitude_min: 60, falsifying_experiment: "Release the draft and the wait stays.", if_null: "The wait is set elsewhere." };
 const call = async (s: Session, name: string, args: unknown): Promise<R> => dispatch(s, name, JSON.stringify(args), { turn: 1 });
 
 function eventOf(s: Session, caseId: string, step: string): string {
@@ -29,11 +30,11 @@ describe("oracle replay through the investigator's own tools", () => {
     ];
     const down = { metric: "post_signoff_wait_min", comparison: "intervention_lt_control", tolerance_min: 30, scope: { cases: LONG } };
     const same = { metric: "post_signoff_wait_min", comparison: "no_difference", tolerance_min: 10, scope: { cases: LONG } };
-    const h1 = await call(s, "record_hypothesis", { statement: "The summary draft waits for the clinical discharge.", mechanism: "Its edge and its trigger both wait on the clinical discharge.", subject_refs: ["st06"], competing: { none_identified_reason: "first reading" }, evidence, if_true: down, if_false: same, refuted_if: "The wait does not fall.", revises: null });
+    const h1 = await call(s, "record_hypothesis", { statement: "The summary draft waits for the clinical discharge.", mechanism: "Its edge and its trigger both wait on the clinical discharge.", subject_refs: ["st06"], competing: { none_identified_reason: "first reading" }, evidence, if_true: down, if_false: same, refuted_if: "The wait does not fall.", revises: null, ...LF });
     expect(h1.ok).toBe(true);
-    const h2 = await call(s, "record_hypothesis", { statement: "Payment timing sets the wait.", mechanism: "Clearance waits for the sponsor.", subject_refs: ["st13"], competing: [h1.hypothesis_id], evidence, if_true: same, if_false: down, refuted_if: "The summary change alone cuts the wait.", revises: null });
+    const h2 = await call(s, "record_hypothesis", { statement: "Payment timing sets the wait.", mechanism: "Clearance waits for the sponsor.", subject_refs: ["st13"], competing: [h1.hypothesis_id], evidence, if_true: same, if_false: down, refuted_if: "The summary change alone cuts the wait.", revises: null, ...LF });
     expect(h2.ok).toBe(true);
-    const x = await call(s, "run_experiment", { hypothesis_id: h1.hypothesis_id, distinguishes: [h2.hypothesis_id], base: { version: 1 }, ops: PLANTED, case_ids: [...LONG, SHORT], note: "planted change" });
+    const x = await call(s, "run_experiment", { hypothesis_id: h1.hypothesis_id, distinguishes: [h2.hypothesis_id], base: { version: 1 }, ops: PLANTED, case_ids: [...LONG, SHORT], note: "planted change", expected_change: { step: "st06", behaviour: "start_time" } });
     expect(x.ok).toBe(true);
     const cases = x.cases as { case_id: string; delta: { post_signoff_wait_min: number } }[];
     for (const c of cases.filter((y) => LONG.includes(y.case_id))) expect(c.delta.post_signoff_wait_min).toBeLessThanOrEqual(-30);

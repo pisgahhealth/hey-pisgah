@@ -289,6 +289,48 @@
         "insufficient_evidence_default": false
       },
       "hash": "72af53cf43ca899567c50b5e6a3076d72e21c1866ad3370d8bc47ec7cd13126e"
+    },
+    {
+      "revision": 9,
+      "at": "2026-10-29T22:53:38.535Z",
+      "reason": "Revision 9 (lane E6.d, from the research note on why the investigator stalls). Control structure: the adaptive arm runs as an investigation cycle owned by code (observe, construct and run, interpret); the controller offers each stage's tools only, opens every cycle with a fresh conversation, and carries forward a ledger the session fills from tool results (observations, hypotheses with predicted size, falsifying experiment and what a null result would mean, experiments with receipts, proposals); cycle 0 states and tests the prior as hypothesis one. The read budget, the hypothesis window, the pair gate and the note windows are removed. Tool interface: run_experiment names the step behaviour it expects to move and returns a receipt (rules changed, the named behaviour per case in both versions, delivered k of n, first event divergence, outcome); a deterministic pre-run lint refuses a change that leaves every step's start and completion rule equivalent, one whose cited hypotheses cannot be told apart on its cases, or a repeat, with the reason as data; get_derived_statistics gives per-step waiting, critical-path membership and the ranked critical segments; choose_question records the cycle's question. Evaluation logic: the prediction check counts an experiment only when its named behaviour moved, and only on the cases where it moved, so an undelivered change never supports or counts against a hypothesis. Effort is set per run, medium or high. Three short live probes before this revision (run-9b0be001 to run-9b0be003, 1, 16 and 20 calls, $0.74, not counted) exposed two interface defects fixed here: a choose_question refusal now lists each pair's allowed delta ranges and overlap, and a refused request no longer moves the controller out of the construct stage.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "704058ab0a77fc3307bc9f22ab5e2e81fa1ba28957edc948981def44a969ed0b",
+            "tools": "7bc2cb7496856896a7075b1ede24f5ceb3689f18bb7671d978306f966b85d3eb"
+          },
+          "a3": {
+            "prompt": "99a85b831d4a0926333e57f3398d5c4c0652f9ccc816944ffb05d1cf74d645db",
+            "tools": "7dc5b916fff8223bdec7ac38b22f1533f890e71f61631d97861214bea963a9d5"
+          },
+          "a4": {
+            "prompt": "55a3398a6533072bfc44dbe93d194fe90667d511c413f1c18884fb056f769cf3",
+            "tools": "2535fa876f2aff71eaf70f1db86b8dbb356a5392107cdb4b920583263bce3e95"
+          },
+          "prior": {
+            "prompt": "f3f1869f55cf864b9efb8aa0ca202a3aac135c7c5f358d2e1fb2d06ebb7e8712",
+            "tools": "2fd590e02488a003e8deb611346c1209fc6a604d9cb9138f4867447bb975b514"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "adaptive_controller": "cycle",
+          "adaptive_efforts": [
+            "medium",
+            "high"
+          ],
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 30000,
+          "history_chars": 70000,
+          "turn_result_chars": 20000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "49bc8a852e91f701196d61000e80fd55ce39f4fe5efaab0a57a68993ee3aed33"
     }
   ]
 }

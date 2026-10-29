@@ -3,10 +3,13 @@ import { Metric, definitionHash, hashJson, type Operation, type RunResult, type 
 import { worldRules } from "@hey-pisgah/hospital";
 import { behaviourNote, effectiveParams, externalSubLogHash, rulesHashFor, runDefinition, scheduleHash, type WorldRules } from "@hey-pisgah/simulator";
 import { applyOperations, deriveDataIntegrityFences, type Facts } from "@hey-pisgah/workflow";
+import { firstDivergence, rulesChanged, targetRow, type Divergence, type ExpectedChange, type TargetRow } from "./delivery.js";
 import type { Deltas } from "./prediction.js";
 
 export type Runner = typeof runDefinition;
-export type MatchedOptions = { caseFacts: readonly Facts[]; world?: WorldRules; runner?: Runner; experimentId: string };
+export type MatchedOptions = { caseFacts: readonly Facts[]; world?: WorldRules; runner?: Runner; experimentId: string; expected?: ExpectedChange };
+// What an experiment proves it changed: the rules edited, the named behaviour per case in both arms, and where the logs first part.
+export type Receipt = { rules_changed: Record<string, unknown>; expected_change: ExpectedChange | null; target: TargetRow[]; delivered_cases: number; first_divergence: { case_id: string; first: Divergence }[] };
 
 type Ok = Extract<RunResult, { outcome: "ok" }>;
 export type ArmView = Record<string, unknown>;
@@ -31,7 +34,7 @@ export type Gating = {
 export type Behaviour = { event_logs_identical_to_control: string; identical_cases: string[]; changed_cases: string[]; note: string | null; gating: Gating[] | null };
 export type Matched =
   | { ok: false; stage: "static" | "schedule_hash"; errors: string[] }
-  | { ok: true; aborted: { case_id: string; reason: string } | null; base_hash: string; intervention_hash: string; warnings: string[]; noop: boolean; cases: CaseResult[]; deltas: Deltas; behaviour: Behaviour | null };
+  | { ok: true; aborted: { case_id: string; reason: string } | null; base_hash: string; intervention_hash: string; warnings: string[]; noop: boolean; cases: CaseResult[]; deltas: Deltas; behaviour: Behaviour | null; receipt: Receipt | null };
 
 const METRICS = Metric.options;
 
@@ -124,13 +127,16 @@ export function runMatched(base: WD, ops: readonly Operation[], files: readonly 
     deltas[f.case_id] = r.delta;
   }
   let behaviour: Behaviour | null = null;
+  let receipt: Receipt | null = null;
   if (!aborted) {
+    const target = o.expected ? pairs.map((x, k) => targetRow(cases[k]!.case_id, x.c, x.i, o.expected!)) : [];
+    receipt = { rules_changed: rulesChanged(base, def), expected_change: o.expected ?? null, target, delivered_cases: target.filter((t) => t.moved).length, first_divergence: pairs.map((x, k) => ({ case_id: cases[k]!.case_id, first: firstDivergence(x.c.events, x.i.events) })) };
     const b = behaviourNote(pairs.map((x) => x.c), pairs.map((x) => x.i));
     cases.forEach((r, k) => { r.event_logs_identical = b.identical[k] ?? false; });
     const same = cases.filter((r) => r.event_logs_identical).map((r) => r.case_id);
     behaviour = { event_logs_identical_to_control: `${same.length} of ${cases.length} cases`, identical_cases: same, changed_cases: cases.filter((r) => !r.event_logs_identical).map((r) => r.case_id), note: b.note, gating: same.length ? gatingOf(def, targetedSteps(base, ops)) : null };
   }
-  return { ok: true, aborted, base_hash: definitionHash(base), intervention_hash: definitionHash(def), warnings: applied.warnings.map((w) => w.message), noop: applied.noop, cases: aborted ? [] : cases, deltas: aborted ? {} : deltas, behaviour };
+  return { ok: true, aborted, base_hash: definitionHash(base), intervention_hash: definitionHash(def), warnings: applied.warnings.map((w) => w.message), noop: applied.noop, cases: aborted ? [] : cases, deltas: aborted ? {} : deltas, behaviour, receipt };
 }
 
 const median = (xs: number[]): number | null => {

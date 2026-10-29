@@ -7,6 +7,7 @@ import { readStream } from "@hey-pisgah/store";
 import { z } from "zod";
 import { checkDiscovery } from "./check.js";
 import { commitmentFor } from "./commitments.js";
+import { runCycleLoop } from "./cycle.js";
 import { SETTINGS, runLoop } from "./loop.js";
 import { scriptedInvestigator } from "./mock.js";
 import { DiscoveryPool, loadObserved, type OutcomeCase } from "./pool.js";
@@ -19,7 +20,7 @@ const ListedOrder = z.union([z.array(z.strictObject({ ops: z.array(Operation).mi
 
 export type DiscoverDeps = { validate?: (storeRoot: string) => Promise<void>; out?: (line: string) => void; mode?: Mode };
 
-// discover --arm adaptive|a3|a4|prior --budget-usd N --max-calls M [--run-id run-xxxxxxxx] [--store dir] [--a4-order file] [--cycle 2 [--outcomes file] [--observed file]] [--insufficient-evidence]
+// discover --arm adaptive|a3|a4|prior [--effort medium|high] --budget-usd N --max-calls M [--run-id run-xxxxxxxx] [--store dir] [--a4-order file] [--cycle 2 [--outcomes file] [--observed file]] [--insufficient-evidence]
 export async function discoverCommand(root: string, argv: readonly string[], deps: DiscoverDeps = {}): Promise<number> {
   const out = deps.out ?? ((l: string) => console.log(l));
   const arm = (flag(argv, "arm") ?? "adaptive") as Arm;
@@ -40,20 +41,23 @@ export async function discoverCommand(root: string, argv: readonly string[], dep
     const parsed = ListedOrder.parse(JSON.parse(readFileSync(p, "utf8")));
     a4Order = (Array.isArray(parsed) ? parsed : parsed.order) as ListedExperiment[];
   }
+  const effort = flag(argv, "effort") as "medium" | "high" | undefined;
+  if (arm === "adaptive" && (!effort || !(SETTINGS.adaptive_efforts as readonly string[]).includes(effort))) { out(`discover: the adaptive arm needs --effort ${SETTINGS.adaptive_efforts.join(" or ")}`); return 2; }
   const cycle = flag(argv, "cycle") === "2" ? 2 : 1;
   const outcomes = cycle === 2 ? [...readStream(storeRoot, STREAMS.outcomes).filter((e) => e.record_type === "outcome.case_run").map((e) => e.payload as OutcomeCase), ...(flag(argv, "outcomes") ? loadObserved(flag(argv, "outcomes")!) : [])] : [];
   const observedFile = flag(argv, "observed") ?? join(root, "evaluation", "results", "observed-cases.json");
   const observed = cycle === 2 && existsSync(observedFile) ? loadObserved(observedFile) : [];
   const provider = (flag(argv, "provider") ?? SETTINGS.provider) as ProviderId;
   const model = flag(argv, "model") ?? SETTINGS.model;
-  const client = createModelClient({ storeRoot, mode, recordingsDir: flag(argv, "recordings") ?? INTELLIGENCE_RECORDINGS_DIR, mock: scriptedInvestigator(arm), budget: { ...env, runUsd: budgetUsd, runMaxCalls: maxCalls } });
+  const client = createModelClient({ storeRoot, mode, recordingsDir: flag(argv, "recordings") ?? INTELLIGENCE_RECORDINGS_DIR, mock: scriptedInvestigator(arm), timeoutMs: 300_000, budget: { ...env, runUsd: budgetUsd, runMaxCalls: maxCalls } });
   const session = new Session({
     storeRoot, runId, arm, cycle, pool: new DiscoveryPool(undefined, outcomes, observed), insufficientEvidence: argv.includes("--insufficient-evidence"),
     ...(deps.validate ? { validate: deps.validate } : {}), ...(a4Order ? { a4Order } : {}),
     usage: () => { const u = client.runUsage(runId); return { ...u, max_calls: maxCalls, max_usd: budgetUsd }; }
   });
   try {
-    const r = await runLoop({ client, session, maxCalls, budgetUsd, provider, model, commitment: commitment ?? { revision: null, hash: null } });
+    const common = { client, session, maxCalls, budgetUsd, provider, model, commitment: commitment ?? { revision: null, hash: null } };
+    const r = arm === "adaptive" ? await runCycleLoop({ ...common, effort: effort! }) : await runLoop(common);
     out(`discover ${runId}: arm ${arm}, mode ${client.mode}, stop ${r.stop} (${r.detail}), ${r.calls} calls, $${r.usd.toFixed(4)}, ${session.hypotheses.size} hypotheses, ${session.experiments.size} experiments, ${session.proposals.size} proposals`);
     out(`next: npm run check:discovery -- ${runId}`);
     return 0;
