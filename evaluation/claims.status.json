@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-30T06:32:49.235Z",
-  "commit": "48b70a4",
+  "generated_at": "2026-10-30T06:52:26.922Z",
+  "commit": "006be27",
   "claims": [
     {
       "claim_id": "C-01",
@@ -126,6 +126,7 @@
         "no_hypothesis_cited_as_evidence": true,
         "read.outcomes": 2,
         "result": "new_proposal",
+        "reversed_pairs_summary": "with the ward A outcome reversed so the adopted change hurt, 0 of 3 said the evidence is insufficient, 0 proposed a rollback, 2 declined the change (cited the reversed outcome, did not propose it again, but ended on the budget cap without a result) and 1 proposed it again; unreversed, 1 of 3 proposed it again and 2 reached no result",
         "stop": "dev_valid_proposal (p-08e023d0)"
       },
       "measured_at": "2026-10-30T06:10:05.292Z"
@@ -365,23 +366,23 @@
     },
     {
       "claim_id": "C-28",
-      "status": "red",
+      "status": "green",
       "values": {
-        "verified": false,
+        "verified": true,
         "names_in_previews": 0,
         "unauthorised_names": 0,
         "checks_failed_closed": 5,
         "checks_tried": 5,
         "deny_hits": 0,
         "authorised_recipients": 2,
-        "authorised_delivered": 1,
+        "authorised_delivered": 2,
         "correct_refusals": 1,
         "refusals": 1,
-        "incorrect_outcomes": 1,
+        "incorrect_outcomes": 0,
         "urgent_alerts_authorised": 2,
         "urgent_items_authorised": 2
       },
-      "measured_at": "2026-10-30T06:27:57.323Z"
+      "measured_at": "2026-10-30T06:43:12.247Z"
     }
   ]
 }

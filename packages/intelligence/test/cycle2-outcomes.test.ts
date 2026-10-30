@@ -2,7 +2,7 @@ import { loadV1 } from "@hey-pisgah/hospital";
 import { createModelClient, type MockResponder } from "@hey-pisgah/model";
 import { readStream } from "@hey-pisgah/store";
 import { describe, expect, it } from "vitest";
-import { cycle2Result } from "../src/claims-results.js";
+import { cycle2Result, cycleResponse } from "../src/claims-results.js";
 import { runCycleLoop } from "../src/cycle.js";
 import { outcomeComparison, reverseOutcomes } from "../src/outcomes.js";
 import { DiscoveryPool, loadObserved } from "../src/pool.js";
@@ -55,7 +55,8 @@ describe("the second cycle reads the new outcomes first", () => {
     const c = outcomeComparison(pool(reversed), loadV1());
     expect(c.after.find((r) => r.ward_id === "A")).toMatchObject({ workflow_version: 2, direction: "worse" });
     expect(c.contradicts_adopted).toBe(true);
-    const s = second(pool(reversed));
+    const storeRoot = tempRoot();
+    const s = new Session({ storeRoot, runId: "run-c2a00004", arm: "adaptive", cycle: 2, pool: pool(reversed), insufficientEvidence: true, now: () => new Date("2026-10-30T09:00:00Z") });
     s.compareOutcomes();
     const ev = historyEvent();
     expect(s.endSession({ result: "no_change_warranted", note: "the version holds", evidence_event_ids: [ev] })).toMatchObject({ ok: false, error: "outcomes_contradict" });
@@ -64,6 +65,9 @@ describe("the second cycle reads the new outcomes first", () => {
     const ids = [hyp(s), hyp(s)];
     expect(s.endSession({ result: "insufficient_evidence", note: "one reversed case", evidence_event_ids: [ev], insufficient: { ...insufficient, distinguishes: ids } })).toMatchObject({ ok: true, result: "insufficient_evidence" });
     s.close();
+    // The pair report reads that as a response to the reversed outcomes, never as a required reversal.
+    const adoptedOps = [{ op: "remove_soft_edge", edge_id: "e04" }, { op: "set_prep_trigger", target: { step: "st06" }, when: { after: { step: "st01" } } }];
+    expect(cycleResponse(storeRoot, "run-c2a00004", { observed: OBSERVED, outcomes: reversed, adoptedOps })).toMatchObject({ response: "insufficient_evidence", outcomes_contradict_adopted: true, compared_outcomes: true });
   });
 
   it("offers compare_outcomes only in a second cycle, counts its reads in the cycle-2 result, and keeps the texts clean", async () => {

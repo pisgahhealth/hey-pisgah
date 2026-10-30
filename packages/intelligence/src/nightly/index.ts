@@ -6,3 +6,4 @@ export { checkMemo, verifyMemo, type CheckCode, type CheckFailure, type Verdict 
 export { alertHash, heldTransport, memoPublisher, sendOnVerdict, taskAlert, urgentPreview, type DeliveryAnswer, type MemoDelivery, type MemoRepair, type MemoTransport, type PublishResult, type Publisher } from "./publish.js";
 export { CRITIC_SYSTEM, CRITIC_TOOL, INVESTIGATE_TOOL, INVESTIGATOR_SYSTEM, criticMessage, investigateDay, investigatorMessage, scanNightPrompts, type NightModel } from "./investigate.js";
 export { plantedFaults } from "./faults.js";
+export { repairFromRecords } from "./repair.js";

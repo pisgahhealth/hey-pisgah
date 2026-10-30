@@ -244,8 +244,8 @@
         "measured_on": "dev"
       },
       "wording": {
-        "pass": "A second pass over the verified outcomes concluded: {result}",
-        "partial": "A second cycle reached {result}, but it read none of the new verified outcomes",
+        "pass": "A second pass over the verified outcomes concluded: {result}; in paired runs, {reversed_pairs_summary}",
+        "partial": "A second cycle reached {result}, but it read none of the new verified outcomes; in paired runs, {reversed_pairs_summary}",
         "fail": "Second cycle ran and reached no result; it stopped at {stop}",
         "not_measured": "Not measured yet"
       },
@@ -941,6 +941,25 @@
         }
       },
       "reason": "The review found urgent items had no route of their own and rang only inside the memo. The memo is now kept and its bell opens an authorised page, and each urgent item of a recipient the record authorises goes first as its own alert through its own door route. Green now also needs every such urgent item to have rung as its own alert; amber and red are unchanged. Nothing was loosened."
+    },
+    {
+      "date": "2026-10-30",
+      "by": "F3b",
+      "claims": [
+        "C-10"
+      ],
+      "previous_predicates": {
+        "C-10": "cycle2_result_recorded && no_hypothesis_cited_as_evidence && read.outcomes >= 1 ; amber: cycle2_result_recorded && no_hypothesis_cited_as_evidence"
+      },
+      "previous_wording": {
+        "C-10": {
+          "pass": "A second pass over the verified outcomes concluded: {result}",
+          "partial": "A second cycle reached {result}, but it read none of the new verified outcomes",
+          "fail": "Second cycle ran and reached no result; it stopped at {stop}",
+          "not_measured": "Not measured yet"
+        }
+      },
+      "reason": "The reviewers asked for reversed evidence as paired runs. C-10's wording now states, from cycle2.json's reversed_pairs, what three paired second cycles under revision 14 did when the adopted change's outcome was reversed against the same cycle on the true outcomes. The predicate is unchanged: no response to reversed evidence is required, since one noisy case must not force a reversal."
     }
   ]
 }
