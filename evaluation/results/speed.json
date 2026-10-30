@@ -1,24 +1,90 @@
 {
-  "source": "Lane G6 integration runs on the sandbox EMR with synthetic voices; these are not the microphone-driven acceptance run.",
-  "measured_at": "2026-10-30T09:31:48.925Z",
+  "source": "Lane G6 and G9 integration runs on the sandbox EMR with synthetic voices; these are not the microphone-driven acceptance run.",
+  "measured_at": "2026-10-30T14:11:18.040Z",
   "floor_vitals_p50_ms": 7420,
   "floor_vitals_p90_ms": 10005,
   "floor_vitals_errors": 0,
   "local_vitals_p50_ms": 4268,
   "local_vitals_p90_ms": 6781,
   "local_vitals_errors": 0,
+  "meta_vitals_p50_ms": 4207,
+  "meta_vitals_p90_ms": 6031,
+  "meta_vitals_errors": 8,
+  "meta_parakeet_vitals_p50_ms": 4231,
+  "meta_parakeet_vitals_p90_ms": 4802,
+  "meta_parakeet_vitals_errors": 0,
   "floor_order_decided_p50_ms": 6065,
   "floor_order_decided_p90_ms": 6892,
   "local_order_decided_p50_ms": 3721,
   "local_order_decided_p90_ms": 4057,
-  "orders_note": "The order lines are timed from the end of the line to the order being decided. The hospital's voice match changed its token format during these runs, so every order was held for the owner's yes and none reached the lab board; board times wait for that change to land.",
+  "orders_note": "Order lines are timed from the end of the line to the order being decided, and to the order on the lab board where it got there. G6's order runs predate G1's v2 voice tokens, so none of them reached the board; G9 reran every order setting after G1 merged, and those rows carry the board times.",
   "switches": {
     "HEY_PISGAH_EAR": "spark (default) or parakeet",
-    "HEY_PISGAH_ASR": "rest (default) or stream"
+    "HEY_PISGAH_ASR": "rest (default), stream or meta-stream",
+    "HEY_PISGAH_LANGUAGE_BIAS": "off (default) or 1",
+    "HEY_PISGAH_VT_READINGS": "1 (default) or more"
   },
   "configs": [
     {
       "path": "orders",
+      "lane": "G9",
+      "release_whole": false,
+      "timed_to": "order decided",
+      "setting": "parakeet/meta-stream",
+      "ear": "parakeet",
+      "first_ear": "meta-stream",
+      "transport": "frames",
+      "runs": 2,
+      "n": 6,
+      "p50_ms": 3706,
+      "p90_ms": 4703,
+      "max_ms": 4703,
+      "errors": {
+        "lines_not_done": 3,
+        "streams_refused": 1,
+        "wrong_values": 0,
+        "readings_differ": 0,
+        "runtime": 0
+      },
+      "lines_said": 9,
+      "runs_refused": 1,
+      "corrections": 0,
+      "board_p50_ms": [
+        4267,
+        5142
+      ],
+      "board": {
+        "n": 6,
+        "of": 6,
+        "p50_ms": 4467,
+        "p90_ms": 5316
+      },
+      "usd": 0.0349,
+      "meta": {
+        "words": "Meta Voice Transcribe realtime",
+        "decides": "Muse Spark Open",
+        "numbers": [],
+        "meta_models_on_the_step": 2
+      },
+      "load_avg_1m": [
+        [
+          2.2822265625,
+          2.21630859375
+        ],
+        [
+          7.0927734375,
+          5.04052734375
+        ]
+      ],
+      "started": [
+        "2026-10-30T13:48:03.639Z",
+        "2026-10-30T14:11:18.040Z"
+      ]
+    },
+    {
+      "path": "orders",
+      "lane": "G6",
+      "release_whole": false,
       "timed_to": "order decided",
       "setting": "parakeet/rest",
       "ear": "parakeet",
@@ -31,15 +97,24 @@
       "max_ms": 7335,
       "errors": {
         "lines_not_done": 0,
+        "streams_refused": 0,
         "wrong_values": 0,
         "readings_differ": 0,
         "runtime": 0
       },
       "lines_said": 6,
+      "runs_refused": 0,
+      "corrections": 0,
       "board_p50_ms": [
         null,
         null
       ],
+      "board": {
+        "n": 0,
+        "of": 6,
+        "p50_ms": null,
+        "p90_ms": null
+      },
       "usd": 0.035,
       "meta": {
         "words": "Meta Voice Transcribe",
@@ -64,6 +139,64 @@
     },
     {
       "path": "orders",
+      "lane": "G9",
+      "release_whole": false,
+      "timed_to": "order decided",
+      "setting": "parakeet/rest",
+      "ear": "parakeet",
+      "first_ear": "rest",
+      "transport": "chunks",
+      "runs": 2,
+      "n": 6,
+      "p50_ms": 6792,
+      "p90_ms": 21202,
+      "max_ms": 21202,
+      "errors": {
+        "lines_not_done": 0,
+        "streams_refused": 0,
+        "wrong_values": 0,
+        "readings_differ": 0,
+        "runtime": 0
+      },
+      "lines_said": 6,
+      "runs_refused": 0,
+      "corrections": 0,
+      "board_p50_ms": [
+        10530,
+        7018
+      ],
+      "board": {
+        "n": 6,
+        "of": 6,
+        "p50_ms": 7018,
+        "p90_ms": 21623
+      },
+      "usd": 0.0349,
+      "meta": {
+        "words": "Meta Voice Transcribe",
+        "decides": "Muse Spark Open",
+        "numbers": [],
+        "meta_models_on_the_step": 2
+      },
+      "load_avg_1m": [
+        [
+          4.47509765625,
+          2.94091796875
+        ],
+        [
+          3.95556640625,
+          3.2451171875
+        ]
+      ],
+      "started": [
+        "2026-10-30T13:45:56.361Z",
+        "2026-10-30T13:52:01.597Z"
+      ]
+    },
+    {
+      "path": "orders",
+      "lane": "G6",
+      "release_whole": false,
       "timed_to": "order decided",
       "setting": "parakeet/stream",
       "ear": "parakeet",
@@ -76,15 +209,24 @@
       "max_ms": 4057,
       "errors": {
         "lines_not_done": 0,
+        "streams_refused": 0,
         "wrong_values": 0,
         "readings_differ": 0,
         "runtime": 0
       },
       "lines_said": 6,
+      "runs_refused": 0,
+      "corrections": 0,
       "board_p50_ms": [
         null,
         null
       ],
+      "board": {
+        "n": 0,
+        "of": 6,
+        "p50_ms": null,
+        "p90_ms": null
+      },
       "usd": 0.036,
       "meta": {
         "words": "local streaming Zipformer",
@@ -109,6 +251,120 @@
     },
     {
       "path": "orders",
+      "lane": "G9",
+      "release_whole": false,
+      "timed_to": "order decided",
+      "setting": "parakeet/stream",
+      "ear": "parakeet",
+      "first_ear": "stream",
+      "transport": "frames",
+      "runs": 2,
+      "n": 6,
+      "p50_ms": 4306,
+      "p90_ms": 9581,
+      "max_ms": 9581,
+      "errors": {
+        "lines_not_done": 0,
+        "streams_refused": 0,
+        "wrong_values": 0,
+        "readings_differ": 0,
+        "runtime": 0
+      },
+      "lines_said": 6,
+      "runs_refused": 0,
+      "corrections": 0,
+      "board_p50_ms": [
+        4566,
+        4825
+      ],
+      "board": {
+        "n": 6,
+        "of": 6,
+        "p50_ms": 4566,
+        "p90_ms": 9857
+      },
+      "usd": 0.035,
+      "meta": {
+        "words": "local streaming Zipformer",
+        "decides": "Muse Spark Open",
+        "numbers": [],
+        "meta_models_on_the_step": 1
+      },
+      "load_avg_1m": [
+        [
+          2.00048828125,
+          2.0693359375
+        ],
+        [
+          6.69091796875,
+          5.7216796875
+        ]
+      ],
+      "started": [
+        "2026-10-30T13:44:10.050Z",
+        "2026-10-30T13:50:09.435Z"
+      ]
+    },
+    {
+      "path": "orders",
+      "lane": "G9",
+      "release_whole": false,
+      "timed_to": "order decided",
+      "setting": "spark/meta-stream",
+      "ear": "spark",
+      "first_ear": "meta-stream",
+      "transport": "frames",
+      "runs": 2,
+      "n": 6,
+      "p50_ms": 3548,
+      "p90_ms": 4785,
+      "max_ms": 4785,
+      "errors": {
+        "lines_not_done": 0,
+        "streams_refused": 0,
+        "wrong_values": 0,
+        "readings_differ": 0,
+        "runtime": 0
+      },
+      "lines_said": 6,
+      "runs_refused": 0,
+      "corrections": 0,
+      "board_p50_ms": [
+        4660,
+        4290
+      ],
+      "board": {
+        "n": 6,
+        "of": 6,
+        "p50_ms": 4471,
+        "p90_ms": 5212
+      },
+      "usd": 0.0343,
+      "meta": {
+        "words": "Meta Voice Transcribe realtime",
+        "decides": "Muse Spark Open",
+        "numbers": [],
+        "meta_models_on_the_step": 2
+      },
+      "load_avg_1m": [
+        [
+          2.6064453125,
+          2.7548828125
+        ],
+        [
+          3.10302734375,
+          2.42138671875
+        ]
+      ],
+      "started": [
+        "2026-10-30T13:41:10.127Z",
+        "2026-10-30T13:47:07.568Z"
+      ]
+    },
+    {
+      "path": "orders",
+      "lane": "G6",
+      "release_whole": false,
       "timed_to": "order decided",
       "setting": "spark/rest",
       "ear": "spark",
@@ -121,15 +377,24 @@
       "max_ms": 6892,
       "errors": {
         "lines_not_done": 0,
+        "streams_refused": 0,
         "wrong_values": 0,
         "readings_differ": 0,
         "runtime": 0
       },
       "lines_said": 6,
+      "runs_refused": 0,
+      "corrections": 0,
       "board_p50_ms": [
         null,
         null
       ],
+      "board": {
+        "n": 0,
+        "of": 6,
+        "p50_ms": null,
+        "p90_ms": null
+      },
       "usd": 0.0351,
       "meta": {
         "words": "Meta Voice Transcribe",
@@ -154,6 +419,64 @@
     },
     {
       "path": "orders",
+      "lane": "G9",
+      "release_whole": false,
+      "timed_to": "order decided",
+      "setting": "spark/rest",
+      "ear": "spark",
+      "first_ear": "rest",
+      "transport": "chunks",
+      "runs": 2,
+      "n": 5,
+      "p50_ms": 7571,
+      "p90_ms": 14672,
+      "max_ms": 14672,
+      "errors": {
+        "lines_not_done": 1,
+        "streams_refused": 0,
+        "wrong_values": 0,
+        "readings_differ": 0,
+        "runtime": 0
+      },
+      "lines_said": 6,
+      "runs_refused": 0,
+      "corrections": 0,
+      "board_p50_ms": [
+        7353,
+        8125
+      ],
+      "board": {
+        "n": 5,
+        "of": 6,
+        "p50_ms": 8125,
+        "p90_ms": 15225
+      },
+      "usd": 0.0292,
+      "meta": {
+        "words": "Meta Voice Transcribe",
+        "decides": "Muse Spark Open",
+        "numbers": [],
+        "meta_models_on_the_step": 2
+      },
+      "load_avg_1m": [
+        [
+          2.24609375,
+          1.9140625
+        ],
+        [
+          5.859375,
+          6.00927734375
+        ]
+      ],
+      "started": [
+        "2026-10-30T13:42:55.632Z",
+        "2026-10-30T13:48:56.702Z"
+      ]
+    },
+    {
+      "path": "orders",
+      "lane": "G6",
+      "release_whole": false,
       "timed_to": "order decided",
       "setting": "spark/stream",
       "ear": "spark",
@@ -166,15 +489,24 @@
       "max_ms": 18652,
       "errors": {
         "lines_not_done": 1,
+        "streams_refused": 0,
         "wrong_values": 0,
         "readings_differ": 0,
         "runtime": 0
       },
       "lines_said": 6,
+      "runs_refused": 0,
+      "corrections": 0,
       "board_p50_ms": [
         null,
         null
       ],
+      "board": {
+        "n": 0,
+        "of": 6,
+        "p50_ms": null,
+        "p90_ms": null
+      },
       "usd": 0.03,
       "meta": {
         "words": "local streaming Zipformer",
@@ -198,7 +530,217 @@
       ]
     },
     {
+      "path": "orders",
+      "lane": "G9",
+      "release_whole": false,
+      "timed_to": "order decided",
+      "setting": "spark/stream",
+      "ear": "spark",
+      "first_ear": "stream",
+      "transport": "frames",
+      "runs": 2,
+      "n": 5,
+      "p50_ms": 3659,
+      "p90_ms": 6427,
+      "max_ms": 6427,
+      "errors": {
+        "lines_not_done": 1,
+        "streams_refused": 0,
+        "wrong_values": 0,
+        "readings_differ": 0,
+        "runtime": 0
+      },
+      "lines_said": 6,
+      "runs_refused": 0,
+      "corrections": 0,
+      "board_p50_ms": [
+        4385,
+        4295
+      ],
+      "board": {
+        "n": 5,
+        "of": 6,
+        "p50_ms": 4385,
+        "p90_ms": 6642
+      },
+      "usd": 0.0365,
+      "meta": {
+        "words": "local streaming Zipformer",
+        "decides": "Muse Spark Open",
+        "numbers": [],
+        "meta_models_on_the_step": 1
+      },
+      "load_avg_1m": [
+        [
+          2.1435546875,
+          2.15478515625
+        ],
+        [
+          5.818359375,
+          4.04296875
+        ]
+      ],
+      "started": [
+        "2026-10-30T13:45:03.090Z",
+        "2026-10-30T13:51:07.919Z"
+      ]
+    },
+    {
       "path": "vitals",
+      "lane": "G9",
+      "release_whole": false,
+      "timed_to": "record verified",
+      "setting": "parakeet/meta-stream",
+      "ear": "parakeet",
+      "first_ear": "meta-stream",
+      "transport": "frames",
+      "runs": 2,
+      "n": 16,
+      "p50_ms": 4231,
+      "p90_ms": 4802,
+      "max_ms": 5648,
+      "errors": {
+        "lines_not_done": 0,
+        "streams_refused": 0,
+        "wrong_values": 0,
+        "readings_differ": 0,
+        "runtime": 0
+      },
+      "lines_said": 16,
+      "runs_refused": 0,
+      "corrections": 0,
+      "parts_p50": [
+        {
+          "heard": 902,
+          "asr": 902,
+          "delivered": 3020,
+          "gate_start": 906,
+          "gate_end": 2184,
+          "ear_done": 1085,
+          "proposed": 3033,
+          "hold_until": 4000,
+          "written": 4085,
+          "verified": 4171,
+          "verify_ms": 76
+        },
+        {
+          "heard": 908,
+          "asr": 908,
+          "delivered": 3035,
+          "gate_start": 910,
+          "gate_end": 3318,
+          "ear_done": 1205,
+          "proposed": 3337,
+          "hold_until": 4000,
+          "written": 4129,
+          "verified": 4282,
+          "verify_ms": 85
+        }
+      ],
+      "usd": 0.0927,
+      "meta": {
+        "words": "Meta Voice Transcribe realtime",
+        "decides": "Muse Spark Open",
+        "numbers": [
+          "local Parakeet TDT 0.6B v2"
+        ],
+        "meta_models_on_the_step": 2
+      },
+      "load_avg_1m": [
+        [
+          15.33935546875,
+          7.6552734375
+        ],
+        [
+          7.220703125,
+          13.0673828125
+        ]
+      ],
+      "started": [
+        "2026-10-30T14:05:25.900Z",
+        "2026-10-30T14:06:38.731Z"
+      ]
+    },
+    {
+      "path": "vitals",
+      "lane": "G9",
+      "release_whole": true,
+      "timed_to": "record verified",
+      "setting": "parakeet/meta-stream",
+      "ear": "parakeet",
+      "first_ear": "meta-stream",
+      "transport": "frames",
+      "runs": 2,
+      "n": 17,
+      "p50_ms": 3888,
+      "p90_ms": 4179,
+      "max_ms": 4179,
+      "errors": {
+        "lines_not_done": 0,
+        "streams_refused": 0,
+        "wrong_values": 0,
+        "readings_differ": 0,
+        "runtime": 0
+      },
+      "lines_said": 16,
+      "runs_refused": 0,
+      "corrections": 1,
+      "parts_p50": [
+        {
+          "heard": 894,
+          "asr": 894,
+          "delivered": 901,
+          "gate_start": 910,
+          "gate_end": 2931,
+          "ear_done": 1094,
+          "proposed": 3059,
+          "hold_until": 0,
+          "written": 3507,
+          "verified": 4011,
+          "verify_ms": 71
+        },
+        {
+          "heard": 900,
+          "asr": 900,
+          "delivered": 1282,
+          "gate_start": 912,
+          "gate_end": 3208,
+          "ear_done": 1111,
+          "proposed": 3213,
+          "hold_until": 0,
+          "written": 3623,
+          "verified": 3712,
+          "verify_ms": 80
+        }
+      ],
+      "usd": 0.0976,
+      "meta": {
+        "words": "Meta Voice Transcribe realtime",
+        "decides": "Muse Spark Open",
+        "numbers": [
+          "local Parakeet TDT 0.6B v2"
+        ],
+        "meta_models_on_the_step": 2
+      },
+      "load_avg_1m": [
+        [
+          3.47900390625,
+          3.0908203125
+        ],
+        [
+          5.849609375,
+          8.14404296875
+        ]
+      ],
+      "started": [
+        "2026-10-30T13:53:14.771Z",
+        "2026-10-30T14:04:13.675Z"
+      ]
+    },
+    {
+      "path": "vitals",
+      "lane": "G6",
+      "release_whole": false,
       "timed_to": "record verified",
       "setting": "parakeet/rest",
       "ear": "parakeet",
@@ -211,11 +753,14 @@
       "max_ms": 8662,
       "errors": {
         "lines_not_done": 0,
+        "streams_refused": 0,
         "wrong_values": 0,
         "readings_differ": 0,
         "runtime": 0
       },
       "lines_said": 16,
+      "runs_refused": 0,
+      "corrections": 0,
       "parts_p50": [
         {
           "heard": 1090,
@@ -270,6 +815,8 @@
     },
     {
       "path": "vitals",
+      "lane": "G6",
+      "release_whole": false,
       "timed_to": "record verified",
       "setting": "parakeet/stream",
       "ear": "parakeet",
@@ -282,11 +829,14 @@
       "max_ms": 7942,
       "errors": {
         "lines_not_done": 0,
+        "streams_refused": 0,
         "wrong_values": 0,
         "readings_differ": 0,
         "runtime": 0
       },
       "lines_said": 16,
+      "runs_refused": 0,
+      "corrections": 0,
       "parts_p50": [
         {
           "heard": 700,
@@ -342,6 +892,8 @@
     },
     {
       "path": "vitals",
+      "lane": "G6",
+      "release_whole": false,
       "timed_to": "record verified",
       "setting": "parakeet/stream",
       "ear": "parakeet",
@@ -354,11 +906,14 @@
       "max_ms": 4250,
       "errors": {
         "lines_not_done": 0,
+        "streams_refused": 0,
         "wrong_values": 0,
         "readings_differ": 0,
         "runtime": 0
       },
       "lines_said": 8,
+      "runs_refused": 0,
+      "corrections": 0,
       "parts_p50": [
         {
           "heard": 1090,
@@ -396,6 +951,84 @@
     },
     {
       "path": "vitals",
+      "lane": "G9",
+      "release_whole": false,
+      "timed_to": "record verified",
+      "setting": "spark/meta-stream",
+      "ear": "spark",
+      "first_ear": "meta-stream",
+      "transport": "frames",
+      "runs": 2,
+      "n": 16,
+      "p50_ms": 4207,
+      "p90_ms": 6031,
+      "max_ms": 9258,
+      "errors": {
+        "lines_not_done": 8,
+        "streams_refused": 1,
+        "wrong_values": 0,
+        "readings_differ": 0,
+        "runtime": 0
+      },
+      "lines_said": 24,
+      "runs_refused": 1,
+      "corrections": 0,
+      "parts_p50": [
+        {
+          "heard": 890,
+          "asr": 890,
+          "delivered": 3021,
+          "gate_start": 894,
+          "gate_end": 3158,
+          "ear_done": 3032,
+          "proposed": 3164,
+          "hold_until": 4000,
+          "written": 4105,
+          "verified": 4193,
+          "verify_ms": 79
+        },
+        {
+          "heard": 921,
+          "asr": 921,
+          "delivered": 3025,
+          "gate_start": 922,
+          "gate_end": 3257,
+          "ear_done": 3266,
+          "proposed": 3262,
+          "hold_until": 4000,
+          "written": 4097,
+          "verified": 4207,
+          "verify_ms": 74
+        }
+      ],
+      "usd": 0.1134,
+      "meta": {
+        "words": "Meta Voice Transcribe realtime",
+        "decides": "Muse Spark Open",
+        "numbers": [
+          "Muse Spark Open audio"
+        ],
+        "meta_models_on_the_step": 3
+      },
+      "load_avg_1m": [
+        [
+          14.7177734375,
+          9.74755859375
+        ],
+        [
+          8.6474609375,
+          8.10546875
+        ]
+      ],
+      "started": [
+        "2026-10-30T14:08:10.645Z",
+        "2026-10-30T14:09:46.610Z"
+      ]
+    },
+    {
+      "path": "vitals",
+      "lane": "G6",
+      "release_whole": false,
       "timed_to": "record verified",
       "setting": "spark/rest",
       "ear": "spark",
@@ -408,11 +1041,14 @@
       "max_ms": 11313,
       "errors": {
         "lines_not_done": 0,
+        "streams_refused": 0,
         "wrong_values": 0,
         "readings_differ": 0,
         "runtime": 0
       },
       "lines_said": 16,
+      "runs_refused": 0,
+      "corrections": 0,
       "parts_p50": [
         {
           "heard": 1090,
@@ -467,6 +1103,84 @@
     },
     {
       "path": "vitals",
+      "lane": "G9",
+      "release_whole": true,
+      "timed_to": "record verified",
+      "setting": "spark/rest",
+      "ear": "spark",
+      "first_ear": "rest",
+      "transport": "chunks",
+      "runs": 2,
+      "n": 16,
+      "p50_ms": 4993,
+      "p90_ms": 8028,
+      "max_ms": 8932,
+      "errors": {
+        "lines_not_done": 0,
+        "streams_refused": 0,
+        "wrong_values": 0,
+        "readings_differ": 0,
+        "runtime": 0
+      },
+      "lines_said": 16,
+      "runs_refused": 0,
+      "corrections": 0,
+      "parts_p50": [
+        {
+          "heard": 1090,
+          "asr": 2896,
+          "delivered": 3104,
+          "gate_start": 2941,
+          "gate_end": 4148,
+          "ear_done": 4478,
+          "proposed": 4158,
+          "hold_until": 0,
+          "written": 4565,
+          "verified": 4646,
+          "verify_ms": 76
+        },
+        {
+          "heard": 1090,
+          "asr": 3105,
+          "delivered": 3509,
+          "gate_start": 3106,
+          "gate_end": 4495,
+          "ear_done": 4814,
+          "proposed": 5011,
+          "hold_until": 0,
+          "written": 5436,
+          "verified": 5513,
+          "verify_ms": 70
+        }
+      ],
+      "usd": 0.1112,
+      "meta": {
+        "words": "Meta Voice Transcribe",
+        "decides": "Muse Spark Open",
+        "numbers": [
+          "Muse Spark Open audio"
+        ],
+        "meta_models_on_the_step": 3
+      },
+      "load_avg_1m": [
+        [
+          13.63671875,
+          9.201171875
+        ],
+        [
+          7.7119140625,
+          6.02001953125
+        ]
+      ],
+      "started": [
+        "2026-10-30T14:01:57.736Z",
+        "2026-10-30T14:03:12.670Z"
+      ]
+    },
+    {
+      "path": "vitals",
+      "lane": "G6",
+      "release_whole": false,
       "timed_to": "record verified",
       "setting": "spark/stream",
       "ear": "spark",
@@ -479,11 +1193,14 @@
       "max_ms": 9067,
       "errors": {
         "lines_not_done": 0,
+        "streams_refused": 0,
         "wrong_values": 0,
         "readings_differ": 0,
         "runtime": 0
       },
       "lines_said": 16,
+      "runs_refused": 0,
+      "corrections": 0,
       "parts_p50": [
         {
           "heard": 700,
@@ -634,6 +1351,36 @@
         "max_ms": 4769,
         "agree": 8
       }
+    }
+  ],
+  "meta_realtime_stages": [
+    {
+      "started": "2026-10-30T10:57:15.971Z",
+      "voice": "Rishi",
+      "load_avg_1m": 27.638671875,
+      "turns": 8,
+      "values_heard": 8,
+      "after_speech": {
+        "n": 8,
+        "p50_ms": 855.208251953125,
+        "p90_ms": 1092,
+        "max_ms": 1092
+      },
+      "cost_usd": 0.00249
+    },
+    {
+      "started": "2026-10-30T10:55:52.712Z",
+      "voice": "system default",
+      "load_avg_1m": 6.3427734375,
+      "turns": 8,
+      "values_heard": 8,
+      "after_speech": {
+        "n": 8,
+        "p50_ms": 814.625,
+        "p90_ms": 1194,
+        "max_ms": 1194
+      },
+      "cost_usd": 0.0024110000000000004
     }
   ]
 }

@@ -19,9 +19,9 @@ export const STREAM_FLUSH_MS = 1000;
 
 // The two switches, both off by default so every recorded run replays as made.
 export type EarSwitch = "spark" | "parakeet";
-export type AsrSwitch = "rest" | "stream";
+export type AsrSwitch = "rest" | "stream" | "meta-stream";
 export const earSwitch = (v: string | undefined): EarSwitch => (v?.trim().toLowerCase() === "parakeet" ? "parakeet" : "spark");
-export const asrSwitch = (v: string | undefined): AsrSwitch => (v?.trim().toLowerCase() === "stream" ? "stream" : "rest");
+export const asrSwitch = (v: string | undefined): AsrSwitch => { const x = v?.trim().toLowerCase(); return x === "stream" ? "stream" : x === "meta-stream" ? "meta-stream" : "rest"; };
 
 // One reading that is not a Spark call, kept on the run's ledger beside the model calls so every decision names its model and purpose.
 export type ReadingCall = { provider: "local" | "meta"; model: string; purpose: "verify_number" | "interpret_speech"; latency_ms: number; cost_usd: number; task_id: string | null; line_id: string | null; error: string | null };
