@@ -142,7 +142,7 @@ export function sherpaStreamAsr(o: { modelDir: string; sherpaDir?: string | unde
     const x = wave16k(wav);
     const d = open();
     d.accept(x);
-    return { final: true, text: d.finish(), audio_ms: Math.round((x.length / 16_000) * 1000), session_id: sessionId, cost_usd: 0 };
+    return { final: true, text: streamRepair(d.finish()), audio_ms: Math.round((x.length / 16_000) * 1000), session_id: sessionId, cost_usd: 0 };
   };
   return { model: `local:${STREAM_MODEL}`, open, transcribe };
 }
