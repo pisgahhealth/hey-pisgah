@@ -20,9 +20,6 @@
   "deposit",
   "mark paid"
  ],
- "rulings": {
-  "D10": "Until D10 lets an agent draft a consultation its owner holds, d01 expects the EMR to refuse the agent's draft and the strip to show it as refused. When D10 lands, set d01's expect state to completed and add decision point j02 (line d01, acceptable act) back."
- },
  "steps": [
   {
    "id": "p01",
@@ -82,8 +79,7 @@
    "say": "Write my assessment: forty year old woman with right lower abdominal pain since yesterday, worse on walking, no vomiting. Tender in the right iliac fossa, no guarding.",
    "expect": [
     {
-     "kind": "draft_consult_note",
-     "state": "refused"
+     "kind": "draft_consult_note"
     }
    ],
    "key": [
@@ -532,6 +528,15 @@
     "act"
    ],
    "what": "triage observations said at arrival"
+  },
+  {
+   "dp_id": "j02",
+   "line": "d01",
+   "measure": "line",
+   "acceptable": [
+    "act"
+   ],
+   "what": "the dictated assessment drafted into the consultation the doctor holds"
   },
   {
    "dp_id": "j03",

@@ -43,7 +43,7 @@ describe("journey scorer", () => {
     const r = journeyResults(s, goodTrace());
     expect(r.per_step.filter((p) => !p.ok)).toEqual([]);
     expect(r.fr1_appropriate).toBe(r.fr1_points);
-    expect(r).toMatchObject({ digest_present: true, actions_unverified: 1, actions_refused_by_emr: 1, steps_failed: 0, fr1_missed: 0 });
+    expect(r).toMatchObject({ digest_present: true, actions_unverified: 1, actions_refused_by_emr: 0, steps_failed: 0, fr1_missed: 0 });
   });
 
   it("calls a write while called away prohibited, and a held action written before the return a failure to act on return", () => {
@@ -67,11 +67,23 @@ describe("journey scorer", () => {
   });
 
   it("fails a step whose expected EMR refusal came back completed, and counts an unproved completion", () => {
+    // The script no longer expects a refusal, so the control runs on a copy whose d01 still does.
+    const refusing = { ...s, steps: s.steps.map((st) => (st.id === "d01" && isTalk(st) ? { ...st, expect: [{ kind: "draft_consult_note", state: "refused" as const }] } : st)) };
     const t = goodTrace();
     const draft = t.views.flatMap((v) => v.actions).find((a) => a.kind === "draft_consult_note")!;
-    Object.assign(draft, { state: "completed", written_at: at(30) });
-    const r = journeyResults(s, t);
+    Object.assign(draft, { state: "completed", written_at: at(30), proof: undefined });
+    const r = journeyResults(refusing, t);
     expect(r.per_step.find((p) => p.id === "d01")).toMatchObject({ ok: false });
     expect(r.actions_unproved).toBe(1);
+  });
+
+  it("fails the draft step and scores j02 a failure to act when the EMR refuses the owner's agent its draft", () => {
+    const t = goodTrace();
+    const draft = t.views.flatMap((v) => v.actions).find((a) => a.kind === "draft_consult_note")!;
+    Object.assign(draft, { state: "refused", written_at: null, proof: undefined });
+    const r = journeyResults(s, t);
+    expect(r.per_step.find((p) => p.id === "d01")).toMatchObject({ ok: false });
+    expect(r.actions_refused_by_emr).toBe(1);
+    expect(outcome(t, "j02").outcome).not.toBe("appropriate");
   });
 });

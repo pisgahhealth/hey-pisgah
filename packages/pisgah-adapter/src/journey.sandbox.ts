@@ -139,7 +139,8 @@ function checkRecords(sb: SandboxBlock, script: JourneyScript, t: JourneyTrace, 
       // Titles are encrypted at rest, so the check counts the owner's agent's items instead of reading them.
       if (a.kind === "add_care_plan_item") { const mineItems = (rows["care_items"] as Record<string, unknown>[]).filter((x) => x["created_by"] === agent).length; const want = acts.filter((x) => x.kind === "add_care_plan_item").length; if (mineItems < want) why.push(`${mineItems} care-plan items by the owner's agent, expected ${want}`); }
       if (a.kind === "page_staff") { if (!(rows["pages"] as Record<string, unknown>[]).some((x) => x["id"] === rid && x["sender"] === agent)) why.push("page not sent by the owner's agent"); }
-      if (a.kind === "draft_consult_note") { const r = (rows["visit"] as Record<string, unknown>[])[0]; if (!r || r["draft_updated_by"] !== agent) why.push("draft not saved by the owner's agent"); }
+      // Signing clears the draft's author on the visit, so the proof is the draft's own audit row under this line, already checked to name the owner and the agent.
+      if (a.kind === "draft_consult_note") { if (!mine.some((p) => /draft/.test(String(p["action_type"])))) why.push("draft not saved by the owner's agent"); }
       if (a.kind === "record_triage_vitals") { const r = (rows["visit"] as Record<string, unknown>[])[0]; if (!r || !r["triaged_at"] || (a.args["pulse"] !== undefined && r["pulse"] !== a.args["pulse"])) why.push("triage not in the visit"); }
       if (a.kind === "send_pay_link" && admission) { if (!q("pay_link_events", { admission }).some((x) => x["actor_id"] === agent)) why.push("no pay-link event by the owner's agent"); }
       if (a.kind === "schedule_follow_up") { if (!(rows["appointments"] as Record<string, unknown>[]).some((x) => x["booked_by"] === agent)) why.push("follow-up not booked by the owner's agent"); }

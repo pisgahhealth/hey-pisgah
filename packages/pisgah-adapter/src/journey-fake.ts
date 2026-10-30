@@ -22,8 +22,10 @@ export class JourneyFakeHospital implements EmrPort {
   readonly writeKinds = ["record_observation"] as const;
   readonly writes: { kind: string; args: WorkArgs; key: string; owner: string; id: string }[] = [];
   readonly refused: string[] = [];
-  // Until D10 the EMR refuses an agent's draft of a consultation its owner holds; set true to play the ruling.
-  agentMayDraft = false;
+  // The EMR lets an agent draft only the consultation its own owner holds; false plays the hospital before that ruling.
+  agentMayDraft = true;
+  // The doctor who holds the arrival's consultation; another owner's agent is refused its draft.
+  consultHolder: string = FAKE.owners.doctor;
   state = { requested: false, accepted: false, bed: false, stage: "awaiting_sign_off", payLink: null as string | null, cleared: false, pulse: null as number | null, temp: null as string | null, notes: [] as string[], items: [] as string[] };
   kindsFor(owner: string): readonly string[] { return KINDS[owner] ?? []; }
   // Like the EMR, nothing reads a sent pay link back.
@@ -45,7 +47,7 @@ export class JourneyFakeHospital implements EmrPort {
     const hit = this.writes.find((w) => w.key === key);
     if (hit) return { ok: true, record_id: hit.id, record_version: 1, event_ids: [`${kind}:${hit.id}`], replayed: true };
     if (kind === "send_pay_link" && this.state.stage !== "signed_off") return { ok: false, reason: "door_409_conflict", status: 409, retryable: false, counted: false };
-    if (kind === "draft_consult_note" && !this.agentMayDraft) return { ok: false, reason: "door_404_not_found_opaque", status: 404, retryable: false, counted: false };
+    if (kind === "draft_consult_note" && (!this.agentMayDraft || prov.owner !== this.consultHolder)) return { ok: false, reason: "door_404_not_found_opaque", status: 404, retryable: false, counted: false };
     const id = kind === "request_admission" ? FAKE.admission : `${kind}-${this.writes.length + 1}`;
     this.writes.push({ kind, args, key, owner: prov.owner, id });
     if (kind === "request_admission") this.state.requested = true;
@@ -83,9 +85,10 @@ export class JourneyFakeHospital implements EmrPort {
 }
 
 // Plays the journey through serve over a fresh in-memory hospital with the given gate answers, as CI does for a recorded run.
-export async function replayJourney(gate: MockResponder, script: JourneyScript = loadJourney()): Promise<{ results: JourneyResults; hospital: JourneyFakeHospital }> {
+export async function replayJourney(gate: MockResponder, script: JourneyScript = loadJourney(), opts: { agentMayDraft?: boolean } = {}): Promise<{ results: JourneyResults; hospital: JourneyFakeHospital }> {
   const root = mkdtempSync(join(tmpdir(), "hp-journey-"));
   const hospital = new JourneyFakeHospital();
+  if (opts.agentMayDraft !== undefined) hospital.agentMayDraft = opts.agentMayDraft;
   let rt: EmrRuntime | null = null;
   const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gate, taskStateOf: (id) => rt?.stateOf(id) ?? null });
   const s = await startEmrServe({ storeRoot: root, port: hospital, client, listenPort: 0, runtime: { holdMs: 400, proofRetryMs: 5, watchMs: 100 } });
