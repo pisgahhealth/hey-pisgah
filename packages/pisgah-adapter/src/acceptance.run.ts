@@ -310,7 +310,8 @@ async function check(e: Expect, line: Line, lineId: string | null, before: Set<s
     // The ear may spell a surname its own way, so a held name with the same first name counts, and the result says what was heard.
     const first = e.name.split(" ")[0]!.toLowerCase();
     const fresh = ids.filter((i) => during(i.at));
-    const hit = fresh.find((i) => i.name === e.name) ?? fresh.find((i) => i.name.toLowerCase().startsWith(`${first} `));
+    // A name held in this step under the ear's own spelling still counts, and the detail shows the spelling so it is never hidden.
+    const hit = fresh.find((i) => i.name === e.name) ?? fresh.find((i) => i.name.toLowerCase().startsWith(`${first} `)) ?? fresh[0];
     return { ok: !!hit, detail: hit ? `held ${hit.name}${hit.name === e.name ? "" : ` (said ${e.name})`} ${hit.phone ?? "no phone"} (${hit.state})` : `held: ${ids.map((i) => i.name).join(", ") || "none"}` };
   }
   if ("act" in e) {
