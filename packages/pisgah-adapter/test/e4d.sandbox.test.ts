@@ -16,7 +16,7 @@ const now = () => new Date().toISOString();
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe.skipIf(!RUN)("E4 the pharmacy and the lab act on sent voice orders on the sandbox EMR", () => {
-  it("the pharmacist's agent takes the sent prescription, waits for the consultation, prepares it on the pharmacist's words and holds the dispense for its payment, the lab's agent receives the lab order, and the doctor's agent reports each step from the record", async () => {
+  it("the pharmacist's agent takes the sent prescription, waits for the consultation, prepares it on the pharmacist's words, holds the dispense for its payment and dispenses once accounts take it, the lab's agent receives the lab order, and the doctor's agent reports each step from the record", async () => {
     const profile = loadProfile();
     const embed = sherpaEmbedder({ modelPath: process.env["HEY_PISGAH_SPEAKER_MODEL"] ?? "", sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] })!;
     expect(embed).not.toBeNull();
@@ -60,8 +60,9 @@ describe.skipIf(!RUN)("E4 the pharmacy and the lab act on sent voice orders on t
       const bed = await port.commit("assign_bed", { admission_id: admission, ward: "a_and_e" }, `e4d-bed-${visit}`, prov("e4d-bed"));
       expect(bed, JSON.stringify(bed)).toMatchObject({ ok: true });
       result["admission"] = admission;
-      const rxLine = await matched("Give paracetamol tablets 500 milligrams by mouth three times a day, quantity 6.", "e4d-rx");
-      const rx = await port.commit("prescribe", { visit_id: visit, patient_id: patient, drug: "paracetamol_oral", dose: "500 mg", route: "oral", frequency: 3, quantity: 6 }, `e4d-rx-${visit}`, { ...prov("e4d-rx"), voice: { authorisation: authorised("e4d-rx", rxLine)! } });
+      // The duration is said, since the pharmacy dispenses only a clinician-authored schedule.
+      const rxLine = await matched("Give paracetamol tablets 500 milligrams by mouth three times a day for two days, quantity 6.", "e4d-rx");
+      const rx = await port.commit("prescribe", { visit_id: visit, patient_id: patient, drug: "paracetamol_oral", dose: "500 mg", route: "oral", frequency: 3, duration_days: 2, quantity: 6 }, `e4d-rx-${visit}`, { ...prov("e4d-rx"), voice: { authorisation: authorised("e4d-rx", rxLine)! } });
       expect(rx, JSON.stringify(rx)).toMatchObject({ ok: true });
       const labLine = await matched("Send a full blood count.", "e4d-fbc");
       const fbc = await port.commit("order_test", { visit_id: visit, patient_id: patient, test: "fbc" }, `e4d-fbc-${visit}`, { ...prov("e4d-fbc"), voice: { authorisation: authorised("e4d-fbc", labLine)! } });
@@ -135,14 +136,26 @@ describe.skipIf(!RUN)("E4 the pharmacy and the lab act on sent voice orders on t
       result["dispense_not_ready"] = early.ok ? "accepted" : early.reason;
       expect(early).toMatchObject({ ok: false });
 
+      // The accounts person takes the stay's bill; the stay's money pays performed care oldest first, which releases the paid line to the counter.
+      const bill = await person("bill", { admission_id: admission });
+      const outstanding = String((bill.json as { bill?: { outstandingNgn?: string } } | null)?.bill?.outstandingNgn ?? "0.00");
+      const settled = await person("settle", { admission_id: admission, outstanding });
+      result["settle"] = { outstanding, ok: settled.ok, status: settled.status, note: settled.note ?? null };
+      expect(settled.ok, JSON.stringify(settled)).toBe(true);
+      // The pharmacist's agent sees the line ready and dispenses it within the pharmacist's permissions; the doctor's agent closes the task from the record.
+      const dv = await until("the dispense", () => { const v = view(pharm.owner); return v && done(v, DISPENSE_KIND).length ? v : null; }, 180_000);
+      result["pharmacist_actions_after_payment"] = dv.actions.map((a) => ({ kind: a.kind, state: a.state, reason: a.reason }));
+      await until("the doctor's agent closing the pharmacy task", () => serve.runtime.views(doc.owner).find((v) => v.delegations.some((d) => d.delegation_id === rxTask && d.completed_at)), 180_000);
+
       // The record: each order received by its own person through that person's agent, the prescription dispensed, every write on its clinician's behalf.
       const receipts = sandboxQuery(sb, "order_receipt", { visit });
       result["receipts"] = receipts;
-      expect(receipts.find((r) => r["kind"] === "prescription")).toMatchObject({ received_by: pharm.owner, rx_status: "issued" });
+      expect(receipts.find((r) => r["kind"] === "prescription")).toMatchObject({ received_by: pharm.owner });
+      expect(receipts.find((r) => r["kind"] === "prescription")!["dispensed_at"]).toBeTruthy();
       expect(receipts.find((r) => r["kind"] === "lab")).toMatchObject({ received_by: lab.owner });
       const rows = sandboxQuery(sb, "delegations_for", { patient });
       result["delegations"] = rows;
-      expect(rows.find((r) => r["id"] === rxTask)).toMatchObject({ assignee: pharm.owner, acknowledged_by: pharm.owner, acknowledged_via: pharm.agent, completed_by: null });
+      expect(rows.find((r) => r["id"] === rxTask)).toMatchObject({ assignee: pharm.owner, acknowledged_by: pharm.owner, acknowledged_via: pharm.agent, completed_by: doc.agent });
       expect(rows.find((r) => r["id"] === labTask)).toMatchObject({ assignee: lab.owner, acknowledged_by: lab.owner, acknowledged_via: lab.agent, completed_by: doc.agent });
       const audit = sandboxQuery(sb, "audit_for_patient", { patient });
       result["audit"] = audit.filter((a) => String(a["agent"] ?? "") !== "" || String(a["action_type"]).startsWith("delegation."));
