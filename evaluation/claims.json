@@ -138,15 +138,15 @@
         "table": "validation report"
       },
       "acceptance": {
-        "command": "npx tsx apps/cli/src/learning-claims.ts (arguments in the M4.c done file), then npm run claims:check",
-        "result_path": "evaluation/results/proposals.json",
-        "predicate": "dev_gate_pass && exception_check_pass && fences_unchanged ; amber: proposals_validated >= 1",
+        "command": "npm run discover (adaptive, medium) per run, then npx tsx apps/cli/src/discover-claim.ts --invariance pass after the answer-invariance test",
+        "result_path": "evaluation/results/discovery.json",
+        "predicate": "discover_dev_valid >= 1 && discover_invariance_pass == true && discover_deny_clean == true ; amber: discover_dev_valid_any >= 1",
         "measured_on": "dev"
       },
       "wording": {
-        "pass": "Proposed one change, limited to {scope}, validated on {n} unseen cases",
-        "partial": "A change was proposed and failed one dev check; it is shown",
-        "fail": "No change passed validation; the honest negative is shown",
+        "pass": "Found a change that helps, at a stated cost: {discover_dev_valid} of {discover_runs} blind runs under the answer-invariance gate proposed a dev-valid change; the adopted one gives {discover_share} of the planted change's gain and adds {discover_rework_events} document revisions",
+        "partial": "{discover_dev_valid_any} runs proposed a dev-valid change, but none under the answer-invariance gate",
+        "fail": "No blind run proposed a dev-valid change",
         "not_measured": "Not measured yet"
       },
       "evidence_links": []
@@ -163,15 +163,15 @@
         "table": "A2 and A2a rows"
       },
       "acceptance": {
-        "command": "npx tsx apps/cli/src/learning-claims.ts (arguments in the M4.c done file), then npm run claims:check",
-        "result_path": "evaluation/results/adoption.json",
-        "predicate": "adopted_by_person && ac09_pass && order_differs_where_diff_says",
+        "command": "version adopt through serve, two live demo tasks, then npx tsx apps/cli/src/improve.ts report",
+        "result_path": "evaluation/results/improve.json",
+        "predicate": "adopted_by_person == true && human_approval == true && fresh_applicable.executed_differently == true && fresh_applicable.actions_open == 0 && fresh_applicable.state == 'done' && withheld.version_withheld == true && withheld.actions_open == 0 && withheld.state == 'done' ; amber: adopted_by_person == true && fresh_applicable.executed_differently == true && withheld.version_withheld == true",
         "measured_on": "dev"
       },
       "wording": {
-        "pass": "Adopted by {role}; the agent prepared the paperwork at the learned point on a new patient",
-        "partial": "Adopted; the agent used it with one deviation, shown",
-        "fail": "Adopted but executed as v1 ({reason})",
+        "pass": "A person adopted the change; on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes, and on {withheld_case} it was withheld by its scope",
+        "partial": "Ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes) and was withheld on {withheld_case}, adopted by the disclosed synthetic ward manager; awaiting Samuel's approval",
+        "fail": "The adopted change did not run differently on the fresh case, or was not withheld where its scope says",
         "not_measured": "Not measured yet"
       },
       "evidence_links": []
@@ -871,6 +871,19 @@
         }
       },
       "reason": "Added C-20 to C-28. C-20 to C-24 read files the microphone-driven acceptance run writes (touches, speed, countersign, speaker, delegation); they stay not measured until M5 writes them with these field names. The learning claims are three, each with its own file: C-25 remember reads remember.json (the sandbox preference run), C-26 discover reads discovery.json's discover_* summary (dev-valid adaptive runs under revisions with the answer-invariance gate, wording a change that helps at a stated cost, never the best change), C-27 improve reads improve.json (green also needs Samuel's own approval, so the synthetic ward manager's adoption is amber). C-28 memo reads memo.json and is green only once the memo is delivered through a door route. No predicate reads another claim's file. C-10 is tightened: its pass wording says the cycle worked over the verified outcomes, so green also needs it to have read at least one of them; E6's second cycle reached a new dev-valid proposal while reading 0 of 2 outcome cases, which is now amber with wording that says so."
+    },
+    {
+      "date": "2026-10-30",
+      "by": "coordinator",
+      "claims": [
+        "C-06",
+        "C-07"
+      ],
+      "previous_predicates": {
+        "C-06": "dev_gate_pass && exception_check_pass && fences_unchanged ; amber: proposals_validated >= 1",
+        "C-07": "adopted_by_person && ac09_pass && order_differs_where_diff_says"
+      },
+      "reason": "C-06 and C-07 asked the questions C-26 (discover) and C-27 (improve) now measure on E6.d's blind runs under the answer-invariance gate and E6's adoption, fresh and withheld cases; the M4.c result files they read predate the discovery rerun and the learning-claims script cannot read E6.d's store layout, so both now read the same result files as their successors; wording and status follow those files"
     }
   ]
 }
