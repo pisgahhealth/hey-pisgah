@@ -5,7 +5,8 @@ import { EmrId, OBSERVATION_KIND } from "./port.js";
 export const WORK_KINDS = [
   OBSERVATION_KIND, "draft_consult_note", "request_admission", "record_triage_vitals", "add_care_plan_item",
   "record_note", "draft_handover", "page_staff", "schedule_follow_up", "prepare_bill", "send_pay_link",
-  "open_consult", "record_clerking", "record_allergy", "admit_patient", "assign_bed", "schedule_review"
+  "open_consult", "record_clerking", "record_allergy", "admit_patient", "assign_bed", "schedule_review",
+  "order_test", "prescribe", "countersign"
 ] as const;
 export type WorkKind = (typeof WORK_KINDS)[number];
 // Kinds that only read the record and report back; they change nothing in it.
@@ -21,6 +22,8 @@ export const CLERKING_SECTIONS = ["presenting_complaint", "history", "examinatio
 export type ClerkingSection = (typeof CLERKING_SECTIONS)[number];
 export const REPORTED_SECTION = "patient_reported" as const;
 export const ALLERGY_SEVERITIES = ["mild", "moderate", "severe", "unknown"] as const;
+export const ORDER_PRIORITIES = ["routine", "urgent", "stat"] as const;
+export const DRUG_ROUTES = ["oral", "iv", "im", "sc", "inhaled", "topical", "sublingual", "rectal"] as const;
 // What a held instruction waits for besides a time: the admission to exist, or a result to arrive.
 export const OBLIGATION_AFTER = ["admission", "result"] as const;
 // Each cadence code with the spoken phrases that name it; a cadence is kept only when one of its phrases was said.
@@ -61,7 +64,15 @@ export const WORK_ARGS: Record<Exclude<WorkKind, typeof OBSERVATION_KIND>, z.Zod
   record_allergy: z.strictObject({ patient_id: EmrId, visit_id: EmrId.optional(), substance: z.string().trim().min(1).max(120), severity: z.enum(ALLERGY_SEVERITIES), reaction: z.string().trim().min(1).max(500).optional(), source: z.enum(["patient", "relative"]) }),
   admit_patient: z.strictObject({ visit_id: EmrId, patient_id: EmrId.optional(), ward: z.string().regex(/^[a-z_]{1,30}$/), admission_type: z.enum(ADMISSION_TYPES), reason: Text.max(2000) }),
   assign_bed: z.strictObject({ admission_id: EmrId, ward: z.string().regex(/^[a-z_]{1,30}$/) }),
-  schedule_review: z.strictObject({ admission_id: EmrId, title: Text.max(200), due_at: z.iso.datetime() })
+  schedule_review: z.strictObject({ admission_id: EmrId, title: Text.max(200), due_at: z.iso.datetime() }),
+  // A voice order names the hospital's own test or medicine key; the door resolves the price and the catalogue row.
+  order_test: z.strictObject({ visit_id: EmrId, patient_id: EmrId, test: z.string().regex(/^[a-z0-9_]{1,40}$/), priority: z.enum(ORDER_PRIORITIES).optional() }),
+  prescribe: z.strictObject({
+    visit_id: EmrId, patient_id: EmrId, drug: z.string().regex(/^[a-z0-9_]{1,40}$/), dose: z.string().trim().min(1).max(60).optional(),
+    frequency: z.number().int().min(1).max(4).optional(), duration_days: z.number().int().min(1).max(365).optional(), quantity: z.number().int().min(1).max(1000), route: z.enum(DRUG_ROUTES).optional()
+  }),
+  // Countersigns exactly the batch the owner was shown: its item ids, digest and the moment it was read back.
+  countersign: z.strictObject({ visit_id: EmrId, item_ids: z.array(EmrId).min(1).max(100), items_digest: z.string().regex(/^[0-9a-f]{64}$/), read_back_at: z.iso.datetime({ offset: true }), read_back_seal: z.string().regex(/^[A-Za-z0-9_-]{43}$/), labels: z.array(z.string().max(120)).max(100) })
 };
 
 // What each kind means to the speech gate; the gate prompt lists only the kinds the owner holds.
@@ -81,7 +92,10 @@ export const WORK_TEXT: Record<Exclude<WorkKind, typeof OBSERVATION_KIND>, strin
   record_allergy: "record_allergy: add an allergy to the patient's allergy list when the clinician states one: substance, reaction and severity (mild, moderate, severe), all as said.",
   admit_patient: "admit_patient: admit the patient on your clinician's own authority: ward (one of the wards listed below), admission_type (emergency, planned, day_case) and text as the reason, all as said.",
   assign_bed: "assign_bed: put the admitted patient on a free bed in the ward said (one of the wards listed below).",
-  schedule_review: "schedule_review: a review of the patient at a later time; title in the clinician's words and in_minutes as said."
+  schedule_review: "schedule_review: a review of the patient at a later time; title in the clinician's words and in_minutes as said.",
+  order_test: "order_test: send a test for the patient in context: test (one of the tests listed below) and priority (routine, urgent, stat) only when said.",
+  prescribe: "prescribe: prescribe a medicine for the patient in context: drug (one of the medicines listed below), dose as said (such as 1 g or 500 mg), frequency (doses per day, 1 to 4), duration_days, quantity and route (oral, iv, im, sc), all as said.",
+  countersign: "countersign: you never name it; the clinician says sign everything."
 };
 
 // The value fields the wider gate tool adds for these kinds; the observation-only tool stays as committed.
@@ -136,6 +150,9 @@ export function summariseWork(kind: string, a: Record<string, unknown>): string 
     case "admit_patient": return `Admit, ${t(a["admission_type"])}, to the ${String(a["ward"]).replace(/_/g, " ")} ward on your authority: ${t(a["reason"], 60)}`;
     case "assign_bed": return `Put the patient on a free bed in the ${String(a["ward"]).replace(/_/g, " ")} ward`;
     case "schedule_review": return `Review due ${String(a["due_at"]).slice(11, 16)} UTC on the ward board: ${t(a["title"], 60)}`;
+    case "order_test": return `Send the test: ${String(a["test"]).replace(/_/g, " ")}${a["priority"] && a["priority"] !== "routine" ? `, ${a["priority"]}` : ""}, as a voice order awaiting your countersign`;
+    case "prescribe": return `Prescribe ${String(a["drug"]).replace(/_/g, " ")}${a["dose"] ? ` ${t(a["dose"], 30)}` : ""}${a["route"] ? ` ${String(a["route"]).toUpperCase()}` : ""}${a["frequency"] ? `, ${a["frequency"]} times a day` : ""}${a["duration_days"] ? ` for ${a["duration_days"]} days` : ""}, quantity ${a["quantity"]}, as a voice order awaiting your countersign`;
+    case "countersign": return `Countersign ${(a["item_ids"] as unknown[]).length} voice order${(a["item_ids"] as unknown[]).length === 1 ? "" : "s"}: ${((a["labels"] as string[] | undefined) ?? []).join(", ").slice(0, 120)}`;
     default: return kind;
   }
 }
@@ -156,4 +173,60 @@ export function minutesSaid(line: string): number | null {
 export function afterSaid(after: string, line: string): boolean {
   const low = line.toLowerCase();
   return after === "admission" ? /\badmit(ted|s)?\b|\badmission\b|\bon the ward\b/.test(low) : after === "result" ? /\bresults?\b|\bcomes? back\b|\bare back\b|\bis back\b/.test(low) : false;
+}
+
+const FREQUENCY_WORDS: readonly [RegExp, number][] = [
+  [/\b(once (a|per) day|once daily|daily|every 24 hours|od)\b/, 1], [/\b(twice (a|per) day|twice daily|every 12 hours|bd)\b/, 2],
+  [/\b(three times (a|per) day|three times daily|every 8 hours|tds)\b/, 3], [/\b(four times (a|per) day|four times daily|every 6 hours|qds|qid)\b/, 4]
+];
+const ROUTE_WORDS: readonly [RegExp, (typeof DRUG_ROUTES)[number]][] = [
+  [/\b(iv|i v|intravenous(ly)?|into the vein)\b/, "iv"], [/\b(im|i m|intramuscular(ly)?)\b/, "im"], [/\b(oral(ly)?|by mouth|po|tablets?)\b/, "oral"],
+  [/\b(sc|subcutaneous(ly)?|sub ?cut)\b/, "sc"], [/\b(rectal(ly)?|suppositor(y|ies))\b/, "rectal"], [/\b(inhaled|nebulised|nebulized|inhaler)\b/, "inhaled"]
+];
+const COUNT_WORDS: Record<string, number> = { one: 1, a: 1, an: 1, single: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, twelve: 12, fourteen: 14, fifteen: 15, twenty: 20, thirty: 30 };
+const countOf = (w: string) => (/^\d+$/.test(w) ? Number(w) : COUNT_WORDS[w] ?? null);
+
+// The parts of a prescription the line itself says; nothing is worked out from anything else, except that stat or a single dose means one.
+export function prescriptionSaid(line: string, c: { dose?: string | null | undefined }): { dose: string | null; frequency: number | null; duration_days: number | null; quantity: number | null; route: (typeof DRUG_ROUTES)[number] | null } {
+  const low = ` ${line.toLowerCase().replace(/[,.!?]/g, " ").replace(/\s+/g, " ")} `;
+  const nums = new Set((doseDigits(line).match(/\d+(?:\.\d+)?/g) ?? []).map((x) => String(Number(x))));
+  const dose = c.dose && (c.dose.match(/\d+(?:\.\d+)?/g) ?? []).every((n) => nums.has(String(Number(n)))) && /\d/.test(c.dose) ? c.dose.trim() : null;
+  const frequency = FREQUENCY_WORDS.find(([re]) => re.test(low))?.[1] ?? null;
+  // A course is "for N days" or "N days"; "a day" belongs to the frequency, not the course.
+  const dm = / for (\d+|[a-z]+) days? /.exec(low) ?? / (\d+|two|three|four|five|six|seven|ten|fourteen) days /.exec(low);
+  const duration_days = dm ? countOf(dm[1]!) : null;
+  const qm = / (?:quantity|dispense|supply) (\d+|[a-z]+) /.exec(low) ?? / (\d+|[a-z]+) (?:tablets?|vials?|ampoules?|doses?|bottles?|packs?) /.exec(low);
+  const quantity = (qm ? countOf(qm[1]!) : null) ?? (/ (stat|a single dose|one dose|once only) /.test(low) ? 1 : null);
+  const route = ROUTE_WORDS.find(([re]) => re.test(low))?.[1] ?? null;
+  return { dose, frequency: frequency ?? null, duration_days: duration_days && duration_days >= 1 ? duration_days : null, quantity: quantity && quantity >= 1 ? quantity : null, route };
+}
+
+const UNIT_WORDS: readonly [RegExp, string][] = [
+  [/^(mg|milligrams?|milligrammes?)$/, "mg"], [/^(g|grams?|grammes?|gm)$/, "g"], [/^(mcg|micrograms?|ug)$/, "mcg"],
+  [/^(ml|millilit(er|re)s?|mils?)$/, "ml"], [/^(units?|iu)$/, "unit"], [/^(l|lit(er|re)s?)$/, "l"]
+];
+const unitOf = (w: string) => UNIT_WORDS.find(([re]) => re.test(w))?.[1] ?? null;
+
+const SMALL: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
+// A small number said as a word straight before a dose unit is that dose ("five milligrams" is 5 mg); the normaliser keeps single small words as words.
+export function doseDigits(text: string): string {
+  return text.replace(/\b(one|two|three|four|five|six|seven|eight|nine)(\s+)(mg|milligrams?|milligrammes?|g|grams?|grammes?|mcg|micrograms?|ml|millilit(?:er|re)s?|units?)\b/gi, (_m, w: string, sp: string, u: string) => `${SMALL[w.toLowerCase()]}${sp}${u}`);
+}
+
+// Every dose in a text as a number with its unit, from digits or the cleaned spoken form ("5 mg", "500 milligrams", "five milligrams").
+export function dosesIn(text: string): { n: string; unit: string | null }[] {
+  const toks = doseDigits(text).toLowerCase().replace(/(\d)([a-z])/g, "$1 $2").replace(/[^a-z0-9. ]+/g, " ").split(/\s+/).filter(Boolean);
+  const out: { n: string; unit: string | null }[] = [];
+  toks.forEach((t, i) => { if (/^\d+(\.\d+)?$/.test(t)) out.push({ n: String(Number(t)), unit: unitOf(toks[i + 1] ?? "") }); });
+  return out;
+}
+
+// True when a line says a dose, so its second reading can start beside the gate.
+export const saysDose = (text: string): boolean => dosesIn(text).some((d) => d.unit !== null && d.unit !== "unit");
+
+// True when a second reading heard the same dose: the same number with the same unit, so milligrams heard as millilitres holds the order.
+export function doseAgrees(dose: string, second: string): boolean {
+  const first = dosesIn(dose)[0];
+  if (!first) return true;
+  return dosesIn(second).some((d) => d.n === first.n && (first.unit === null || d.unit === first.unit));
 }

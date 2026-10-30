@@ -61,7 +61,7 @@ export type VersionsSpec = z.infer<typeof VersionsSpec>;
 export const DoorProfile = z.strictObject({
   base_url: z.url(),
   timeout_ms: z.number().int().min(1000).max(900_000).default(300_000),
-  headers: z.strictObject({ on_behalf_of: HeaderName, origin: HeaderName, evidence: HeaderName, spoken_at: HeaderName, idempotency: HeaderName, replayed: HeaderName }),
+  headers: z.strictObject({ on_behalf_of: HeaderName, origin: HeaderName, evidence: HeaderName, spoken_at: HeaderName, idempotency: HeaderName, replayed: HeaderName, authorisation: HeaderName.optional(), confirmation: HeaderName.optional() }),
   origin_value: z.string().regex(/^[a-z][a-z_]{0,39}$/),
   // Paths the port never calls, whatever asks; checked before the allowlist.
   deny: z.array(z.string().regex(/^[a-z0-9_-]+(\/[a-z0-9_-]+)*$/)).min(1),
@@ -73,8 +73,16 @@ export const DoorProfile = z.strictObject({
     // The current inpatients the owner may see, so a caller can pick a live admission rather than a stored id.
     census: z.strictObject({ method: z.literal("GET"), path: PathTpl, list_path: Dotted, admission_path: Dotted, label_path: Dotted }).optional(),
     // The context for a patient who is not admitted yet: one list read, matched on the patient.
-    patient_context: ReadSpec.extend({ list_path: Dotted, match: Dotted, label: Dotted, visit: Dotted, facts: z.record(z.string(), Dotted).default({}) }).optional()
+    patient_context: ReadSpec.extend({ list_path: Dotted, match: Dotted, label: Dotted, visit: Dotted, facts: z.record(z.string(), Dotted).default({}) }).optional(),
+    // Where the hospital matches a segment's voiceprint, and where it reads back the batch awaiting countersign.
+    speaker: z.strictObject({ path: PathTpl }).optional(),
+    read_back: ReadSpec.optional()
   }),
+  // The tests and medicines an owner may order by voice: the words that name each, the hospital's own name or id, and whether a medicine is controlled.
+  orders: z.strictObject({
+    tests: z.record(z.string().regex(/^[a-z0-9_]{1,40}$/), z.strictObject({ words: Words, name: z.string().min(1).max(200) })).default({}),
+    drugs: z.record(z.string().regex(/^[a-z0-9_]{1,40}$/), z.strictObject({ words: Words, id: EmrId, controlled: z.boolean().default(false) })).default({})
+  }).optional(),
   // The other kinds of work, each a write with its proof or a read-only report.
   work: z.record(z.string(), z.union([WriteOp, ReadOnlyOp])).default({}),
   owners: z.array(OwnerSpec).default([]),
