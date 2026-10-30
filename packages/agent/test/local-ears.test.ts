@@ -44,7 +44,7 @@ function scriptedStream(lines: string[]): StreamAsr & { stretches: () => number 
   };
 }
 
-async function bootStream(lines: string[], o: { local: string; meta: string; numberMs?: number }) {
+async function bootStream(lines: string[], o: { local: string; meta: string; numberMs?: number; replay?: "refuse" }) {
   const root = emrRoot();
   const port = new FakeEmr();
   let rt: EmrRuntime | null = null;
@@ -57,7 +57,7 @@ async function bootStream(lines: string[], o: { local: string; meta: string; num
     ears: local, asr: "stream", streamAsr: scriptedStream(lines),
     // Voice Transcribe here is only ever the Meta reading of a number line, never the first ear.
     transcribe: async (wav, _k, sid) => { metaHeard.push(wav.length); return { final: true, text: o.meta, audio_ms: 1000, session_id: sid, cost_usd: 0.00005 }; },
-    listen: { numberJoinWaitMs: o.numberMs ?? 5000, strongJoinWaitMs: 5000 }
+    listen: { numberJoinWaitMs: o.numberMs ?? 5000, strongJoinWaitMs: 5000, ...(o.replay ? { replay: o.replay } : {}) }
   });
   rt = s.runtime;
   const stream = async (body: Buffer, session = "st1") => {
@@ -150,6 +150,15 @@ describe("the streaming first ear", () => {
     await s.runtime.settled();
     expect(seen).toEqual(["Chart his respiratory rate 22"]);
     expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, resp_rate: 22 }]);
+    await s.close();
+  });
+
+  it("with replay refusal on, refuses a stream sent faster than it could be spoken", async () => {
+    const { s, port, stream } = await bootStream(["Chart his pulse one hundred and sixteen"], { local: "pulse 116", meta: "pulse 116", replay: "refuse" });
+    const r = await stream(pcm([["quiet", 400], ["tone", 1800], ["quiet", 900], ["quiet", 3000]]));
+    expect(r).toMatchObject({ status: 409, body: { error: "replayed audio refused: faster_than_live" } });
+    await s.runtime.settled();
+    expect(port.writes).toEqual([]);
     await s.close();
   });
 

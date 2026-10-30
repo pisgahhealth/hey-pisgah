@@ -11,24 +11,28 @@ export const STREAM_PREROLL_MS = 300;
 // Speech that runs this long with no pause is ended where it stands.
 export const STREAM_MAX_MS = 30_000;
 const FRAME_MS = 20;
+// A live microphone cannot send audio much faster than it is spoken; past this lead a stream is a recording.
+export const STREAM_LIVE_SLACK_MS = 2000;
 
 type Live = {
   owner: string; target: EmrTarget; rate: number; frame: number; dec: StreamDecoder; carry: Float32Array;
-  pre: Float32Array[]; buf: Float32Array[]; speech: boolean; quiet_ms: number; speech_ms: number; partial: string; work: Promise<unknown>; errors: string[];
+  pre: Float32Array[]; buf: Float32Array[]; speech: boolean; quiet_ms: number; speech_ms: number; partial: string; work: Promise<unknown>; errors: string[]; opened: number; fed: number;
 };
 
 const rms = (x: Float32Array) => { let s = 0; for (const v of x) s += v * v; return Math.sqrt(s / Math.max(1, x.length)); };
 
+export class StreamRefused extends Error { constructor(readonly reason: "faster_than_live") { super(`replayed audio refused: ${reason}`); } }
+
 // Audio frames as they are spoken: the local model decodes while the clinician talks, a pause of STREAM_ENDPOINT_MS ends a stretch, and the listen rules take it from there.
 export class StreamListener {
   private readonly live = new Map<string, Live>();
-  constructor(private readonly listen: ListenSessions, private readonly asr: StreamAsr, private readonly o: { endpointMs?: number; now?: () => number } = {}) {}
+  constructor(private readonly listen: ListenSessions, private readonly asr: StreamAsr, private readonly o: { endpointMs?: number; now?: () => number; refuseFasterThanLive?: boolean } = {}) {}
 
   open(c: { owner: string; target: EmrTarget; session_id: string; rate: number }): void {
     if (this.live.has(c.session_id)) throw new Error("this listening session is already streaming");
     this.live.set(c.session_id, {
       owner: c.owner, target: c.target, rate: c.rate, frame: Math.round((c.rate * FRAME_MS) / 1000), dec: this.asr.open(), carry: new Float32Array(0),
-      pre: [], buf: [], speech: false, quiet_ms: 0, speech_ms: 0, partial: "", work: Promise.resolve(), errors: []
+      pre: [], buf: [], speech: false, quiet_ms: 0, speech_ms: 0, partial: "", work: Promise.resolve(), errors: [], opened: this.o.now?.() ?? Date.now(), fed: 0
     });
   }
 
@@ -36,6 +40,9 @@ export class StreamListener {
   feed(sessionId: string, samples: Float32Array): void {
     const l = this.live.get(sessionId);
     if (!l) throw new Error("this listening session is not streaming");
+    l.fed += samples.length;
+    // The same rule the chunk path's replay guard applies: with refusal on, audio that runs ahead of the clock is refused before it is heard.
+    if (this.o.refuseFasterThanLive && (l.fed / l.rate) * 1000 > (this.o.now?.() ?? Date.now()) - l.opened + STREAM_LIVE_SLACK_MS) throw new StreamRefused("faster_than_live");
     const all = l.carry.length ? concat([l.carry, samples]) : samples;
     let i = 0;
     for (; i + l.frame <= all.length; i += l.frame) this.frame(sessionId, l, all.slice(i, i + l.frame));

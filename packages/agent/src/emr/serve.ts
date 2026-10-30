@@ -6,7 +6,7 @@ import { loadKeys, ModelClient, type Mode } from "@hey-pisgah/model";
 import { VITALS_KEYWORDS, VoiceError, buildKeywords, cleanTranscript, transcribeWav, vitalsVocabulary, type FinalTranscript } from "@hey-pisgah/voice";
 import { sparkEar, type SecondEar } from "./ears.js";
 import { allEars, parakeetEar, sherpaStreamAsr, transcriberEar, type ReadingLedger, type StreamAsr } from "./local-ears.js";
-import { StreamListener } from "./stream-listen.js";
+import { StreamListener, StreamRefused } from "./stream-listen.js";
 import { EmrRuntime, type EmrRuntimeOptions } from "./runtime.js";
 import { ListenError, ListenSessions, type ListenOptions, type Transcriber } from "./listen.js";
 import { parseWav } from "@hey-pisgah/voice";
@@ -200,7 +200,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   // Each patient's listening session reports its utterances' statuses under the strip's own session id.
   const clientOf = new Map<string, string>();
   const listening = new ListenSessions(rt, { ...(o.listen ?? {}), transcribe, ...(o.embed ? { embed: o.embed } : {}), onStatus: (owner, sid, seq, st) => setStatus(owner, clientOf.get(sid) ?? sid, seq, st) });
-  const streamer = streamAsr ? new StreamListener(listening, streamAsr) : null;
+  const streamer = streamAsr ? new StreamListener(listening, streamAsr, { refuseFasterThanLive: o.listen?.replay === "refuse" }) : null;
   const wakeLog = join(o.storeRoot, "..", "wake.jsonl");
   // The patient each listening session started with keeps the session's own id, so a session that never moves reads as before.
   const firstSubject = new Map<string, string>();
@@ -379,19 +379,22 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     let n = 0;
     let odd: number | null = null;
     let failed: unknown = null;
-    try {
-      for await (const c of req) {
-        const buf = c as Buffer;
-        n += buf.length;
-        if (n > STREAM_LIMIT) throw new HttpError(413, "the stream ran past its limit");
+    // A refused or failed stream is still read to its end and dropped, so the answer reaches a sender that is still uploading.
+    for await (const c of req) {
+      const buf = c as Buffer;
+      n += buf.length;
+      // Past the limit the connection is closed rather than read on.
+      if (n > STREAM_LIMIT) { failed = new HttpError(413, "the stream ran past its limit"); break; }
+      if (failed) continue;
+      try {
         const bytes: Buffer = odd === null ? buf : Buffer.concat([Buffer.from([odd]), buf]);
         const whole: number = bytes.length - (bytes.length % 2);
         odd = whole < bytes.length ? bytes[bytes.length - 1]! : null;
         const x = new Float32Array(whole / 2);
         for (let i = 0; i < x.length; i++) x[i] = bytes.readInt16LE(i * 2) / 32768;
         streamer.feed(b.session_id, x);
-      }
-    } catch (e) { failed = e; }
+      } catch (e) { failed = e instanceof StreamRefused ? new HttpError(409, e.message) : e; }
+    }
     // The stream always closes, so what was heard before a failure is still handed on and the session can open again.
     const ended = await streamer.end(b.session_id);
     if (failed) throw failed;
