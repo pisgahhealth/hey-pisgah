@@ -77,6 +77,8 @@ describe("hands-free entry rules", () => {
     // The local streaming ear hears "her name na" as "her name now" (rehearsal, 30 Oct).
     expect(identityFrom("She's talking small now. Her name now blessing. Blessing Adie me. The number is over eight oh three")).toMatchObject({ name: "Blessing Adie" });
     expect(identityFrom("She's talking small now. Her name no Blessing Adimi. The number is over eight over three, one two three four five six seven.")).toMatchObject({ name: "Blessing Adimi", phone: "08031234567" });
+    expect(identityFrom("His name is Amika, Emikonvosu. Phone is zero eight zero six")).toMatchObject({ name: "Amika Emikonvosu" });
+    expect(identityFrom("Her name is Grace, Grace Okafor")).toMatchObject({ name: "Grace Okafor" });
     // "over" alone, or in a short run, is never a digit.
     expect(identityFrom("Her name is Grace Okafor, she has been ill over three days")).toMatchObject({ name: "Grace Okafor", phone: null });
     expect(identityFrom("the bystander said she's called, eh, Blessing... Blessing Adeyemi")).toMatchObject({ name: "Blessing Adeyemi", phone: null });

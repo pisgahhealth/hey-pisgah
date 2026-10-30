@@ -68,6 +68,9 @@ export function identityFrom(line: string): SpokenIdentity | null {
   const parts = line.slice(m.index + m[0].length).replace(/\.{2,}|…/g, ",").split(/\bnumber\b|\bphone\b/i)[0]!.split(/[.!?;]\s/);
   const runsIn = (t: string) => [...t.matchAll(NAME_RUN)].map((r) => r[0].split(/\s+/).filter((w) => !NOT_NAME.test(w)).join(" ")).filter((n) => n.split(" ").length >= 2);
   const runs = runsIn(parts[0] ?? "").length ? runsIn(parts[0] ?? "") : runsIn(parts[1] ?? "");
+  // "Amika, Emikonvosu" is a first name and a surname with a pause between, when no longer run was heard.
+  const paused = /([A-Z][a-z'-]+),\s+([A-Z][a-z'-]+)\b/.exec(parts[0] ?? "");
+  if (!runs.length && paused && paused[1] !== paused[2] && !NOT_NAME.test(paused[1]!) && !NOT_NAME.test(paused[2]!)) runs.push(`${paused[1]} ${paused[2]}`);
   const name = runs.sort((x, y) => y.length - x.length)[0];
   if (!name) return null;
   const p = PHONE.exec(digitsSpoken(line));
