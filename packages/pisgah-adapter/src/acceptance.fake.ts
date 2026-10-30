@@ -17,13 +17,13 @@ type Act = { action_id: string; kind: string; state: string; line_id: string; ar
 type Task = {
   task_id: string; owner: string; patient_id: string | null; visit_id: string | null; admission_id: string; actions: Act[]; usd: number; calls: number;
   transcript: { id: string; line_id: string; text: string; at: string; source: string; class: string | null; classes: string[]; speaker?: { speaker: string; label: string | null }; ambient?: { ended_at: string } }[];
-  questions: { question_id: string; text: string }[]; identities: { name: string; phone: string | null; state: string }[];
-  delegations: { key: string; delegation_id: string; side: string; team: string; task_kind: string; assigned_at: string | null; acknowledged_at: string | null; completed_at: string | null }[];
-  obligations: { title: string; state: string; after: string | null }[]; speed: { rows: { kind: string; ms: number; line_id: string; action_id: string }[] };
+  questions: { question_id: string; text: string }[]; asked: { question_id: string; text: string; line_id: string; at: string }[]; identities: { name: string; phone: string | null; state: string; at: string }[];
+  delegations: { key: string; delegation_id: string; side: string; team: string; task_kind: string; at: string; assigned_at: string | null; acknowledged_at: string | null; completed_at: string | null }[];
+  obligations: { title: string; state: string; after: string | null; held_at: string; fired_at: string | null }[]; speed: { rows: { kind: string; ms: number; line_id: string; action_id: string }[] };
 };
 type State = { tasks: Task[]; tracking: Record<string, string | null>; refs: Record<string, string>; done: string[]; queries: Record<string, Record<string, unknown>[]>; n: number };
 
-export async function startFakeHospital(o: { port: number; dir: string; script: Script; fail?: Set<string>; log?: (s: string) => void }): Promise<{ close: () => Promise<void> }> {
+export async function startFakeHospital(o: { port: number; dir: string; script: Script; fail?: Set<string>; drop?: Set<string>; log?: (s: string) => void }): Promise<{ close: () => Promise<void> }> {
   const file = join(o.dir, "fake.json");
   mkdirSync(o.dir, { recursive: true });
   const st: State = existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as State) : { tasks: [], tracking: {}, refs: {}, done: [], queries: {}, n: 0 };
@@ -34,7 +34,7 @@ export async function startFakeHospital(o: { port: number; dir: string; script: 
   const taskOf = (owner: string, ref: string | null): Task => {
     const patient = ref ? st.refs[ref] ?? null : null;
     let t = st.tasks.find((x) => x.owner === owner && x.patient_id === patient);
-    if (!t) { t = { task_id: id("task"), owner, patient_id: patient, visit_id: patient ? `${patient}-visit` : null, admission_id: "", actions: [], transcript: [], questions: [], identities: [], delegations: [], obligations: [], speed: { rows: [] }, usd: 0, calls: 0 }; st.tasks.push(t); }
+    if (!t) { t = { task_id: id("task"), owner, patient_id: patient, visit_id: patient ? `${patient}-visit` : null, admission_id: "", actions: [], transcript: [], questions: [], asked: [], identities: [], delegations: [], obligations: [], speed: { rows: [] }, usd: 0, calls: 0 }; st.tasks.push(t); }
     return t;
   };
   // A write goes proposed, then sent, then completed and timed; a restart finishes any write a kill left sent, once.
@@ -63,7 +63,7 @@ export async function startFakeHospital(o: { port: number; dir: string; script: 
     const doc = () => taskOf("fake-doctor", ref);
     for (const e of line.expect as Expect[]) {
       if ("arrival" in e) { st.refs[e.arrival] = `fake-patient-${e.arrival}`; const t = doc(); write(t, "open_unnamed_encounter", lineId, {}, endAt); st.tracking["fake-doctor"] = st.refs[e.arrival]!; }
-      else if ("identity" in e) doc().identities.push({ name: e.name, phone: null, state: "open" });
+      else if ("identity" in e) doc().identities.push({ name: e.name, phone: null, state: "open", at: now() });
       else if ("act" in e) {
         const t = taskOf(e.owner ? ROLE_OWNER[e.owner]! : "fake-doctor", ref);
         const waiting = t.actions.filter((a) => a.kind === e.act && a.state === "proposed" && a.awaiting);
@@ -75,7 +75,7 @@ export async function startFakeHospital(o: { port: number; dir: string; script: 
           if (["order_test", "prescribe"].includes(e.act)) a.authorised_by_line = lineId;
         }
       } else if ("awaits" in e) { const a = write(doc(), e.awaits, lineId, {}, endAt, "proposed"); a.awaiting = "confirm"; }
-      else if ("question" in e) doc().questions.push({ question_id: id("q"), text: `Read back: ${e.question}` });
+      else if ("question" in e) { const q = { question_id: id("q"), text: `Read back: ${e.question}` }; doc().questions.push(q); doc().asked.push({ ...q, line_id: lineId, at: now() }); }
       else if ("delegation" in e) {
         const t = doc();
         const mine = t.delegations.filter((d) => d.team === e.delegation.team);
@@ -83,11 +83,11 @@ export async function startFakeHospital(o: { port: number; dir: string; script: 
         else if (e.delegation.state === "completed") { for (const d of mine) { d.completed_at ??= now(); write(t, "complete_task", lineId, { delegation_id: d.delegation_id }, endAt); } }
         else for (let i = 0; i < (e.delegation.n ?? 1); i++) {
           const did = id("del");
-          t.delegations.push({ key: did, delegation_id: did, side: "delegator", team: e.delegation.team, task_kind: e.delegation.team, assigned_at: now(), acknowledged_at: null, completed_at: null });
+          t.delegations.push({ key: did, delegation_id: did, side: "delegator", team: e.delegation.team, task_kind: e.delegation.team, at: now(), assigned_at: now(), acknowledged_at: null, completed_at: null });
           const role = TEAM_ROLE[e.delegation.team];
           if (role) write(taskOf(ROLE_OWNER[role]!, ref), "nudge_owner", `rec-${did}`, { delegation_id: did }, endAt);
         }
-      } else if ("obligation" in e) { const os = doc().obligations; const hit = os.find((x) => x.after === (e.obligation.after ?? null)); if (hit) hit.state = e.obligation.state; else os.push({ title: line.text ?? line.id, state: e.obligation.state, after: e.obligation.after ?? null }); }
+      } else if ("obligation" in e) { const os = doc().obligations; const hit = os.find((x) => x.after === (e.obligation.after ?? null)); if (hit) { hit.state = e.obligation.state; if (e.obligation.state === "fired") hit.fired_at = now(); } else os.push({ title: line.text ?? line.id, state: e.obligation.state, after: e.obligation.after ?? null, held_at: now(), fired_at: e.obligation.state === "fired" ? now() : null }); }
       else if ("tracking" in e) st.tracking["fake-doctor"] = st.refs[e.tracking] ?? null;
       else if ("wake" in e) appendFileSync(join(o.dir, "wake.jsonl"), `${JSON.stringify({ at: now(), owner: "fake-doctor", keyword: "emergency", latency_ms: 420 })}\n`);
       else if ("query" in e) st.queries[`${e.query}:${JSON.stringify(e.vars)}`] = Array.from({ length: Math.max(1, e.rows_min ?? 1) }, () => ({ ...(e.match ?? {}), fake: true }));
@@ -98,6 +98,8 @@ export async function startFakeHospital(o: { port: number; dir: string; script: 
   // A heard or typed line becomes a transcript line on the owner's task, then the script line it matches is played.
   const heard = (owner: string, text: string, voice: string | null, source: "audio" | "text") => {
     const line = o.script.lines.find((l) => l.text === text && !st.done.includes(l.id));
+    // A dropped utterance never reaches any transcript, the case where an older record must not pass for it.
+    if (line && o.drop?.has(line.id)) { st.done.push(line.id); save(); return { task_id: "", line_id: "" }; }
     const ref = line?.patient ?? null;
     const t = taskOf(owner, ref ?? (owner === "fake-doctor" ? Object.entries(st.refs).find(([, p]) => p === st.tracking["fake-doctor"])?.[0] ?? null : null));
     const lineId = id("line");
@@ -152,5 +154,6 @@ if (process.argv[1]?.endsWith("acceptance.fake.ts")) {
   const dir = join(process.env["ACC_OUT"] ?? ".", "store");
   const { script } = loadScript(process.env["ACC_SCRIPT"] ?? "");
   const fail = new Set((process.env["ACC_FAKE_FAIL"] ?? "").split(",").filter(Boolean));
-  void startFakeHospital({ port, dir, script, fail, log: (s) => process.stdout.write(`${s}\n`) });
+  const drop = new Set((process.env["ACC_FAKE_DROP"] ?? "").split(",").filter(Boolean));
+  void startFakeHospital({ port, dir, script, fail, drop, log: (s) => process.stdout.write(`${s}\n`) });
 }

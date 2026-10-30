@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { claimStatus, parseClaimPredicate } from "@hey-pisgah/evaluator";
-import { Script, claimFields, didBy, percentile, speedTable, stepStatus, writeAccResults, type AccResult, type StepOutcome } from "../src/acceptance.js";
+import { Script, claimFields, completion, didBy, percentile, speedTable, stepStatus, writeAccResults, type AccResult, type StepOutcome } from "../src/acceptance.js";
 
 const claims = (JSON.parse(readFileSync(join(__dirname, "../../../evaluation/claims.json"), "utf8")) as { claims: { claim_id: string; acceptance: { predicate: string } }[] }).claims;
 const status = (id: string, data: unknown) => claimStatus(parseClaimPredicate(claims.find((c) => c.claim_id === id)!.acceptance.predicate), data).status;
@@ -16,7 +16,7 @@ function result(over: Partial<AccResult> = {}): AccResult {
     speed: { rows, table: speedTable(rows, [], [600]), wake_ms: [600] }, errors: [], error_rows: [], faults: [], unaccounted: [],
     delegations: [{ id: "d1", team: "surgery", acknowledged: true, acknowledged_by_voice: true, completed_from_record: true, acknowledged_counted_as_done: false }],
     speakers: [{ line: "A05", who: "doctor", heard_as: "owner", acted_as_owner: true, order_written: true }, { line: "B07", who: "dr_b", heard_as: "other_clinician", acted_as_owner: false, order_written: false }],
-    countersign: { batches: 2, batch_orders: 3, batch_signed_by_voice: true, changed_after_batch_unsigned: true, unmatched_voice_orders: 0 }, model: { calls: 10, usd: 0.1, rate_limited: 0 }, ...over
+    countersign: { batches: 2, batch_orders: 3, batch_signed_by_voice: true, changed_after_batch_unsigned: true, unmatched_voice_orders: 0 }, model: { calls: 10, usd: 0.1, rate_limited: 0 }, harness_errors: [], completion: { complete: true, reasons: [] }, ...over
   };
 }
 
@@ -58,6 +58,13 @@ describe("acceptance harness", () => {
     expect(status("C-21", claimFields(result({ speed: { rows: slowRows, table: speedTable(slowRows, [], [800]), wake_ms: [800] } }))["C-21"])).toBe("amber");
     // A run that never measured a wake leaves the wake field out, so the claim reads not measured rather than a guess.
     expect(status("C-21", claimFields(result({ speed: { rows: slowRows, table: speedTable(slowRows, [], []), wake_ms: [] } }))["C-21"])).toBe("not_measured");
+  });
+  it("calls a run complete only when every mandatory step verified and every fault ran and recovered", () => {
+    const r = result({ faults: [{ kind: "restart", line: "R1", at: "", killed_during: null, restarted_in_ms: 600, outcome: "ok", ok: true }] });
+    expect(completion(r, 1)).toEqual({ complete: true, reasons: [] });
+    expect(completion(r, 2).reasons).toEqual(["1 of 2 faults never ran"]);
+    expect(completion(result({ steps: [step(), step({ line: "A09", status: "failed" })] }), 0).reasons).toEqual(["A09 failed"]);
+    expect(completion(result({ faults: [{ kind: "interrupt", line: "A11", at: "", killed_during: "sent", restarted_in_ms: 600, outcome: "write gone", ok: false }] }), 1).complete).toBe(false);
   });
   it("writes the claim files and keeps the lane floor already in speed.json", () => {
     const root = mkdtempSync(join(tmpdir(), "acc-"));

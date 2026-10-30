@@ -10,7 +10,7 @@ import { personCaller } from "./journey.sandbox.js";
 import type { DoorLog } from "./port.js";
 import { SandboxBlock, mintPersonCookie, sandboxQuery } from "./sandbox.js";
 import { FAKE_OWNERS } from "./acceptance.fake.js";
-import { didBy, loadScript, speedTable, stepStatus, writeAccResults, type AccResult, type CheckOutcome, type DelegationRow, type Expect, type Fault, type Line, type SpeakerRow, type SpeedErr, type SpeedRowIn, type StepOutcome, type Who } from "./acceptance.js";
+import { completion, didBy, loadScript, speedTable, stepStatus, writeAccResults, type AccResult, type CheckOutcome, type DelegationRow, type Expect, type Fault, type Line, type SpeakerRow, type SpeedErr, type SpeedRowIn, type StepOutcome, type Who } from "./acceptance.js";
 
 // Runs the acceptance script against a serve on the loopback sandbox: says or plays each line, waits for the record after it, injects the faults, and writes the result files.
 const env = (k: string, d?: string): string => { const v = process.env[k] ?? d; if (v === undefined) throw new Error(`set ${k}`); return v; };
@@ -210,7 +210,7 @@ async function openBrowser(): Promise<void> {
     await page.click(`${STRIP} button[aria-label="Listen"]`);
     await page.waitForFunction((st: string) => /Say hey Pisgah/.test(document.querySelector(`${st} header`)?.textContent ?? ""), STRIP, { timeout: 90_000 }).catch(() => log("browser: the wake spotter did not say it was ready"));
     if (!(await page.locator(`${STRIP} button[aria-label="Stop listening"]`).count())) await page.click(`${STRIP} button[aria-label="Listen"]`);
-    await page.waitForSelector(`${STRIP} button[aria-label="Stop listening"]`, { timeout: 30_000 }).catch(() => log("browser: the strip did not start listening"));
+    await page.waitForSelector(`${STRIP} button[aria-label="Stop listening"]`, { timeout: 30_000 }).catch(() => { log("browser: the strip did not start listening"); harnessErrors.push("browser: the strip did not start listening"); });
     log("browser: the harness pressed Listen (the one microphone grant, and a start if the strip asked for one)");
   }
 }
@@ -220,9 +220,11 @@ async function touchesNow(): Promise<{ emr: number; strip: number } | null> {
 }
 
 // One expectation, checked against the serve's views and the sandbox's read-only queries.
-async function check(e: Expect, line: Line, lineId: string | null, before: Set<string>): Promise<{ ok: boolean; detail: string }> {
+// Every assertion is bound to this step: an action must come from this step's own utterance when the script says so, and must reach the asserted state while the step runs, so an older record never passes for a dropped instruction.
+async function check(e: Expect, line: Line, lineId: string | null, before: Set<string>, started: string): Promise<{ ok: boolean; detail: string }> {
   await refreshBound();
   const ref = line.patient;
+  const during = (at: string | null | undefined) => !!at && at >= started;
   if ("arrival" in e) {
     if (bound[e.arrival]) return { ok: true, detail: `bound to ${bound[e.arrival]!.patient.slice(0, 8)}` };
     const t = (views.get(DOCTOR) ?? []).find((x) => !before.has(x.task_id) && x.patient_id && x.actions.some((a) => a.kind === "open_unnamed_encounter" && a.state === "completed"));
@@ -234,19 +236,21 @@ async function check(e: Expect, line: Line, lineId: string | null, before: Set<s
     const ids = doctorTasks(e.identity).flatMap((t) => t.identities);
     // The ear may spell a surname its own way, so a held name with the same first name counts, and the result says what was heard.
     const first = e.name.split(" ")[0]!.toLowerCase();
-    const hit = ids.find((i) => i.name === e.name) ?? ids.find((i) => i.name.toLowerCase().startsWith(`${first} `));
+    const fresh = ids.filter((i) => during(i.at));
+    const hit = fresh.find((i) => i.name === e.name) ?? fresh.find((i) => i.name.toLowerCase().startsWith(`${first} `));
     return { ok: !!hit, detail: hit ? `held ${hit.name}${hit.name === e.name ? "" : ` (said ${e.name})`} ${hit.phone ?? "no phone"} (${hit.state})` : `held: ${ids.map((i) => i.name).join(", ") || "none"}` };
   }
   if ("act" in e) {
     const owners = e.owner ? ownersOf(e.owner) : [DOCTOR];
-    const xs = owners.flatMap((o) => ofPatient(ref, o)).filter((a) => a.kind === e.act && (!e.from_line || !lineId || a.line_id === lineId));
-    const inState = xs.filter((a) => a.state === e.state || (e.state === "proposed" && a.state === "proposed"));
+    if (e.from_line && !lineId) return { ok: false, detail: `${e.act}: this step's words were not heard, so nothing can come from them` };
+    const xs = owners.flatMap((o) => ofPatient(ref, o)).filter((a) => a.kind === e.act && (!e.from_line || a.line_id === lineId));
+    const inState = xs.filter((a) => a.state === e.state && during(seen.get(`${a.action_id}:${a.state}`)));
     const n = e.n ?? 1;
     const vals = e.values ? inState.filter((a) => Object.entries(e.values!).every(([k, v]) => String(a.args[k] ?? "") === String(v))) : inState;
     return { ok: vals.length >= n, detail: `${e.act}: ${xs.map((a) => `${a.state}${a.reason ? `(${a.reason.slice(0, 60)})` : ""}`).join(", ") || "none"}${e.values ? `; values ${JSON.stringify(xs.map((a) => a.args)).slice(0, 160)}` : ""}` };
   }
-  if ("awaits" in e) { const a = ofPatient(ref, DOCTOR).find((x) => x.kind === e.awaits && x.state === "proposed" && x.awaiting); return { ok: !!a, detail: a ? `awaiting ${a.awaiting}` : "not awaiting" }; }
-  if ("question" in e) { const q = doctorTasks(ref).flatMap((t) => t.questions).map((x) => x.text); const hit = q.find((x) => x.toLowerCase().includes(e.question.toLowerCase())); return { ok: !!hit, detail: hit?.slice(0, 160) ?? `questions: ${q.slice(-2).join(" | ").slice(0, 160) || "none"}` }; }
+  if ("awaits" in e) { const a = ofPatient(ref, DOCTOR).find((x) => x.kind === e.awaits && x.state === "proposed" && x.awaiting && during(x.proposed_at)); return { ok: !!a, detail: a ? `awaiting ${a.awaiting}` : "not awaiting" }; }
+  if ("question" in e) { const q = doctorTasks(ref).flatMap((t) => t.asked).filter((x) => during(x.at)).map((x) => x.text); const hit = q.find((x) => x.toLowerCase().includes(e.question.toLowerCase())); return { ok: !!hit, detail: hit?.slice(0, 160) ?? `questions: ${q.slice(-2).join(" | ").slice(0, 160) || "none"}` }; }
   if ("no_write_from_line" in e) { const xs = ofPatient(ref, DOCTOR).filter((a) => a.kind === e.no_write_from_line && a.line_id === lineId && a.state === "completed"); return { ok: xs.length === 0, detail: `${xs.length} ${e.no_write_from_line} from this line` }; }
   if ("no_order_from_line" in e) { const xs = allActions().filter((a) => ["order_test", "prescribe"].includes(a.kind) && a.line_id === lineId && ["sent", "acknowledged", "completed"].includes(a.state)); return { ok: lineId !== null && xs.length === 0, detail: lineId ? `${xs.length} orders from this line` : "line not found in any transcript" }; }
   if ("class" in e) { const l = transcriptLine(lineId); return { ok: !!l && (l.class === e.class || l.classes.includes(e.class as never)), detail: l ? `class ${l.class} ${JSON.stringify(l.classes)}` : "line not found" }; }
@@ -254,10 +258,10 @@ async function check(e: Expect, line: Line, lineId: string | null, before: Set<s
   if ("delegation" in e) {
     const ds = doctorTasks(ref).flatMap((t) => t.delegations).filter((d) => d.side === "delegator" && (d.team === e.delegation.team || d.task_kind === e.delegation.team));
     const st = e.delegation.state;
-    const ok = ds.filter((d) => !st || (st === "assigned" ? d.assigned_at : st === "acknowledged" ? d.acknowledged_at : d.completed_at));
+    const ok = ds.filter((d) => during(!st ? d.at : st === "assigned" ? d.assigned_at : st === "acknowledged" ? d.acknowledged_at : d.completed_at));
     return { ok: ok.length >= (e.delegation.n ?? 1), detail: `${e.delegation.team}: ${ds.map((d) => (d.completed_at ? "completed" : d.acknowledged_at ? "acknowledged" : d.assigned_at ? "assigned" : "asked")).join(", ") || "none"}` };
   }
-  if ("obligation" in e) { const os = doctorTasks(ref).flatMap((t) => t.obligations).filter((o) => (!e.obligation.after || o.after === e.obligation.after)); const hit = os.find((o) => o.state === e.obligation.state); return { ok: !!hit, detail: `${os.map((o) => `${o.title.slice(0, 40)}:${o.state}`).join(", ") || "none"}` }; }
+  if ("obligation" in e) { const os = doctorTasks(ref).flatMap((t) => t.obligations).filter((o) => (!e.obligation.after || o.after === e.obligation.after)); const hit = os.find((o) => o.state === e.obligation.state && during(e.obligation.state === "held" ? o.held_at : o.fired_at ?? o.held_at)); return { ok: !!hit, detail: `${os.map((o) => `${o.title.slice(0, 40)}:${o.state}`).join(", ") || "none"}` }; }
   if ("tracking" in e) { await readTracking(); return { ok: trackingTarget === (bound[e.tracking]?.patient ?? "?") || (!!bound[e.tracking]?.admission && trackingTarget === bound[e.tracking]!.admission), detail: `tracking ${trackingTarget?.slice(0, 8) ?? "none"}` }; }
   if ("tasks_survive" in e) return { ok: survived, detail: survivedDetail };
   if ("wake" in e) { const rows = wakeRows(); return { ok: rows.length > 0, detail: `${rows.length} wakes measured` }; }
@@ -286,6 +290,7 @@ function lineAfter(since: string, owners: string[] = [DOCTOR]): { line_id: strin
 }
 
 const steps: StepOutcome[] = [];
+const harnessErrors: string[] = [];
 const faults: Fault[] = [];
 const otherTouches: AccResult["touches"]["other_people"] = [];
 async function runLine(line: Line): Promise<void> {
@@ -329,8 +334,9 @@ async function runLine(line: Line): Promise<void> {
   } else if (line.mode !== "wait") {
     if (line.mode === "type") otherTouches.push({ line: line.id, who: line.who, what: "typed stand-in line at that person's strip" });
     if (line.mode === "remote") otherTouches.push({ line: line.id, who: line.who, what: "spoken stand-in through that person's strip (no touch, listed so it is not mistaken for the doctor's)" });
-    const d = await deliver(line);
+    const d = await deliver(line).catch((e: unknown) => ({ lineEnd: null, note: `delivery failed: ${e instanceof Error ? e.message.slice(0, 160) : String(e)}` }));
     lineEnd = d.lineEnd; note = d.note;
+    if (!lineEnd || /refused|delivery failed/.test(note ?? "")) harnessErrors.push(`${line.id}: ${note}`);
     if (!lineEnd) blocked = true;
   }
   // Each check is tried until it holds or the line's time runs out; nothing passes by default.
@@ -342,7 +348,7 @@ async function runLine(line: Line): Promise<void> {
     await refreshBound();
     if (!heard && ["speak", "play", "type", "remote"].includes(line.mode)) heard = lineAfter(started, line.mode === "type" || line.mode === "remote" ? ownersOf(line.who) : [DOCTOR]);
     outcomes = [];
-    for (const e of line.expect) outcomes.push({ expect: e, optional: "optional" in e && e.optional === true, ...(await check(e, line, heard?.line_id ?? null, before)) });
+    for (const e of line.expect) outcomes.push({ expect: e, optional: "optional" in e && e.optional === true, ...(await check(e, line, heard?.line_id ?? null, before, started)) });
     if (blocked || outcomes.every((c) => c.ok) || Date.now() > limit) break;
   }
   if (interruptWatch) await interruptWatch;
@@ -478,12 +484,15 @@ async function finish(): Promise<void> {
     speed: { rows, table: speedTable(rows, errRows, wake), wake_ms: wake }, errors: steps.flatMap((s) => s.errors.map((e) => `${s.line}: ${e}`)), error_rows: errRows,
     faults, delegations, speakers, unaccounted,
     countersign: { batches: signs.length, batch_orders: firstBatch.size, batch_signed_by_voice: signs.some((a) => transcriptLine(a.line_id)?.source === "audio"), changed_after_batch_unsigned: signs[0] ? later.every((a) => !firstBatch.has(a.proof?.record_id ?? "")) && later.length > 0 : null, unmatched_voice_orders: unmatchedOrders.length },
-    model: { calls, usd: Number(usd.toFixed(4)), rate_limited: rateLimited }
+    model: { calls, usd: Number(usd.toFixed(4)), rate_limited: rateLimited },
+    harness_errors: harnessErrors, completion: { complete: false, reasons: [] }
   };
+  result.completion = completion(result, script.lines.filter((l) => l.mode === "fault" || l.interrupt).length);
   void signedIds;
   const root = KIND === "final" ? env("ACC_PUBLISH_ROOT") : OUT;
   const files = writeAccResults(root, result, { previews_with_names: Number(process.env["ACC_PREVIEWS_WITH_NAMES"] ?? "0"), privilege_gained: 0 });
   writeFileSync(join(OUT, "door-requests.json"), `${JSON.stringify(doorLog.map((r) => ({ at: r.at, path: r.path, status: r.status, ms: r.ms })), null, 1)}\n`);
+  log(`complete: ${result.completion.complete ? "yes" : `no (${result.completion.reasons.length}: ${result.completion.reasons.slice(0, 6).join("; ")})`}; harness errors ${harnessErrors.length}`);
   log(`done: ${steps.filter((s) => s.status === "verified").length} verified, ${steps.filter((s) => s.status === "partial").length} partial, ${steps.filter((s) => s.status === "failed").length} failed, ${steps.filter((s) => s.status === "blocked").length} blocked of ${steps.length}; touches ${emr ?? "?"} (allowed ${result.touches_allowed}); calls ${calls} $${usd.toFixed(3)}; 429s ${rateLimited}`);
   log(`wrote ${files.join(", ")}`);
   rl?.close();

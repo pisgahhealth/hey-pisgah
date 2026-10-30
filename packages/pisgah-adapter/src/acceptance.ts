@@ -120,9 +120,23 @@ export type AccResult = {
   faults: Fault[]; delegations: DelegationRow[]; speakers: SpeakerRow[];
   // Completed agent writes no step's window accounts for; each one is a silent step.
   unaccounted: { owner: string; kind: string; action_id: string; completed_at: string | null }[];
+  // Errors of the harness itself (driver, browser, a missing person step), kept apart from what the hospital or the agent did.
+  harness_errors: string[];
+  completion: { complete: boolean; reasons: string[] };
   countersign: { batches: number; batch_orders: number; batch_signed_by_voice: boolean; changed_after_batch_unsigned: boolean | null; unmatched_voice_orders: number };
   model: { calls: number; usd: number; rate_limited: number };
 };
+
+// The run is complete only when every mandatory step verified, every fault the script injects ran and recovered, and no agent write went unaccounted; green claim cards alone never make it complete.
+export function completion(r: Pick<AccResult, "steps" | "faults" | "unaccounted">, expectedFaults: number): { complete: boolean; reasons: string[] } {
+  const reasons = [
+    ...r.steps.filter((s) => s.status !== "verified" && s.status !== "partial").map((s) => `${s.line} ${s.status}`),
+    ...r.faults.filter((f) => !f.ok).map((f) => `${f.kind} at ${f.line} did not recover: ${f.outcome}`),
+    ...(r.faults.length < expectedFaults ? [`${expectedFaults - r.faults.length} of ${expectedFaults} faults never ran`] : []),
+    ...r.unaccounted.map((u) => `${u.kind} by ${u.owner} completed outside every step`)
+  ];
+  return { complete: reasons.length === 0, reasons };
+}
 
 // The claims fields C-20 to C-24 read, from one run; a field stays out when the run did not measure it, so a claim reads not measured rather than a guess.
 export function claimFields(r: AccResult): Record<"C-20" | "C-21" | "C-22" | "C-23" | "C-24", Record<string, unknown>> {
