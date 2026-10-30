@@ -69,6 +69,10 @@ export interface EmrPort {
   pageHref?(page: string): string | undefined;
   // The watched facts whose change means a result came back, for work held until then.
   resultFacts?(owner: string): readonly string[];
+  // Each order on the subject's visit by its record id, with its test and its result state now; work held for a result waits on named orders only.
+  orderResults?(owner: string, subject: EmrTarget & { visit_id?: string | null }, prov: Provenance): Promise<OrderResult[]>;
+  // The order states that mean the result is back.
+  resultStates?(owner: string): readonly string[];
   // Who spoke one segment, matched by the hospital against its enrolled voices; the template never leaves the hospital.
   speaker?(owner: string, voiceprint: readonly number[], prov: Provenance): Promise<SpeakerVerdict>;
   // The batch of voice orders the owner may countersign now on one visit, read back with its digest.
@@ -91,4 +95,5 @@ export type PaperworkReadBack = { digest: string; diagnosis: string | null; disp
 
 // The hospital seals each read-back, so the countersign that follows proves which batch was shown and when.
 export type ReadBack = { items: { stateId: string; label: string; kind: string; controlled: boolean; sentAt: string | null }[]; itemsDigest: string | null; readBackAt: string; seal: string | null; awaitingSecond: { stateId: string; label: string }[]; changed: { stateId: string; label: string }[] };
+export type OrderResult = { id: string; test: string | null; state: string | null };
 export type Orderables = { tests: Record<string, readonly string[]>; drugs: Record<string, { words: readonly string[]; controlled: boolean }> };

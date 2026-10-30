@@ -7,8 +7,8 @@ import { DEFAULT_INTENT_ROUTE, FALLBACK_INTENT_ROUTE, decideIntent, tempText, ty
 import { primaryClass } from "./classes.js";
 import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
-import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
-import { READ_ONLY_KINDS, WORK_ARGS, afterSaid, cadenceSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
+import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
+import { OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareReadings, disagreementQuestion, normValue, quotedQuestion, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
@@ -67,7 +67,10 @@ export type EmrObligation = {
   obligation_id: string; line_id: string; kind: string; clause: Record<string, unknown>; title: string;
   due_at: string | null; after: "admission" | "result" | null; state: "held" | "fired" | "done" | "cancelled";
   held_at: string; fired_at: string | null; fired_by: string | null; action_id: string | null; anchor_action_id: string | null; reason: string;
+  // Work held for a result names the orders it waits on (by action until written, then by record id) and the states that mean the result is back.
+  condition?: ResultCondition | null;
 };
+export type ResultCondition = { order_actions: string[]; orders: string[]; tests: string[]; states: string[]; unbound_noted?: boolean };
 // One verified action timed from the end of the words that asked for it; parts are the milestones on the way.
 export type SpeedRow = { action_id: string; kind: string; line_id: string; from: string; verified_at: string; ms: number; parts: Record<string, number | null>; gate?: string | null; levers?: number[]; from_record?: true };
 export type EmrTask = {
@@ -161,6 +164,8 @@ export type EmrRuntimeOptions = {
 
 const OPEN_ACTION: ReadonlySet<EmrActionState> = new Set(["proposed", "sent", "acknowledged"]);
 const CLOSED_TASK: ReadonlySet<TaskState> = new Set(["cancelled", "failed"]);
+// An action that will never write: its order is not one a held result waits on.
+const DEAD_STATES: ReadonlySet<EmrActionState> = new Set(["refused", "cancelled", "failed"]);
 // The waits between verification reads of a saved write; a restart reads it again after the last.
 export const RECONCILE_MS: readonly number[] = [1000, 3000, 10_000, 30_000, 60_000];
 const RESUME_WINDOW_MS = 10 * 60_000;
@@ -190,7 +195,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       t.lines.push({ id: String(x["line_id"]), text, at: String(x["spoken_at"]), source: x["source"] === "audio" ? "audio" : "text", decided: false, ambient, classes: [], kept: !x["withheld"], words: Number(x["words"] ?? text.split(/\s+/).filter(Boolean).length), speaker: null });
       if (!t.goal && !x["withheld"]) t.goal = text.slice(0, 200);
       // A typed or pushed line answers the open question; an ambient line answers only when the gate hears it as meant for the agent.
-      if (!ambient && x["via"] !== "gate") for (const q of t.questions) if (q.answered_by === null) q.answered_by = String(x["line_id"]);
+      if (!ambient && x["via"] !== "gate" && x["via"] !== "rule") for (const q of t.questions) if (q.answered_by === null) q.answered_by = String(x["line_id"]);
       break;
     }
     case "gate.decided": {
@@ -275,9 +280,15 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       t.obligations.push({
         obligation_id: String(x["obligation_id"]), line_id: String(x["line_id"]), kind: String(x["kind"]), clause: (x["clause"] as Record<string, unknown>) ?? {}, title: String(x["title"] ?? ""),
         due_at: (x["due_at"] as string | null) ?? null, after: (x["after"] as EmrObligation["after"]) ?? null, state: "held", held_at: e.wall_at,
-        fired_at: null, fired_by: null, action_id: null, anchor_action_id: null, reason: String(x["reason"] ?? "")
+        fired_at: null, fired_by: null, action_id: null, anchor_action_id: null, reason: String(x["reason"] ?? ""),
+        ...(x["condition"] ? { condition: { ...(x["condition"] as ResultCondition) } } : {})
       });
       break;
+    case "obligation.bound": {
+      const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]);
+      if (o?.condition) { o.condition.orders = [...new Set([...o.condition.orders, ...((x["orders"] as string[] | undefined) ?? [])])]; if (x["unbound_noted"]) o.condition.unbound_noted = true; }
+      break;
+    }
     case "obligation.anchored": { const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]); if (o) o.anchor_action_id = String(x["action_id"]); break; }
     case "obligation.fired": { const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]); if (o) { o.state = "fired"; o.fired_at = e.wall_at; o.fired_by = String(x["by"]); } break; }
     case "obligation.done": { const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]); if (o) { o.state = "done"; o.action_id = (x["action_id"] as string | null) ?? null; } break; }
@@ -291,7 +302,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
     }
     case "delegation.details": {
       const d = t.delegations.find((y) => y.key === x["key"]);
-      if (d?.registration) { if (x["phone"]) d.registration.phone = String(x["phone"]); if (x["consent_line"]) d.registration.consent_line = String(x["consent_line"]); }
+      if (d?.registration) { if (x["phone"]) d.registration.phone = String(x["phone"]); if (x["consent_line"]) d.registration.consent_line = String(x["consent_line"]); if (x["phone_line"]) d.registration.phone_line = String(x["phone_line"]); }
       break;
     }
     case "identity.closed": { const o = t.identities.find((y) => y.obligation_id === x["obligation_id"]); if (o) o.state = "done"; break; }
@@ -494,6 +505,8 @@ export class EmrRuntime {
   // The runtime's own clock for held work, and the obligations already queued to fire.
   private obTick: NodeJS.Timeout | null = null;
   private readonly firing = new Set<string>();
+  // The latest result state of each order a task waits on, by record id, as the last read showed it.
+  private readonly results = new Map<string, Map<string, OrderResult>>();
   // The levers in force, the line whose clauses are being applied now, second readings started with the gate, timings, and side work to wait for.
   private readonly lv: SpeedLevers;
   private fresh: string | null = null;
@@ -577,7 +590,7 @@ export class EmrRuntime {
         this.settle(l, "restarted_before_decision");
       }
     }
-    if (this.o.watchMs && this.o.watchMs > 0 && (this.o.port.watch || this.o.port.inbox || this.o.port.delegations) && !this.poller) {
+    if (this.o.watchMs && this.o.watchMs > 0 && (this.o.port.watch || this.o.port.inbox || this.o.port.delegations || this.o.port.orderResults) && !this.poller) {
       this.poller = setInterval(() => { void this.pollOnce(); }, this.o.watchMs);
     }
     this.sweepObligations();
@@ -675,7 +688,7 @@ export class EmrRuntime {
     const text = s.text.trim().slice(0, 1000);
     if (!text) throw new Error("empty utterance");
     // A spoken acceptance or the front desk's registration details reach the task handed to this owner, by rule and before any read.
-    if (!taskId) { const d = this.delegationLine(s.owner, text, s.spoken_at ?? this.wall().toISOString(), s.source ?? "text", s.target); if (d) return d; }
+    if (!taskId) { const d = this.delegationLine(s.owner, text, s.spoken_at ?? this.wall().toISOString(), s.source ?? "text", s.target, s.voiceprint, s.unverified_reason); if (d) return d; }
     const lineId = this.nextLineId(s.owner, text);
     const spokenAt = s.spoken_at ?? this.wall().toISOString();
     const prov: Provenance = { owner: s.owner, evidence: `transcript:${lineId}`, spoken_at: spokenAt };
@@ -726,15 +739,7 @@ export class EmrRuntime {
       const p = this.o.secondEar(s.clip, { run_id: t0.run_id, task_id: t0.task_id, line_id: lineId }).then((reading) => ({ reading, error: null }), (e: unknown) => ({ reading: null, error: e instanceof ModelError ? e.code : "ear_failed" }));
       this.doseEars.set(lineId, this.track(p));
     }
-    // The hospital matches the segment's voiceprint while the gate reads the words, so attribution adds no wait of its own.
-    const vp = s.voiceprint;
-    if (vp && this.o.port.speaker) {
-      const t0 = Date.now();
-      const fail = (reason: string) => ({ v: { speaker: "unverified", reason } as SpeakerVerdict, embed_ms: vp.ms, match_ms: Date.now() - t0 });
-      this.speakers.set(lineId, this.o.port.speaker(s.owner, vp.vector, prov).then((v) => ({ v, embed_ms: vp.ms, match_ms: Date.now() - t0 })).catch(() => fail("match_failed")));
-    } else if (s.source === "audio" && this.o.port.speaker) {
-      this.speakers.set(lineId, Promise.resolve({ v: { speaker: "unverified", reason: s.unverified_reason ?? "no_voiceprint" } as SpeakerVerdict, embed_ms: null, match_ms: null }));
-    }
+    this.matchVoice(s.owner, lineId, s.source ?? "text", s.voiceprint, prov, s.unverified_reason);
     // A spoken pause or return is handled by rule; while called away nothing heard is decided, so no model is called.
     if (SPOKEN_PAUSE.test(text) && !CLOSED_TASK.has(live.task.state) && live.task.state !== "paused") { this.pauseSpoken(live, lineId, ctx); this.afterLine(live, lineId, true); return { task_id: live.task.task_id, line_id: lineId }; }
     if (live.task.state === "paused" && live.task.reason === "called_away") {
@@ -768,6 +773,17 @@ export class EmrRuntime {
     });
     this.pump(live);
     return { task_id: live.task.task_id, line_id: lineId };
+  }
+
+  // The hospital matches the segment's voiceprint while the gate reads the words, so attribution adds no wait of its own.
+  private matchVoice(owner: string, lineId: string, source: "text" | "audio", vp: Voiceprint | null | undefined, prov: Provenance, unverifiedReason?: string): void {
+    if (vp && this.o.port.speaker) {
+      const t0 = Date.now();
+      const fail = (reason: string) => ({ v: { speaker: "unverified", reason } as SpeakerVerdict, embed_ms: vp.ms, match_ms: Date.now() - t0 });
+      this.speakers.set(lineId, this.o.port.speaker(owner, vp.vector, prov).then((v) => ({ v, embed_ms: vp.ms, match_ms: Date.now() - t0 })).catch(() => fail("match_failed")));
+    } else if (source === "audio" && this.o.port.speaker) {
+      this.speakers.set(lineId, Promise.resolve({ v: { speaker: "unverified", reason: unverifiedReason ?? "no_voiceprint" } as SpeakerVerdict, embed_ms: null, match_ms: null }));
+    }
   }
 
   // After a line is decided its audio is let go, and an ambient line's words are stored only when an action or a question rests on them.
@@ -1106,9 +1122,10 @@ export class EmrRuntime {
     });
     this.gateStage.set(lineId, r.stage ?? "full");
     if (l.task.state !== "running") return;
-    // Words meant for the agent answer its open question before they are acted on.
+    // Words meant for the agent answer its open question before they are acted on; a question waiting on the owner's voice closes only on the owner's line.
     if (clauses.some((c) => c.class === "instruction" || c.class === "correction")) {
-      for (const q of t.questions.filter((y) => y.answered_by === null)) this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
+      const speaker = this.speakerOf(t, lineId)?.speaker;
+      for (const q of t.questions.filter((y) => y.answered_by === null && (!y.rule || !speaker || speaker === "owner"))) this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
     }
     this.fresh = lineId;
     try {
@@ -1253,6 +1270,20 @@ export class EmrRuntime {
         break;
       }
       case "draft_handover": case "prepare_bill": case "send_pay_link": if (!needAdmission()) return; raw = { admission_id: t.admission_id }; break;
+      case "record_diagnosis": {
+        if (!needVisit() || !t.patient_id) return;
+        // Only the owner's own matched voice states the diagnosis; Dr B's words and an unverified voice never record it.
+        const who = this.speakerOf(t, lineId);
+        if (who?.speaker !== "owner") {
+          this.append(l, "speaker.refused", { line_id: lineId, kind, speaker: who?.label ?? who?.speaker ?? "no_voice" });
+          this.note(l, `${who?.speaker === "other_clinician" ? `${who.label} said a diagnosis` : "I could not match that voice to you"}, so no diagnosis was recorded. Say it yourself.`);
+          return this.settle(l, "needs_owner_voice");
+        }
+        const dx = said(c.text);
+        if (!dx) return this.ask(l, lineId, "What diagnosis should I record? Say it in your words.");
+        raw = { visit_id: t.visit_id, patient_id: t.patient_id, diagnosis: dx.slice(0, 500) };
+        break;
+      }
       case "release_home": {
         if (!needAdmission()) return;
         const advice = said(c.text);
@@ -1494,11 +1525,65 @@ export class EmrRuntime {
     const title = (c.title ?? c.text ?? words).trim().slice(0, 200);
     if (t.obligations.some((o) => o.line_id === lineId && o.kind === kind && o.state === "held")) return;
     const obligation_id = `o-${shortHash(t.task_id, lineId, kind, t.obligations.length + 1)}`;
-    this.append(l, "obligation.held", { obligation_id, line_id: lineId, kind, clause, title, due_at: w.due_at, after: w.after, reason: w.reason });
+    const condition = w.after === "result" ? this.resultCondition(t, lineId) : null;
+    this.append(l, "obligation.held", { obligation_id, line_id: lineId, kind, clause, title, due_at: w.due_at, after: w.after, reason: w.reason, ...(condition ? { condition } : {}) });
     const when = [w.due_at ? `at ${w.due_at.slice(11, 16)} UTC` : null, w.after === "admission" ? "once the patient is admitted" : w.after === "result" ? "when the result is back" : null].filter(Boolean).join(", ");
     this.note(l, `Held ${when}: ${kind === "schedule_review" ? `review, ${title}` : summariseWork(kind, clause)}. I will do it then without being asked again.`);
     this.anchorReviews(l);
     if (kind === "schedule_review") this.delegateReview(l, lineId, `${title} ${String(c.words ?? "")}`, w.due_at);
+  }
+
+  // The orders "when the result is back" waits on: this task's sent tests the line names, or all of them when it names none, and the states that mean a result.
+  private resultCondition(t: EmrTask, lineId: string): ResultCondition {
+    const line = t.lines.find((x) => x.id === lineId)?.text ?? "";
+    const tests = Object.entries(this.o.port.orderables?.().tests ?? {}).filter(([, ws]) => ws.some((w) => wordSaid(w, line))).map(([k]) => k);
+    const acts = t.order.map((id) => t.actions.get(id)!).filter((a) => a.kind === "order_test" && !DEAD_STATES.has(a.state) && (!tests.length || tests.includes(String(a.args["test"]))));
+    return { order_actions: acts.map((a) => a.action_id), orders: acts.flatMap((a) => (a.written?.record_id ? [a.written.record_id] : [])), tests, states: [...(this.o.port.resultStates?.(t.owner) ?? [])] };
+  }
+
+  // True only when every order the work waits on has been sent and its result state is one the hospital counts as back; a general list change never counts.
+  private resultBack(t: EmrTask, o: EmrObligation): boolean {
+    const c = o.condition;
+    const seen = this.results.get(t.task_id);
+    if (!c || !c.states.length || !seen) return false;
+    const acts = c.order_actions.map((id) => t.actions.get(id)).filter((a): a is EmrAction => !!a && !DEAD_STATES.has(a.state));
+    if (acts.some((a) => !a.written?.record_id)) return false;
+    const ids = [...new Set([...c.orders, ...acts.map((a) => a.written!.record_id)])];
+    return ids.length > 0 && ids.every((id) => { const r = seen.get(id); return !!r?.state && c.states.includes(r.state); });
+  }
+
+  // Reads the result state of the orders each held result waits on, and binds work that named no sent order to the matching orders still waiting on the visit.
+  private async pollResults(at: string): Promise<void> {
+    const port = this.o.port;
+    if (!port.orderResults) return;
+    for (const l of [...this.live.values()]) {
+      const t = l.task;
+      const held = t.obligations.filter((o) => o.state === "held" && o.after === "result" && o.condition);
+      if (CLOSED_TASK.has(t.state) || !held.length || this.stopped) continue;
+      let rows: OrderResult[];
+      try { rows = await port.orderResults(t.owner, { ...this.subjectOf(t), visit_id: t.visit_id }, { owner: t.owner, evidence: `watch:${t.task_id}`, spoken_at: at }); } catch (e) { this.log(`results ${t.task_id}: ${e instanceof Error ? e.message : String(e)}`); continue; }
+      this.results.set(t.task_id, new Map(rows.filter((r) => EmrId.safeParse(r.id).success).map((r) => [r.id, r])));
+      for (const o of held) {
+        const c = o.condition!;
+        const written = c.order_actions.map((id) => t.actions.get(id)?.written?.record_id).filter((x): x is string => !!x && !c.orders.includes(x));
+        if (written.length) { this.append(l, "obligation.bound", { obligation_id: o.obligation_id, orders: written }); continue; }
+        if (c.order_actions.length || c.orders.length) continue;
+        const waiting = rows.filter((r) => EmrId.safeParse(r.id).success && (!c.tests.length || (r.test !== null && c.tests.includes(r.test))) && !(r.state && c.states.includes(r.state))).map((r) => r.id);
+        if (waiting.length) { this.append(l, "obligation.bound", { obligation_id: o.obligation_id, orders: waiting }); continue; }
+        if (c.unbound_noted) continue;
+        const named = c.tests.length ? this.testWords(t, o.line_id, c.tests) : "test";
+        this.append(l, "obligation.bound", { obligation_id: o.obligation_id, orders: [], unbound_noted: true });
+        this.note(l, `No ${named} sent here is waiting for a result, so this waits until one is sent: ${summariseWork(o.kind, o.clause)}.`);
+        this.settle(l, "result_unbound");
+      }
+    }
+  }
+
+  // The words the line used for the tests it named, for a note in the clinician's own terms.
+  private testWords(t: EmrTask, lineId: string, tests: readonly string[]): string {
+    const line = t.lines.find((x) => x.id === lineId)?.text ?? "";
+    const all = this.o.port.orderables?.().tests ?? {};
+    return tests.map((k) => (all[k] ?? []).find((w) => wordSaid(w, line)) ?? k.replace(/_/g, " ")).join(" or ");
   }
 
   // Puts each held review on the ward board as a STAT item at its due time, once there is an admission to hang it on.
@@ -1531,11 +1616,10 @@ export class EmrRuntime {
           }
         });
       }
-      const results = this.o.port.resultFacts?.(t.owner) ?? [];
       for (const o of t.obligations) {
         if (o.state !== "held" || this.firing.has(o.obligation_id)) continue;
         const timeCame = o.due_at !== null && Date.parse(o.due_at) <= now;
-        const condition = o.after === "admission" ? !!t.admission_id : o.after === "result" ? t.changes.some((c) => results.includes(c.fact) && c.at >= o.held_at) : false;
+        const condition = o.after === "admission" ? !!t.admission_id : o.after === "result" ? this.resultBack(t, o) : false;
         // A held time and a condition both have to be met when both were said.
         const ready = o.due_at !== null && o.after !== null ? timeCame && condition : timeCame || condition;
         if (!ready) continue;
@@ -1579,7 +1663,7 @@ export class EmrRuntime {
     }
     const args = DOCUMENTATION_KINDS.has(kind) && who && who.speaker !== "owner" ? this.attributed(kind, rawArgs, who) : rawArgs;
     let awaiting: EmrAction["awaiting"] = needsOwner && who?.speaker !== "owner" ? "owner_voice" : null;
-    const controlled = kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(args["drug"])]?.controlled;
+    const controlled = (kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(args["drug"])]?.controlled) || OWNER_CONFIRM_KINDS.has(kind);
     if (!awaiting && (controlled || CONFIRM_KINDS.has(kind))) awaiting = "confirm";
     const authorisedBy = kind === "countersign" || (ORDER_KINDS.has(kind) && who?.speaker === "owner") ? lineId : null;
     const actionId = `a-${shortHash(t.task_id, lineId, t.order.length + 1)}`;
@@ -1589,7 +1673,7 @@ export class EmrRuntime {
     const screen = this.screenOf(t, kind, args);
     this.append(l, "action.proposed", { action_id: actionId, kind, args, summary, line_id: lineId, corrects_action_id: correctsId, hold_ms: this.o.holdMs ?? 0, ...this.holdUntil(anchor), ...(ears ? { ears: true } : {}), ...(awaiting ? { awaiting } : {}), ...(authorisedBy ? { authorised_by_line: authorisedBy } : {}), ...(screen ? { screen } : {}) });
     if (awaiting === "owner_voice") this.ask(l, lineId, `Held: ${summary}. ${who ? "I could not match the voice to you" : "I heard no voice to match"}, so it waits until you say yes yourself.`, null, { kind: "authorise", action_id: actionId });
-    if (awaiting === "confirm" && !CONFIRM_KINDS.has(kind)) this.ask(l, lineId, `${summary}. This is a controlled drug: say confirm to send it.`, null, { kind: "confirm", action_id: actionId });
+    if (awaiting === "confirm" && !CONFIRM_KINDS.has(kind)) this.ask(l, lineId, confirmAsk(kind, summary), null, { kind: "confirm", action_id: actionId });
     this.settle(l, "proposed");
     if (CONFIRM_KINDS.has(kind)) void this.readBackPaperwork(l, lineId, actionId);
     this.noteHold(actionId, anchor);
@@ -1704,11 +1788,11 @@ export class EmrRuntime {
     }
     const a = t.actions.get(rule.action_id);
     if (!a || a.state !== "proposed" || !a.awaiting) { this.note(l, "There was nothing waiting for your word."); this.settle(l, "nothing_waiting"); return true; }
-    const controlled = a.kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(a.args["drug"])]?.controlled;
+    const controlled = (a.kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(a.args["drug"])]?.controlled) || OWNER_CONFIRM_KINDS.has(a.kind);
     const confirmKind = CONFIRM_KINDS.has(a.kind);
     if (a.awaiting === "owner_voice") {
       this.append(l, "action.authorised", { action_id: a.action_id, line_id: lineId, as: "authorise", awaiting: controlled || confirmKind ? "confirm" : null });
-      if (controlled) { this.ask(l, lineId, `${a.summary}. This is a controlled drug: say confirm to send it.`, null, { kind: "confirm", action_id: a.action_id }); this.settle(l, "asked"); return true; }
+      if (controlled) { this.ask(l, lineId, confirmAsk(a.kind, a.summary), null, { kind: "confirm", action_id: a.action_id }); this.settle(l, "asked"); return true; }
       if (confirmKind) {
         if (a.read_back) this.ask(l, lineId, paperworkAsk(a.summary, a.read_back), null, { kind: "confirm", action_id: a.action_id });
         this.settle(l, "asked");
@@ -1945,6 +2029,7 @@ export class EmrRuntime {
           }
         }
       }
+      await this.pollResults(at);
       await this.pollDelegations(at);
     } finally {
       this.polling = false;
@@ -2308,13 +2393,14 @@ export class EmrRuntime {
     const h = this.o.port.delegationHandoffs?.(t.owner)[a.kind];
     if (!h || !t.patient_id || !EmrId.safeParse(recordId).success || !this.kinds(t.owner).includes(DELEGATE_KIND)) return;
     const spec = (this.o.port.delegationTeams?.(t.owner) ?? {})[h.team];
-    if (!spec || t.delegations.some((d) => d.side === "delegator" && d.line_id === a.line_id && d.team === h.team)) return;
+    // One hand-off per source action and record, so several orders said in one line each reach the team once.
+    if (!spec || t.delegations.some((d) => d.side === "delegator" && d.team === h.team && (d.source_action_id === a.action_id || d.subject_id === recordId))) return;
     const id = this.ruleAct(l, a.line_id, DELEGATE_KIND, {
       task_kind: spec.task_kind, team: h.team, patient_id: t.patient_id, ...(t.admission_id ? { admission_id: t.admission_id } : {}), ...(t.visit_id ? { visit_id: t.visit_id } : {}),
       subject_table: h.subject_table, subject_id: recordId, title: spec.title, instruction: `${a.summary}`.slice(0, 2000),
       ...(spec.escalate_after_minutes !== undefined ? { escalate_after_minutes: spec.escalate_after_minutes } : {}), evidence: `transcript:${a.line_id}`
     });
-    if (id) this.append(l, "delegation.made", { delegation: this.newDelegation(id, a.line_id, spec.task_kind, spec.title, h.team, null, "none") });
+    if (id) this.append(l, "delegation.made", { delegation: this.newDelegation(id, a.line_id, spec.task_kind, spec.title, h.team, null, "none", { subject_id: recordId, source_action_id: a.action_id }) });
   }
 
   private onBed(t: EmrTask): boolean {
@@ -2333,15 +2419,35 @@ export class EmrRuntime {
   }
 
   // The words that a rule takes are kept as evidence on the task they belong to.
-  private ruledLine(l: Live, owner: string, text: string, spokenAt: string, source: "text" | "audio", as: string): string {
+  private ruledLine(l: Live, owner: string, text: string, spokenAt: string, source: "text" | "audio", as: string, vp?: Voiceprint | null, unverifiedReason?: string): string {
     const lineId = this.nextLineId(owner, text);
-    this.append(l, "utterance.heard", { line_id: lineId, text, source, spoken_at: spokenAt });
+    this.append(l, "utterance.heard", { line_id: lineId, text, source, spoken_at: spokenAt, via: "rule" });
     this.append(l, "line.ruled", { line_id: lineId, classes: ["instruction"], as });
+    this.matchVoice(owner, lineId, source, vp, { owner, evidence: `transcript:${lineId}`, spoken_at: spokenAt }, unverifiedReason);
+    // Only the owner's own line, or the owner's session typing, answers the questions the agent asked the owner.
+    this.whenAttributed(l, lineId, (who) => {
+      if (who && who.speaker !== "owner") return;
+      for (const q of l.task.questions.filter((y) => y.answered_by === null && y.line_id !== lineId)) this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
+    });
     return lineId;
   }
 
+  // A rule's action on a spoken line waits for the line's voice match, so propose holds or refuses it exactly as it does every other instruction.
+  private whenAttributed(l: Live, lineId: string, act: (who: SpeakerRecord | null) => void): void {
+    if (!this.speakers.has(lineId)) return act(this.speakerOf(l.task, lineId));
+    this.enqueue(l, async () => act(await this.attribute(l, lineId)));
+  }
+
+  // Words from a voice that is not the owner's are not taken as the owner's own statement; the note says whose they were.
+  private notOwnersWords(l: Live, lineId: string, who: SpeakerRecord | null, what: string): boolean {
+    if (!who || who.speaker === "owner") return false;
+    this.append(l, "speaker.refused", { line_id: lineId, kind: what, speaker: who.label ?? who.speaker });
+    this.note(l, `${who.speaker === "other_clinician" ? `${who.label} said that` : "I could not match that voice to you"}, so I did not act on it. Say it yourself.`);
+    return true;
+  }
+
   // A spoken "accepted <task>" acknowledges the one open task it names, and the desk's phone or consent words fill a registration; anything else is not a delegation line.
-  delegationLine(owner: string, text: string, spokenAt: string, source: "text" | "audio", target?: EmrTarget): { task_id: string; line_id: string } | null {
+  delegationLine(owner: string, text: string, spokenAt: string, source: "text" | "audio", target?: EmrTarget, vp?: Voiceprint | null, unverifiedReason?: string): { task_id: string; line_id: string } | null {
     const open = [...this.live.values()].filter((l) => l.task.owner === owner && !CLOSED_TASK.has(l.task.state))
       .flatMap((l) => l.task.delegations.filter((d) => d.side === "assignee" && d.delegation_id && !d.completed_at).map((d) => ({ l, d, title: d.title })));
     if (!open.length) return null;
@@ -2351,8 +2457,8 @@ export class EmrRuntime {
     const acc = acceptedTask(text, atHand.length ? atHand : waiting);
     if (acc) {
       const home = "hit" in acc ? acc.hit.l : open.at(-1)!.l;
-      const lineId = this.ruledLine(home, owner, text, spokenAt, source, "accept");
-      if ("hit" in acc) this.ruleAct(home, lineId, ACK_KIND, { delegation_id: acc.hit.d.delegation_id, title: acc.hit.d.title, evidence: `transcript:${lineId}` });
+      const lineId = this.ruledLine(home, owner, text, spokenAt, source, "accept", vp, unverifiedReason);
+      if ("hit" in acc) { const hit = acc.hit; this.whenAttributed(home, lineId, () => { this.ruleAct(home, lineId, ACK_KIND, { delegation_id: hit.d.delegation_id, title: hit.d.title, evidence: `transcript:${lineId}` }); this.settle(home, "accept_line"); }); }
       else if ("ambiguous" in acc) this.ask(home, lineId, `Which task do you accept? ${acc.ambiguous.map((x) => x.title).join("; ")}. Say accepted and its name.`);
       else this.note(home, `No task waiting for you matches that. Waiting: ${waiting.map((x) => x.title).join("; ") || "none"}.`);
       this.settle(home, "accept_line");
@@ -2363,11 +2469,15 @@ export class EmrRuntime {
     const orders = open.filter((x) => x.d.task_kind === "dispense" && x.d.subject_id && (!target || !(target.admission_id || target.patient_id) || x.l.task.admission_id === target.admission_id || x.l.task.patient_id === target.patient_id));
     if (asked && orders.length === 1) {
       const { l, d } = orders[0]!;
-      const lineId = this.ruledLine(l, owner, text, spokenAt, source, "order");
-      if (!d.acknowledged_at && !this.attempts(l.task, ACK_KIND, d.delegation_id).live) this.ruleAct(l, lineId, ACK_KIND, { delegation_id: d.delegation_id, title: d.title, evidence: `transcript:${lineId}` });
-      this.append(l, "delegation.state", { key: d.key, asked, asked_line: lineId });
-      this.enqueue(l, async () => this.advanceOrder(l, d.key));
-      this.settle(l, "order_line");
+      const lineId = this.ruledLine(l, owner, text, spokenAt, source, "order", vp, unverifiedReason);
+      // Preparing and dispensing are the pharmacist's own acts, so only the owner's voice, or the owner's own session typing, asks for them.
+      this.whenAttributed(l, lineId, (who) => {
+        if (this.notOwnersWords(l, lineId, who, PREPARE_KIND)) return this.settle(l, "needs_owner_voice");
+        if (!d.acknowledged_at && !this.attempts(l.task, ACK_KIND, d.delegation_id).live) this.ruleAct(l, lineId, ACK_KIND, { delegation_id: d.delegation_id, title: d.title, evidence: `transcript:${lineId}` });
+        this.append(l, "delegation.state", { key: d.key, asked, asked_line: lineId });
+        this.enqueue(l, async () => this.advanceOrder(l, d.key));
+        this.settle(l, "order_line");
+      });
       return { task_id: l.task.task_id, line_id: lineId };
     }
     const all = open.filter((x) => x.d.task_kind === "registration" && x.d.registration && !x.d.record_id);
@@ -2379,16 +2489,20 @@ export class EmrRuntime {
     if (!reg.length || (!phone && !consent)) return null;
     if (reg.length > 1) {
       const l = reg.at(-1)!.l;
-      const lineId = this.ruledLine(l, owner, text, spokenAt, source, "registration");
+      const lineId = this.ruledLine(l, owner, text, spokenAt, source, "registration", vp, unverifiedReason);
       this.ask(l, lineId, `${reg.length} registrations are waiting. Open the patient you are registering, then say it again.`);
       this.settle(l, "registration_ambiguous");
       return { task_id: l.task.task_id, line_id: lineId };
     }
     const { l, d } = reg[0]!;
-    const lineId = this.ruledLine(l, owner, text, spokenAt, source, "registration");
-    this.append(l, "delegation.details", { key: d.key, ...(phone ? { phone } : {}), ...(consent ? { consent_line: lineId } : {}) });
-    this.registerWhenReady(l, d, lineId);
-    this.settle(l, "registration_details");
+    const lineId = this.ruledLine(l, owner, text, spokenAt, source, "registration", vp, unverifiedReason);
+    // Another clinician's details are not the desk's; an unverified voice's are kept with their line, so the registration waits for the owner's yes.
+    this.whenAttributed(l, lineId, (who) => {
+      if (who?.speaker === "other_clinician" && this.notOwnersWords(l, lineId, who, REGISTER_KIND)) return this.settle(l, "needs_owner_voice");
+      this.append(l, "delegation.details", { key: d.key, ...(phone ? { phone, phone_line: lineId } : {}), ...(consent ? { consent_line: lineId } : {}) });
+      this.registerWhenReady(l, d, lineId);
+      this.settle(l, "registration_details");
+    });
     return { task_id: l.task.task_id, line_id: lineId };
   }
 
@@ -2401,7 +2515,9 @@ export class EmrRuntime {
     if (needs.length) { this.note(l, `Still needed before I register: ${needs.map((n) => (n === "phone" ? "a phone number" : "the patient's consent, said by you")).join(" and ")}.`); return; }
     const tried = this.attempts(l.task, REGISTER_KIND, d.delegation_id);
     if (tried.live || tried.tries >= 2 || !l.task.patient_id) return;
-    this.ruleAct(l, lineId, REGISTER_KIND, { delegation_id: d.delegation_id, patient_id: l.task.patient_id, ...parts, phone: r.phone, evidence: `transcript:${r.consent_line}` });
+    // The registration rests on its least certain line: a detail no voice match gave to the owner holds it for the owner's yes.
+    const weak = [r.phone_line, r.consent_line].find((x) => { const w = x ? this.speakerOf(l.task, x) : null; return !!w && w.speaker !== "owner"; });
+    this.ruleAct(l, weak ?? lineId, REGISTER_KIND, { delegation_id: d.delegation_id, patient_id: l.task.patient_id, ...parts, phone: r.phone, evidence: `transcript:${r.consent_line}` });
   }
 
   // A task handed to this owner opens the owner's task for that patient with no read, and the agent tells its human on the bell at once.

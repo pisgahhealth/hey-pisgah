@@ -1,7 +1,7 @@
 import { canonical, sha256 } from "@hey-pisgah/contracts";
 import {
   EMERGENCY_KIND, EmrId, EmrPortError, OBSERVATION_KIND, ObservationArgs, READ_ONLY_KINDS,
-  type DelegationRead, type DelegationTeam, type EmrCommit, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type EmrWriteKind, type InboxPage, type Orderables, type Provenance,
+  type DelegationRead, type DelegationTeam, type EmrCommit, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type EmrWriteKind, type InboxPage, type OrderResult, type Orderables, type Provenance,
   type PaperworkReadBack, type ReadBack, type SayableNames, type SpeakerVerdict, type WatchOffer, type WatchRead, type WorkArgs
 } from "@hey-pisgah/agent";
 import { fillPath, fillTemplate, pathPattern, pick, type DoorProfile } from "./profile.js";
@@ -54,13 +54,16 @@ export class PisgahPort implements EmrPort {
   readonly speaker?: (owner: string, voiceprint: readonly number[], prov: Provenance) => Promise<SpeakerVerdict>;
   readonly readBack?: (owner: string, visitId: string, prov: Provenance) => Promise<ReadBack>;
   readonly readPaperwork?: (owner: string, admissionId: string, prov: Provenance) => Promise<PaperworkReadBack>;
+  readonly orderResults?: (owner: string, subject: EmrTarget & { visit_id?: string | null }, prov: Provenance) => Promise<OrderResult[]>;
 
   constructor(readonly profile: DoorProfile, private readonly o: PisgahPortOptions) {
     const ops = profile.ops;
     if (ops.speaker) this.speaker = (owner, voiceprint, prov) => this.matchSpeaker(owner, voiceprint, prov);
     if (ops.read_back) this.readBack = (owner, visitId, prov) => this.readBackFor(owner, visitId, prov);
     if (ops.paperwork) this.readPaperwork = (owner, admissionId, prov) => this.paperworkFor(owner, admissionId, prov);
+    if (profile.result_orders) this.orderResults = (_owner, subject, prov) => this.resultsFor(subject, prov);
     const reads = [
+      ...(profile.result_orders ? [profile.result_orders.path] : []),
       ...(ops.patient_context ? [ops.patient_context.path] : []), ...profile.owners.flatMap((o) => (o.context ? [o.context.path] : [])), ...Object.values(profile.watches).map((w) => w.path),
       ...(profile.inbox ? [profile.inbox.path, ...(profile.inbox.detail ? [profile.inbox.detail.path] : [])] : []),
       ...(profile.delegations ? [profile.delegations.list.path, profile.delegations.one.path] : []),
@@ -96,6 +99,22 @@ export class PisgahPort implements EmrPort {
     };
   }
   resultFacts(owner: string): readonly string[] { return this.profile.result_facts[owner] ?? []; }
+  resultStates(): readonly string[] { return this.profile.result_orders?.states ?? []; }
+
+  // Each order on the visit by its record id, its test key by the hospital's own test name, and its state now.
+  private async resultsFor(subject: EmrTarget & { visit_id?: string | null }, prov: Provenance): Promise<OrderResult[]> {
+    const spec = this.profile.result_orders!;
+    const visit = subject.visit_id ?? (subject.patient_id ? this.learned.visit_by_patient.get(subject.patient_id) : undefined);
+    if (!visit) return [];
+    const json = await this.read(spec, { visit_id: visit, patient_id: subject.patient_id, admission_id: subject.admission_id || undefined }, prov);
+    const byName = new Map(Object.entries(this.profile.orders?.tests ?? {}).map(([k, v]) => [v.name.toLowerCase(), k]));
+    return pickAll(json, spec.list).flatMap((x) => {
+      const id = opt(pick(x, spec.id));
+      if (!id || !EmrId.safeParse(id).success) return [];
+      const name = opt(pick(x, spec.test));
+      return [{ id, test: name ? byName.get(name.toLowerCase()) ?? null : null, state: opt(pick(x, spec.state)) }];
+    });
+  }
   orderables(): Orderables {
     const o = this.profile.orders;
     return { tests: Object.fromEntries(Object.entries(o?.tests ?? {}).map(([k, v]) => [k, v.words])), drugs: Object.fromEntries(Object.entries(o?.drugs ?? {}).map(([k, v]) => [k, { words: v.words, controlled: v.controlled }])) };
