@@ -11,6 +11,7 @@ import { asrSwitch } from "../src/emr/local-ears.js";
 import { MetaStreamListener } from "../src/emr/meta-stream.js";
 import type { EmrRuntime } from "../src/emr/runtime.js";
 import { startEmrServe } from "../src/emr/serve.js";
+import { KEPT_LEVERS, leversFrom } from "../src/emr/speed.js";
 import { ADM, FakeEmr, OWNER, emrRoot, gater } from "./emr-helpers.js";
 import { obs } from "./mic-helpers.js";
 
@@ -70,7 +71,7 @@ function turn(id: number, startMs: number, endMs: number, words: string, final =
   ];
 }
 
-async function boot(scripts: Parameters<typeof fakeMeta>[0], o: { gate?: (said: string) => ReturnType<typeof obs>; socket?: (f: SocketFactory) => SocketFactory; numberMs?: number; release?: boolean; holdMs?: number; heard?: string } = {}) {
+async function boot(scripts: Parameters<typeof fakeMeta>[0], o: { gate?: (said: string) => ReturnType<typeof obs>; socket?: (f: SocketFactory) => SocketFactory; numberMs?: number; release?: boolean; holdMs?: number; heard?: string; levers?: boolean } = {}) {
   const root = emrRoot();
   const port = new FakeEmr();
   let rt: EmrRuntime | null = null;
@@ -80,7 +81,7 @@ async function boot(scripts: Parameters<typeof fakeMeta>[0], o: { gate?: (said: 
   const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater(gate, seen), taskStateOf: (id) => rt?.stateOf(id) ?? null });
   const ear: SecondEar = async () => reading(o.heard ?? "temperature 37.6 pulse 116");
   const s = await startEmrServe({
-    storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: o.holdMs ?? 0, proofRetryMs: 1 }, preferences: false, ears: ear, asr: "meta-stream", ...(o.release ? { releaseWhole: true } : {}),
+    storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: o.holdMs ?? 0, proofRetryMs: 1, ...(o.levers ? { speed: leversFrom(KEPT_LEVERS) } : {}) }, preferences: false, ears: ear, asr: "meta-stream", ...(o.release ? { releaseWhole: true } : {}),
     realtimeSocket: o.socket ? o.socket(meta.factory) : meta.factory, realtimeKey: () => "k-test",
     transcribe: async () => { throw new Error("the chunk ear is not used on the frames route"); },
     listen: { numberJoinWaitMs: o.numberMs ?? 5000, strongJoinWaitMs: 5000 }
@@ -197,6 +198,14 @@ describe("the Meta realtime first ear", () => {
     expect(v.actions.map((a) => a.state)).toEqual(["cancelled", "completed"]);
     await s.close();
   });
+
+  it("with D17 and the serve's kept levers, settles three turns of pulse, temperature and pulse", async () => {
+    const { s, port, stream } = await boot([[], [...turn(0, 400, 1900, "Chart his pulse 116."), ...turn(1, 4400, 5900, "Chart his temperature 37.6."), ...turn(2, 8400, 9900, "Chart his pulse 112.")]], { release: true, holdMs: 4000, levers: true, heard: "pulse 116 temperature 37.6 pulse 112", gate: (said) => { const p = /pulse (\d+)/.exec(said); return p ? obs(said, { pulse: Number(p[1]) }) : said.includes("37.6") ? obs(said, { temp_c: "37.6" }) : [{ class: "aside" as const }]; } });
+    expect((await stream(pcm([["quiet", 400], ["tone", 1500], ["quiet", 2500], ["tone", 1500], ["quiet", 2500], ["tone", 1500], ["quiet", 2500]]))).status).toBe(202);
+    await s.runtime.settled(20_000);
+    expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, pulse: 116 }, { admission_id: ADM, temp_c: "37.6" }, { admission_id: ADM, pulse: 112 }]);
+    await s.close();
+  }, 40_000);
 
   it("sends the language hint only when switched on", async () => {
     const meta = fakeMeta([[], []]);

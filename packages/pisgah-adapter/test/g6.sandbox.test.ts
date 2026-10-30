@@ -88,7 +88,7 @@ function listener(s: EmrServe, owner: string, patient: string, session: string, 
   push(new Float32Array(RATE));
   return {
     line: async (wav: Uint8Array, gapMs: number) => { push(decodeWav(wav).samples); push(new Float32Array(Math.round((RATE * gapMs) / 1000))); await waitSent(); void root; },
-    end: async () => { done = true; const r = await reply; expect(r.status).toBe(202); return (await r.json()) as unknown; }
+    end: async () => { done = true; const r = await reply; const b = (await r.json()) as unknown; expect(r.status, JSON.stringify(b).slice(0, 400)).toBe(202); return b; }
   };
 }
 

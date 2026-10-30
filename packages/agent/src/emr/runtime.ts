@@ -1143,6 +1143,8 @@ export class EmrRuntime {
       ...(r.stage ? { stage: r.stage, first_look: r.first_look ?? null, stage_ms: r.stage_ms ?? null } : {}), ...(pre ? { started_early: true } : {})
     });
     this.gateStage.set(lineId, r.stage ?? "full");
+    // An earlier line's write can finish while this call is out and leave the task done or waiting; this line wakes it again rather than being dropped.
+    if (l.task.state === "done" || l.task.state === "waiting") this.setState(l, "running", `heard_${lineId}`);
     if (l.task.state !== "running") return;
     // Words meant for the agent answer its open question before they are acted on; a question waiting on the owner's voice closes only on the owner's line.
     if (clauses.some((c) => c.class === "instruction" || c.class === "correction")) {

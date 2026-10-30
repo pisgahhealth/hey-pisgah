@@ -3,6 +3,7 @@ import { ModelClient } from "@hey-pisgah/model";
 import { wholeInRange } from "@hey-pisgah/voice";
 import { ListenSessions } from "../src/emr/listen.js";
 import { EmrRuntime, releasable } from "../src/emr/runtime.js";
+import { KEPT_LEVERS, leversFrom } from "../src/emr/speed.js";
 import { ADM, FakeEmr, OWNER, emrRoot, gater, until } from "./emr-helpers.js";
 import { chunkWav, earOf, obs, say, secondOf } from "./mic-helpers.js";
 
@@ -13,17 +14,40 @@ const gate = (said: string) => {
   return p ? obs(said, { pulse: Number(p[1]) }) : r ? obs(said, { resp_rate: Number(r[1]) }) : t ? obs(said, { temp_c: t[1] }) : [{ class: "aside" as const }];
 };
 
-function boot(first: Record<number, string>, second: Record<number, string>, release = true) {
+function boot(first: Record<number, string>, second: Record<number, string>, release = true, levers = false) {
   const root = emrRoot();
   const port = new FakeEmr();
   let rt: EmrRuntime | null = null;
   const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater(gate), taskStateOf: (id) => rt?.stateOf(id) ?? null });
-  rt = new EmrRuntime({ storeRoot: root, client, port, holdMs: HOLD, proofRetryMs: 1, secondEar: secondOf(second), ...(release ? { releaseWhole: true } : {}) });
+  rt = new EmrRuntime({ storeRoot: root, client, port, holdMs: HOLD, proofRetryMs: 1, secondEar: secondOf(second), ...(release ? { releaseWhole: true } : {}), ...(levers ? { speed: leversFrom(KEPT_LEVERS) } : {}) });
   rt.start();
   const listen = new ListenSessions(rt, { transcribe: earOf(first), numberJoinWaitMs: WAIT, strongJoinWaitMs: 5000, ...(release ? { releaseWhole: true } : {}) });
   const settle = async () => { await listen.flush("s1"); await rt!.settled(); };
   return { rt, port, listen, settle };
 }
+
+// A model client whose gate call for a respiratory line answers late, so an earlier line's write finishes while that call is out.
+class SlowRateGate extends ModelClient {
+  override async call(a: Parameters<ModelClient["call"]>[0]): ReturnType<ModelClient["call"]> {
+    if (JSON.stringify(a.messages).includes("rate 22")) await new Promise((r) => setTimeout(r, 400));
+    return super.call(a);
+  }
+}
+
+describe("a line decided while the task went idle", () => {
+  it("is still acted on when an earlier line's write finished during its gate call", async () => {
+    const root = emrRoot();
+    const port = new FakeEmr();
+    let rt: EmrRuntime | null = null;
+    const client = new SlowRateGate({ storeRoot: root, mode: "mock", mock: gater(gate), taskStateOf: (id) => rt?.stateOf(id) ?? null });
+    rt = new EmrRuntime({ storeRoot: root, client, port, holdMs: 0, proofRetryMs: 1, speed: leversFrom(KEPT_LEVERS) });
+    rt.start();
+    await rt.say({ owner: OWNER, target: { admission_id: ADM }, text: "Chart the pulse 80", source: "audio", ambient: { session_id: "s1", seqs: [0], raw_text: "", ended_at: new Date().toISOString(), final_at: new Date().toISOString(), trailing_silence_ms: 700, finished_by: "quiet_tail" } });
+    await rt.say({ owner: OWNER, target: { admission_id: ADM }, text: "Chart the respiratory rate 22", source: "audio", ambient: { session_id: "s1", seqs: [1], raw_text: "", ended_at: new Date().toISOString(), final_at: new Date().toISOString(), trailing_silence_ms: 700, finished_by: "quiet_tail" } });
+    await rt.settled();
+    expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, pulse: 80 }, { admission_id: ADM, resp_rate: 22 }]);
+  });
+});
 
 describe("D17: which values are released", () => {
   it("takes whole numbers in range and leaves decimals, temperatures and out-of-range values to wait", () => {
@@ -53,6 +77,14 @@ describe("D17: a whole-number vital is written at once", () => {
     const v = rt.views(OWNER)[0]!;
     expect(v.speed.rows[0]).toMatchObject({ released: true });
     expect(v.speed.corrections).toBe(0);
+  });
+
+  it("with the serve's kept speed levers on, writes the released pulse and settles", async () => {
+    const { port, listen, settle } = boot({ 2200: "Chart the pulse eighty", 3000: "Chart the temperature 37.6" }, { 2200: "pulse 80", 3000: "temperature 37.6" }, true, true);
+    await say(listen, 0, chunkWav(1500, 700));
+    await say(listen, 1, chunkWav(2300, 700));
+    await settle();
+    expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, pulse: 80 }, { admission_id: ADM, temp_c: "37.6" }]);
   });
 
   it("still holds a temperature, which carries a decimal", async () => {
