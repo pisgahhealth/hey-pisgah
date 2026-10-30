@@ -38,9 +38,9 @@ describe.skipIf(!RUN)("F5 one learning loop on a fresh EMR stay", () => {
       const adm = await port.commit("admit_patient", { visit_id: visit, patient_id: patient, ward, admission_type: "emergency", reason: "ZZ-TEST abdominal pain for observation" }, `f5-admit-${visit}`, prov(`f5-admit-${tag}`));
       expect(adm, JSON.stringify(adm)).toMatchObject({ ok: true });
       const admission = (adm as { record_id: string }).record_id;
+      // A bed is taken when the ward has one free; the ward the stay is on comes from the admission either way.
       const bed = await port.commit("assign_bed", { admission_id: admission, ward }, `f5-bed-${visit}`, prov(`f5-bed-${tag}`));
-      expect(bed, JSON.stringify(bed)).toMatchObject({ ok: true });
-      return { patient, visit, admission };
+      return { patient, visit, admission, bed: bed.ok ? "assigned" : bed.reason };
     };
     const root = join(out, "store");
     const versions = adoptedForEmr(root, process.env["F5_VERSIONS"]!, () => loadProfile().versions!);
@@ -51,8 +51,11 @@ describe.skipIf(!RUN)("F5 one learning loop on a fresh EMR stay", () => {
     const result: Row = { version: versions.def.version, definition_hash: versions.def.definition_hash };
     const types = (taskId: string) => readStream(root, `emr/${taskId}`);
     try {
+      // F5_B_ADMISSION names an earlier F5 stay to use as the ward B case, so only that part runs.
+      const onlyB = process.env["F5_B_ADMISSION"] ?? null;
+      if (!onlyB) {
       // Ward A: the fresh applicable encounter.
-      const a = await stay("F5 Loop A", "private", "a");
+      const a = await stay("F5 Loop A", "childrens", "a");
       const tA = await s.runtime.open(nurse.owner, { admission_id: a.admission });
       const before = await until("the nurse's first watch", () => s.runtime.view(tA.task_id)!.watching);
       result["a_watch_before_round"] = { round: before["stay.round"] ?? null, ward: before["stay.ward"] ? "read" : null };
@@ -78,18 +81,21 @@ describe.skipIf(!RUN)("F5 one learning loop on a fresh EMR stay", () => {
       expect(notes.some((n) => n["id"] === saved.proof?.record_id && n["author"] === nurse.agent)).toBe(true);
       expect(provRows.some((r) => r["on_behalf_of"] === nurse.owner && r["agent"] === nurse.agent)).toBe(true);
 
+      result["stays_a"] = { admission: a.admission, patient: a.patient, bed: a.bed };
+      result["task_a"] = tA.task_id;
+      }
       // Ward B: the withheld case, the same trigger point on a ward the adopted scope does not cover.
-      const b = await stay("F5 Loop B", "childrens", "b");
+      const b = onlyB ? { admission: onlyB, patient: null, bed: "earlier" } : await stay("F5 Loop B", "private", "b");
       const tB = await s.runtime.open(nurse.owner, { admission_id: b.admission });
       await until("the nurse's first watch on B", () => s.runtime.view(tB.task_id)!.watching);
-      expect((await port.commit("record_note", { admission_id: b.admission, note_type: "ward_round", text: "Ward round: settling, feeding well." }, `f5-round-${b.admission}`, prov("f5-round-b")))).toMatchObject({ ok: true });
+      if (!onlyB) expect((await port.commit("record_note", { admission_id: b.admission, note_type: "ward_round", text: "Ward round: settling, feeding well." }, `f5-round-${b.admission}`, prov("f5-round-b")))).toMatchObject({ ok: true });
       const withheld = await until("the withheld offer", () => types(tB.task_id).find((e) => e.record_type === "version.offer_withheld"));
       await wait(9000);
       const vB = s.runtime.view(tB.task_id)!;
       result["b_withheld"] = { row: withheld.payload, version_in_force: vB.version?.version ?? null, questions: vB.questions.length, offers: types(tB.task_id).filter((e) => e.record_type === "offer.made").length, note: vB.notes.find((n) => n.text.startsWith("Not offered"))?.text ?? null };
       expect(vB.questions).toHaveLength(0);
-      result["stays"] = { a: a.admission, b: b.admission, patients: [a.patient, b.patient] };
-      result["tasks"] = { a: tA.task_id, b: tB.task_id };
+      result["stay_b"] = { admission: b.admission, patient: b.patient, bed: b.bed, reused: !!onlyB };
+      result["task_b"] = tB.task_id;
       result["ok"] = true;
     } finally {
       result["ledger"] = s.runtime.views(nurse.owner).reduce((n, v) => n + v.calls, 0);

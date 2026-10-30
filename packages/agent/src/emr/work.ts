@@ -97,7 +97,7 @@ export const WORK_TEXT: Record<Exclude<WorkKind, typeof OBSERVATION_KIND>, strin
   add_care_plan_item: "add_care_plan_item: add one item to the care plan: title in the clinician's words, item_kind (medication, nursing, observation, diet) and cadence (OD, BD, TDS, QID, q2h, q4h, q6h, q8h, q12h, STAT, PRN). One clause per item.",
   record_note: "record_note: write a note in the record: note_type (progress, ward_round, nursing) and text, the words dictated. Saving a handover draft you made is record_note with text null.",
   draft_handover: "draft_handover: draft a shift handover from the record for the clinician to review; nothing is written until they say to save it.",
-  draft_stay_summary: "draft_stay_summary: draft the summary of the stay from the record for the clinician to review, for when the patient goes home; nothing is written until they say to save it.",
+  draft_stay_summary: "draft_stay_summary: draft the summary of the stay from the record for the clinician to review, for when the patient goes home; nothing is written until they say to save it. Saving that draft once reviewed is record_note with text null, never another draft_stay_summary.",
   page_staff: "page_staff: send a page to another department or person; to names who (one of the page targets listed below) and text is the message in the clinician's words.",
   schedule_follow_up: "schedule_follow_up: book a follow-up appointment; clinic names the clinic (one of the clinics listed below) and date is the day said, written as YYYY-MM-DD.",
   prepare_bill: "prepare_bill: read the patient's bill and report what is charged, paid and outstanding; nothing is changed.",

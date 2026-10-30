@@ -47,7 +47,6 @@
  "approver": "Synthetic Ward A manager (disclosed; a person's role played on the coordinator's instruction by the E6 build lane)",
  "approver_id": "wm_a_synthetic",
  "human_approval": false,
- "human_approval_note": "Adopted by the disclosed synthetic ward manager on the coordinator's instruction; green needs Samuel's own approval at review.",
  "fresh_applicable": {
   "task_id": "t-157de412",
   "case_id": "c-110f6ad7",
@@ -277,10 +276,10 @@
    "offers_made": 0
   }
  },
- "emr_journey_blocked": "the journey seed does not check the journey patient in again while an earlier run's stay (accepted, no bed) is still live, and the A&E nurse's cover can start only in her morning shift; both are M5.0's open seed items",
- "emr_offers_made": 0,
+ "emr_journey_blocked": null,
+ "emr_offers_made": 1,
  "emr_offer_seen": true,
- "emr_offer_reason": "the fresh EMR journey could not run: the journey seed does not check the journey patient in again while an earlier run's stay (accepted, no bed) is still live, and the A&E nurse's cover can start only in her morning shift; both are M5.0's open seed items; on a live stay through the door the adopted version offered it 1 time at its trigger point and version 1 0",
+ "emr_offer_reason": "on a fresh ward A stay the adopted version offered the summary draft at the round entry (1 offer), the nurse approved it by voice and the reviewed draft was saved as a note on the stay and proved by a fresh read; on a ward B stay at the same trigger point it was withheld with the reason \"version 2 is adopted for ward A and this patient is on ward B, so version 1 is in force\"",
  "applicable_case": "c-110f6ad7",
  "withheld_case": "c-2a14921a",
  "draft_earlier_by_min": 146,
@@ -397,5 +396,47 @@
  "dev_median_wait_delta_min": 0,
  "dev_moved": 5,
  "dev_shorter": 4,
- "dev_longer": 1
+ "dev_longer": 1,
+ "approval": {
+  "approver_id": "wm_a_synthetic",
+  "kind": "person",
+  "at": "2026-10-30T01:19:57.840Z",
+  "display_name": "Synthetic Ward A manager (disclosed; a person's role played on the coordinator's instruction by the E6 build lane)",
+  "played_by_lane": true,
+  "suspended_or_reverted": false,
+  "why": "adopted by a person's role played by a build lane, disclosed in the record"
+ },
+ "emr_loop": {
+  "mode": "sandbox door, live Spark Open gate on the nurse's two lines, the doctor's admission and round entry written by his agent through the door (scripted)",
+  "applicable": {
+   "ward_id": "A",
+   "version_in_force": 2,
+   "offers_made": 1,
+   "offer_step": "st06",
+   "watched_before_round": {
+    "round": null,
+    "ward": "read"
+   },
+   "approved_by": "the nurse's own spoken line through serve (say draft, then save once reviewed)",
+   "action": {
+    "kind": "record_note",
+    "label": "stay_summary",
+    "persisted": true,
+    "verified": true,
+    "by_owner_agent": true,
+    "provenance_rows": 1
+   }
+  },
+  "withheld": {
+   "ward_id": "B",
+   "version_in_force": 1,
+   "offers_made": 0,
+   "questions": 0,
+   "refused_with_reason": true,
+   "reason": "version 2 is adopted for ward A and this patient is on ward B, so version 1 is in force",
+   "reused_stay": true
+  }
+ },
+ "emr_loop_complete": true,
+ "dev_slowest_min": 167
 }

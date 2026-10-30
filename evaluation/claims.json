@@ -663,14 +663,14 @@
         "table": "fresh applicable case and withheld case under the adopted version"
       },
       "acceptance": {
-        "command": "version adopt through serve, two live demo tasks, the version offer read on a live stay and the fresh EMR journey, then npx tsx apps/cli/src/improve.ts report --profile <EMR profile> --stay-offer f --stay-offer-v1 f [--journey-version f | --journey-blocked reason]",
+        "command": "version adopt through serve, two live demo tasks, the version offer read on a live stay and the fresh EMR journey, then npx tsx apps/cli/src/improve.ts report --profile <EMR profile> --stay-offer f --stay-offer-v1 f [--journey-version f | --journey-blocked reason]; then the fresh-stay loop (packages/pisgah-adapter/test/f5loop.sandbox.test.ts) and npx tsx apps/cli/src/improve.ts loop --file evaluation/results/improve.json --store <version store> --applicable-run f --withheld-run f",
         "result_path": "evaluation/results/improve.json",
-        "predicate": "adopted_by_person == true && human_approval == true && deployable == true && emr_offers_made >= 1 && fresh_applicable.executed_differently == true && fresh_applicable.actions_open == 0 && fresh_applicable.state == 'done' && withheld.version_withheld == true && withheld.actions_open == 0 && withheld.state == 'done' ; amber: adopted_by_person == true && deployable == true && emr_offer_seen == true && fresh_applicable.executed_differently == true && withheld.version_withheld == true",
+        "predicate": "adopted_by_person == true && human_approval == true && deployable == true && emr_offers_made >= 1 && fresh_applicable.executed_differently == true && fresh_applicable.actions_open == 0 && fresh_applicable.state == 'done' && withheld.version_withheld == true && withheld.actions_open == 0 && withheld.state == 'done' && emr_loop_complete == true ; amber: adopted_by_person == true && deployable == true && emr_offer_seen == true && fresh_applicable.executed_differently == true && withheld.version_withheld == true && emr_loop_complete == true",
         "measured_on": "dev"
       },
       "wording": {
-        "pass": "A person adopted the change; in the simulator, on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes; on the {dev_cases} dev cases the median wait change was {dev_median_wait_delta_min} minutes, with {dev_moved} cases moved ({dev_shorter} shorter, {dev_longer} longer); it was withheld on {withheld_case} by its scope, and in the EMR {emr_offer_reason}",
-        "partial": "In the simulator, ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes); on the {dev_cases} dev cases the median wait change was {dev_median_wait_delta_min} minutes, with {dev_moved} cases moved ({dev_shorter} shorter, {dev_longer} longer); withheld on {withheld_case}, adopted by the disclosed synthetic ward manager; in the EMR {emr_offer_reason}; awaiting Samuel's approval",
+        "pass": "A person adopted the change; in the simulator, on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes; on the {dev_cases} dev cases the median wait change was {dev_median_wait_delta_min} minutes, with {dev_moved} cases moved ({dev_shorter} shorter, {dev_longer} longer, the slowest by {dev_slowest_min} minutes); it was withheld on {withheld_case} by its scope, and in the EMR {emr_offer_reason}",
+        "partial": "In the simulator, ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes); on the {dev_cases} dev cases the median wait change was {dev_median_wait_delta_min} minutes, with {dev_moved} cases moved ({dev_shorter} shorter, {dev_longer} longer, the slowest by {dev_slowest_min} minutes); withheld on {withheld_case}, adopted by the disclosed synthetic ward manager, so the adoption record shows no person's own approval; in the EMR {emr_offer_reason}; awaiting Samuel's approval",
         "fail": "The adopted change did not run differently on the fresh case, was not withheld where its scope says, or this EMR cannot carry it or offered it nowhere: {deployment_reason}",
         "not_measured": "Not measured yet"
       },
@@ -1089,6 +1089,28 @@
         "predicate": "verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0 && authorised_recipients >= 1 && authorised_delivered == authorised_recipients && correct_refusals == refusals && incorrect_outcomes == 0 && urgent_alerts_authorised == urgent_items_authorised ; amber: verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0"
       },
       "reason": "Review 3 item 7a: the verifier accepted an actionable item whose description, destination or due date was altered while its id and state matched. The checks now bind each item to the task records (altered_description, altered_destination, altered_due_date) and the publisher reads the records again before every delivery. Green and amber now also need the three planted faults that change only those fields to be refused; nothing was loosened and the wording is unchanged."
+    },
+    {
+      "date": "2026-10-30",
+      "by": "F5",
+      "claims": [
+        "C-27"
+      ],
+      "previous_predicate": {
+        "predicate": "adopted_by_person == true && human_approval == true && deployable == true && emr_offers_made >= 1 && fresh_applicable.executed_differently == true && fresh_applicable.actions_open == 0 && fresh_applicable.state == 'done' && withheld.version_withheld == true && withheld.actions_open == 0 && withheld.state == 'done' ; amber: adopted_by_person == true && deployable == true && emr_offer_seen == true && fresh_applicable.executed_differently == true && withheld.version_withheld == true"
+      },
+      "previous_wording": {
+        "C-27": {
+          "pass": "A person adopted the change; in the simulator, on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes; on the {dev_cases} dev cases the median wait change was {dev_median_wait_delta_min} minutes, with {dev_moved} cases moved ({dev_shorter} shorter, {dev_longer} longer); it was withheld on {withheld_case} by its scope, and in the EMR {emr_offer_reason}",
+          "partial": "In the simulator, ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes); on the {dev_cases} dev cases the median wait change was {dev_median_wait_delta_min} minutes, with {dev_moved} cases moved ({dev_shorter} shorter, {dev_longer} longer); withheld on {withheld_case}, adopted by the disclosed synthetic ward manager; in the EMR {emr_offer_reason}; awaiting Samuel's approval",
+          "fail": "The adopted change did not run differently on the fresh case, was not withheld where its scope says, or this EMR cannot carry it or offered it nowhere: {deployment_reason}",
+          "not_measured": "Not measured yet"
+        }
+      },
+      "previous_acceptance": {
+        "command": "version adopt through serve, two live demo tasks, the version offer read on a live stay and the fresh EMR journey, then npx tsx apps/cli/src/improve.ts report --profile <EMR profile> --stay-offer f --stay-offer-v1 f [--journey-version f | --journey-blocked reason]"
+      },
+      "reason": "Review 3 item 6: the adopted version had one offer on an existing stay and none on a fresh encounter, the offered action was a read-only draft, and human_approval was hardcoded false. The serve now resolves the version per encounter from the ward the record names, the summary draft is saved as a note on the stay on the nurse's word and proved, a ward B stay records the withheld offer with its reason, and human_approval is read from the adoption record (approver id, kind person, time, no later suspension). Green and amber now also need emr_loop_complete; the wording adds the slowest dev case (167 minutes) beside the median and says the adoption record shows no person's own approval. Nothing loosened."
     }
   ]
 }

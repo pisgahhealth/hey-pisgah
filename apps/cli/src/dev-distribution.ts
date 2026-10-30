@@ -21,5 +21,6 @@ export function devDistribution(report: { proposal_id?: string | null; status?: 
 
 // The flat fields the improve claim's wording reads, beside the fresh-case figure.
 export function devFields(dist: Row): Row {
-  return { dev_cases: dist["cases"], dev_median_wait_delta_min: dist["median_wait_delta_min"], dev_moved: dist["moved"], dev_shorter: dist["shorter"], dev_longer: dist["longer"] };
+  const longest = Math.max(0, ...((dist["wait_deltas_min"] as { wait: number | null }[] | undefined) ?? []).map((x) => x.wait ?? 0));
+  return { dev_cases: dist["cases"], dev_median_wait_delta_min: dist["median_wait_delta_min"], dev_moved: dist["moved"], dev_shorter: dist["shorter"], dev_longer: dist["longer"], dev_slowest_min: longest };
 }
