@@ -18,16 +18,16 @@ describe("discovery counts", () => {
     expect(exactInterval(3, 3)).toMatchObject({ upper: 1 });
   });
 
-  it("reconciles 6 of 28 with 6 of 26, reads the latest configuration's rate, and matches the committed file", () => {
+  it("reconciles 10 of 33 with 10 of 31, reads the latest configuration's rate, and matches the committed file", () => {
     const d = read("discovery.json");
     const s = discoverSummary(d, { invariancePass: true, adopted: "p-a563fe32", tradeOffs: [{ metric: "rework_events", sum_delta: 4 }, { metric: "rework_min", sum_delta: 4 }], currentRevision: commitments.revisions.at(-1)!.revision });
-    expect([s["discover_history_dev_valid"], s["discover_history_runs"]]).toEqual([6, 28]);
-    expect([s["discover_dev_valid_any"], s["discover_runs_listed"]]).toEqual([6, 26]);
-    expect([s["discover_dev_valid"], s["discover_runs"]]).toEqual([4, 12]);
-    expect([s["discover_config_revision"], s["discover_config_dev_valid"], s["discover_config_runs"], s["discover_config_lower"], s["discover_config_upper"]]).toEqual([12, 2, 3, 0.09, 0.99]);
+    expect([s["discover_history_dev_valid"], s["discover_history_runs"]]).toEqual([10, 33]);
+    expect([s["discover_dev_valid_any"], s["discover_runs_listed"]]).toEqual([10, 31]);
+    expect([s["discover_dev_valid"], s["discover_runs"]]).toEqual([8, 17]);
+    expect([s["discover_config_revision"], s["discover_config_dev_valid"], s["discover_config_runs"], s["discover_config_lower"], s["discover_config_upper"]]).toEqual([12, 6, 8, 0.35, 0.97]);
     const byRev = s["discover_history_by_revision"] as { runs: number; dev_valid: number }[];
-    expect(byRev.reduce((n, r) => n + r.runs, 0)).toBe(28);
-    expect(byRev.reduce((n, r) => n + r.dev_valid, 0)).toBe(6);
+    expect(byRev.reduce((n, r) => n + r.runs, 0)).toBe(33);
+    expect(byRev.reduce((n, r) => n + r.dev_valid, 0)).toBe(10);
     const f = (s["discover_findings"] as string[]).join(" ");
     expect(f).toContain("high effort was 0 of 3 dev-valid against medium 2 of 3");
     expect(f).toContain("the pair variant at revision 10 was 0 of 2");
