@@ -9,7 +9,7 @@ import { applyOperations, evalCondition } from "@hey-pisgah/workflow";
 import { z } from "zod";
 import { ExpectedChange, mayUpdate, outcomeClass, type OutcomeClass } from "./delivery.js";
 import { runMatched, summarise, type Behaviour, type CaseResult, type Receipt, type Runner } from "./experiments.js";
-import { lintExperiment, type LintResult } from "./lint.js";
+import { lintExperiment, nonPreparableTargets, type LintResult } from "./lint.js";
 import { preconditionTable } from "./preconditions.js";
 import { derivedStatistics } from "./stats.js";
 import { OP_KINDS, SWEEP_LIMITS, scopedOperations, sweep, sweepView } from "./sweep.js";
@@ -460,18 +460,23 @@ export class Session {
     const base = this.resolveBase(q.base);
     const files = q.case_ids.map((id) => this.pool.experimentable(id));
     if (!live(q.hypothesis_id) || q.distinguishes.some((d) => !live(d)) || !base || files.some((f) => f === null) || new Set(q.case_ids).size !== q.case_ids.length) return this.invalid("ids", raw, ["unknown id"], UNKNOWN_ID);
+    const blocked = nonPreparableTargets(base, q.ops);
+    if (blocked.length) return this.lintRefusal(rawIn, q.ops, q.case_ids.length, { ok: false, reasons: ["not_preparable"], detail: { not_preparable: blocked, rule: "Operations may target only steps whose action is prepare_document and that are not external." } });
     const applied = applyOperations(base, q.ops, { caseFacts: this.pool.caseFacts() });
     if (!applied.ok) return this.invalid("static", raw, applied.errors.map((e) => `${e.code}: ${e.message}`), refusal("invalid_request", "The change breaks a definition rule.", { stage: "static", errors: applied.errors.map((e) => `${e.code}: ${e.message}`) }));
     const cited = [...new Set([q.hypothesis_id, ...q.distinguishes])].map((id) => this.hypotheses.get(id)!);
     const previous = [...this.experiments.values()].filter((x) => x.source === "request" && x.status === "completed").map((x) => ({ experiment_id: x.experiment_id, intervention_hash: x.intervention_hash ?? "", base_hash: x.base_hash, case_ids: (x.request as { case_ids: string[] }).case_ids }));
     const lint = lintExperiment({ base, next: applied.definition, ops: q.ops, caseIds: q.case_ids, cited, previous, factsOf: this.factsOf, expectedStep: ex.data.step, nextHash: applied.definition.definition_hash, baseHash: base.definition_hash });
-    if (!lint.ok) {
-      this.counters.lint_refusals += 1;
-      this.streams.experiments.append("experiment.lint_refused", { session_id: this.o.runId, request: rawIn, lint, lint_refusals: this.counters.lint_refusals }, { recorded_at: 0, occurred_at: 0 });
-      this.observe(`lint refused ${JSON.stringify(q.ops)} on ${q.case_ids.length} cases: ${lint.reasons.join(", ")}`);
-      return refusal("lint_refused", "The pre-run lint refused this experiment; it used no experiment and is not counted as a refused request.", { reasons: lint.reasons, lint: lint.detail, budget: this.budgetView() });
-    }
+    if (!lint.ok) return this.lintRefusal(rawIn, q.ops, q.case_ids.length, lint);
     return this.execute("request", { ...q, expected_change: ex.data }, base, q.ops, files as NonNullable<(typeof files)[number]>[], this.active(), cited.map((h) => h.hypothesis_id), null, ex.data, lint);
+  }
+
+  // A lint refusal: logged, observed in the ledger, no experiment used and not counted toward the lockout.
+  private lintRefusal(rawIn: unknown, ops: readonly Operation[], cases: number, lint: LintResult): Result {
+    this.counters.lint_refusals += 1;
+    this.streams.experiments.append("experiment.lint_refused", { session_id: this.o.runId, request: rawIn, lint, lint_refusals: this.counters.lint_refusals }, { recorded_at: 0, occurred_at: 0 });
+    this.observe(`lint refused ${JSON.stringify(ops)} on ${cases} cases: ${lint.reasons.join(", ")}`);
+    return refusal("lint_refused", "The pre-run lint refused this experiment; it used no experiment and is not counted as a refused request.", { reasons: lint.reasons, lint: lint.detail, budget: this.budgetView() });
   }
 
   // Records the question this cycle's experiment must answer; refused unless two of the named hypotheses can be told apart on some pool case.

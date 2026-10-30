@@ -373,6 +373,48 @@
         "insufficient_evidence_default": false
       },
       "hash": "dc797151472c5b10fcbfb889b8bc1c2e326967cbaacf3bc9e69129d941d14c48"
+    },
+    {
+      "revision": 11,
+      "at": "2026-10-30T00:00:46.390Z",
+      "reason": "Revision 11 (lane E6.d, after the revision 9 and 10 runs). Tool layer only, keeping all of revision 10: an experiment operation whose target step is not a non-external prepare_document step is now refused by the uncounted pre-run lint (reason not_preparable, with the operation index and step) instead of by the definition rules, where it counted toward the three-refusal lockout. Three of the twelve revision 9 and 10 runs had delivered the planted change and then locked out on exactly this request (retriggering the hand-over step after an edge removal the lint had called a no-op). The run_experiment description and the experiment sentence of the system prompt name the new lint refusal; nothing else changes. In the same commit the evaluator's dev gate gains documents_kept (not a commitment change): a proposal fails when a ward-required document whose final the base completed is not completed under it.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "22e704ab6b3ff4b5af0d95132fe6f365cfccecd378072f0794cfdd7f2d5982e7",
+            "tools": "d88bb951cc60dd5ce37cb368257d731e93e42cd2bb1c73a4329369fb7691bc47"
+          },
+          "a3": {
+            "prompt": "99a85b831d4a0926333e57f3398d5c4c0652f9ccc816944ffb05d1cf74d645db",
+            "tools": "7dc5b916fff8223bdec7ac38b22f1533f890e71f61631d97861214bea963a9d5"
+          },
+          "a4": {
+            "prompt": "55a3398a6533072bfc44dbe93d194fe90667d511c413f1c18884fb056f769cf3",
+            "tools": "2535fa876f2aff71eaf70f1db86b8dbb356a5392107cdb4b920583263bce3e95"
+          },
+          "prior": {
+            "prompt": "f3f1869f55cf864b9efb8aa0ca202a3aac135c7c5f358d2e1fb2d06ebb7e8712",
+            "tools": "2fd590e02488a003e8deb611346c1209fc6a604d9cb9138f4867447bb975b514"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "adaptive_controller": "cycle",
+          "adaptive_efforts": [
+            "medium",
+            "high"
+          ],
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 30000,
+          "history_chars": 70000,
+          "turn_result_chars": 20000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "89cff7ea206636bf1f8ee3226cacd11443cc57bbe5cc8dde28bfacc3eacb14ef"
     }
   ]
 }

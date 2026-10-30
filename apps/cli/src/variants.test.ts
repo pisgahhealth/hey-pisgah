@@ -21,4 +21,12 @@ describe("simulator variants through the dev gate", () => {
       }
     }
   }, 120_000);
+
+  it("refuses the change that switched the refund voucher final off in the triple world", async () => {
+    const v = loadVariant("triple");
+    const r = await validateProposal(proposal([{ op: "add_condition", target: { step: { step: "st17b" } }, condition: { fact: "expected_discharge_recorded", eq: "false" } }], "0000dd02"), { base: v.base, cases: v.validation!, caseFacts: v.pool.caseFacts() });
+    expect(r.status).toBe("dev_failed");
+    expect(r.gate?.documents_kept).toBe(false);
+    expect(gain(r)).toBeGreaterThan(0);
+  }, 60_000);
 });

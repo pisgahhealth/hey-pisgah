@@ -1,10 +1,21 @@
 import { canonical, type HypothesisRecord as HR, type Operation, type WorkflowDefinition as WD } from "@hey-pisgah/contracts";
-import type { Facts } from "@hey-pisgah/workflow";
+import { isPreparingStep, type Facts } from "@hey-pisgah/workflow";
 import { targetedSteps } from "./experiments.js";
 import { checkBefore, pairDiagnostics } from "./prediction.js";
 import { isStaticNoop, ruleChanges } from "./preconditions.js";
 
-export type LintCode = "no_op" | "no_discrimination" | "already_run" | "unknown_step";
+export type LintCode = "no_op" | "no_discrimination" | "already_run" | "unknown_step" | "not_preparable";
+
+// Operations whose target step exists but is not a non-external preparing step, which no operation may target.
+export function nonPreparableTargets(base: WD, ops: readonly Operation[]): { op_index: number; step: string }[] {
+  const out: { op_index: number; step: string }[] = [];
+  ops.forEach((op, i) => {
+    const step = op.op === "set_prep_trigger" ? op.target.step : op.op === "add_soft_edge" ? op.to.step : op.op === "move_step_after" ? op.step.step : op.op === "add_condition" && op.target !== "scope" && "step" in op.target ? op.target.step.step : null;
+    const s = step ? base.steps.find((x) => x.step_id === step) : undefined;
+    if (s && (s.external || !isPreparingStep(s))) out.push({ op_index: i, step: s.step_id });
+  });
+  return out;
+}
 export type LintResult = { ok: boolean; reasons: LintCode[]; detail: Record<string, unknown> };
 export type PriorRun = { experiment_id: string; intervention_hash: string; base_hash: string; case_ids: readonly string[] };
 

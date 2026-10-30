@@ -114,6 +114,23 @@ describe("matched experiments", () => {
     s.close();
   });
 
+  it("lints an operation on a step no operation may target, uncounted, so a find is never followed by a lockout for it", () => {
+    const s = session();
+    const { h1, h2 } = two(s);
+    expect(s.runExperiment(req(h1, h2)).ok).toBe(true);
+    const retrigger = [{ op: "remove_soft_edge", edge_id: "e05" }, { op: "set_prep_trigger", target: { step: "st14" }, when: { after: { step: "st08" } } }];
+    for (let i = 0; i < 4; i++) {
+      const r = s.runExperiment(req(h1, h2, { ops: retrigger, case_ids: [LONG[i % 3]!] }));
+      expect(r.error).toBe("lint_refused");
+      expect(r.reasons).toEqual(["not_preparable"]);
+      expect((r.lint as { not_preparable: { op_index: number; step: string }[] }).not_preparable).toEqual([{ op_index: 1, step: "st14" }]);
+    }
+    expect(s.counters).toMatchObject({ invalid_requests: 0, lint_refusals: 4, experiments_used: 1 });
+    expect(s.locked).toBe(false);
+    expect(s.stop).toBeNull();
+    s.close();
+  });
+
   it("names the expected behaviour, returns a receipt, and tells a delivered change from an undelivered one", () => {
     const s = session();
     const { h1, h2 } = two(s);
