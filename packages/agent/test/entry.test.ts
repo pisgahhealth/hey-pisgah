@@ -58,8 +58,8 @@ describe("hands-free entry rules", () => {
   });
 
   it("accepts a loose transcript only for audio the device heard as emergency", () => {
-    for (const yes of ["Hypiska,Hey, emergency!", "Hey Pisgah emergency", "hi pizga, emergency", "Hey, emergency."]) expect(emergencyHeardLoosely(yes)).toBe(true);
-    for (const no of ["page the emergency team", "this is an emergency admission", "emergency", "the patient is stable", "hey nurse, emergency bay three"]) expect(emergencyHeardLoosely(no)).toBe(false);
+    for (const yes of ["Hypiska,Hey, emergency!", "Hey Pisgah emergency", "hi pizga, emergency", "Hey, emergency.", "Heape is the emergency"]) expect(emergencyHeardLoosely(yes)).toBe(true);
+    for (const no of ["page the emergency team", "this is an emergency admission", "emergency", "the patient is stable", "hey nurse, emergency bay three", "help us, emergency", "happy that it is not an emergency"]) expect(emergencyHeardLoosely(no)).toBe(false);
   });
 
   it("takes a spoken name and phone only from a naming phrase", () => {

@@ -31,7 +31,9 @@ export function emergencyHeardLoosely(line: string): boolean {
   const m = /^\W*((?:\S+\W+){0,4}?)emergency\b/i.exec(line);
   if (!m) return false;
   const before = m[1]!.trim();
-  return /h[aeiy]{0,2}\W*p[iy]\W*[sz]?\W*[gk]|pisg|pizg|pisk|pesk/i.test(before.replace(/\s+/g, "")) || /^(?:hey|hi|hay|okay|ok)\W*$/i.test(before);
+  // The local streaming ear writes "hey Pisgah" as "Heape is the", so an h-word then a p and an s or z close behind also counts.
+  const joined = before.replace(/\W+/g, "").toLowerCase();
+  return /h[aeiy]{0,2}\W*p[iy]\W*[sz]?\W*[gk]|pisg|pizg|pisk|pesk/i.test(before.replace(/\s+/g, "")) || /^h[aeiy]{1,3}p\w{0,3}[sz]/.test(joined) || /^(?:hey|hi|hay|okay|ok)\W*$/i.test(before);
 }
 
 // The line an Emergency press leaves as its evidence: what happened, not words nobody said.
