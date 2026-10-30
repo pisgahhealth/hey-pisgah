@@ -117,6 +117,10 @@ export class PisgahPort implements EmrPort {
       return [{ id, test: name ? byName.get(name.toLowerCase()) ?? null : null, state: opt(pick(x, spec.state)) }];
     });
   }
+  verbalIssuers(owner: string): Record<string, { words: readonly string[]; label: string }> {
+    return Object.fromEntries(Object.entries(this.profile.verbal_issuers).filter(([, v]) => v.receivers.includes(owner)).map(([k, v]) => [k, { words: v.words, label: v.label }]));
+  }
+
   orderables(): Orderables {
     const o = this.profile.orders;
     return { tests: Object.fromEntries(Object.entries(o?.tests ?? {}).map(([k, v]) => [k, v.words])), drugs: Object.fromEntries(Object.entries(o?.drugs ?? {}).map(([k, v]) => [k, { words: v.words, controlled: v.controlled }])) };
@@ -412,6 +416,11 @@ export class PisgahPort implements EmrPort {
     if (kind === "schedule_review") v["review_title"] = `Review: ${String(a["title"])}`.slice(0, 200);
     if (kind === "order_test") { const tst = this.profile.orders?.tests[String(a["test"])]; if (tst) v["test_name"] = tst.name; }
     if (kind === "prescribe") { const d = this.profile.orders?.drugs[String(a["drug"])]; if (d) { v["drug_catalog_id"] = d.id; v["duration"] = a["duration_days"]; } }
+    if (kind === "take_verbal_order") {
+      v["issuer_id"] = this.profile.verbal_issuers[String(a["issuer"])]?.id;
+      if (a["test"]) v["test_name"] = this.profile.orders?.tests[String(a["test"])]?.name;
+      if (a["drug"]) v["drug_catalog_id"] = this.profile.orders?.drugs[String(a["drug"])]?.id;
+    }
     if (kind === "countersign") v["first_item_id"] = (a["item_ids"] as string[] | undefined)?.[0];
     if (kind === "delegate_task" || kind === "request_ward_review") {
       // A team is named by its key; who takes it in the EMR comes from the profile, never from the words.

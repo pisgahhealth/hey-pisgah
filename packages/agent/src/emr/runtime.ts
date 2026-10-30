@@ -20,6 +20,7 @@ import {
   CONSENT_PURPOSES, acceptedTask, consentSaid, consentScope, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
   type ConsentPurpose, type DelegationRead, type EmrDelegation
 } from "./delegate.js";
+import { VERBAL_LINE, VERBAL_ORDER_ARGS, VERBAL_ORDER_KIND, verbalMissingNote, verbalOrderSaid } from "./verbal.js";
 import { FROM_NOW_ON, PreferenceError, SCOPE_KINDS, describePref, describeScope, describeSource, readRule, scopeAnswer, type PrefField, type PreferenceMemory } from "./preferences.js";
 
 export type EmrActionState = "proposed" | "sent" | "acknowledged" | "completed" | "refused" | "cancelled" | "failed";
@@ -755,6 +756,8 @@ export class EmrRuntime {
       else { this.append(live, "line.handled", { line_id: lineId, as: "heard_while_paused" }); this.afterLine(live, lineId, false); }
       return { task_id: live.task.task_id, line_id: lineId };
     }
+    // A receiver's verbal order with its read-back is taken by rule, never by the gate, and waits for the receiver's own matched voice.
+    if (VERBAL_LINE.test(text) && this.kinds(s.owner).includes(VERBAL_ORDER_KIND)) { this.verbalOrder(live, lineId, text, ctx); this.afterLine(live, lineId, true); return { task_id: live.task.task_id, line_id: lineId }; }
     // A spoken name for an unnamed patient is held as an obligation for the front desk, by rule and with no model call.
     const named = live.task.unidentified ? identityFrom(text) : null;
     // The naming line is handled whole by rule; anything else said in it waits for the next line.
@@ -1663,7 +1666,7 @@ export class EmrRuntime {
     const who = this.speakerOf(t, lineId);
     const summary = kind === OBSERVATION_KIND ? summarise(rawArgs as ObservationArgs, correctsId) : summariseWork(kind, rawArgs);
     // Only the owner's own matched voice changes the patient's care; documentation from another voice is kept and marked with who said it.
-    const needsOwner = kind !== "countersign" && (ORDER_KINDS.has(kind) || (who !== null && !DOCUMENTATION_KINDS.has(kind)));
+    const needsOwner = kind !== "countersign" && (ORDER_KINDS.has(kind) || kind === VERBAL_ORDER_KIND || (who !== null && !DOCUMENTATION_KINDS.has(kind)));
     if (needsOwner && who?.speaker === "other_clinician") {
       this.append(l, "speaker.refused", { line_id: lineId, kind, speaker: who.label });
       this.note(l, `${who.label} said: ${summary}. Not done: ${who.label}'s orders need ${who.label}'s own session; a voice never changes whose agent this is.`);
@@ -1675,7 +1678,7 @@ export class EmrRuntime {
     let awaiting: EmrAction["awaiting"] = needsOwner && who?.speaker !== "owner" && !bySession ? "owner_voice" : null;
     const controlled = (kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(args["drug"])]?.controlled) || OWNER_CONFIRM_KINDS.has(kind);
     if (!awaiting && (controlled || CONFIRM_KINDS.has(kind))) awaiting = "confirm";
-    const authorisedBy = kind === "countersign" || (ORDER_KINDS.has(kind) && who?.speaker === "owner") ? lineId : null;
+    const authorisedBy = kind === "countersign" || ((ORDER_KINDS.has(kind) || kind === VERBAL_ORDER_KIND) && who?.speaker === "owner") ? lineId : null;
     const actionId = `a-${shortHash(t.task_id, lineId, t.order.length + 1)}`;
     const ears = this.startCheck(l, actionId, lineId, own);
     if (kind === "prescribe" && typeof args["dose"] === "string") this.startDoseCheck(l, actionId, lineId, args["dose"]);
@@ -2111,6 +2114,8 @@ export class EmrRuntime {
       return { ...base, ...(a.read_back ? { read_back_digest: a.read_back.digest } : {}), voice: { ...(authorisation ? { authorisation } : {}), ...(confirmation ? { confirmation } : {}) } };
     }
     // A registration carries the receptionist's matched consent line when her voice is enrolled; with no token the hospital attributes it to her session.
+    // A verbal order carries the receiver's matched read-back line; without it the hospital refuses the order.
+    if (a.kind === VERBAL_ORDER_KIND) { const rb = voicedLine(a.authorised_by_line ?? a.line_id); return rb ? { ...base, voice: { authorisation: rb } } : base; }
     if (a.kind === REGISTER_KIND) { const consent = voicedLine(String(a.args["evidence"] ?? "").replace(/^transcript:/, "") || null); return consent ? { ...base, voice: { authorisation: consent } } : base; }
     if (!a.kind || !ORDER_KINDS.has(a.kind)) return base;
     // An order carries the owner's matched lines as "evidence~token"; a token lost on restart leaves the header out, and the hospital refuses the write.
@@ -2537,6 +2542,25 @@ export class EmrRuntime {
       this.settle(l, "registration_details");
     });
     return { task_id: l.task.task_id, line_id: lineId };
+  }
+
+  // A verbal order is proposed only whole, on the receiver's own line; another clinician's voice reading it back is refused and an unmatched voice holds it.
+  private verbalOrder(l: Live, lineId: string, text: string, ctx: EmrContext): void {
+    const o = this.o.port.orderables?.() ?? { tests: {}, drugs: {} };
+    const said = verbalOrderSaid(text, { tests: o.tests, drugs: o.drugs, issuers: this.o.port.verbalIssuers?.(l.task.owner) ?? {} });
+    this.append(l, "line.ruled", { line_id: lineId, classes: ["instruction"], as: "verbal_order" });
+    if (!said) return this.settle(l, "verbal_order_none");
+    if ("missing" in said) { this.note(l, verbalMissingNote(said.missing)); return this.settle(l, "verbal_order_incomplete"); }
+    const visit = ctx.visit_id ?? l.task.visit_id ?? null;
+    const patient = l.task.patient_id ?? ctx.patient_id ?? null;
+    if (!visit || !patient) { this.note(l, "Open the patient's visit before taking a verbal order; nothing was recorded."); return this.settle(l, "verbal_order_no_visit"); }
+    const args = VERBAL_ORDER_ARGS.safeParse({ ...said.args, visit_id: visit, patient_id: patient });
+    if (!args.success) { this.note(l, "That verbal order could not be read whole; say it again and read it back."); return this.settle(l, "verbal_order_invalid"); }
+    this.whenAttributed(l, lineId, (who) => {
+      if (this.notOwnersWords(l, lineId, who?.speaker === "unverified" ? null : who, VERBAL_ORDER_KIND)) return this.settle(l, "needs_owner_voice");
+      this.setState(l, "running", `rule_${VERBAL_ORDER_KIND}`);
+      this.propose(l, lineId, VERBAL_ORDER_KIND, args.data, null);
+    });
   }
 
   // The desk's agent completes the record only with the name, a phone and the patient's consent said at the desk; otherwise it says what is missing.
