@@ -46,6 +46,24 @@ describe("the owner's v2 recordings", () => {
   });
 });
 
+describe("the owner's re-recordings", () => {
+  const redo = JSON.parse(readFileSync(join(import.meta.dirname, "..", "research", "v2-redo-set.json"), "utf8")) as { cuts: { id: string; status: string; sha256: string }[] };
+  it("cuts every re-recorded line and every full-volume replay, and keeps each hash in the fixture", () => {
+    const want = ["O045", "O083", "O084", ...Array.from({ length: 20 }, (_, i) => `R${String(i + 11).padStart(3, "0")}`)];
+    expect(redo.cuts.map((c) => c.id)).toEqual(want);
+    expect(redo.cuts.filter((c) => c.status === "missing")).toEqual([]);
+    const hashes = new Set(fx.rows.map((r) => r.sha256));
+    for (const c of redo.cuts) expect(hashes.has(c.sha256)).toBe(true);
+  });
+  // O045 and O084 were missing and O083 was kept out in Part 4, so only the 40 replay rows are superseded.
+  it("keeps the rows they replace, marked superseded and out of every count", () => {
+    const old = fx.rows.filter((r) => r.source === "owner_v2" && /^v2-R0(1[1-9]|2\d|30)-(away|here)$/.test(r.id));
+    expect(old).toHaveLength(40);
+    for (const r of old) expect([r.usable, r.note?.startsWith("superseded")]).toEqual([false, true]);
+    expect(published.owner_v2.held_out.unusable.filter((u: string) => u.includes("superseded"))).toHaveLength(40);
+  });
+});
+
 describe("frozen thresholds", () => {
   it("keeps every revision with its source, date, reason and body hash, and never rewrites one", () => {
     const f = readThresholds();
