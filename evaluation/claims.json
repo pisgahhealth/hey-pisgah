@@ -138,15 +138,15 @@
         "table": "validation report"
       },
       "acceptance": {
-        "command": "npx tsx apps/cli/src/learning-claims.ts (arguments in the M4.c done file), then npm run claims:check",
-        "result_path": "evaluation/results/proposals.json",
-        "predicate": "dev_gate_pass && exception_check_pass && fences_unchanged ; amber: proposals_validated >= 1",
+        "command": "npm run discover (adaptive, medium) per run, then npx tsx apps/cli/src/discover-claim.ts --invariance pass after the answer-invariance test",
+        "result_path": "evaluation/results/discovery.json",
+        "predicate": "discover_dev_valid >= 1 && discover_invariance_pass == true && discover_deny_clean == true ; amber: discover_dev_valid_any >= 1",
         "measured_on": "dev"
       },
       "wording": {
-        "pass": "Proposed one change, limited to {scope}, validated on {n} unseen cases",
-        "partial": "A change was proposed and failed one dev check; it is shown",
-        "fail": "No change passed validation; the honest negative is shown",
+        "pass": "Found a change that helps, at a stated cost: {discover_dev_valid} of {discover_runs} blind runs under the answer-invariance gate proposed a dev-valid change; the adopted one gives {discover_share} of the planted change's gain and adds {discover_rework_events} document revisions",
+        "partial": "{discover_dev_valid_any} runs proposed a dev-valid change, but none under the answer-invariance gate",
+        "fail": "No blind run proposed a dev-valid change",
         "not_measured": "Not measured yet"
       },
       "evidence_links": []
@@ -163,15 +163,15 @@
         "table": "A2 and A2a rows"
       },
       "acceptance": {
-        "command": "npx tsx apps/cli/src/learning-claims.ts (arguments in the M4.c done file), then npm run claims:check",
-        "result_path": "evaluation/results/adoption.json",
-        "predicate": "adopted_by_person && ac09_pass && order_differs_where_diff_says",
+        "command": "version adopt through serve, two live demo tasks, then npx tsx apps/cli/src/improve.ts report",
+        "result_path": "evaluation/results/improve.json",
+        "predicate": "adopted_by_person == true && human_approval == true && fresh_applicable.executed_differently == true && fresh_applicable.actions_open == 0 && fresh_applicable.state == 'done' && withheld.version_withheld == true && withheld.actions_open == 0 && withheld.state == 'done' ; amber: adopted_by_person == true && fresh_applicable.executed_differently == true && withheld.version_withheld == true",
         "measured_on": "dev"
       },
       "wording": {
-        "pass": "Adopted by {role}; the agent prepared the paperwork at the learned point on a new patient",
-        "partial": "Adopted; the agent used it with one deviation, shown",
-        "fail": "Adopted but executed as v1 ({reason})",
+        "pass": "A person adopted the change; on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes, and on {withheld_case} it was withheld by its scope",
+        "partial": "Ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes) and was withheld on {withheld_case}, adopted by the disclosed synthetic ward manager; awaiting Samuel's approval",
+        "fail": "The adopted change did not run differently on the fresh case, or was not withheld where its scope says",
         "not_measured": "Not measured yet"
       },
       "evidence_links": []
@@ -240,12 +240,12 @@
       "acceptance": {
         "command": "npm run discover -- --arm adaptive --cycle 2, then npx tsx apps/cli/src/learning-claims.ts --cycle2, then npm run claims:check",
         "result_path": "evaluation/results/cycle2.json",
-        "predicate": "cycle2_result_recorded && no_hypothesis_cited_as_evidence",
+        "predicate": "cycle2_result_recorded && no_hypothesis_cited_as_evidence && read.outcomes >= 1 ; amber: cycle2_result_recorded && no_hypothesis_cited_as_evidence",
         "measured_on": "dev"
       },
       "wording": {
         "pass": "A second pass over the verified outcomes concluded: {result}",
-        "partial": "Second cycle ran and ended without a conclusion",
+        "partial": "A second cycle reached {result}, but it read none of the new verified outcomes",
         "fail": "Second cycle ran and reached no result; it stopped at {stop}",
         "not_measured": "Not measured yet"
       },
@@ -475,6 +475,231 @@
         "not_measured": "Not measured yet"
       },
       "evidence_links": []
+    },
+    {
+      "claim_id": "C-20",
+      "question": "Over the whole emergency encounter, how many times did a person touch the screen, and was every step accounted for?",
+      "demo_surface": {
+        "step": "results",
+        "component": "results tile; the touch list beside the acceptance run's step table"
+      },
+      "evaluation_view": {
+        "tab": "Costs and instrumentation",
+        "table": "touch count per step with who did each step"
+      },
+      "acceptance": {
+        "command": "the microphone-driven acceptance run (M5), which writes this file",
+        "result_path": "evaluation/results/touches.json",
+        "predicate": "touches_counted == true && silent_steps == 0 && touches <= touches_allowed ; amber: touches_counted == true && silent_steps == 0",
+        "measured_on": "all_runs"
+      },
+      "wording": {
+        "pass": "{touches} screen touches over the encounter against {touches_allowed} allowed (the microphone grant and the explicit confirmations), with every step accounted for",
+        "partial": "Every step accounted for, but {touches} touches against {touches_allowed} allowed",
+        "fail": "{silent_steps} steps completed with no one accounted for, or touches were not counted",
+        "not_measured": "Not measured yet"
+      },
+      "evidence_links": []
+    },
+    {
+      "claim_id": "C-21",
+      "question": "How long from the end of each instruction to the verified result, with the errors beside it?",
+      "demo_surface": {
+        "step": "results",
+        "component": "results tile; the speed table from the acceptance run"
+      },
+      "evaluation_view": {
+        "tab": "Costs and instrumentation",
+        "table": "speed table, p50 and p90 per kind with errors"
+      },
+      "acceptance": {
+        "command": "the microphone-driven acceptance run (M5), which writes this file",
+        "result_path": "evaluation/results/speed.json",
+        "predicate": "rows >= 1 && errors_listed == true && wake_p50_ms <= 1000 && vitals_p50_ms <= 5000 && order_p50_ms <= 8000 ; amber: rows >= 1 && errors_listed == true",
+        "measured_on": "all_runs"
+      },
+      "wording": {
+        "pass": "Wake {wake_p50_ms} ms, vitals {vitals_p50_ms} ms and an order {order_p50_ms} ms at p50 from the end of the words to the verified record, over {rows} actions with the errors listed",
+        "partial": "Measured over {rows} actions with errors listed; p50 wake {wake_p50_ms} ms, vitals {vitals_p50_ms} ms, order {order_p50_ms} ms, one or more above its target",
+        "fail": "No speed rows with errors beside them",
+        "not_measured": "Not measured yet"
+      },
+      "evidence_links": []
+    },
+    {
+      "claim_id": "C-22",
+      "question": "Were voice orders countersigned as an identified batch, with later changes left unsigned?",
+      "demo_surface": {
+        "step": "results",
+        "component": "results tile; live in the EMR strip: the batch read back before countersign"
+      },
+      "evaluation_view": {
+        "tab": "Decision points",
+        "table": "countersign batches and the orders in each"
+      },
+      "acceptance": {
+        "command": "the microphone-driven acceptance run (M5), which writes this file",
+        "result_path": "evaluation/results/countersign.json",
+        "predicate": "batch_signed_by_voice == true && changed_after_batch_unsigned == true && unmatched_voice_orders == 0 ; amber: changed_after_batch_unsigned == true && unmatched_voice_orders == 0",
+        "measured_on": "all_runs"
+      },
+      "wording": {
+        "pass": "Countersigned {batch_orders} orders as one read-back batch by voice; a change after the batch stayed unsigned, and no unmatched voice placed an order",
+        "partial": "Later changes stayed unsigned and no unmatched voice ordered, but the batch was not countersigned by voice",
+        "fail": "{unmatched_voice_orders} orders from an unmatched voice, or a change after the batch was signed",
+        "not_measured": "Not measured yet"
+      },
+      "evidence_links": []
+    },
+    {
+      "claim_id": "C-23",
+      "question": "Was speech attributed to the right clinician, and did another voice ever gain authority?",
+      "demo_surface": {
+        "step": "results",
+        "component": "results tile; live in the EMR strip: Dr B said, with no order placed"
+      },
+      "evaluation_view": {
+        "tab": "Decision points",
+        "table": "speaker attribution per line with the false-authority count"
+      },
+      "acceptance": {
+        "command": "the microphone-driven acceptance run (M5), which writes this file",
+        "result_path": "evaluation/results/speaker.json",
+        "predicate": "false_authority == 0 && unmatched_orders == 0 && other_clinician_recorded >= 1 ; amber: false_authority == 0 && unmatched_orders == 0",
+        "measured_on": "all_runs"
+      },
+      "wording": {
+        "pass": "No voice gained authority: {other_clinician_recorded} lines recorded as another clinician said, none acted on as an order, {unmatched_orders} orders from an unmatched voice",
+        "partial": "No false authority, but no other clinician's line was recorded",
+        "fail": "{false_authority} lines from another voice were acted on with the owner's authority",
+        "not_measured": "Not measured yet"
+      },
+      "evidence_links": []
+    },
+    {
+      "claim_id": "C-24",
+      "question": "Did the doctor's agent hand work to another agent through the record, with acknowledgement and completion kept apart?",
+      "demo_surface": {
+        "step": "results",
+        "component": "results tile; live in each owner's strip and bell: the task handed on, accepted by voice, completed from the record"
+      },
+      "evaluation_view": {
+        "tab": "Decision points",
+        "table": "delegations with assignment, acknowledgement and completion"
+      },
+      "acceptance": {
+        "command": "the microphone-driven acceptance run (M5), which writes this file",
+        "result_path": "evaluation/results/delegation.json",
+        "predicate": "accepted_by_voice >= 1 && completed_from_record >= 1 && acknowledged_counted_as_done == 0 && previews_with_names == 0 && privilege_gained == 0 ; amber: acknowledged_counted_as_done == 0 && previews_with_names == 0 && privilege_gained == 0",
+        "measured_on": "all_runs"
+      },
+      "wording": {
+        "pass": "Handed work on through the record: {accepted_by_voice} tasks accepted by voice, {completed_from_record} completed only once the record showed them, no preview named a patient",
+        "partial": "No acknowledgement counted as done and no name in a preview, but nothing was both accepted by voice and completed from the record",
+        "fail": "{acknowledged_counted_as_done} acknowledgements counted as done, {previews_with_names} previews with a name, or {privilege_gained} privileges gained",
+        "not_measured": "Not measured yet"
+      },
+      "evidence_links": []
+    },
+    {
+      "claim_id": "C-25",
+      "question": "Remember: was a clinician's preference applied on a fresh encounter and withheld where its scope says?",
+      "demo_surface": {
+        "step": "results",
+        "component": "results tile; live in the EMR strip: the preference used with its source, and the one not used with why"
+      },
+      "evaluation_view": {
+        "tab": "Decision points",
+        "table": "preferences applied and withheld, with source and scope"
+      },
+      "acceptance": {
+        "command": "SANDBOX=1 vitest run packages/pisgah-adapter/test/e6.sandbox.test.ts with HEY_PISGAH_E6_REMEMBER set",
+        "result_path": "evaluation/results/remember.json",
+        "predicate": "applied_on_fresh_encounter == true && applied_source_visible == true && candidate_held_before_scope == true && withheld_where_scope_says >= 1 ; amber: candidate_held_before_scope == true && withheld_where_scope_says >= 1",
+        "measured_on": "dev"
+      },
+      "wording": {
+        "pass": "Remembered a correction only once its owner chose a scope, then used it on a fresh patient with its source shown ({applied_value_in_record} in the record), and withheld a rule scoped to another ward",
+        "partial": "Kept a correction to its entry until a scope was chosen and withheld a rule outside its scope, but did not use a preference on a fresh encounter",
+        "fail": "A preference was used without a scope decision, or nowhere withheld where its scope says",
+        "not_measured": "Not measured yet"
+      },
+      "evidence_links": []
+    },
+    {
+      "claim_id": "C-26",
+      "question": "Discover: did the investigator propose a dev-valid change from evidence without being handed it?",
+      "demo_surface": {
+        "step": "4",
+        "component": "workflow change card with its trade-offs, and the ladder of runs"
+      },
+      "evaluation_view": {
+        "tab": "Prediction checks",
+        "table": "adaptive runs per commitment revision, k of n, with the answer-invariance gate"
+      },
+      "acceptance": {
+        "command": "npm run discover (adaptive, medium) per run, then npx tsx apps/cli/src/discover-claim.ts --invariance pass after the answer-invariance test",
+        "result_path": "evaluation/results/discovery.json",
+        "predicate": "discover_dev_valid >= 1 && discover_invariance_pass == true && discover_deny_clean == true ; amber: discover_dev_valid_any >= 1",
+        "measured_on": "dev"
+      },
+      "wording": {
+        "pass": "Found a change that helps, at a stated cost: {discover_dev_valid} of {discover_runs} blind runs under the answer-invariance gate proposed a dev-valid change; the adopted one gives {discover_share} of the planted change's gain and adds {discover_rework_events} document revisions",
+        "partial": "{discover_dev_valid_any} runs proposed a dev-valid change, but none under the answer-invariance gate",
+        "fail": "No blind run proposed a dev-valid change",
+        "not_measured": "Not measured yet"
+      },
+      "evidence_links": []
+    },
+    {
+      "claim_id": "C-27",
+      "question": "Improve: did the adopted change run differently on a fresh applicable case and stay withheld on the inapplicable one?",
+      "demo_surface": {
+        "step": "5",
+        "component": "adoption record, the fresh case's timeline beside version 1, and the withheld case"
+      },
+      "evaluation_view": {
+        "tab": "Decision points",
+        "table": "fresh applicable case and withheld case under the adopted version"
+      },
+      "acceptance": {
+        "command": "version adopt through serve, two live demo tasks, then npx tsx apps/cli/src/improve.ts report",
+        "result_path": "evaluation/results/improve.json",
+        "predicate": "adopted_by_person == true && human_approval == true && fresh_applicable.executed_differently == true && fresh_applicable.actions_open == 0 && fresh_applicable.state == 'done' && withheld.version_withheld == true && withheld.actions_open == 0 && withheld.state == 'done' ; amber: adopted_by_person == true && fresh_applicable.executed_differently == true && withheld.version_withheld == true",
+        "measured_on": "dev"
+      },
+      "wording": {
+        "pass": "A person adopted the change; on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes, and on {withheld_case} it was withheld by its scope",
+        "partial": "Ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes) and was withheld on {withheld_case}, adopted by the disclosed synthetic ward manager; awaiting Samuel's approval",
+        "fail": "The adopted change did not run differently on the fresh case, or was not withheld where its scope says",
+        "not_measured": "Not measured yet"
+      },
+      "evidence_links": []
+    },
+    {
+      "claim_id": "C-28",
+      "question": "Was each clinician's nightly memo checked against the records before it was published, with names kept out?",
+      "demo_surface": {
+        "step": "results",
+        "component": "results tile; the bell and inbox memo in the EMR"
+      },
+      "evaluation_view": {
+        "tab": "Truthful completion",
+        "table": "memo verdicts per recipient with the refused faults"
+      },
+      "acceptance": {
+        "command": "npx tsx apps/cli/src/nightly.ts over the day's evidence and task stores, delivered through the door with a record expectation per recipient",
+        "result_path": "evaluation/results/memo.json",
+        "predicate": "verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0 && authorised_recipients >= 1 && authorised_delivered == authorised_recipients && correct_refusals == refusals && incorrect_outcomes == 0 ; amber: verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0",
+        "measured_on": "dev"
+      },
+      "wording": {
+        "pass": "Every memo was checked against the records; {authorised_delivered} of {authorised_recipients} authorised recipients received it through the door, {correct_refusals} of {refusals} refusals were correct, {checks_failed_closed} of {checks_tried} planted faults were refused and no preview named a patient",
+        "partial": "Every memo passed its checks and {checks_failed_closed} of {checks_tried} planted faults were refused, but only {authorised_delivered} of {authorised_recipients} authorised recipients received it and {correct_refusals} of {refusals} refusals were correct",
+        "fail": "A memo failed its checks, named a patient where it must not, or a planted fault was published",
+        "not_measured": "Not measured yet"
+      },
+      "evidence_links": []
     }
   ],
   "revisions": [
@@ -617,6 +842,67 @@
         }
       },
       "reason": "Predicates now read the real result files. C-04, C-05 and C-06 read files the claims-results command writes from the published adaptive runs (newest commitment revision; k of n kept beside each), because discovery.json and validation.json hold the evaluator's placeholders at the top level and the three wordings share the placeholder n. C-07 and C-08 read adoption.json, built from the two demo runs on the simulator, the fresh EMR journey and the version log; they are measured on dev cases, not reserved ones, since no reserved run exists yet, so measured_on says dev. C-16 is tightened: green also needs the delay hypotheses on the late-entry case to cite at least one late entry, because a zero count over hypotheses that never touch a late entry tests nothing; the partial wording now says that, without the words the step 1 page must not show. C-10's fail wording said the cycle was not run; a cycle that ran out of calls with no result is also red under the unchanged predicate and now says so. No predicate was loosened. C-09 and C-11 are unchanged: C-11 still reads the reserved RUN.json, which does not exist yet."
+    },
+    {
+      "date": "2026-10-30",
+      "by": "E6",
+      "claims": [
+        "C-10",
+        "C-20",
+        "C-21",
+        "C-22",
+        "C-23",
+        "C-24",
+        "C-25",
+        "C-26",
+        "C-27",
+        "C-28"
+      ],
+      "previous_predicates": {
+        "C-10": "cycle2_result_recorded && no_hypothesis_cited_as_evidence"
+      },
+      "previous_acceptance": {},
+      "previous_wording": {
+        "C-10": {
+          "pass": "A second pass over the verified outcomes concluded: {result}",
+          "partial": "Second cycle ran and ended without a conclusion",
+          "fail": "Second cycle ran and reached no result; it stopped at {stop}",
+          "not_measured": "Not measured yet"
+        }
+      },
+      "reason": "Added C-20 to C-28. C-20 to C-24 read files the microphone-driven acceptance run writes (touches, speed, countersign, speaker, delegation); they stay not measured until M5 writes them with these field names. The learning claims are three, each with its own file: C-25 remember reads remember.json (the sandbox preference run), C-26 discover reads discovery.json's discover_* summary (dev-valid adaptive runs under revisions with the answer-invariance gate, wording a change that helps at a stated cost, never the best change), C-27 improve reads improve.json (green also needs Samuel's own approval, so the synthetic ward manager's adoption is amber). C-28 memo reads memo.json and is green only once the memo is delivered through a door route. No predicate reads another claim's file. C-10 is tightened: its pass wording says the cycle worked over the verified outcomes, so green also needs it to have read at least one of them; E6's second cycle reached a new dev-valid proposal while reading 0 of 2 outcome cases, which is now amber with wording that says so."
+    },
+    {
+      "date": "2026-10-30",
+      "by": "coordinator",
+      "claims": [
+        "C-06",
+        "C-07"
+      ],
+      "previous_predicates": {
+        "C-06": "dev_gate_pass && exception_check_pass && fences_unchanged ; amber: proposals_validated >= 1",
+        "C-07": "adopted_by_person && ac09_pass && order_differs_where_diff_says"
+      },
+      "reason": "C-06 and C-07 asked the questions C-26 (discover) and C-27 (improve) now measure on E6.d's blind runs under the answer-invariance gate and E6's adoption, fresh and withheld cases; the M4.c result files they read predate the discovery rerun and the learning-claims script cannot read E6.d's store layout, so both now read the same result files as their successors; wording and status follow those files"
+    },
+    {
+      "date": "2026-10-30",
+      "by": "E6.m",
+      "claims": [
+        "C-28"
+      ],
+      "previous_predicates": {
+        "C-28": "delivered == true && verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0 ; amber: verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0"
+      },
+      "previous_wording": {
+        "C-28": {
+          "pass": "Every memo was checked against the records and delivered to the bell and inbox; {checks_failed_closed} of {checks_tried} planted faults were refused and no preview named a patient",
+          "partial": "Every memo passed its checks and {checks_failed_closed} of {checks_tried} planted faults were refused, but the memos are held: {delivery}",
+          "fail": "A memo failed its checks, named a patient where it must not, or a planted fault was published",
+          "not_measured": "Not measured yet"
+        }
+      },
+      "reason": "The memo now goes through the door, so the amber wording no longer says held. Green needs every recipient the record authorises to have received it, every refusal to be one the record calls for, and no outcome against the record, on top of the unchanged checks; amber keeps the checks and states the counts. The expectation per recipient is read from the record before the run, not from the door's answer."
     }
   ]
 }

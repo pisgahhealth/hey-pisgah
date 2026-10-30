@@ -1,7 +1,7 @@
 import { canonical, sha256 } from "@hey-pisgah/contracts";
 import {
   EMERGENCY_KIND, EmrId, EmrPortError, OBSERVATION_KIND, ObservationArgs, READ_ONLY_KINDS,
-  type EmrCommit, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type EmrWriteKind, type InboxPage, type Orderables, type Provenance,
+  type DelegationRead, type DelegationTeam, type EmrCommit, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type EmrWriteKind, type InboxPage, type Orderables, type Provenance,
   type PaperworkReadBack, type ReadBack, type SayableNames, type SpeakerVerdict, type WatchOffer, type WatchRead, type WorkArgs
 } from "@hey-pisgah/agent";
 import { fillPath, fillTemplate, pathPattern, pick, type DoorProfile } from "./profile.js";
@@ -63,6 +63,7 @@ export class PisgahPort implements EmrPort {
     const reads = [
       ...(ops.patient_context ? [ops.patient_context.path] : []), ...profile.owners.flatMap((o) => (o.context ? [o.context.path] : [])), ...Object.values(profile.watches).map((w) => w.path),
       ...(profile.inbox ? [profile.inbox.path, ...(profile.inbox.detail ? [profile.inbox.detail.path] : [])] : []),
+      ...(profile.delegations ? [profile.delegations.list.path, profile.delegations.one.path] : []),
       ...Object.values(profile.work).flatMap((w) => ("reads" in w ? Object.values(w.reads).map((r) => r.path) : [...(w.proof ? [w.proof.path] : []), ...(w.before ?? []).map((b) => b.path)]))
     ];
     const writes = Object.values(profile.work).flatMap((w) => ("method" in w ? [w.path] : []));
@@ -70,7 +71,7 @@ export class PisgahPort implements EmrPort {
       ops.read_admission, ops.write_observation, ...(ops.census ? [ops.census] : []),
       ...(ops.speaker ? [{ method: "POST", path: ops.speaker.path }] : []), ...(ops.read_back ? [{ method: "GET", path: ops.read_back.path }] : []),
       ...(ops.paperwork ? [{ method: "GET", path: ops.paperwork.path }] : []),
-      ...reads.map((path) => ({ method: "GET", path })), ...writes.map((path) => ({ method: "POST", path }))
+      ...reads.map((path) => ({ method: "GET", path })), ...writes.map((path) => ({ method: "POST", path })), ...(profile.memos ? [{ method: "POST", path: profile.memos.path }] : [])
     ].map((x) => ({ method: x.method, re: pathPattern(x.path) }));
     for (const a of this.allow) for (const d of [...profile.deny, ...profile.deny_exact]) if (a.re.test(d)) throw new Error("the profile allows a denied path");
   }
@@ -143,6 +144,36 @@ export class PisgahPort implements EmrPort {
       tests: { resulted: tests.filter((x) => pick(x, op.test_resulted) === true).length, total: tests.length },
       unsigned: Number.isFinite(unsigned) ? unsigned : 0
     };
+  }
+
+  delegationSide(owner: string): "none" | "assignee" | "delegator" | "both" {
+    return this.profile.delegations ? this.profile.owners.find((x) => x.id === owner)?.delegation ?? "none" : "none";
+  }
+  // Only owners this serve holds a bearer for are polled, so an owner left out of a run is never a refused read.
+  delegationOwners(): readonly string[] { return this.profile.owners.filter((x) => this.delegationSide(x.id) !== "none" && this.o.bearers[x.id]).map((x) => x.id); }
+  // The teams are the hospital's, the same for every owner who may hand work on.
+  delegationTeams(owner: string): Record<string, DelegationTeam> {
+    const side = this.delegationSide(owner);
+    if (side !== "delegator" && side !== "both") return {};
+    return Object.fromEntries(Object.entries(this.profile.delegations?.teams ?? {}).map(([k, t]) => [k, { words: t.words, task_kind: t.task_kind, title: t.title, label: t.label, ...(t.escalate_after_minutes !== undefined ? { escalate_after_minutes: t.escalate_after_minutes } : {}) }]));
+  }
+  delegationHandoffs(owner: string): Record<string, { team: string; subject_table: string }> {
+    const side = this.delegationSide(owner);
+    return side === "delegator" || side === "both" ? this.profile.delegations?.handoffs ?? {} : {};
+  }
+  // The open tasks handed to the owner, or handed on by them, as the door lists them.
+  async delegations(owner: string, as: "assignee" | "delegator", prov: Provenance): Promise<DelegationRead[]> {
+    const spec = this.profile.delegations;
+    if (!spec || this.delegationSide(owner) === "none" || !this.o.bearers[owner]) return [];
+    const json = await this.read(spec.list, { as }, prov);
+    const list = pick(json, spec.list.list_path);
+    return (Array.isArray(list) ? list : []).map(delegationOf).filter((d): d is DelegationRead => d !== null);
+  }
+  // One task with what the record says about it, read fresh.
+  async delegation(owner: string, id: string, prov: Provenance): Promise<DelegationRead | null> {
+    const spec = this.profile.delegations;
+    if (!spec || this.delegationSide(owner) === "none" || !EmrId.safeParse(id).success) return null;
+    return delegationOf(await this.read(spec.one, { delegation_id: id }, prov));
   }
 
   refusedCount(): number { return this.refusals.length; }
@@ -353,6 +384,15 @@ export class PisgahPort implements EmrPort {
     if (kind === "order_test") { const tst = this.profile.orders?.tests[String(a["test"])]; if (tst) v["test_name"] = tst.name; }
     if (kind === "prescribe") { const d = this.profile.orders?.drugs[String(a["drug"])]; if (d) { v["drug_catalog_id"] = d.id; v["duration"] = a["duration_days"]; } }
     if (kind === "countersign") v["first_item_id"] = (a["item_ids"] as string[] | undefined)?.[0];
+    if (kind === "delegate_task" || kind === "request_ward_review") {
+      // A team is named by its key; who takes it in the EMR comes from the profile, never from the words.
+      const team = this.profile.delegations?.teams[String(a["team"])];
+      if (team) {
+        v["assignee"] = team.person_id ? { facilityUserId: team.person_id } : Object.fromEntries(Object.entries({ role: team.role, clinicId: team.clinic_id, wardId: team.ward_id, unitFacilityId: team.unit_facility_id }).filter(([, x]) => x !== undefined));
+        if (team.clinic_id) v["clinic_id"] = team.clinic_id;
+      }
+      if (a["subject_table"] && a["subject_id"]) v["subject"] = { table: a["subject_table"], id: a["subject_id"] };
+    }
     return v;
   }
 
@@ -482,6 +522,26 @@ export class PisgahPort implements EmrPort {
     }
     return out;
   }
+}
+
+const opt = (v: unknown): string | null => (typeof v === "string" && v.length ? v : null);
+const flag = (v: unknown): boolean | null => (typeof v === "boolean" ? v : null);
+// One delegation from the door's answer, or null when it is not one.
+function delegationOf(x: unknown): DelegationRead | null {
+  const id = opt(pick(x, "id"));
+  const patient = opt(pick(x, "patientId"));
+  if (!id || !EmrId.safeParse(id).success || !patient) return null;
+  const status = opt(pick(x, "record.status"));
+  return {
+    id, kind: String(pick(x, "kind") ?? ""), title: String(pick(x, "title") ?? ""), patient_id: patient, admission_id: opt(pick(x, "admissionId")), visit_id: opt(pick(x, "visitId")),
+    state: String(pick(x, "state") ?? ""), assignee: opt(pick(x, "assignee.facilityUserId")), rule: String(pick(x, "assignee.rule") ?? ""),
+    acknowledged_at: opt(pick(x, "acknowledgedAt")), completed_at: opt(pick(x, "completedAt")), completion_record_id: opt(pick(x, "completionRecordId")),
+    due_at: opt(pick(x, "dueAt")), overdue: pick(x, "overdue") === true, escalated_at: opt(pick(x, "escalatedAt")),
+    record: { status: status === "verified" || status === "verifier_error" ? status : "unsupported_or_incomplete", record_id: opt(pick(x, "record.recordId")), reason: opt(pick(x, "record.reason")) },
+    instruction: opt(pick(x, "instruction")), nudged: Array.isArray(pick(x, "nudged")) ? (pick(x, "nudged") as unknown[]).map(String) : [],
+    subject_id: opt(pick(x, "subject.id")), subject_prepared: flag(pick(x, "subjectPrepared")), order_received: flag(pick(x, "orderReceived")), consult_finished: flag(pick(x, "consultFinished")), created_at: opt(pick(x, "createdAt")),
+    subject_ready: flag(pick(x, "subjectReady")), awaiting_payment: flag(pick(x, "awaitingPayment"))
+  };
 }
 
 // One proof check: "$name" equal, "@nonnull", "@recent:<seconds>" for a time written just now, "@startswith:$name" on the first 40 characters, or "@contains:$name".

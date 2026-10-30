@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { SpeakerVerdict } from "./speaker.js";
+import type { DelegationHandoff, DelegationRead, DelegationTeam } from "./delegate.js";
 
 // The one write kind an EMR agent holds in M1, and the shape of its arguments.
 export const OBSERVATION_KIND = "record_observation" as const;
@@ -76,6 +77,13 @@ export interface EmrPort {
   orderables?(): Orderables;
   // The discharge paperwork filled from the record, read back before the owner confirms.
   readPaperwork?(owner: string, admissionId: string, prov: Provenance): Promise<PaperworkReadBack>;
+  // Which side of a delegation this owner's agent follows, the teams it may hand work to, and the reads of a delegation.
+  delegationSide?(owner: string): "none" | "assignee" | "delegator" | "both";
+  delegationOwners?(): readonly string[];
+  delegationTeams?(owner: string): Record<string, DelegationTeam>;
+  delegationHandoffs?(owner: string): Record<string, DelegationHandoff>;
+  delegations?(owner: string, as: "assignee" | "delegator", prov: Provenance): Promise<DelegationRead[]>;
+  delegation?(owner: string, id: string, prov: Provenance): Promise<DelegationRead | null>;
 }
 
 // Prescribed and dispensed stay apart; each exception is for the responsible doctor to confirm, and the digest binds the confirmation to this reading.

@@ -60,7 +60,7 @@ export function cycle2Result(storeRoot: string, runId: string, o: { observed: re
   const rows = readStream(storeRoot, `ledger/${runId}`).filter((e) => e.record_type === "model.call").map((e) => LedgerRow.parse(e.payload));
   return {
     measured_at: new Date().toISOString(), measured: true, source: "cycle2_run", set: "dev", run_id: runId,
-    commitment: opened["commitment"], effort: (opened["settings"] as Row | undefined)?.["effort"] ?? null, model: opened["model"] ?? null,
+    commitment: opened["commitment"], effort: opened["effort"] ?? (opened["settings"] as Row | undefined)?.["effort"] ?? null, model: opened["model"] ?? null,
     pool: { histories: bySource("history").length, outcomes: bySource("outcome").length, observed: bySource("observed").length },
     read: { histories: readOf("history").length, outcomes: readOf("outcome").length, observed: readOf("observed").length, observed_case_ids: readOf("observed"), outcome_case_ids: readOf("outcome") },
     cited_events: { histories: cited("history"), outcomes: cited("outcome"), observed: cited("observed") },

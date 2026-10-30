@@ -1,0 +1,73 @@
+{
+ "measured_at": "2026-10-30T01:13:45.517Z",
+ "measured": true,
+ "source": "sandbox_emr_live",
+ "set": "sandbox",
+ "mode": "live",
+ "owner_role": "doctor",
+ "candidate_held_before_scope": true,
+ "applied_on_fresh_encounter": true,
+ "applied_value_in_record": "q2h",
+ "applied_source_visible": true,
+ "withheld_where_scope_says": 1,
+ "withheld_reasons": [
+  "no scope was chosen for it, so it stayed with the entry it came from",
+  "its scope is ward A and E and this patient is on children's ward"
+ ],
+ "scope_decided_by": "owner, one word",
+ "corrected_entry_in_record": "q2h",
+ "record_checks": "read-only SQL on the sandbox care plan, items made by the doctor's agent",
+ "strip": {
+  "correction_patient": [
+   "Kept: observation items two hourly (q2h), scope your patients."
+  ],
+  "second_patient_before_scope": [
+   "Not used here: observation items six hourly (q6h), from a hospital rule added as text \"A and E rule: observations six hourly for every admitted patient.\", because its scope is ward A and E and this patient is on children's ward.",
+   "Not used here: observation items two hourly (q2h), from your correction \"No, make that two hourly.\", because no scope was chosen for it, so it stayed with the entry it came from."
+  ],
+  "fresh_patient_after_scope": [
+   "Not used here: observation items six hourly (q6h), from a hospital rule added as text \"A and E rule: observations six hourly for every admitted patient.\", because its scope is ward A and E and this patient is on children's ward.",
+   "observation items two hourly (q2h): used your correction \"No, make that two hourly.\", scope your patients."
+  ],
+  "applied": [
+   {
+    "pref_id": "pf-1c4b5899",
+    "value": "q2h",
+    "text": "observation items two hourly (q2h)",
+    "scope": "your patients",
+    "source": "your correction \"No, make that two hourly.\""
+   }
+  ],
+  "withheld": [
+   {
+    "pref_id": "pf-e3371ffa",
+    "value": "q6h",
+    "scope": "ward A and E",
+    "reason": "its scope is ward A and E and this patient is on children's ward"
+   },
+   {
+    "pref_id": "pf-1c4b5899",
+    "value": "q2h",
+    "scope": "no scope chosen",
+    "reason": "no scope was chosen for it, so it stayed with the entry it came from"
+   },
+   {
+    "pref_id": "pf-e3371ffa",
+    "value": "q6h",
+    "scope": "ward A and E",
+    "reason": "its scope is ward A and E and this patient is on children's ward"
+   }
+  ]
+ },
+ "patients": 3,
+ "gate_calls": 7,
+ "cost_usd": 0.037681,
+ "efforts": [
+  "low"
+ ],
+ "models": [
+  "meta-models/Muse-Spark-Open-816B-A42B"
+ ],
+ "unit_tests": "packages/agent/test/preferences.test.ts (8 tests)",
+ "sandbox_test": "packages/pisgah-adapter/test/e6.sandbox.test.ts"
+}
