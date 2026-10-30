@@ -197,9 +197,10 @@ describe("EMR runtime", () => {
     const a = await say(rt, "Chart pulse 96");
     await rt.settled();
     expect(port.writes).toHaveLength(1);
-    expect(rt.view(a.task_id)!.actions[0]).toMatchObject({ state: "failed", reason: "unproved" });
+    // Saved but not found by its read: held as awaiting verification, never failed and never completed.
+    expect(rt.view(a.task_id)!.actions[0]).toMatchObject({ state: "acknowledged", awaiting_verification: { attempts: 1 } });
     expect(rt.view(a.task_id)!.actions[0]!.proof).toBeUndefined();
-    expect(rt.view(a.task_id)!.state).toBe("done");
+    expect(rt.view(a.task_id)!.state).toBe("running");
     await rt.stop();
   });
 

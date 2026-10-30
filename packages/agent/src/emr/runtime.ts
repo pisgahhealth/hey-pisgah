@@ -32,6 +32,8 @@ export type EmrAction = {
   report: string | null; draft: string | null;
   // Written and acknowledged, but no read the EMR offers can show it, so it is never marked completed.
   unverified: boolean;
+  // Saved by the door but not yet found by its verification read; reconciled by the record id or the same key, never marked failed for it.
+  awaiting_verification: { since: string; attempts: number; reason: string } | null;
   // Vitals heard from audio wait for the second ear to agree before the write.
   ears: boolean;
   // A voice order waits for the owner's own matched voice, or for the spoken confirmation a controlled drug needs; the lines that gave them.
@@ -92,6 +94,7 @@ export type EmrTaskView = {
     line_id: string; args: Record<string, unknown>; proposed_at: string; written_at: string | null;
     proof?: { record_id: string; record_version: number; event_ids: string[] };
     report?: string; draft?: string; unverified?: true; awaiting?: "owner_voice" | "confirm"; authorised_by_line?: string;
+    awaiting_verification?: { since: string; attempts: number; reason: string };
     // The page the strip opens and fills for this action; command_id and owner_id bind it through navigation.
     screen?: ScreenPlan & { command_id: string; owner_id: string };
   }[];
@@ -125,6 +128,8 @@ export type EmrRuntimeOptions = {
   // How long a proposed action waits before its write, so a spoken correction or a Stop can reach it first.
   holdMs?: number;
   proofRetryMs?: number;
+  // The waits between verification reads of a saved write the first read missed; after the last it stays awaiting until a restart reads again.
+  reconcileMs?: readonly number[];
   routes?: { primary: IntentRoute; fallback: IntentRoute | null };
   // The speech gate for ambient lines; the default is the committed settings.
   gate?: GateSettings;
@@ -145,7 +150,9 @@ export type EmrRuntimeOptions = {
   wallNow?: () => Date;
   log?: (line: string) => void;
   // Called when the agent moves to the patient the clinician is with: a spoken name or an arrival it opened.
-  onSubject?: (owner: string, target: EmrTarget, by: "spoken" | "emergency" | "delegation") => void;
+  onSubject?: (owner: string, target: EmrTarget, by: "spoken" | "emergency" | "delegation", at?: string) => void;
+  // Called when an arrival the agent was asked to open ends refused or failed, so speech held for it can be released.
+  onArrivalFailed?: (owner: string, taskId: string, reason: string) => void;
   // The A&E clinic a spoken emergency opens its arrival on.
   emergencyClinicId?: string;
   // The clinicians' remembered preferences; without it no preference is kept or applied.
@@ -154,6 +161,9 @@ export type EmrRuntimeOptions = {
 
 const OPEN_ACTION: ReadonlySet<EmrActionState> = new Set(["proposed", "sent", "acknowledged"]);
 const CLOSED_TASK: ReadonlySet<TaskState> = new Set(["cancelled", "failed"]);
+// The waits between verification reads of a saved write; a restart reads it again after the last.
+export const RECONCILE_MS: readonly number[] = [1000, 3000, 10_000, 30_000, 60_000];
+const RESUME_WINDOW_MS = 10 * 60_000;
 const Z = { recorded_at: 0, occurred_at: 0 };
 type P = Record<string, unknown>;
 
@@ -225,7 +235,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       t.actions.set(String(x["action_id"]), {
         action_id: String(x["action_id"]), kind: String(x["kind"] ?? OBSERVATION_KIND), args: x["args"] as WorkArgs, summary: String(x["summary"]), line_id: String(x["line_id"]),
         corrects_action_id: (x["corrects_action_id"] as string | null) ?? null, state: "proposed", intent_key: null, written: null, proof: null, reason: null,
-        proposed_at: e.wall_at, written_at: null, completed_at: null, report: null, draft: null, unverified: false, ears: !!x["ears"],
+        proposed_at: e.wall_at, written_at: null, completed_at: null, report: null, draft: null, unverified: false, awaiting_verification: null, ears: !!x["ears"],
         awaiting: (x["awaiting"] as EmrAction["awaiting"] | undefined) ?? null, authorised_by_line: (x["authorised_by_line"] as string | null | undefined) ?? null, confirmed_by_line: null,
         screen: (x["screen"] as ScreenPlan | undefined) ?? null, read_back: null
       });
@@ -239,6 +249,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
     case "action.refused": if (act) { act.state = "refused"; act.reason = String(x["reason"]); } break;
     case "action.failed": if (act) { act.state = "failed"; act.reason = String(x["reason"]); } break;
     case "action.unverified": if (act) { act.unverified = true; act.reason = String(x["reason"]); } break;
+    case "action.awaiting_verification": if (act) act.awaiting_verification = { since: act.awaiting_verification?.since ?? e.wall_at, attempts: Number(x["attempts"]), reason: String(x["reason"]) }; break;
     case "action.reported": if (act) { act.report = (x["report"] as string | null) ?? null; act.draft = (x["draft"] as string | null) ?? null; } break;
     case "task.state_changed": t.state = x["to"] as TaskState; t.reason = (x["reason"] as string | null) ?? null; break;
     case "task.linked": t.admission_id = String(x["admission_id"]); break;
@@ -304,6 +315,7 @@ export function viewOf(t: EmrTask): EmrTaskView {
       line_id: a.line_id, args: Object.fromEntries(Object.entries(a.args).filter(([k]) => k !== "admission_id")), proposed_at: a.proposed_at, written_at: a.written_at,
       ...(a.proof ? { proof: { record_id: a.proof.record_id, record_version: a.proof.record_version, event_ids: a.proof.event_ids } } : {}),
       ...(a.report ? { report: a.report } : {}), ...(a.draft ? { draft: a.draft } : {}), ...(a.unverified ? { unverified: true as const } : {}), ...(a.awaiting ? { awaiting: a.awaiting } : {}),
+      ...(a.awaiting_verification && a.state === "acknowledged" ? { awaiting_verification: { ...a.awaiting_verification } } : {}),
       ...(a.authorised_by_line && a.authorised_by_line !== a.line_id ? { authorised_by_line: a.authorised_by_line } : {}),
       ...(a.screen ? { screen: { ...a.screen, encounter: { patient_id: a.screen.encounter.patient_id ?? t.patient_id, visit_id: a.screen.encounter.visit_id ?? t.visit_id, admission_id: a.screen.encounter.admission_id ?? (t.admission_id || null) }, command_id: a.action_id, owner_id: t.owner } } : {})
     })),
@@ -468,6 +480,8 @@ type EarsOutcome = { check: EarsCheck; reading: EarReading | null; error: string
 export class EmrRuntime {
   private readonly live = new Map<string, Live>();
   private readonly timers = new Set<NodeJS.Timeout>();
+  private readonly recon = new Set<NodeJS.Timeout>();
+  private readonly reconRound = new Map<string, number>();
   private lineCounter = 0;
   private stopped = false;
   private poller: NodeJS.Timeout | null = null;
@@ -550,6 +564,7 @@ export class EmrRuntime {
       const l: Live = this.liveOf(stream);
       this.live.set(id, l);
       if (CLOSED_TASK.has(l.task.state)) continue;
+      this.resumeDependents(l);
       for (const aid of l.task.order) {
         const a = l.task.actions.get(aid)!;
         if (a.state === "sent" || (a.state === "acknowledged" && !a.unverified)) this.enqueueExec(l, () => this.execute(l, aid));
@@ -575,6 +590,8 @@ export class EmrRuntime {
     this.obTick = null;
     for (const t of this.timers) clearTimeout(t);
     this.timers.clear();
+    for (const t of this.recon) clearTimeout(t);
+    this.recon.clear();
     await Promise.all([...this.live.values()].flatMap((l) => [l.queue, l.writes]));
     await Promise.all([...this.side]);
     for (const l of this.live.values()) l.stream.close();
@@ -681,7 +698,7 @@ export class EmrRuntime {
         .map((t) => ({ label: t.label, target: t.admission_id ? { admission_id: t.admission_id } : { patient_id: t.patient_id! } }));
       const moved = spokenPatient(text, known);
       const target = moved && JSON.stringify(moved.target) !== JSON.stringify(s.target) ? moved.target : s.target;
-      if (target !== s.target) this.o.onSubject?.(s.owner, target, "spoken");
+      if (target !== s.target) this.o.onSubject?.(s.owner, target, "spoken", spokenAt);
       ctx = target === s.target && s.context && s.context.admission_id === s.target.admission_id ? s.context : await this.o.port.resolve(target, prov);
       l = this.taskFor(s.owner, ctx) ?? this.openTask(s.owner, ctx);
     }
@@ -2025,6 +2042,7 @@ export class EmrRuntime {
       }
       if (!c.ok) {
         this.append(l, c.retryable ? "action.failed" : "action.refused", { action_id: actionId, reason: c.reason, status: c.status, counted: c.counted });
+        if (a.kind === EMERGENCY_KIND) this.o.onArrivalFailed?.(t.owner, t.task_id, c.reason);
         if (a.kind === "countersign" && !c.retryable) this.note(l, "Nothing was signed: the orders changed after they were read back, or one is not yours to sign now. Say sign everything to read them back again.");
         return this.settle(l, c.retryable ? "write_failed" : "write_refused");
       }
@@ -2034,35 +2052,40 @@ export class EmrRuntime {
     const w = a.written!;
     const v0 = Date.now();
     let proof: EmrProof | null;
-    // Lever 3: a second read starts at 500 ms when the first is slow or finds nothing, and the first proof found wins.
-    if (this.lv.proofBeside) proof = await hedgedRead(() => this.o.port.prove(a.kind, a.args, w, prov), PROOF_HEDGE_MS);
-    else {
-      proof = await this.o.port.prove(a.kind, a.args, w, prov);
-      if (!proof) {
-        await new Promise((r) => setTimeout(r, this.o.proofRetryMs ?? 500));
+    let readError: string | null = null;
+    try {
+      // Lever 3: a second read starts at 500 ms when the first is slow or finds nothing, and the first proof found wins.
+      if (this.lv.proofBeside) proof = await hedgedRead(() => this.o.port.prove(a.kind, a.args, w, prov), PROOF_HEDGE_MS);
+      else {
         proof = await this.o.port.prove(a.kind, a.args, w, prov);
+        if (!proof) {
+          await new Promise((r) => setTimeout(r, this.o.proofRetryMs ?? 500));
+          proof = await this.o.port.prove(a.kind, a.args, w, prov);
+        }
       }
+    } catch (e) {
+      // A read that errs says nothing about the write, so it counts as not found yet.
+      proof = null;
+      readError = e instanceof Error ? e.message.slice(0, 120) : "read failed";
     }
     const verifyMs = Date.now() - v0;
-    if (!proof && this.o.port.unverifiable?.(a.kind)) {
+    if (!proof && !readError && this.o.port.unverifiable?.(a.kind)) {
       this.append(l, "action.unverified", { action_id: actionId, reason: `Sent, not verified: ${this.o.port.unverifiable(a.kind)}` });
       this.note(l, `${a.summary}: sent, but not verified. ${this.o.port.unverifiable(a.kind)}`);
       return this.settle(l, "unverified");
     }
-    if (!proof || proof.record_id !== w.record_id) {
-      this.append(l, "action.failed", { action_id: actionId, reason: proof ? "proof_for_another_record" : "unproved" });
+    if (proof && proof.record_id !== w.record_id) {
+      this.append(l, "action.failed", { action_id: actionId, reason: "proof_for_another_record" });
+      if (a.kind === EMERGENCY_KIND) this.o.onArrivalFailed?.(t.owner, t.task_id, "proof_for_another_record");
       return this.settle(l, "unproved");
     }
+    if (!proof) return this.awaitVerification(l, a, readError);
     this.append(l, "action.completed", { action_id: actionId, proof });
     this.append(l, "speed.logged", { row: this.speedRow(t, a, verifyMs) });
+    // An unnamed arrival the agent opened becomes the task's patient and arrival first, so later words and any hand-off reach it.
+    this.linkArrival(l, a);
     if (DELEGATION_RULE_KINDS.has(a.kind)) this.afterDelegation(l, a, w.record_id);
     else this.handOff(l, a, w.record_id);
-    // An unnamed arrival the agent opened becomes the task's patient and arrival, so later words reach it.
-    if (a.kind === EMERGENCY_KIND && EmrId.safeParse(w.record_id).success) {
-      const visit = w.event_ids.map((e) => /^visit:(.+)$/.exec(e)?.[1]).find((v) => v && EmrId.safeParse(v).success) ?? null;
-      this.append(l, "task.subject", { patient_id: w.record_id, visit_id: visit, unidentified: true, by: actionId });
-      this.o.onSubject?.(t.owner, { patient_id: w.record_id }, "emergency");
-    }
     // An admission the agent requested or made becomes the task's subject, so later words reach the same task and held work can resume.
     if ((a.kind === "request_admission" || a.kind === "admit_patient") && !t.admission_id && EmrId.safeParse(w.record_id).success) {
       this.append(l, "task.linked", { admission_id: w.record_id, by: actionId });
@@ -2074,6 +2097,70 @@ export class EmrRuntime {
     // A pay link read back from the bill proves only that the request is recorded.
     if (a.kind === "send_pay_link") this.note(l, PAY_LINK_VERIFIED_NOTE);
     this.settle(l, "proved");
+  }
+
+  private linkArrival(l: Live, a: EmrAction): void {
+    const t = l.task;
+    const w = a.written;
+    if (a.kind !== EMERGENCY_KIND || !w || !EmrId.safeParse(w.record_id).success || t.patient_id === w.record_id) return;
+    const visit = w.event_ids.map((e) => /^visit:(.+)$/.exec(e)?.[1]).find((v) => v && EmrId.safeParse(v).success) ?? null;
+    this.append(l, "task.subject", { patient_id: w.record_id, visit_id: visit, unidentified: true, by: a.action_id });
+    this.o.onSubject?.(t.owner, { patient_id: w.record_id }, "emergency", t.lines.find((x) => x.id === a.line_id)?.at);
+  }
+
+  // A saved write its read did not find yet stays acknowledged and is read again on a timer; the same key is replayed from the second try, so the door names its record.
+  private awaitVerification(l: Live, a: EmrAction, readError: string | null): void {
+    const attempts = (a.awaiting_verification?.attempts ?? 0) + 1;
+    const waits = this.o.reconcileMs ?? RECONCILE_MS;
+    // Each process start gets its own round of reads, so a restart always tries again.
+    const round = (this.reconRound.get(a.action_id) ?? 0) + 1;
+    this.reconRound.set(a.action_id, round);
+    const next = round <= waits.length ? waits[round - 1]! : null;
+    this.append(l, "action.awaiting_verification", { action_id: a.action_id, attempts, reason: readError ? `verifier_error: ${readError}` : "saved; the record does not show it yet", next_in_ms: next });
+    if (attempts === 1) this.note(l, `${a.summary}: saved, awaiting verification. I will read the record again before anything depends on it.`);
+    this.settle(l, "awaiting_verification");
+    if (next === null || this.stopped) return;
+    const timer = setTimeout(() => {
+      this.recon.delete(timer);
+      if (!this.stopped) this.enqueueExec(l, () => this.reconcile(l, a.action_id));
+    }, next);
+    timer.unref?.();
+    this.recon.add(timer);
+  }
+
+  private async reconcile(l: Live, actionId: string): Promise<void> {
+    const a = l.task.actions.get(actionId);
+    if (!a || a.state !== "acknowledged" || !a.written || !a.intent_key) return;
+    if ((a.awaiting_verification?.attempts ?? 0) >= 2) {
+      // The door answers the same key with the record it saved; another record means the write is not the one asked for.
+      const c = await this.o.port.commit(a.kind, a.args, a.intent_key, this.provFor(l.task, a));
+      if (c.ok && c.record_id !== a.written.record_id) {
+        this.append(l, "action.failed", { action_id: actionId, reason: "proof_for_another_record" });
+        if (a.kind === EMERGENCY_KIND) this.o.onArrivalFailed?.(l.task.owner, l.task.task_id, "proof_for_another_record");
+        return this.settle(l, "unproved");
+      }
+    }
+    await this.execute(l, actionId);
+  }
+
+  // Work that follows a verified write and is missing after a restart is done now, once: the arrival's patient, the admission link and the hand-off.
+  private resumeDependents(l: Live): void {
+    for (const a of l.task.order.map((id) => l.task.actions.get(id)!).filter((x) => x.state === "completed" && x.written)) {
+      this.linkArrival(l, a);
+      if ((a.kind === "request_admission" || a.kind === "admit_patient") && !l.task.admission_id && EmrId.safeParse(a.written!.record_id).success) {
+        this.append(l, "task.linked", { admission_id: a.written!.record_id, by: a.action_id });
+        this.anchorReviews(l);
+      }
+      if (!DELEGATION_RULE_KINDS.has(a.kind) && this.diedAfter(l, a)) this.handOff(l, a, a.written!.record_id);
+    }
+  }
+
+  // True when the process stopped right after this action's completion, before anything else was journaled, and recently; older work is never handed on at a restart.
+  private diedAfter(l: Live, a: EmrAction): boolean {
+    const recs = l.stream.records();
+    const at = recs.findIndex((r) => r.record_type === "action.completed" && (r.payload as { action_id?: string }).action_id === a.action_id);
+    if (at < 0 || !a.completed_at || Date.now() - Date.parse(a.completed_at) > RESUME_WINDOW_MS) return false;
+    return recs.slice(at + 1).every((r) => !r.record_type.startsWith("action.") && !r.record_type.startsWith("delegation."));
   }
 
   // The page that shows a kind of work for this owner, bound to the task's encounter.
