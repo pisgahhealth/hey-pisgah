@@ -2,7 +2,7 @@ import { ExperimentBudget, hashJson, sha256 } from "@hey-pisgah/contracts";
 import { ModelError, type ChatMessage } from "@hey-pisgah/model";
 import { definitionDigest, resultDigest } from "./digest.js";
 import { REPEAT_LIMIT, SETTINGS, compact, type Digests, type LoopOptions, type LoopOutcome } from "./loop.js";
-import { CYCLE_CLOSED, LEDGER_HEADER, NUDGE, REPEAT_NOTE, STAGES, armHashes, fill, kickoff, systemPrompt } from "./prompts.js";
+import { CYCLE_CLOSED, LEDGER_HEADER, NUDGE, PROPOSE_NOTE, REPEAT_NOTE, STAGES, armHashes, fill, kickoff, systemPrompt } from "./prompts.js";
 import { armTools, dispatch, toolDefs } from "./tools.js";
 
 export type Stage = keyof typeof STAGES;
@@ -48,7 +48,8 @@ export async function runCycleLoop(o: CycleOptions): Promise<LoopOutcome> {
   let repeats = 0;
   let definitionSeen = false;
   const arm = new Set<string>(armTools("adaptive"));
-  const offered = (st: Stage) => new Set(STAGE_TOOLS[st].filter((t) => arm.has(t)));
+  // submit_proposal is offered in interpret only once a delivered experiment made the primary metric better on the cases it moved.
+  const offered = (st: Stage) => new Set(STAGE_TOOLS[st].filter((t) => arm.has(t) && (t !== "submit_proposal" || s.improvedExperiments().length > 0)));
 
   for (s.cycle = 0; !stop && s.cycle < CYCLE.max_cycles; s.cycle++) {
     s.question = null;
@@ -67,7 +68,9 @@ export async function runCycleLoop(o: CycleOptions): Promise<LoopOutcome> {
       stageTurns = 0;
       experimentAtStage = s.experiments.size;
       const tools = [...offered(st)];
-      messages.push({ role: "user", content: fill(STAGES[st], { cycle: s.cycle, turns: CYCLE.turns[st], tools: tools.join(", "), question: s.question?.question ?? "", hypotheses: s.question?.hypothesis_ids.join(", ") ?? "", expected: s.question ? `${s.question.expected_change.step} ${s.question.expected_change.behaviour}` : "", experiment: lastExperiment }) });
+      const improved = st === "interpret" ? s.improvedExperiments() : [];
+      const note = improved.length ? `\n${fill(PROPOSE_NOTE, { side_effects: JSON.stringify(improved) })}` : "";
+      messages.push({ role: "user", content: `${fill(STAGES[st], { cycle: s.cycle, turns: CYCLE.turns[st], tools: tools.join(", "), question: s.question?.question ?? "", hypotheses: s.question?.hypothesis_ids.join(", ") ?? "", expected: s.question ? `${s.question.expected_change.step} ${s.question.expected_change.behaviour}` : "", experiment: lastExperiment })}${note}` });
       s.log("stage.entered", { cycle: s.cycle, stage: st, turn: turns, tools });
     };
     s.log("cycle.opened", { cycle: s.cycle, ledger_hash: sha256(ledgerText), ledger_chars: ledgerText.length });

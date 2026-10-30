@@ -60,6 +60,7 @@ export const STAGES = {
   construct: "Stage: construct and run, cycle {cycle}. Question: {question} Hypotheses to tell apart: {hypotheses}. Expected change: {expected}. Build one experiment that answers it and run it with run_experiment, citing those hypotheses; the lint runs first and a refusal says why. This stage has {turns} turns. Tools: {tools}.",
   interpret: "Stage: interpret, cycle {cycle}. Read the receipt of {experiment}: whether the named behaviour moved, where the runs first diverged, and the outcome. Set hypothesis statuses, revise or record hypotheses, submit a proposal, end the session with a result, or call next_cycle. This stage has {turns} turns. Tools: {tools}."
 } as const;
+export const PROPOSE_NOTE = "submit_proposal is offered: these delivered experiments made the post sign-off wait better on the cases they moved. A proposal states trade_offs, every side effect its cited experiments' receipts show, as data: {side_effects}. The dev gate and the hospital's aim are unchanged, and a proposal that fails the gate is a valid result.";
 export const LEDGER_HEADER = "Ledger at the start of cycle {cycle}, kept by the session from tool results; the definition short form follows it once the definition has been read.";
 export const CYCLE_CLOSED = "The cycle closed: {reason}";
 
@@ -85,6 +86,7 @@ export function appTexts(arm: Arm): { label: string; text: string }[] {
     { label: "ledger_shapes", text: JSON.stringify(LEDGER_SHAPES) },
     ...Object.entries(STAGES).map(([k, v]) => ({ label: `stage.${k}`, text: v })),
     { label: "ledger_header", text: LEDGER_HEADER },
+    { label: "propose_note", text: PROPOSE_NOTE },
     { label: "cycle_closed", text: CYCLE_CLOSED },
     { label: "elided", text: ELIDED },
     { label: "repeat_note", text: REPEAT_NOTE },
@@ -103,5 +105,5 @@ export const ARMS: readonly Arm[] = ["adaptive", "a3", "a4", "prior"];
 
 // The hashes a run is reported under; the commitments file must carry them before a live run.
 export function armHashes(arm: Arm): { prompt: string; tools: string } {
-  return { prompt: sha256(`${systemPrompt(arm)}\n---\n${kickoffTemplate(arm)}\n---\n${CYCLE_TWO}\n---\n${NUDGE}\n---\n${ELIDED}\n---\n${REPEAT_NOTE}\n---\n${DIGEST_NOTE}\n---\n${DEFINITION_NOTE}\n---\n${ARGS_NOTE}\n---\n${DROPPED_NOTE}\n---\n${NOTES_HEADER}\n---\n${DEFINITION_UNCHANGED}\n---\n${JSON.stringify(HYPOTHESIS_SHAPES)}\n---\n${JSON.stringify(LEDGER_SHAPES)}\n---\n${JSON.stringify(STAGES)}\n---\n${LEDGER_HEADER}\n---\n${CYCLE_CLOSED}`), tools: hashJson({ defs: toolDefs(arm), vocabulary: OPERATION_VOCABULARY, semantics: ENGINE_SEMANTICS }) };
+  return { prompt: sha256(`${systemPrompt(arm)}\n---\n${kickoffTemplate(arm)}\n---\n${CYCLE_TWO}\n---\n${NUDGE}\n---\n${ELIDED}\n---\n${REPEAT_NOTE}\n---\n${DIGEST_NOTE}\n---\n${DEFINITION_NOTE}\n---\n${ARGS_NOTE}\n---\n${DROPPED_NOTE}\n---\n${NOTES_HEADER}\n---\n${DEFINITION_UNCHANGED}\n---\n${JSON.stringify(HYPOTHESIS_SHAPES)}\n---\n${JSON.stringify(LEDGER_SHAPES)}\n---\n${JSON.stringify(STAGES)}\n---\n${LEDGER_HEADER}\n---\n${CYCLE_CLOSED}\n---\n${PROPOSE_NOTE}`), tools: hashJson({ defs: toolDefs(arm), vocabulary: OPERATION_VOCABULARY, semantics: ENGINE_SEMANTICS }) };
 }

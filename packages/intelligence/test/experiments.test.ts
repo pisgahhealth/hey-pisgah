@@ -9,6 +9,8 @@ import { LEARNED, LONG, SHORT, eventId, hyp, pred, session } from "./helpers.js"
 const two = (s: Session) => { const h1 = hyp(s); const h2 = hyp(s, { competing: [h1], if_true: pred("no_difference", 10), if_false: pred("intervention_lt_control", 30) }); return { h1, h2 }; };
 const req = (h1: string, h2: string, o: Record<string, unknown> = {}) => ({ hypothesis_id: h1, distinguishes: [h2], base: { version: 1 }, ops: LEARNED, case_ids: [...LONG, SHORT], note: "n", expected_change: { step: "st06", behaviour: "start_time" }, ...o });
 const proposal = (o: Record<string, unknown> = {}) => ({ parent_proposal_id: null, base_version: 1, ops: LEARNED, scope: { wards: "all", condition: null }, rationale: "r", evidence: { hypothesis_ids: [], experiment_ids: [], event_ids: [] }, expected_effects: [{ metric: "post_signoff_wait_min", direction: "down", subgroup_condition: null }], known_exceptions: [], ...o });
+// The trade-offs a proposal citing this experiment must state, copied from its receipt.
+const trades = (x: Record<string, unknown>) => ({ trade_offs: ((x.receipt as { side_effects: { metric: string; sum_delta: number }[] }).side_effects).map((e) => ({ metric: e.metric, sum_delta: e.sum_delta, note: "from the receipt" })) });
 
 describe("matched experiments", () => {
   it("runs control and intervention on the same world and returns numbers, diffs and no verdict", () => {
@@ -176,6 +178,27 @@ describe("matched experiments", () => {
   });
 });
 
+describe("trade-offs", () => {
+  it("lists a delivered better experiment's side effects in its receipt and refuses a proposal that leaves one out, using no slot", async () => {
+    const s = session();
+    const { h1, h2 } = two(s);
+    const ops = [{ op: "remove_soft_edge", edge_id: "e04" }, { op: "set_prep_trigger", target: { step: "st06" }, when: { after: { step: "st01" } } }];
+    const x = s.runExperiment(req(h1, h2, { ops }));
+    const fx = (x.receipt as { side_effects: { metric: string; sum_delta: number }[] }).side_effects;
+    expect(s.improvedExperiments().map((e) => e.experiment_id)).toEqual([x.experiment_id]);
+    const ev = { hypothesis_ids: [h1], experiment_ids: [x.experiment_id], event_ids: [] };
+    const base = { parent_proposal_id: null, base_version: 1, ops, scope: { wards: "all", condition: null }, rationale: "r", evidence: ev, expected_effects: [], known_exceptions: [] };
+    if (fx.length) {
+      const r = await s.submitProposal({ ...base, trade_offs: [] });
+      expect(r.error).toBe("trade_offs_missing");
+      expect(s.counters).toMatchObject({ proposals_used: 0, trade_off_refusals: 1 });
+    }
+    const ok = await s.submitProposal({ ...base, trade_offs: fx.map((e) => ({ metric: e.metric, sum_delta: e.sum_delta, note: "stated" })) });
+    expect(ok.ok).toBe(true);
+    s.close();
+  });
+});
+
 describe("proposal submission", () => {
   it("appends a strict proposal with server fields, runs the validator hook and stops on a dev-valid report", async () => {
     let called = 0;
@@ -189,14 +212,15 @@ describe("proposal submission", () => {
       }
     });
     const { h1, h2 } = two(s);
-    expect((await s.submitProposal(proposal({ evidence: { hypothesis_ids: [h1], experiment_ids: [], event_ids: [] } }))).error).toBe("evidence_rule");
+    expect((await s.submitProposal(proposal({ evidence: { hypothesis_ids: [h1], experiment_ids: [], event_ids: [] }, trade_offs: [] }))).error).toBe("evidence_rule");
     const x = s.runExperiment(req(h1, h2));
-    const ok = await s.submitProposal(proposal({ evidence: { hypothesis_ids: [h1], experiment_ids: [x.experiment_id], event_ids: [eventId(LONG[0], "st16")] } }));
+    const ok = await s.submitProposal(proposal({ evidence: { hypothesis_ids: [h1], experiment_ids: [x.experiment_id], event_ids: [eventId(LONG[0], "st16")] }, ...trades(x) }));
     expect(ok.ok).toBe(true);
     expect(ok.validation).toBe("dev_validated");
     expect(called).toBe(1);
     expect(s.stop?.reason).toBe("dev_valid_proposal");
-    const stored = readStream(s.o.storeRoot, STREAMS.proposals).map((e) => WorkflowChangeProposal.parse(e.payload));
+    const stored = readStream(s.o.storeRoot, STREAMS.proposals).filter((e) => e.record_type === "proposal.submitted").map((e) => WorkflowChangeProposal.parse(e.payload));
+    expect(readStream(s.o.storeRoot, STREAMS.proposals).filter((e) => e.record_type === "proposal.trade_offs").length).toBe(1);
     expect(stored.length).toBe(1);
     const { hash, ...body } = stored[0]!;
     expect(hash).toBe(hashJson(body));
@@ -212,10 +236,10 @@ describe("proposal submission", () => {
     const { h1, h2 } = two(s);
     const x = s.runExperiment(req(h1, h2));
     const ev = { hypothesis_ids: [h1], experiment_ids: [x.experiment_id], event_ids: [] };
-    expect((await s.submitProposal(proposal({ ops: [{ op: "remove_soft_edge", edge_id: "e19" }], evidence: ev }))).error).toBe("static_invalid");
-    expect(JSON.stringify(await s.submitProposal(proposal({ evidence: { ...ev, hypothesis_ids: ["h-0ther5e5"] } })))).toBe(JSON.stringify(UNKNOWN_ID));
+    expect((await s.submitProposal(proposal({ ops: [{ op: "remove_soft_edge", edge_id: "e19" }], evidence: ev, ...trades(x) }))).error).toBe("static_invalid");
+    expect(JSON.stringify(await s.submitProposal(proposal({ evidence: { ...ev, hypothesis_ids: ["h-0ther5e5"] }, ...trades(x) })))).toBe(JSON.stringify(UNKNOWN_ID));
     expect(s.counters.proposals_used).toBe(0);
-    expect((await s.submitProposal(proposal({ evidence: ev }))).validation).toBe("pending");
+    expect((await s.submitProposal(proposal({ evidence: ev, ...trades(x) }))).validation).toBe("pending");
     s.close();
   });
 

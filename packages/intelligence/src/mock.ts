@@ -107,8 +107,22 @@ function cycleScript(messages: Msg[], ctx: Ctx): Call[] | string {
   if (stage.startsWith("construct")) return [{ name: "run_experiment", args: { hypothesis_id: h1, distinguishes: [h2], base: { version: 1 }, ops: OPS, case_ids: [...MOCK_CASES.long, MOCK_CASES.short], note: "release the draft", expected_change: { step: "st06", behaviour: "start_time" } } }];
   const x = String(ctx.results.filter((r) => r.name === "run_experiment" && r.value.ok === true).at(-1)?.value.experiment_id ?? "x-00000000");
   if (stage === "interpret" && turn === 0) return [{ name: "set_hypothesis_status", args: { hypothesis_id: h1, status: "retained", experiment_ids: [x], evidence_event_ids: [], note: "wait fell" } }, { name: "set_hypothesis_status", args: { hypothesis_id: h2, status: "rejected", experiment_ids: [x], evidence_event_ids: [], note: "summary change moved it" } }];
-  if (stage === "interpret" && turn === 1) return [{ name: "submit_proposal", args: { parent_proposal_id: null, base_version: 1, ops: OPS, scope: { wards: "all", condition: null }, rationale: "Release the summary draft once the take-home order stage is done.", evidence: { hypothesis_ids: [h1], experiment_ids: [x], event_ids: [] }, expected_effects: [{ metric: "post_signoff_wait_min", direction: "down", subgroup_condition: null }], known_exceptions: [] } }];
+  if (stage === "interpret" && turn === 1) return [{ name: "submit_proposal", args: { parent_proposal_id: null, base_version: 1, ops: OPS, scope: { wards: "all", condition: null }, rationale: "Release the summary draft once the take-home order stage is done.", evidence: { hypothesis_ids: [h1], experiment_ids: [x], event_ids: [] }, expected_effects: [{ metric: "post_signoff_wait_min", direction: "down", subgroup_condition: null }], known_exceptions: [], trade_offs: tradeOffs(messages, x) } }];
   return "done";
+}
+
+// The side effects the interpret stage listed for one experiment, copied as the trade-offs.
+function tradeOffs(messages: Msg[], x: string): unknown[] {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = String(messages[i]!.content ?? "");
+    const at = m.indexOf("as data: ");
+    if (messages[i]!.role !== "user" || at < 0) continue;
+    try {
+      const list = JSON.parse(m.slice(at + 9, m.lastIndexOf("]") + 1)) as { experiment_id: string; side_effects: { metric: string; sum_delta: number }[] }[];
+      return (list.find((e) => e.experiment_id === x)?.side_effects ?? []).map((e) => ({ metric: e.metric, sum_delta: e.sum_delta, note: "from the receipt" }));
+    } catch { return []; }
+  }
+  return [];
 }
 
 // A deterministic investigator that drives every tool through the real dispatcher, for mock mode and tests.

@@ -86,6 +86,28 @@ export const StatusInput = z.strictObject({
 
 export const ProposalInput = WorkflowChangeProposal.omit({ proposal_id: true, viewed_case_ids: true, status: true, hash: true });
 
+// The side effects a proposal states: each metric that moved the wrong way on the cases its cited experiments moved, copied from their receipts.
+export const TradeOff = z.strictObject({ metric: z.string().max(40), sum_delta: z.number(), note: z.string().max(200) });
+export const TradeOffs = z.array(TradeOff).max(13);
+export type SideEffect = { metric: Metric; sum_delta: number; cases: number };
+
+// Metrics where a rise is a cost, and the one where a fall is; the primary metric is the post sign-off wait.
+const COST_UP: readonly Metric[] = ["prohibited_attempted", "prohibited_executed", "unplanned_interventions", "unnecessary_docs", "unnecessary_min", "duplicates", "stale_actions", "rework_events", "rework_min", "bed_release_delay_min"];
+const COST_DOWN: readonly Metric[] = ["required_steps_done"];
+
+export function sideEffects(x: { receipt?: Receipt | null; deltas: Deltas; outcome_class?: OutcomeClass | null }): SideEffect[] {
+  if (!x.receipt || x.outcome_class !== "delivered_outcome_better") return [];
+  const moved = x.receipt.target.filter((t) => t.moved).map((t) => t.case_id);
+  const out: SideEffect[] = [];
+  for (const m of [...COST_UP, ...COST_DOWN]) {
+    const ds = moved.map((c) => x.deltas[c]?.[m]).filter((d): d is number => typeof d === "number");
+    const sum = ds.reduce((a, b) => a + b, 0);
+    const cost = COST_UP.includes(m) ? sum > 0 : sum < 0;
+    if (cost) out.push({ metric: m, sum_delta: sum, cases: ds.filter((d) => (COST_UP.includes(m) ? d > 0 : d < 0)).length });
+  }
+  return out;
+}
+
 export const NOTE_LIMIT = 20;
 export const NoteInput = z.strictObject({ note: z.string().trim().min(1).max(600) });
 
@@ -177,7 +199,7 @@ export class Session {
   question: Question | null = null;
   cycle = 0;
   private definitionRead: { turn: number; hash: string; cycle: number } | null = null;
-  counters = { hypothesis_schema_errors: 0, definition_unchanged: 0, timeline_pages: 0, experiments_used: 0, invalid_requests: 0, lint_refusals: 0, question_refusals: 0, not_delivered: 0, delivered: 0, informative: 0, zod_streak: 0, repairs: 0, listed_used: 0, proposals_used: 0, say_do_mismatches: 0, retains: 0, rejects: 0, stage_refusals: 0, statistics_reads: 0, sweeps: 0, sweep_refusals: 0, simulations: 0 };
+  counters = { hypothesis_schema_errors: 0, definition_unchanged: 0, timeline_pages: 0, experiments_used: 0, invalid_requests: 0, lint_refusals: 0, question_refusals: 0, not_delivered: 0, delivered: 0, informative: 0, zod_streak: 0, repairs: 0, listed_used: 0, proposals_used: 0, say_do_mismatches: 0, retains: 0, rejects: 0, stage_refusals: 0, statistics_reads: 0, sweeps: 0, sweep_refusals: 0, simulations: 0, trade_off_refusals: 0 };
   stop: { reason: StopReason; detail: string } | null = null;
   private readonly streams: { hypotheses: Stream; experiments: Stream; proposals: Stream; log: Stream };
   private serial = 0;
@@ -557,7 +579,7 @@ export class Session {
   // What the model sees of an experiment: never the prediction check, never a verdict.
   experimentView(x: StoredExperiment): Result {
     if (x.status === "aborted") return { ok: false, error: "experiment_aborted", experiment_id: x.experiment_id, message: x.abort_reason, budget: this.budgetView() };
-    const receipt = x.receipt ? { ...x.receipt, delivered: `${x.receipt.delivered_cases} of ${x.receipt.target.length} cases`, outcome: x.outcome_class } : null;
+    const receipt = x.receipt ? { ...x.receipt, delivered: `${x.receipt.delivered_cases} of ${x.receipt.target.length} cases`, outcome: x.outcome_class, side_effects: sideEffects(x) } : null;
     return { ok: true, experiment_id: x.experiment_id, request: x.request, base_hash: x.base_hash, intervention_hash: x.intervention_hash, warnings: x.warnings, receipt, behaviour: x.behaviour, cases: x.cases.map(caseView), median_delta: x.summary, budget: this.budgetView() };
   }
 
@@ -567,8 +589,12 @@ export class Session {
   }
 
   // Appends a proposal to the proposals stream after the evidence rule for this arm; the evaluator's pipeline validates it.
-  async submitProposal(raw: unknown): Promise<Result> {
+  async submitProposal(rawIn: unknown): Promise<Result> {
     if (this.counters.proposals_used >= this.proposalLimit()) return refusal("proposals_exhausted", "No proposal submissions are left.");
+    const cycleArm = this.o.arm === "adaptive";
+    const { raw, extra } = cycleArm ? split(rawIn, ["trade_offs"]) : { raw: rawIn, extra: {} };
+    const to = cycleArm ? TradeOffs.safeParse(extra.trade_offs) : null;
+    if (to && !to.success) { this.counters.repairs += 1; return refusal("invalid_arguments", "The arguments do not match the schema.", { issues: zodIssues(to.error).map((i) => `trade_offs.${i}`) }); }
     const parsed = ProposalInput.safeParse(raw);
     if (!parsed.success) { this.counters.repairs += 1; return refusal("invalid_arguments", "The arguments do not match the schema.", { issues: zodIssues(parsed.error) }); }
     const a = parsed.data;
@@ -577,6 +603,11 @@ export class Session {
     const ran = ev.experiment_ids.filter((x) => this.experiments.get(x)!.status === "completed");
     const arm = this.o.arm;
     if ((arm === "adaptive" || arm === "a4") && (ran.length === 0 || ev.hypothesis_ids.length === 0)) return refusal("evidence_rule", "A proposal cites at least one completed experiment and one hypothesis from this session.");
+    if (to?.success) {
+      const owed = ran.flatMap((x) => sideEffects(this.experiments.get(x)!).map((e) => ({ experiment_id: x, ...e })));
+      const missing = owed.filter((e) => !to.data.some((t) => t.metric === e.metric && t.sum_delta === e.sum_delta));
+      if (missing.length) { this.counters.trade_off_refusals += 1; return refusal("trade_offs_missing", "trade_offs must state every side effect the cited experiments' receipts show, with its metric and sum_delta; this request used no proposal.", { side_effects: owed, missing }); }
+    }
     if (arm === "a3" && (ev.hypothesis_ids.length === 0 || ev.event_ids.length === 0)) return refusal("evidence_rule", "A proposal cites at least one hypothesis and one recorded event from this session.");
     if (a.base_version !== this.base.version) return UNKNOWN_ID;
     const facts = this.pool.caseFacts();
@@ -588,7 +619,8 @@ export class Session {
     const body = { proposal_id: id, ...a, viewed_case_ids: [...this.viewed].sort(), status: "submitted" as const };
     const proposal = WorkflowChangeProposal.parse({ ...body, hash: hashJson(body) });
     const env = this.streams.proposals.append("proposal.submitted", proposal, { recorded_at: 0, occurred_at: 0 });
-    this.log("proposal.linked", { proposal_id: id, stream_id: env.stream_id, seq: env.seq, hash: proposal.hash });
+    this.log("proposal.linked", { proposal_id: id, stream_id: env.stream_id, seq: env.seq, hash: proposal.hash, ...(to?.success ? { trade_offs: to.data } : {}) });
+    if (to?.success) this.streams.proposals.append("proposal.trade_offs", { proposal_id: id, session_id: this.o.runId, trade_offs: to.data }, { recorded_at: 0, occurred_at: 0 });
     this.proposals.set(id, proposal);
     this.counters.proposals_used += 1;
     if (this.o.validate) await this.o.validate(this.o.storeRoot);
@@ -656,6 +688,11 @@ export class Session {
       proposals: [...this.proposals.values()].map((p) => ({ proposal_id: p.proposal_id, ops: p.ops, validation: (this.report(p.proposal_id)?.status as string | undefined) ?? "pending" })),
       budget: this.budgetView()
     };
+  }
+
+  // Delivered experiments that made the primary metric better on the cases they moved, with their side effects.
+  improvedExperiments(): { experiment_id: string; side_effects: SideEffect[] }[] {
+    return [...this.experiments.values()].filter((x) => x.source === "request" && x.outcome_class === "delivered_outcome_better").map((x) => ({ experiment_id: x.experiment_id, side_effects: sideEffects(x) }));
   }
 
   // Closes the current cycle at the investigator's request; the controller opens the next one with a fresh conversation.
