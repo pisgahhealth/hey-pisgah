@@ -142,8 +142,10 @@ function render(voice: string, text: string, id: string): { file: string; ms: nu
   return { file, ms: info.ok ? Math.round(info.durationMs) : 0 };
 }
 // The words and voice ride as extra form fields the real serve ignores, so the in-memory hospital can stand in for its ear.
-async function postChunk(owner: string, file: string, ms: number, text: string, voice: string): Promise<unknown> {
+async function postChunk(owner: string, file: string, ms: number, text: string, voice: string, patientId?: string): Promise<unknown> {
   const form = new FormData();
+  // A stand-in's own strip is on that patient's page, as the person answering would be.
+  if (patientId) form.set("patientId", patientId);
   form.set("acc_text", text); form.set("acc_voice", voice);
   form.set("owner", owner); form.set("session_id", session); form.set("seq", String(seq++)); form.set("captured_at", String(Date.now() - ms));
   // No presence marker, as the strip sends none today; a marker with no recent input would mark every line not present.
@@ -201,7 +203,7 @@ async function deliver(line: Line): Promise<{ lineEnd: string | null; note: stri
     const patientId = line.patient ? bound[line.patient]?.patient : undefined;
     if (line.mode === "remote") {
       const clip = render(script.voices[line.who] ?? "Daniel", text, `${line.id}-${seq}`);
-      const r = await postChunk(owner, clip.file, clip.ms, text, script.voices[line.who] ?? "Daniel");
+      const r = await postChunk(owner, clip.file, clip.ms, text, script.voices[line.who] ?? "Daniel", patientId);
       return { lineEnd: now(), note: `posted ${script.voices[line.who] ?? "Daniel"} through ${line.who}'s strip: ${JSON.stringify(r).slice(0, 160)}` };
     }
     const at = now();
@@ -434,7 +436,9 @@ async function runLine(line: Line): Promise<void> {
     if (line.lose_ack && PROXY_PORT) dropNext = { path: line.lose_ack.path, hit: null };
     if (line.muted && page && DRIVER === "human") { process.stdout.write("\n  MUTE: press the strip's mute button (the crossed microphone), then press Enter here.\n"); await rl!.question(""); }
     else if (line.muted && page) { await page.click(`${STRIP} button[aria-label="Mute the agent"]`).catch(() => harnessErrors.push(`${line.id}: no Mute button`)); await wait(800); }
-    if (line.reload && page) { const pg = page as unknown as { reload: (o?: unknown) => Promise<unknown> }; await pg.reload({ timeout: 120_000 }).catch(() => harnessErrors.push(`${line.id}: the page did not reload`)); const back = await page.waitForFunction((st: string) => /Listening|Hearing you/.test(document.querySelector(`${st} header`)?.textContent ?? ""), STRIP, { timeout: 60_000 }).then(() => true, () => false); log(`${line.id}: page reloaded; listening again with no touch: ${back}`); reloadBack = back; }
+    // Chrome's fake microphone restarts its file when a reloaded page opens it again, so under the fake driver the reload is proven by its own probe instead.
+    if (line.reload && page && DRIVER === "fake" && process.env["ACC_FAKE_RELOAD"] !== "1") log(`${line.id}: reload not run under the fake microphone; see the reload probe`);
+    else if (line.reload && page) { const pg = page as unknown as { reload: (o?: unknown) => Promise<unknown> }; await pg.reload({ timeout: 120_000 }).catch(() => harnessErrors.push(`${line.id}: the page did not reload`)); const back = await page.waitForFunction((st: string) => /Listening|Hearing you/.test(document.querySelector(`${st} header`)?.textContent ?? ""), STRIP, { timeout: 60_000 }).then(() => true, () => false); log(`${line.id}: page reloaded; listening again with no touch: ${back}`); reloadBack = back; if (DRIVER === "fake") fakeT0 = Date.now(); }
     if (line.offline_s && page) await setOffline(true);
     const d = await deliver(line).catch((e: unknown) => ({ lineEnd: null, note: `delivery failed: ${e instanceof Error ? e.message.slice(0, 160) : String(e)}` }));
     lineEnd = d.lineEnd; note = d.note;
@@ -463,7 +467,7 @@ async function runLine(line: Line): Promise<void> {
     faults.push({ kind: "lost_ack", line: line.id, at: started, killed_during: hit, restarted_in_ms: null, outcome: hit ? `reply to ${hit} dropped; ${kinds.map((c) => c.detail).join("; ")}` : "no matching write was seen", ok: !!hit && kinds.every((c) => c.ok) });
     dropNext = null;
   }
-  if (line.reload && page) faults.push({ kind: "reload", line: line.id, at: started, killed_during: null, restarted_in_ms: null, outcome: `listening again with no touch: ${reloadBack}; ${outcomes.map((c) => c.detail).join("; ").slice(0, 240)}`, ok: reloadBack && outcomes.filter((c) => !c.optional).every((c) => c.ok) });
+  if (line.reload && page && (DRIVER !== "fake" || process.env["ACC_FAKE_RELOAD"] === "1")) faults.push({ kind: "reload", line: line.id, at: started, killed_during: null, restarted_in_ms: null, outcome: `listening again with no touch: ${reloadBack}; ${outcomes.map((c) => c.detail).join("; ").slice(0, 240)}`, ok: reloadBack && outcomes.filter((c) => !c.optional).every((c) => c.ok) });
   if (line.offline_s && page) faults.push({ kind: "offline", line: line.id, at: started, killed_during: null, restarted_in_ms: null, outcome: outcomes.map((c) => c.detail).join("; ").slice(0, 300), ok: outcomes.filter((c) => !c.optional).every((c) => c.ok) });
   if (line.muted && page) faults.push({ kind: "mute", line: line.id, at: started, killed_during: null, restarted_in_ms: null, outcome: outcomes.map((c) => c.detail).join("; ").slice(0, 300), ok: outcomes.filter((c) => !c.optional).every((c) => c.ok) });
   const lineIds = new Set([heard?.line_id].filter(Boolean) as string[]);
@@ -593,7 +597,9 @@ async function finish(): Promise<void> {
   if (!t && rl) { const a = await rl.question("  Read the strip's line 'Touches N · strip touches M' and type N M: "); const [x, y] = a.trim().split(/\s+/).map(Number); if (Number.isFinite(x)) { emr = x!; strip = Number.isFinite(y) ? y! : null; source = "strip counter read off the screen by a person"; } }
   const confirmations = steps.filter((s) => s.confirm === "r3").length;
   const stepWindow = (at: string | null) => steps.find((s) => at && at >= s.started_at && at <= s.ended_at);
-  const unaccounted = acts.filter((a) => a.state === "completed" && !stepWindow(seen.get(`${a.action_id}:completed`) ?? null)).map((a) => ({ owner: whoOf(a.owner), kind: a.kind, action_id: a.action_id, completed_at: seen.get(`${a.action_id}:completed`) ?? null }));
+  // Only the run's own two patients count: agents also work through tasks other runs left open in the sandbox, which no step of this script asked for.
+  const ours = (a: (typeof acts)[number]) => (["A", "B"] as const).some((r) => bound[r] && (a.patient_id === bound[r]!.patient || bound[r]!.tasks.has(a.task_id)));
+  const unaccounted = acts.filter((a) => a.state === "completed" && ours(a) && !stepWindow(seen.get(`${a.action_id}:completed`) ?? null)).map((a) => ({ owner: whoOf(a.owner), kind: a.kind, action_id: a.action_id, completed_at: seen.get(`${a.action_id}:completed`) ?? null }));
   const delegations: DelegationRow[] = (views.get(DOCTOR) ?? []).flatMap((v) => v.delegations).filter((d) => d.side === "delegator").map((d) => {
     const acks = acts.filter((a) => a.kind === "acknowledge_task" && a.state === "completed" && a.args["delegation_id"] === d.delegation_id);
     const ackLine = acks[0] ? transcriptLine(acks[0].line_id) : null;
@@ -628,7 +634,7 @@ async function finish(): Promise<void> {
     model: { calls, usd: Number(usd.toFixed(4)), rate_limited: rateLimited },
     harness_errors: harnessErrors, completion: { complete: false, reasons: [] }
   };
-  result.completion = completion(result, script.lines.filter((l) => l.mode === "fault" || l.interrupt).length + (PROXY_PORT ? script.lines.filter((l) => l.lose_ack).length : 0) + (page ? script.lines.filter((l) => l.offline_s || l.muted || l.reload).length : 0));
+  result.completion = completion(result, script.lines.filter((l) => l.mode === "fault" || l.interrupt).length + (PROXY_PORT ? script.lines.filter((l) => l.lose_ack).length : 0) + (page ? script.lines.filter((l) => l.offline_s || l.muted || (l.reload && DRIVER !== "fake")).length : 0));
   void signedIds;
   const root = KIND === "final" ? env("ACC_PUBLISH_ROOT") : OUT;
   const files = writeAccResults(root, result, { previews_with_names: Number(process.env["ACC_PREVIEWS_WITH_NAMES"] ?? "0"), privilege_gained: 0 });
