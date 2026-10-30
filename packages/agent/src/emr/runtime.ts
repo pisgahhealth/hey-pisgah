@@ -351,6 +351,9 @@ export function percentile(xs: readonly number[], p: number): number | null {
   return s[Math.min(s.length - 1, Math.max(0, Math.ceil((p / 100) * s.length) - 1))]!;
 }
 // p50 and p90 from the end of the words to the verified record, per kind and in all, with the actions that did not verify beside them.
+// The names a task's patient answers to: the label it opened with and every name said for it since, so a named arrival is found by that name.
+export const knownNames = (t: Pick<EmrTask, "label" | "identities">): string[] => [...new Set([t.label, ...t.identities.filter((i) => i.state !== "cancelled").map((i) => i.name)].filter(Boolean))];
+
 export function speedSummary(t: EmrTask): EmrTaskView["speed"] {
   const kinds = [...new Set(t.speed.map((r) => r.kind))];
   const acts = [...t.actions.values()];
@@ -713,8 +716,8 @@ export class EmrRuntime {
         }
       }
       // A line naming another of the owner's open patients moves the agent to that patient, never silently stopping.
-      const known = [...this.live.values()].map((x) => x.task).filter((t) => t.owner === s.owner && !CLOSED_TASK.has(t.state) && t.label && (t.admission_id || t.patient_id))
-        .map((t) => ({ label: t.label, target: t.admission_id ? { admission_id: t.admission_id } : { patient_id: t.patient_id! } }));
+      const known = [...this.live.values()].map((x) => x.task).filter((t) => t.owner === s.owner && !CLOSED_TASK.has(t.state) && (t.admission_id || t.patient_id))
+        .flatMap((t) => knownNames(t).map((label) => ({ label, target: t.admission_id ? { admission_id: t.admission_id } : { patient_id: t.patient_id! } })));
       const moved = spokenPatient(text, known);
       const target = moved && JSON.stringify(moved.target) !== JSON.stringify(s.target) ? moved.target : s.target;
       if (target !== s.target) this.o.onSubject?.(s.owner, target, "spoken", spokenAt);

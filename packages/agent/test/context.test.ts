@@ -231,4 +231,21 @@ describe("the patient the clinician is with", () => {
     expect(b.tracking).toEqual({ patient_id: PAGE_B });
     await again.s.close();
   });
+
+  it("moves back to a named arrival by the name said for it, though its label still reads unknown", async () => {
+    const { s } = await boot(["", "Okay, back to Blessing."]);
+    await post(`${s.url}/tasks/emergency`, { owner: OWNER, spokenAt: new Date().toISOString() });
+    await s.runtime.settled();
+    const named = await post(`${s.url}/tasks/say`, { owner: OWNER, patientId: ARRIVAL, text: "Her name is Blessing, Blessing Adeyemi, the number is 08031234567." });
+    expect(named.status).toBe(202);
+    await s.runtime.settled();
+    expect(s.runtime.views(OWNER).flatMap((v) => v.identities).map((i) => i.name)).toContain("Blessing Adeyemi");
+    expect((await listen(s.url, { session: "s-name", seq: 0, patientId: PAGE_A })).tracking).toEqual({ patient_id: PAGE_A });
+    // The words are a second long and dated from when they began, so they are said after the page opened, as on the ward.
+    await new Promise((r) => setTimeout(r, 1300));
+    await listen(s.url, { session: "s-name", seq: 1 });
+    await s.runtime.settled();
+    expect(await tracking(s.url)).toEqual({ patient_id: ARRIVAL });
+    await s.close();
+  });
 });
