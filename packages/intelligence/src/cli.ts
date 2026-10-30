@@ -11,6 +11,8 @@ import { runCycleLoop } from "./cycle.js";
 import { SETTINGS, runLoop } from "./loop.js";
 import { scriptedInvestigator } from "./mock.js";
 import { DiscoveryPool, loadObserved, type OutcomeCase } from "./pool.js";
+import { reverseOutcomes } from "./outcomes.js";
+import { loadV1 } from "@hey-pisgah/hospital";
 import { ARMS } from "./prompts.js";
 import { STREAMS, Session, type Arm, type ListedExperiment } from "./session.js";
 import { VARIANTS, loadVariant, type ValidationCase, type VariantId } from "./variants.js";
@@ -24,7 +26,7 @@ const ListedOrder = z.union([z.array(z.strictObject({ ops: z.array(Operation).mi
 export type VariantValidation = { base: WorkflowDefinition; cases: ValidationCase[]; caseFacts: Facts[] };
 export type DiscoverDeps = { validate?: (storeRoot: string, variant?: VariantValidation) => Promise<void>; out?: (line: string) => void; mode?: Mode };
 
-// discover --arm adaptive|a3|a4|prior [--effort medium|high] [--variant single|pair|triple] --budget-usd N --max-calls M [--run-id run-xxxxxxxx] [--store dir] [--a4-order file] [--cycle 2 [--outcomes file] [--observed file]] [--insufficient-evidence]
+// discover --arm adaptive|a3|a4|prior [--effort medium|high] [--variant single|pair|triple] --budget-usd N --max-calls M [--run-id run-xxxxxxxx] [--store dir] [--a4-order file] [--cycle 2 [--outcomes file] [--observed file] [--reverse-outcomes]] [--insufficient-evidence]
 export async function discoverCommand(root: string, argv: readonly string[], deps: DiscoverDeps = {}): Promise<number> {
   const out = deps.out ?? ((l: string) => console.log(l));
   const arm = (flag(argv, "arm") ?? "adaptive") as Arm;
@@ -52,6 +54,8 @@ export async function discoverCommand(root: string, argv: readonly string[], dep
   const variant = variantId && variantId !== "pair" ? loadVariant(variantId) : null;
   const cycle = flag(argv, "cycle") === "2" ? 2 : 1;
   const outcomes = cycle === 2 ? [...readStream(storeRoot, STREAMS.outcomes).filter((e) => e.record_type === "outcome.case_run").map((e) => e.payload as OutcomeCase), ...(flag(argv, "outcomes") ? loadObserved(flag(argv, "outcomes")!) : [])] : [];
+  // --reverse-outcomes keeps the histories and turns each outcome's result around, the counter-evidence test the second cycle must answer.
+  const given = argv.includes("--reverse-outcomes") ? reverseOutcomes(outcomes, new DiscoveryPool(), loadV1()) : outcomes;
   const observedFile = flag(argv, "observed") ?? join(root, "evaluation", "results", "observed-cases.json");
   const observed = cycle === 2 && existsSync(observedFile) ? loadObserved(observedFile) : [];
   const provider = (flag(argv, "provider") ?? SETTINGS.provider) as ProviderId;
@@ -59,7 +63,7 @@ export async function discoverCommand(root: string, argv: readonly string[], dep
   const client = createModelClient({ storeRoot, mode, recordingsDir: flag(argv, "recordings") ?? INTELLIGENCE_RECORDINGS_DIR, mock: scriptedInvestigator(arm), timeoutMs: 300_000, budget: { ...env, runUsd: budgetUsd, runMaxCalls: maxCalls } });
   const vv: VariantValidation | undefined = variant ? { base: variant.base, cases: variant.validation!, caseFacts: variant.pool.caseFacts() } : undefined;
   const session = new Session({
-    storeRoot, runId, arm, cycle, pool: variant ? variant.pool : new DiscoveryPool(undefined, outcomes, observed), ...(variant ? { base: variant.base } : {}), insufficientEvidence: argv.includes("--insufficient-evidence"),
+    storeRoot, runId, arm, cycle, pool: variant ? variant.pool : new DiscoveryPool(undefined, given, observed), ...(variant ? { base: variant.base } : {}), insufficientEvidence: argv.includes("--insufficient-evidence") || cycle === 2,
     ...(deps.validate ? { validate: (root: string) => deps.validate!(root, vv) } : {}), ...(a4Order ? { a4Order } : {}),
     usage: () => { const u = client.runUsage(runId); return { ...u, max_calls: maxCalls, max_usd: budgetUsd }; }
   });

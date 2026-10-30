@@ -3,5 +3,6 @@ export { departmentOf, sourcesHash, type DayCase, type DayEvent, type NightSourc
 export { FACT_NAMES, computeFacts, type Fact, type FactName } from "./facts.js";
 export { composeMemo, isUrgent, payloadHash, previewOf, type Finding, type Investigation, type Memo, type MemoItem, type Proposed } from "./memo.js";
 export { checkMemo, verifyMemo, type CheckCode, type CheckFailure, type Verdict } from "./verify.js";
-export { heldTransport, memoPublisher, sendOnVerdict, type DeliveryAnswer, type MemoDelivery, type MemoRepair, type MemoTransport, type PublishResult, type Publisher } from "./publish.js";
+export { alertHash, heldTransport, memoPublisher, sendOnVerdict, taskAlert, urgentPreview, type DeliveryAnswer, type MemoDelivery, type MemoRepair, type MemoTransport, type PublishResult, type Publisher } from "./publish.js";
 export { CRITIC_SYSTEM, CRITIC_TOOL, INVESTIGATE_TOOL, INVESTIGATOR_SYSTEM, criticMessage, investigateDay, investigatorMessage, scanNightPrompts, type NightModel } from "./investigate.js";
+export { plantedFaults } from "./faults.js";
