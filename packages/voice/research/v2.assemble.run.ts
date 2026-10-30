@@ -14,8 +14,9 @@ const of = (s: V2Row["source"]) => fx.rows.filter((r) => r.source === s);
 const cutHeard = Object.fromEntries((JSON.parse(readFileSync("packages/voice/research/v2-real-set.json", "utf8")) as { cuts: { id: string; part: string; heard: string }[] }).cuts.map((c) => [`${c.id}${c.part === "overlap_part" ? "-part" : ""}`, c.heard]));
 const vals = (t: string) => numbersIn(vitalsVocabulary(cleanTranscript(t)).text);
 function numbers(rows: V2Row[]) {
-  const per = rows.filter((r) => r.replay === null && r.usable !== false && !r.id.endsWith("-part")).map((r) => {
-    const id = r.id.replace(/^v2-/, ""), line = V2_LINES.find((l) => l.id === id)!;
+  // Lines Voice Transcribe never read (the re-recordings, scored with no model call) are left out of the number count.
+  const per = rows.filter((r) => r.replay === null && r.usable !== false && !r.id.endsWith("-part") && !r.reading.transcript.error).map((r) => {
+    const id = r.id.replace(/^v2-/, "").replace(/-redo$/, ""), line = V2_LINES.find((l) => l.id === id)!;
     const want = vals(line.words), vt = vals(r.reading.transcript.text), pk = vals(cutHeard[id] ?? "");
     return { id, want, vt, pk };
   }).filter((x) => x.want.length);
