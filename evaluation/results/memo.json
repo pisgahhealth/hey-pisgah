@@ -1,23 +1,23 @@
 {
- "measured_at": "2026-10-30T02:49:10.437Z",
+ "measured_at": "2026-10-30T06:27:57.323Z",
  "measured": true,
  "source": "nightly_run",
  "set": "sandbox",
- "run_id": "run-night001",
+ "run_id": "run-night003",
  "day": "2026-10-30",
  "sources_hash": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
  "departments": [
   {
    "department": "accounts_clerk",
    "causes": 2,
-   "challenged": 0,
+   "challenged": 1,
    "changes": 2,
    "nothing_warrants_change": false
   },
   {
    "department": "doctor",
    "causes": 2,
-   "challenged": 1,
+   "challenged": 0,
    "changes": 2,
    "nothing_warrants_change": false
   },
@@ -25,7 +25,7 @@
    "department": "nurse",
    "causes": 2,
    "challenged": 0,
-   "changes": 1,
+   "changes": 2,
    "nothing_warrants_change": false
   }
  ],
@@ -45,7 +45,7 @@
    "encounters_named": 5,
    "preview": "Night memo: 3 recorded facts, 5 unfinished items for you, 2 urgent.",
    "nothing_warrants_change": false,
-   "publish_ms": 218
+   "publish_ms": 334
   },
   {
    "recipient_role": "doctor",
@@ -62,33 +62,41 @@
    "encounters_named": 1,
    "preview": "Night memo: 3 recorded facts, 5 unfinished items for you, 2 urgent.",
    "nothing_warrants_change": false,
-   "publish_ms": 47
+   "publish_ms": 134
   },
   {
    "recipient_role": "nurse",
    "incoming": true,
-   "status": "delivered",
-   "verdict": "verified",
-   "failures": [],
+   "status": "withheld",
+   "verdict": "unsupported_or_incomplete",
+   "failures": [
+    "invented_figure"
+   ],
    "repairs": 0,
    "facts": 4,
    "causes": 2,
-   "changes": 1,
+   "changes": 2,
    "unfinished": 0,
    "urgent": 0,
    "encounters_named": 0,
    "preview": "Night memo: 4 recorded facts, 0 unfinished items for you.",
    "nothing_warrants_change": false,
-   "publish_ms": 40
+   "publish_ms": 1
   }
  ],
- "verified": true,
+ "verified": false,
  "names_in_previews": 0,
  "unauthorised_names": 0,
  "deny_hits": 0,
- "delivered": true,
- "delivery": "through the door: both authorised recipients received it and the one refusal was correct",
+ "delivered": false,
+ "delivery": "through the door: 0 recipient(s) not as the record calls for, 1 without a record expectation",
  "sender": "Dr Edikan's agent, sending as the synthetic doctors' department lead (disclosed; a role played on the coordinator's instruction by the E6.m build lane)",
+ "recipients": 3,
+ "authorised_recipients": 2,
+ "authorised_delivered": 1,
+ "refusals": 1,
+ "correct_refusals": 1,
+ "incorrect_outcomes": 1,
  "delivery_results": [
   {
    "recipient_role": "doctor",
@@ -98,7 +106,8 @@
    "expected": "deliver",
    "correct": true,
    "why": "the owner doctor's own agent requested and accepted all three stays the memo names",
-   "task_alerts_not_sent": 1
+   "task_alerts_not_sent": 0,
+   "urgent_alerts_sent": 2
   },
   {
    "recipient_role": "doctor",
@@ -108,18 +117,19 @@
    "expected": "refuse",
    "correct": true,
    "why": "the record does not place the incoming doctor on the stay the roster declares; a roster declaration is not the record",
-   "task_alerts_not_sent": 1,
-   "observed": "the door refused before its record check: in the sandbox this doctor is on another hospital's staff, which is also a correct refusal"
+   "task_alerts_not_sent": 2,
+   "urgent_alerts_sent": 0
   },
   {
    "recipient_role": "nurse",
    "incoming": true,
-   "memo": "delivered",
+   "memo": "withheld",
    "reason": null,
    "expected": "deliver",
-   "correct": true,
+   "correct": null,
    "why": "the memo names no encounter, so there is nothing to authorise",
-   "task_alerts_not_sent": 0
+   "task_alerts_not_sent": 0,
+   "urgent_alerts_sent": 0
   }
  ],
  "checks_failed_closed": 5,
@@ -131,41 +141,386 @@
   "changed_after_verification": "payload_changed_after_verification",
   "checker_error": "verifier_error"
  },
+ "negative_not_applicable": [],
+ "refreshed": [
+  {
+   "changed": false,
+   "from": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+   "to": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+   "recomposed": false
+  },
+  {
+   "changed": false,
+   "from": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+   "to": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+   "recomposed": false
+  },
+  null
+ ],
+ "urgent_alerts": 2,
+ "urgent_items": 4,
+ "urgent_items_authorised": 2,
+ "urgent_alerts_authorised": 2,
  "tests": "packages/intelligence/test/nightly.test.ts",
- "model_mode": "replay",
- "calls": 9,
- "cost_usd": 0.052966,
+ "model_mode": "live",
+ "calls": 8,
+ "cost_usd": 0.036935,
  "effort": "medium",
  "purposes": [
   "draft_text",
   "other"
  ],
  "model": "meta-models/Muse-Spark-Open-816B-A42B",
- "recipients": 3,
- "authorised_recipients": 2,
- "authorised_delivered": 2,
- "refusals": 1,
- "correct_refusals": 1,
- "incorrect_outcomes": 0,
- "recorded": {
-  "mode": "live",
-  "at": "2026-10-30T01:51:56Z",
-  "replayed_after": "urgent items sent first as their own alert",
-  "replay_same_memos": true
- },
- "cost_note": "the recorded live run's ledger, repairs included; the re-delivery replayed it and made no model call",
- "redelivered": {
-  "at": "2026-10-30T02:49:10.437Z",
-  "through": "the door's memo route on the sandbox, under the profile's sender",
-  "model_calls": 0,
-  "first_attempt": {
-   "at": "2026-10-30T02:41:24.903Z",
-   "owner_doctor": "refused incorrectly: the door's record check matched the person only, not the agent the doctor owns",
-   "nurse": "delivered",
-   "incoming_doctor": "refused correctly"
+ "note": "Run run-night003, live, after the alert route and the refresh: the owner doctor's memo and both of its urgent items reached him through the door, each urgent item as its own alert; the incoming doctor was refused correctly; the nurse's memo was withheld because a suspected cause carried a figure no cited fact gives (the CLI has no repair step), so she received nothing. Run run-night002, the run before it on the same day's records, verified and delivered all three.",
+ "earlier_runs": [
+  {
+   "measured_at": "2026-10-30T06:25:03.838Z",
+   "measured": true,
+   "source": "nightly_run",
+   "set": "sandbox",
+   "run_id": "run-night002",
+   "day": "2026-10-30",
+   "sources_hash": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+   "departments": [
+    {
+     "department": "accounts_clerk",
+     "causes": 2,
+     "challenged": 1,
+     "changes": 2,
+     "nothing_warrants_change": false
+    },
+    {
+     "department": "doctor",
+     "causes": 2,
+     "challenged": 0,
+     "changes": 2,
+     "nothing_warrants_change": false
+    },
+    {
+     "department": "nurse",
+     "causes": 2,
+     "challenged": 0,
+     "changes": 1,
+     "nothing_warrants_change": false
+    }
+   ],
+   "memos": [
+    {
+     "recipient_role": "doctor",
+     "incoming": false,
+     "status": "delivered",
+     "verdict": "verified",
+     "failures": [],
+     "repairs": 0,
+     "facts": 3,
+     "causes": 2,
+     "changes": 2,
+     "unfinished": 5,
+     "urgent": 2,
+     "encounters_named": 5,
+     "preview": "Night memo: 3 recorded facts, 5 unfinished items for you, 2 urgent.",
+     "nothing_warrants_change": false,
+     "publish_ms": 362
+    },
+    {
+     "recipient_role": "doctor",
+     "incoming": true,
+     "status": "refused",
+     "verdict": "verified",
+     "failures": [],
+     "repairs": 0,
+     "facts": 3,
+     "causes": 2,
+     "changes": 2,
+     "unfinished": 5,
+     "urgent": 2,
+     "encounters_named": 1,
+     "preview": "Night memo: 3 recorded facts, 5 unfinished items for you, 2 urgent.",
+     "nothing_warrants_change": false,
+     "publish_ms": 150
+    },
+    {
+     "recipient_role": "nurse",
+     "incoming": true,
+     "status": "delivered",
+     "verdict": "verified",
+     "failures": [],
+     "repairs": 0,
+     "facts": 4,
+     "causes": 2,
+     "changes": 1,
+     "unfinished": 0,
+     "urgent": 0,
+     "encounters_named": 0,
+     "preview": "Night memo: 4 recorded facts, 0 unfinished items for you.",
+     "nothing_warrants_change": false,
+     "publish_ms": 78
+    }
+   ],
+   "verified": true,
+   "names_in_previews": 0,
+   "unauthorised_names": 0,
+   "deny_hits": 0,
+   "delivered": true,
+   "delivery": "every authorised recipient received the memo and every refusal was correct",
+   "sender": "Dr Edikan's agent, sending as the synthetic doctors' department lead (disclosed; a role played on the coordinator's instruction by the E6.m build lane)",
+   "recipients": 3,
+   "authorised_recipients": 2,
+   "authorised_delivered": 2,
+   "refusals": 1,
+   "correct_refusals": 1,
+   "incorrect_outcomes": 0,
+   "delivery_results": [
+    {
+     "recipient_role": "doctor",
+     "incoming": false,
+     "memo": "delivered",
+     "reason": null,
+     "expected": "deliver",
+     "correct": true,
+     "why": "the owner doctor's own agent requested and accepted all three stays the memo names",
+     "task_alerts_not_sent": 0,
+     "urgent_alerts_sent": 2
+    },
+    {
+     "recipient_role": "doctor",
+     "incoming": true,
+     "memo": "refused",
+     "reason": "404 not_found_opaque: no message",
+     "expected": "refuse",
+     "correct": true,
+     "why": "the record does not place the incoming doctor on the stay the roster declares; a roster declaration is not the record",
+     "task_alerts_not_sent": 2,
+     "urgent_alerts_sent": 0
+    },
+    {
+     "recipient_role": "nurse",
+     "incoming": true,
+     "memo": "delivered",
+     "reason": null,
+     "expected": "deliver",
+     "correct": true,
+     "why": "the memo names no encounter, so there is nothing to authorise",
+     "task_alerts_not_sent": 0,
+     "urgent_alerts_sent": 0
+    }
+   ],
+   "checks_failed_closed": 5,
+   "checks_tried": 5,
+   "negative_cases": {
+    "invented_figure": "unsupported_or_incomplete",
+    "false_completion": "unsupported_or_incomplete",
+    "patient_name": "unsupported_or_incomplete",
+    "changed_after_verification": "payload_changed_after_verification",
+    "checker_error": "verifier_error"
+   },
+   "negative_not_applicable": [],
+   "refreshed": [
+    {
+     "changed": false,
+     "from": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+     "to": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+     "recomposed": false
+    },
+    {
+     "changed": false,
+     "from": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+     "to": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+     "recomposed": false
+    },
+    {
+     "changed": false,
+     "from": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+     "to": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+     "recomposed": false
+    }
+   ],
+   "urgent_alerts": 2,
+   "urgent_items": 4,
+   "tests": "packages/intelligence/test/nightly.test.ts",
+   "model_mode": "live",
+   "calls": 8,
+   "cost_usd": 0.043219,
+   "effort": "medium",
+   "purposes": [
+    "draft_text",
+    "other"
+   ],
+   "model": "meta-models/Muse-Spark-Open-816B-A42B",
+   "urgent_items_authorised": 2,
+   "urgent_alerts_authorised": 2,
+   "counts_note": "urgent_items_authorised and urgent_alerts_authorised computed after the run from its private results by the CLI's rule; its urgent previews used the earlier wording"
   },
-  "after_fix": "the door's record check now counts the recipient's own active agents as the recipient; the same command and bearer were rerun",
-  "bell_rows_read_back": 2,
-  "bell_read_back": "one memo row each on the owner doctor's and the nurse's bell, read by read-only SQL; the nurse's memo was an idempotent replay and did not ring twice"
- }
+  {
+   "measured_at": "2026-10-30T02:49:10.437Z",
+   "measured": true,
+   "source": "nightly_run",
+   "set": "sandbox",
+   "run_id": "run-night001",
+   "day": "2026-10-30",
+   "sources_hash": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+   "departments": [
+    {
+     "department": "accounts_clerk",
+     "causes": 2,
+     "challenged": 0,
+     "changes": 2,
+     "nothing_warrants_change": false
+    },
+    {
+     "department": "doctor",
+     "causes": 2,
+     "challenged": 1,
+     "changes": 2,
+     "nothing_warrants_change": false
+    },
+    {
+     "department": "nurse",
+     "causes": 2,
+     "challenged": 0,
+     "changes": 1,
+     "nothing_warrants_change": false
+    }
+   ],
+   "memos": [
+    {
+     "recipient_role": "doctor",
+     "incoming": false,
+     "status": "delivered",
+     "verdict": "verified",
+     "failures": [],
+     "repairs": 0,
+     "facts": 3,
+     "causes": 2,
+     "changes": 2,
+     "unfinished": 5,
+     "urgent": 2,
+     "encounters_named": 5,
+     "preview": "Night memo: 3 recorded facts, 5 unfinished items for you, 2 urgent.",
+     "nothing_warrants_change": false,
+     "publish_ms": 218
+    },
+    {
+     "recipient_role": "doctor",
+     "incoming": true,
+     "status": "refused",
+     "verdict": "verified",
+     "failures": [],
+     "repairs": 0,
+     "facts": 3,
+     "causes": 2,
+     "changes": 2,
+     "unfinished": 5,
+     "urgent": 2,
+     "encounters_named": 1,
+     "preview": "Night memo: 3 recorded facts, 5 unfinished items for you, 2 urgent.",
+     "nothing_warrants_change": false,
+     "publish_ms": 47
+    },
+    {
+     "recipient_role": "nurse",
+     "incoming": true,
+     "status": "delivered",
+     "verdict": "verified",
+     "failures": [],
+     "repairs": 0,
+     "facts": 4,
+     "causes": 2,
+     "changes": 1,
+     "unfinished": 0,
+     "urgent": 0,
+     "encounters_named": 0,
+     "preview": "Night memo: 4 recorded facts, 0 unfinished items for you.",
+     "nothing_warrants_change": false,
+     "publish_ms": 40
+    }
+   ],
+   "verified": true,
+   "names_in_previews": 0,
+   "unauthorised_names": 0,
+   "deny_hits": 0,
+   "delivered": true,
+   "delivery": "through the door: both authorised recipients received it and the one refusal was correct",
+   "sender": "Dr Edikan's agent, sending as the synthetic doctors' department lead (disclosed; a role played on the coordinator's instruction by the E6.m build lane)",
+   "delivery_results": [
+    {
+     "recipient_role": "doctor",
+     "incoming": false,
+     "memo": "delivered",
+     "reason": null,
+     "expected": "deliver",
+     "correct": true,
+     "why": "the owner doctor's own agent requested and accepted all three stays the memo names",
+     "task_alerts_not_sent": 1
+    },
+    {
+     "recipient_role": "doctor",
+     "incoming": true,
+     "memo": "refused",
+     "reason": "404 not_found_opaque: no message",
+     "expected": "refuse",
+     "correct": true,
+     "why": "the record does not place the incoming doctor on the stay the roster declares; a roster declaration is not the record",
+     "task_alerts_not_sent": 1,
+     "observed": "the door refused before its record check: in the sandbox this doctor is on another hospital's staff, which is also a correct refusal"
+    },
+    {
+     "recipient_role": "nurse",
+     "incoming": true,
+     "memo": "delivered",
+     "reason": null,
+     "expected": "deliver",
+     "correct": true,
+     "why": "the memo names no encounter, so there is nothing to authorise",
+     "task_alerts_not_sent": 0
+    }
+   ],
+   "checks_failed_closed": 5,
+   "checks_tried": 5,
+   "negative_cases": {
+    "invented_figure": "unsupported_or_incomplete",
+    "false_completion": "unsupported_or_incomplete",
+    "patient_name": "unsupported_or_incomplete",
+    "changed_after_verification": "payload_changed_after_verification",
+    "checker_error": "verifier_error"
+   },
+   "tests": "packages/intelligence/test/nightly.test.ts",
+   "model_mode": "replay",
+   "calls": 9,
+   "cost_usd": 0.052966,
+   "effort": "medium",
+   "purposes": [
+    "draft_text",
+    "other"
+   ],
+   "model": "meta-models/Muse-Spark-Open-816B-A42B",
+   "recipients": 3,
+   "authorised_recipients": 2,
+   "authorised_delivered": 2,
+   "refusals": 1,
+   "correct_refusals": 1,
+   "incorrect_outcomes": 0,
+   "recorded": {
+    "mode": "live",
+    "at": "2026-10-30T01:51:56Z",
+    "replayed_after": "urgent items sent first as their own alert",
+    "replay_same_memos": true
+   },
+   "cost_note": "the recorded live run's ledger, repairs included; the re-delivery replayed it and made no model call",
+   "redelivered": {
+    "at": "2026-10-30T02:49:10.437Z",
+    "through": "the door's memo route on the sandbox, under the profile's sender",
+    "model_calls": 0,
+    "first_attempt": {
+     "at": "2026-10-30T02:41:24.903Z",
+     "owner_doctor": "refused incorrectly: the door's record check matched the person only, not the agent the doctor owns",
+     "nurse": "delivered",
+     "incoming_doctor": "refused correctly"
+    },
+    "after_fix": "the door's record check now counts the recipient's own active agents as the recipient; the same command and bearer were rerun",
+    "bell_rows_read_back": 2,
+    "bell_read_back": "one memo row each on the owner doctor's and the nurse's bell, read by read-only SQL; the nurse's memo was an idempotent replay and did not ring twice"
+   }
+  }
+ ]
 }

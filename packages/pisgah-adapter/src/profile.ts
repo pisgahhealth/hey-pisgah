@@ -37,7 +37,8 @@ const WriteOp = z.strictObject({
 }).refine((w) => !!w.proof !== !!w.unverifiable, "a write needs a proof or a reason it cannot have one");
 // A kind that only reads: the answer is rendered into a report or a draft from "{alias.path}" and "{alias.list[].field}" placeholders.
 const ReadOnlyOp = z.strictObject({ reads: z.record(z.string(), ReadSpec), report: z.string().max(2000).optional(), draft: z.string().max(4000).optional(), store: z.string().min(1) });
-const Fact = z.strictObject({ path: Dotted, label: z.string().min(1).max(60) });
+// A watched fact is the value at its path, or with present set, that word when any value along the path (lists read with "[].") is set and not false.
+const Fact = z.strictObject({ path: z.string().regex(/^[A-Za-z0-9_]+((\.|\[\]\.)[A-Za-z0-9_]+)*$/), label: z.string().min(1).max(60), present: z.string().regex(/^[a-z_]{1,30}$/).optional() });
 export const OwnerSpec = z.strictObject({
   id: z.string().min(1).max(80), label: z.string().min(1).max(80), kinds: z.array(z.string().min(1)).min(1),
   watches: z.array(z.string()).default([]), inbox: z.boolean().default(false),
@@ -87,6 +88,8 @@ export const DoorProfile = z.strictObject({
   deny_exact: z.array(z.string().regex(/^[a-z0-9_-]+(\/[a-z0-9_-]+)*$/)).default([]),
   // Paths called only with the owner's matched confirmation line, such as a clinical discharge; anything else is refused before the network.
   confirm: z.array(z.string().regex(/^[a-z0-9_-]+(\/[a-z0-9_-]+)*$/)).default([]),
+  // Kinds sent only with the owner's matched instruction and a later matched confirmation, on a path other work shares.
+  confirm_kinds: z.array(z.string().regex(/^[a-z_]{1,40}$/)).default([]),
   ops: z.strictObject({
     read_admission: z.strictObject({ method: z.literal("GET"), path: PathTpl, label: Dotted, facts: z.record(z.string(), Dotted), proof: z.record(z.string(), Dotted) }),
     write_observation: z.strictObject({ method: z.literal("POST"), path: PathTpl, body: z.record(z.string(), z.json()), writes_path: Dotted, primary_store: z.string().min(1) }),
@@ -129,7 +132,8 @@ export const DoorProfile = z.strictObject({
   // The delegation reads and the teams owners may hand work to.
   delegations: DelegationsSpec.optional(),
   // Where a checked nightly memo is delivered, and the owner whose agent sends it, with how that sender is disclosed.
-  memos: z.strictObject({ path: PathTpl, sender: z.string().min(1).max(80), sender_label: z.string().min(1).max(200) }).optional(),
+  // The memo route, and the route that takes each urgent item, or a withheld memo's open work, as a task alert of its own.
+  memos: z.strictObject({ path: PathTpl, alerts_path: PathTpl.optional(), sender: z.string().min(1).max(80), sender_label: z.string().min(1).max(200) }).optional(),
   // Where each page the strip can operate lives in the EMR.
   pages: z.partialRecord(z.enum(["triage", "doctor_workspace", "admissions", "reception_identity"]), z.string().regex(/^\/[a-z0-9/_-]*$/)).default({})
 });

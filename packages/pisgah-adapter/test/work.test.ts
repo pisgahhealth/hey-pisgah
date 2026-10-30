@@ -36,6 +36,7 @@ async function door() {
     if (path === `stay/${ADM}/bill`) return send(200, { total: "10250.00", paid: "4000.00", lines: [{ d: "Bed" }, { d: "Fee" }], linkAt: st.linkAt });
     if (path === "stay/out/pay-link") { st.linkAt = "2026-10-28T10:00:00.000Z"; return send(200, { ok: true, status: "sent" }); }
     if (path === `stay/${ADM}/stage`) return send(200, { stage: "signed_off" });
+    if (path === "visit/draft") return send(200, { draftUpdatedAt: "2026-10-28T10:00:00.000Z" });
     send(404, { error: { code: "not_found_opaque" } });
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
@@ -151,6 +152,27 @@ describe("profile-driven work over the door", () => {
       const bound = new PisgahPort(DoorProfile.parse({ ...base, headers: { ...base.headers, confirmation: "X-Confirm", read_back_digest: "X-Digest" }, confirm: ["stay/out/pay-link"] }), { bearers: { [DOC]: "b" } });
       expect(await bound.request("POST", "stay/out/pay-link", { ...prov(DOC), voice: { confirmation: tok } }, { body: {} })).toEqual({ kind: "refused", reason: "needs_confirmation" });
       expect(d.st.seen.filter((x) => x.path === "POST stay/out/pay-link")).toHaveLength(1);
+    } finally { await d.close(); }
+  });
+
+  it("sends a confirm kind only with the owner's matched instruction on the evidence line and a separate matched confirmation", async () => {
+    const d = await door();
+    try {
+      const base = profile(d.base);
+      const work = { ...base.work, record_diagnosis: { method: "POST" as const, path: "visit/draft", body: { visitId: "$visit_id", diagnosisName: "$diagnosis" }, ack: { store: "draft" }, unverifiable: "the stand-in door has no draft read" } };
+      const owners = [{ id: DOC, label: "Doctor", kinds: ["record_diagnosis"] }];
+      const port = new PisgahPort(DoorProfile.parse({ ...base, headers: { ...base.headers, authorisation: "X-Auth", confirmation: "X-Confirm" }, work, owners, confirm_kinds: ["record_diagnosis"] }), { bearers: { [DOC]: "b" } });
+      const args = { visit_id: VIS, patient_id: PAT, diagnosis: "Acute appendicitis" };
+      const tok = (line: string) => `transcript:${line}~v1.${Date.now()}.${"a".repeat(43)}`;
+      const refused = { ok: false, reason: "needs_confirmation", status: null, retryable: false, counted: true };
+      expect(await port.commit("record_diagnosis", args, "k-1", prov(DOC))).toEqual(refused);
+      expect(await port.commit("record_diagnosis", args, "k-2", { ...prov(DOC), voice: { authorisation: tok("u-1") } })).toEqual(refused);
+      // The instruction line never doubles as its own confirmation, and it must be the line the write names.
+      expect(await port.commit("record_diagnosis", args, "k-3", { ...prov(DOC), voice: { authorisation: tok("u-1"), confirmation: tok("u-1") } })).toEqual(refused);
+      expect(await port.commit("record_diagnosis", args, "k-4", { ...prov(DOC), voice: { authorisation: tok("u-9"), confirmation: tok("u-2") } })).toEqual(refused);
+      expect(d.st.seen.filter((x) => x.path === "POST visit/draft")).toHaveLength(0);
+      expect(await port.commit("record_diagnosis", args, "k-5", { ...prov(DOC), voice: { authorisation: tok("u-1"), confirmation: tok("u-2") } })).toMatchObject({ ok: true });
+      expect(d.st.seen.filter((x) => x.path === "POST visit/draft").map((x) => x.body)).toEqual([{ visitId: VIS, diagnosisName: "Acute appendicitis" }]);
     } finally { await d.close(); }
   });
 

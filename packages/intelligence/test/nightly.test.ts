@@ -6,7 +6,9 @@ import { ModelClient, type ChatCompletion } from "@hey-pisgah/model";
 import { computeFacts } from "../src/nightly/facts.js";
 import { investigateDay, investigatorMessage, criticMessage, scanNightPrompts } from "../src/nightly/investigate.js";
 import { composeMemo, payloadHash, type Investigation, type Memo } from "../src/nightly/memo.js";
-import { heldTransport, memoPublisher, sendOnVerdict } from "../src/nightly/publish.js";
+import { alertHash, heldTransport, memoPublisher, sendOnVerdict } from "../src/nightly/publish.js";
+import { plantedFaults } from "../src/nightly/faults.js";
+import { sourcesHash } from "../src/nightly/sources.js";
 import type { DayEvent, NightSources } from "../src/nightly/sources.js";
 import { checkMemo, verifyMemo } from "../src/nightly/verify.js";
 
@@ -64,7 +66,10 @@ describe("the nightly memo: facts by rule, findings labelled, names never", () =
     const r = await p.publish(m);
     expect(r).toMatchObject({ status: "delivered", verdict: { status: "verified" }, repairs: 0 });
     // The overdue item reaches the bell at once as its own alert, then the memo.
-    expect(t.sent.map((d) => [d.kind, d.preview])).toEqual([["task", "Urgent: 1 item for you."], ["memo", "Night memo: 3 recorded facts, 2 unfinished items for you, 1 urgent."]]);
+    expect(t.sent.map((d) => [d.kind, d.preview])).toEqual([["urgent", "Urgent: a held task for you is overdue."], ["memo", "Night memo: 3 recorded facts, 2 unfinished items for you, 1 urgent."]]);
+    // The urgent alert carries only its own item, and its hash is over that exact payload.
+    expect(t.sent[0]!.body).toMatchObject({ items: [{ item_id: "oi-2", state: "overdue" }] });
+    expect(t.sent[0]!.payload_hash).toBe(alertHash(t.sent[0]!.body));
     expect(t.sent[1]!.payload_hash).toBe(payloadHash(m));
   });
 
@@ -177,5 +182,46 @@ describe("the nightly memo: facts by rule, findings labelled, names never", () =
       expect(scanNightPrompts(r.prompts)).toEqual([]);
       expect(scanNightPrompts([investigatorMessage("doctor", facts), criticMessage("doctor", doctorInv()[0]!.causes, facts)])).toEqual([]);
     } finally { client.close(); }
+  });
+
+  it("survives a night with no unfinished items: the faults that need an item are named not applicable, the rest are still refused (the review's crash)", async () => {
+    const s = { ...sources(), open: [] };
+    const memos = s.recipients.map((r) => memoFor(s, r.id));
+    expect(memos.every((m) => m.unfinished.length === 0)).toBe(true);
+    const f = await plantedFaults(s, memos, NOW);
+    expect(f.not_applicable).toEqual(["false_completion"]);
+    expect(f).toMatchObject({ tried: 4, refused: 4 });
+    const none = await plantedFaults({ ...s, labels: [] }, memos, NOW);
+    expect(none.cases["patient_name"]).toBe("unsupported_or_incomplete");
+  });
+
+  it("reads the records again right before sending: changed task wording or work finished meanwhile is caught, and the memo goes out rebuilt or not at all", async () => {
+    const before = sources();
+    const m = memoFor(before, "doc-1");
+    // While the model wrote, a task was reworded and the overdue one was done.
+    const after: NightSources = { ...before, open: before.open.map((i) => (i.item_id === "oi-1" ? { ...i, title: "How often should the pain score be done?" } : i.item_id === "oi-2" ? { ...i, state: "done" as const } : i)) };
+    const stale = publisher(before, { refresh: () => after });
+    const r1 = await stale.p.publish(m);
+    expect(r1.refreshed).toMatchObject({ changed: true, from: sourcesHash(before), to: sourcesHash(after), recomposed: false });
+    expect(r1.status).toBe("withheld");
+    expect(r1.verdict.failures.map((f) => f.code)).toContain("stale_sources");
+    expect(stale.t.sent.filter((d) => d.kind === "memo")).toHaveLength(0);
+    const fresh = publisher(before, { refresh: () => after, recompose: (src, x) => composeMemo(src, src.recipients.find((r) => r.id === x.recipient_id)!, computeFacts(src), doctorInv(), NOW) });
+    const r2 = await fresh.p.publish(m);
+    expect(r2).toMatchObject({ status: "delivered", refreshed: { changed: true, recomposed: true } });
+    const sent = fresh.t.sent.find((d) => d.kind === "memo")!.body as Memo;
+    expect(sent.unfinished.map((i) => [i.item_id, i.title])).toEqual([["oi-1", "How often should the pain score be done?"]]);
+    expect(fresh.t.sent.map((d) => d.kind)).toEqual(["memo"]);
+    // Unchanged records publish as before, with the refresh recorded.
+    const same = await publisher(before, { refresh: () => before }).p.publish(m);
+    expect(same).toMatchObject({ status: "delivered", refreshed: { changed: false } });
+  });
+
+  it("treats a refresh that cannot read the records as a verifier error and sends nothing", async () => {
+    const s = sources();
+    const { t, p } = publisher(s, { refresh: () => { throw new Error("store unreadable"); } });
+    const r = await p.publish(memoFor(s, "doc-1"));
+    expect(r.verdict.status).toBe("verifier_error");
+    expect(t.sent).toHaveLength(0);
   });
 });

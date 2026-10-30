@@ -3,6 +3,7 @@ export const PACKAGE = "intelligence" as const;
 export { DENY_LIST, denyScan, type DenyHit } from "./deny.js";
 export { UNKNOWN_ID } from "./unknown.js";
 export { DiscoveryPool, loadObserved, type OutcomeCase, type PoolCase } from "./pool.js";
+export { caseFigures, outcomeComparison, reverseOutcomes, type OutcomeComparison } from "./outcomes.js";
 export { checkAfter, checkBefore, disjoint, holds, interval, scopedCases } from "./prediction.js";
 export { runMatched, type Matched, type Runner } from "./experiments.js";
 export { Session, STREAMS, sessionStreamId, toleranceCap, type Arm, type ListedExperiment, type SessionOptions, type StoredExperiment } from "./session.js";
@@ -10,7 +11,7 @@ export { DESCRIPTIONS, armTools, dispatch, toolDefs, type ToolName } from "./too
 export { ARMS, NUDGE, appTexts, armHashes, kickoff, systemPrompt } from "./prompts.js";
 export { SETTINGS, compact, dropOldTurns, runLoop, type Digests, type LoopOptions, type LoopOutcome } from "./loop.js";
 export { definitionDigest, resultDigest } from "./digest.js";
-export { CYCLE, STAGE_TOOLS, runCycleLoop, type CycleOptions, type Stage } from "./cycle.js";
+export { CYCLE, SECOND_CYCLE_TOOLS, STAGE_TOOLS, runCycleLoop, type CycleOptions, type Stage } from "./cycle.js";
 export { derivedStatistics, criticalPath } from "./stats.js";
 export { lintExperiment } from "./lint.js";
 export { ruleChanges, isStaticNoop, preconditionTable, PRECONDITION_TABLE } from "./preconditions.js";

@@ -123,15 +123,29 @@ export function gatePrompt(kinds: readonly EmrWriteKind[], names?: SayableNames)
     ...base,
     "Each instruction clause names one kind. A clause that asks for two kinds of work is two clauses.",
     "Copy text, title and reasons from the clinician's own words; never add findings, numbers or plans they did not say.",
-    orders
-      ? "A request to another department that you can carry by page is page_staff. Sending a test is order_test and prescribing a medicine is prescribe, only for the tests and medicines listed below and only when the clinician settles it now; signing off, sending the patient home, settling or marking a bill paid stay with staff and are kind null."
-      : "A request to another department that you can carry by page is page_staff; ordering tests or medicines, prescribing, signing off, sending the patient home, settling or marking a bill paid stay with staff and are kind null.",
+    staffRule(kinds, orders),
+    ...(kinds.includes(HOME_KIND) ? [HOME_RULE] : []),
+    ...(kinds.includes(DIAGNOSIS_KIND) ? [DIAGNOSIS_RULE] : []),
     ...(orders ? ORDER_RULES : []),
     ...(orders ? [`Tests you may name in test: ${list(names?.tests)}.`, `Medicines you may name in drug: ${list(names?.drugs)}.`] : []),
     `Page targets you may name in to: ${list(names?.page_targets)}.`,
     `Clinics you may name in clinic: ${list(names?.clinics)}.`,
     ...(holdsClerking(kinds) ? [...CLERKING_RULES.filter((r) => !r.startsWith("Vitals") || kinds.includes(OBSERVATION_KIND)), `Wards you may name in ward: ${list(names?.wards)}.`] : [])
   ].join("\n");
+}
+
+export const HOME_KIND = "release_home" as const;
+// Sending the patient home is the owner's own kind once release_home is permitted, so the prompt never also leaves it with staff.
+export const HOME_RULE = "Sending the patient home is release_home, only for the admitted patient and only when the clinician settles it now; nothing is done until the clinician confirms the paperwork read back from the record.";
+export const DIAGNOSIS_KIND = "record_diagnosis" as const;
+// Only a settled diagnosis is recorded, and only in the clinician's words; it waits for their spoken confirm.
+export const DIAGNOSIS_RULE = "Stating the diagnosis is record_diagnosis only when the clinician settles it now, such as the diagnosis is, put the diagnosis as or record the diagnosis as; copy the diagnosis into text in their words. A diagnosis weighed, doubted or given as one of several is option and is not recorded.";
+// What the owner's kinds carry beside paging, and what stays with staff; both branches leave home with staff only when release_home is not permitted.
+export function staffRule(kinds: readonly EmrWriteKind[], orders = holdsOrders(kinds)): string {
+  const home = kinds.includes(HOME_KIND) ? "" : " sending the patient home,";
+  return orders
+    ? `A request to another department that you can carry by page is page_staff. Sending a test is order_test and prescribing a medicine is prescribe, only for the tests and medicines listed below and only when the clinician settles it now; signing off,${home} settling or marking a bill paid stay with staff and are kind null.`
+    : `A request to another department that you can carry by page is page_staff; ordering tests or medicines, prescribing, signing off,${home} settling or marking a bill paid stay with staff and are kind null.`;
 }
 
 // The order owner's rules, after the general ones.
@@ -236,6 +250,19 @@ export function gateCommitment(): Record<string, unknown> {
       const p = gatePrompt(ok, { ...names, tests: {}, drugs: {} });
       const tl = gateTool(ok);
       return { kinds: ok, prompt: p, prompt_sha256: sha256(p), tool_sha256: hashJson(tl), rules: [...ORDER_RULES], deny_hits: denyHits(`${p}\n${JSON.stringify(tl)}`) };
+    })(),
+    // Owners who may send a patient home, with and without voice orders, so both branches of the staff rule are committed.
+    home: Object.fromEntries(([["plain", [...CLERKING_REFERENCE_KINDS, HOME_KIND]], ["orders", [...ORDER_REFERENCE_KINDS, HOME_KIND]]] as const).map(([k, hk]) => {
+      const p = gatePrompt(hk, { ...names, tests: {}, drugs: {} });
+      const tl = gateTool(hk);
+      return [k, { kinds: [...hk], prompt: p, prompt_sha256: sha256(p), tool_sha256: hashJson(tl), rules: [HOME_RULE], deny_hits: denyHits(`${p}\n${JSON.stringify(tl)}`) }];
+    })),
+    // The order owner who may also state the diagnosis for the record, as the emergency doctor does.
+    diagnosis: (() => {
+      const dk = [...ORDER_REFERENCE_KINDS, HOME_KIND, DIAGNOSIS_KIND];
+      const p = gatePrompt(dk, { ...names, tests: {}, drugs: {} });
+      const tl = gateTool(dk);
+      return { kinds: dk, prompt: p, prompt_sha256: sha256(p), tool_sha256: hashJson(tl), rules: [DIAGNOSIS_RULE], deny_hits: denyHits(`${p}\n${JSON.stringify(tl)}`) };
     })()
   };
 }

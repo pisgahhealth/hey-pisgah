@@ -7,13 +7,15 @@ export const WORK_KINDS = [
   OBSERVATION_KIND, "draft_consult_note", "request_admission", "record_triage_vitals", "add_care_plan_item",
   "record_note", "draft_handover", "page_staff", "schedule_follow_up", "prepare_bill", "send_pay_link",
   "open_consult", "record_clerking", "record_allergy", "admit_patient", "assign_bed", "schedule_review",
-  "order_test", "prescribe", "countersign", "release_home"
+  "order_test", "prescribe", "countersign", "release_home", "record_diagnosis"
 ] as const;
 export type WorkKind = (typeof WORK_KINDS)[number];
 // The delegation kinds an owner may also hold; each is taken by rule, so the gate never lists them.
 export const DELEGATION_KINDS: readonly string[] = [...DELEGATION_RULE_KINDS];
 // Kinds that only read the record and report back; they change nothing in it.
 export const READ_ONLY_KINDS: ReadonlySet<string> = new Set(["draft_handover", "prepare_bill"]);
+// Kinds the owner's own matched voice asks for and a later matched confirm line releases; any other voice never writes them.
+export const OWNER_CONFIRM_KINDS: ReadonlySet<string> = new Set(["record_diagnosis"]);
 
 export const WARD_CLASSES = ["general", "private", "semi_private", "icu", "hdu", "paeds", "isolation", "maternity"] as const;
 export const ADMISSION_TYPES = ["emergency", "planned", "day_case"] as const;
@@ -77,7 +79,9 @@ export const WORK_ARGS: Record<Exclude<WorkKind, typeof OBSERVATION_KIND>, z.Zod
   // Countersigns exactly the batch the owner was shown: its item ids, digest and the moment it was read back.
   countersign: z.strictObject({ visit_id: EmrId, item_ids: z.array(EmrId).min(1).max(100), items_digest: z.string().regex(/^[0-9a-f]{64}$/), read_back_at: z.iso.datetime({ offset: true }), read_back_seal: z.string().regex(/^[A-Za-z0-9_-]{43}$/), labels: z.array(z.string().max(120)).max(100) }),
   // The clinical close of a stay; the diagnosis and medicines come from the record's paperwork, never from the words.
-  release_home: z.strictObject({ admission_id: EmrId, instructions: Text.max(2000).optional(), follow_up_date: z.iso.date().optional() })
+  release_home: z.strictObject({ admission_id: EmrId, instructions: Text.max(2000).optional(), follow_up_date: z.iso.date().optional() }),
+  // The diagnosis in the clinician's own words, never a code; the person who signs the consultation carries it into the record.
+  record_diagnosis: z.strictObject({ visit_id: EmrId, patient_id: EmrId, diagnosis: z.string().trim().min(2).max(500) })
 };
 
 // What each kind means to the speech gate; the gate prompt lists only the kinds the owner holds.
@@ -102,6 +106,7 @@ export const WORK_TEXT: Record<Exclude<WorkKind, typeof OBSERVATION_KIND>, strin
   prescribe: "prescribe: prescribe a medicine for the patient in context: drug (one of the medicines listed below), dose as said (such as 1 g or 500 mg), frequency (doses per day, 1 to 4), duration_days, quantity and route (oral, iv, im, sc), all as said.",
   countersign: "countersign: you never name it; the clinician says sign everything.",
   release_home: "release_home: the clinician says the admitted patient may go home now, closing the stay; instructions are the advice said for the patient, follow_up_date only when a date is said, as YYYY-MM-DD. The diagnosis and medicines are read from the record, never from the words.",
+  record_diagnosis: "record_diagnosis: the clinician settles the patient's diagnosis now, such as \"the diagnosis is malaria\" or \"put the diagnosis as malaria\"; text is the diagnosis in their own words only, never a code. It is read back and recorded only when the clinician then says confirm.",
 };
 
 // The value fields the wider gate tool adds for these kinds; the observation-only tool stays as committed.
@@ -158,10 +163,16 @@ export function summariseWork(kind: string, a: Record<string, unknown>): string 
     case "schedule_review": return `Review due ${String(a["due_at"]).slice(11, 16)} UTC on the ward board: ${t(a["title"], 60)}`;
     case "order_test": return `Send the test: ${String(a["test"]).replace(/_/g, " ")}${a["priority"] && a["priority"] !== "routine" ? `, ${a["priority"]}` : ""}, as a voice order awaiting your countersign`;
     case "prescribe": return `Prescribe ${String(a["drug"]).replace(/_/g, " ")}${a["dose"] ? ` ${t(a["dose"], 30)}` : ""}${a["route"] ? ` ${String(a["route"]).toUpperCase()}` : ""}${a["frequency"] ? `, ${a["frequency"]} times a day` : ""}${a["duration_days"] ? ` for ${a["duration_days"]} days` : ""}, quantity ${a["quantity"]}, as a voice order awaiting your countersign`;
+    case "record_diagnosis": return `Record the diagnosis: "${t(a["diagnosis"], 120)}"`;
     case "release_home": return `Discharge the patient home${a["follow_up_date"] ? `, follow-up ${a["follow_up_date"]}` : ""}${a["instructions"] ? `, advice: "${t(a["instructions"], 60)}"` : ""}`;
     case "countersign": return `Countersign ${(a["item_ids"] as unknown[]).length} voice order${(a["item_ids"] as unknown[]).length === 1 ? "" : "s"}: ${((a["labels"] as string[] | undefined) ?? []).join(", ").slice(0, 120)}`;
     default: return delegationSummary(kind, a) ?? kind;
   }
+}
+
+// The question that waits for the owner's own confirm line before such work is written.
+export function confirmAsk(kind: string, summary: string): string {
+  return kind === "record_diagnosis" ? `${summary}. Say confirm to record this diagnosis.` : `${summary}. This is a controlled drug: say confirm to send it.`;
 }
 
 const NUM_WORDS: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, ten: 10, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, "forty-five": 45, sixty: 60, ninety: 90 };

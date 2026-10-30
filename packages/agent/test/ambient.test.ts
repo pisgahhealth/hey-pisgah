@@ -55,6 +55,17 @@ describe("speech gate", () => {
     const rev3 = JSON.parse(readFileSync(GATE_COMMITMENT_FILE, "utf8")).revisions[2].body;
     expect([last.clerking.prompt_sha256, last.clerking.tool_sha256]).toEqual([rev3.clerking.prompt_sha256, rev3.clerking.tool_sha256]);
     expect(last.first_stage.deny_hits).toEqual([]);
+    // Revision 6 adds the home owners only; the clerking and order owners' prompts without release_home stay revision 5's bytes.
+    const rev5 = JSON.parse(readFileSync(GATE_COMMITMENT_FILE, "utf8")).revisions[4].body;
+    expect([last.orders.prompt_sha256, last.orders.tool_sha256]).toEqual([rev5.orders.prompt_sha256, rev5.orders.tool_sha256]);
+    for (const k of ["plain", "orders"]) {
+      expect(last.home[k].deny_hits).toEqual([]);
+      expect(last.home[k].prompt).not.toMatch(/sending the patient home[^.]*stay with staff/);
+    }
+    // Revision 7 adds the owner who may state the diagnosis; the home owners stay revision 6's bytes.
+    const rev6 = JSON.parse(readFileSync(GATE_COMMITMENT_FILE, "utf8")).revisions[5].body;
+    expect(last.home).toEqual(rev6.home);
+    expect(last.diagnosis.deny_hits).toEqual([]);
     expect(gateCommitmentBody().prompt_sha256).toBe(rev2.prompt_sha256);
     expect(denyHits(gatePrompt(["record_observation"]))).toEqual([]);
     expect(denyHits("we did it earlier")).not.toEqual([]);
