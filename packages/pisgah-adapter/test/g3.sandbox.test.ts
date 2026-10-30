@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -12,14 +12,15 @@ import { speak } from "./e3.sandbox.test.js";
 import { freshArrival } from "./sandbox-helpers.js";
 
 // Runs only with SANDBOX=1 and G3=1 against the loopback sandbox; the receiver's read-back is a synthetic voice matched by the local speaker model, and no language model is called.
-const RUN = process.env["SANDBOX"] === "1" && process.env["G3"] === "1";
+const RUN = process.env["SANDBOX"] === "1" && process.env["G3"] === "1" && !!process.env["HEY_PISGAH_G3_CHECKS"];
 const run = Date.now().toString(36);
 const now = () => new Date().toISOString();
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // The synthetic voice the sandbox nurse was enrolled with.
 const NURSE_VOICE = "Tessa";
-const PARACETAMOL_IV = "48c2d1e3-e2d4-4dc2-beaf-0e293a97b441";
-const MORPHINE = "724d635d-0543-4580-b6c8-68b16dffd8e6";
+// The door paths, the hospital site and the two catalogue drugs live in the private checks file, so this public test names no route or record.
+type Checks = { verbal: string; countersign: string; dictated_read: string; approve: string; dispense: string; clock_on: string; facility_id: string; allowed_drug: string; controlled_drug: string; imaging_test: string };
+const checks = (): Checks => JSON.parse(readFileSync(process.env["HEY_PISGAH_G3_CHECKS"]!, "utf8")) as Checks;
 const results: Record<string, unknown> = { run, synthetic: true };
 
 describe.skipIf(!RUN)("G3 dictated and verbal orders, the rights intersection and attestations on the sandbox door", () => {
@@ -33,6 +34,8 @@ describe.skipIf(!RUN)("G3 dictated and verbal orders, the rights intersection an
 
 async function scenario(): Promise<void> {
     const profile = loadProfile();
+    const c = checks();
+    const PARACETAMOL_IV = c.allowed_drug, MORPHINE = c.controlled_drug;
     const sb = SandboxBlock.parse(profile.sandbox);
     const clinic = process.env["HEY_PISGAH_EMERGENCY_CLINIC"]!;
     const embed = sherpaEmbedder({ modelPath: process.env["HEY_PISGAH_SPEAKER_MODEL"] ?? "", sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] })!;
@@ -65,7 +68,7 @@ async function scenario(): Promise<void> {
       return { status: r.status, json, text: text.slice(0, 300) };
     };
     const verbal = async (body: Record<string, unknown>, rb: { line: string; auth: string } | null, as = nurse) =>
-      door(as.bearer, as.owner, "POST", "consult/verbal-order", body, rb ? { [profile.headers.authorisation!]: rb.auth, evidence: `transcript:${rb.line}` } : {});
+      door(as.bearer, as.owner, "POST", c.verbal, body, rb ? { [profile.headers.authorisation!]: rb.auth, evidence: `transcript:${rb.line}` } : {});
 
     // An emergency arrival the doctor's agent opens, so the visit is the emergency encounter verbal orders need.
     const opened = await port.commit("open_unnamed_encounter", { unidentified_ref: `ZZ-TEST G3 arrival ${run}`, reason: "Emergency arrival", clinic_id: clinic }, `g3-${run}-arrive`, { owner: doc.owner, evidence: `transcript:g3-${run}-arrive`, spoken_at: now() });
@@ -80,7 +83,7 @@ async function scenario(): Promise<void> {
     const rb0 = await readBack("Verbal order read back for checking.");
     const refused = {
       opioid_controlled: await verbal(rx(MORPHINE), rb0),
-      imaging_prohibited: await verbal({ ...lab("ZZ-TEST Abdominal ultrasound"), order: { kind: "imaging", testName: "ZZ-TEST Abdominal ultrasound" } }, rb0),
+      imaging_prohibited: await verbal({ ...lab("ZZ-TEST Abdominal ultrasound"), order: { kind: "imaging", testName: c.imaging_test } }, rb0),
       no_read_back: await verbal(lab("ZZ-TEST Full Blood Count"), null),
       receiver_not_eligible: await verbal(lab("ZZ-TEST Full Blood Count"), null, pharm),
       nurse_as_issuer: await verbal(lab("ZZ-TEST Full Blood Count", nurse.owner), rb0),
@@ -116,8 +119,8 @@ async function scenario(): Promise<void> {
 
     // The rights intersection: the pharmacist's agent has no open task for this prescription, so it may neither prepare nor dispense it.
     const rxId = String(states.find((s) => s["kind"] === "prescription")!["prescription_id"]);
-    const prep = await door(pharm.bearer, pharm.owner, "POST", "pharmacy/approve", { prescriptionId: rxId });
-    const disp = await door(pharm.bearer, pharm.owner, "POST", "pharmacy/dispense", { prescriptionId: rxId });
+    const prep = await door(pharm.bearer, pharm.owner, "POST", c.approve, { prescriptionId: rxId });
+    const disp = await door(pharm.bearer, pharm.owner, "POST", c.dispense, { prescriptionId: rxId });
     results["task_scope"] = { approve: prep, dispense: disp };
     expect(prep.status).toBe(403);
     expect(disp.status).toBe(403);
@@ -127,7 +130,7 @@ async function scenario(): Promise<void> {
     // Overdue authentication (the one simulated short deadline) rings the issuer and the receiver, and changes nothing that was ordered.
     await wait(65_000);
     results["escalation_read_at"] = now();
-    const read = await door(doc.bearer, doc.owner, "GET", `consult/order-send?visitId=${visit}`);
+    const read = await door(doc.bearer, doc.owner, "GET", `${c.dictated_read}?visitId=${visit}`);
     results["escalation_read"] = { status: read.status, at: now() };
     expect(read.status).toBe(200);
     const labState = sandboxQuery(sb, "verbal_states", { visit }).find((s) => s["kind"] === "lab")!;
@@ -140,20 +143,20 @@ async function scenario(): Promise<void> {
 
     // A substitute doctor authenticates both verbal orders on his own session; the receiver's agent cannot countersign at all.
     const imeBearer = mintPersonBearer(sb, { login: ime.login, ...(ime.clinic ? { clinic: ime.clinic } : {}) });
-    const nurseTries = await door(nurse.bearer, nurse.owner, "GET", `consult/countersign?visitId=${visit}`);
+    const nurseTries = await door(nurse.bearer, nurse.owner, "GET", `${c.countersign}?visitId=${visit}`);
     expect(nurseTries.status).toBe(403);
-    const shown = await door(imeBearer, null, "GET", `consult/countersign?visitId=${visit}`);
+    const shown = await door(imeBearer, null, "GET", `${c.countersign}?visitId=${visit}`);
     expect(shown.status, shown.text).toBe(200);
     const sb2 = shown.json as { items: { stateId: string }[]; itemsDigest: string; readBackAt: string; readBackSeal: string };
     expect(sb2.items.map((i) => i.stateId).sort()).toEqual(states.map((s) => String(s["id"])).sort());
-    const signed = await door(imeBearer, null, "POST", "consult/countersign", { visitId: visit, role: "issuer", itemIds: sb2.items.map((i) => i.stateId), itemsDigest: sb2.itemsDigest, readBackAt: sb2.readBackAt, readBackSeal: sb2.readBackSeal }, { [profile.headers.idempotency]: `g3-${run}-sign` });
+    const signed = await door(imeBearer, null, "POST", c.countersign, { visitId: visit, role: "issuer", itemIds: sb2.items.map((i) => i.stateId), itemsDigest: sb2.itemsDigest, readBackAt: sb2.readBackAt, readBackSeal: sb2.readBackSeal }, { [profile.headers.idempotency]: `g3-${run}-sign` });
     expect(signed.status, signed.text).toBe(200);
     const after = sandboxQuery(sb, "verbal_states", { visit });
     for (const s of after) expect(s).toMatchObject({ countersigned_by: imeId, issued_by: doc.owner, received_by: nurse.owner });
     results["authenticated"] = after;
 
     // Attestations: the doctor's agent never goes on duty for him.
-    const duty = await door(doc.bearer, doc.owner, "POST", "roster/duty/clock-on", { facilityId: process.env["HEY_PISGAH_G3_FACILITY"] ?? "" });
+    const duty = await door(doc.bearer, doc.owner, "POST", c.clock_on, { facilityId: c.facility_id });
     results["agent_clock_on"] = { status: duty.status, text: duty.text };
     expect(duty.status).toBe(409);
     // The nurse's own agent takes a spoken verbal order end to end by rule, on her matched voice, with no model call.
