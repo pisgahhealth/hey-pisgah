@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DELEGATION_RULE_KINDS, delegationSummary } from "./delegate.js";
 import { EmrId, OBSERVATION_KIND } from "./port.js";
 
 // Every kind of work an EMR agent can hold; an owner holds only the kinds its profile grants.
@@ -9,6 +10,8 @@ export const WORK_KINDS = [
   "order_test", "prescribe", "countersign"
 ] as const;
 export type WorkKind = (typeof WORK_KINDS)[number];
+// The delegation kinds an owner may also hold; each is taken by rule, so the gate never lists them.
+export const DELEGATION_KINDS: readonly string[] = [...DELEGATION_RULE_KINDS];
 // Kinds that only read the record and report back; they change nothing in it.
 export const READ_ONLY_KINDS: ReadonlySet<string> = new Set(["draft_handover", "prepare_bill"]);
 
@@ -153,7 +156,7 @@ export function summariseWork(kind: string, a: Record<string, unknown>): string 
     case "order_test": return `Send the test: ${String(a["test"]).replace(/_/g, " ")}${a["priority"] && a["priority"] !== "routine" ? `, ${a["priority"]}` : ""}, as a voice order awaiting your countersign`;
     case "prescribe": return `Prescribe ${String(a["drug"]).replace(/_/g, " ")}${a["dose"] ? ` ${t(a["dose"], 30)}` : ""}${a["route"] ? ` ${String(a["route"]).toUpperCase()}` : ""}${a["frequency"] ? `, ${a["frequency"]} times a day` : ""}${a["duration_days"] ? ` for ${a["duration_days"]} days` : ""}, quantity ${a["quantity"]}, as a voice order awaiting your countersign`;
     case "countersign": return `Countersign ${(a["item_ids"] as unknown[]).length} voice order${(a["item_ids"] as unknown[]).length === 1 ? "" : "s"}: ${((a["labels"] as string[] | undefined) ?? []).join(", ").slice(0, 120)}`;
-    default: return kind;
+    default: return delegationSummary(kind, a) ?? kind;
   }
 }
 
