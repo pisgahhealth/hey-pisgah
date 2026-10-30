@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-30T03:07:34.689Z",
-  "commit": "9e35070",
+  "generated_at": "2026-10-30T06:38:15.286Z",
+  "commit": "3925631",
   "claims": [
     {
       "claim_id": "C-01",
@@ -67,13 +67,17 @@
       "claim_id": "C-06",
       "status": "green",
       "values": {
-        "discover_dev_valid": 4,
+        "discover_config_dev_valid": 2,
         "discover_invariance_pass": true,
         "discover_deny_clean": true,
         "discover_dev_valid_any": 6,
-        "discover_runs": 12,
+        "discover_config": "revision 12, committed world, medium effort",
+        "discover_config_runs": 3,
+        "discover_config_lower": 0.09,
+        "discover_config_upper": 0.99,
         "discover_share": 0.56,
-        "discover_rework_events": 4
+        "discover_rework_events": 4,
+        "discover_history_runs": 28
       },
       "measured_at": "2026-10-28T03:21:27.939Z"
     },
@@ -93,6 +97,11 @@
         "draft_earlier_by_min": 146,
         "wait_v1_min": 166,
         "wait_adopted_min": 57,
+        "dev_cases": 15,
+        "dev_median_wait_delta_min": 0,
+        "dev_moved": 5,
+        "dev_shorter": 4,
+        "dev_longer": 1,
         "withheld_case": "c-2a14921a"
       },
       "measured_at": "2026-10-30T01:24:26.096Z"
@@ -328,13 +337,17 @@
       "claim_id": "C-26",
       "status": "green",
       "values": {
-        "discover_dev_valid": 4,
+        "discover_config_dev_valid": 2,
         "discover_invariance_pass": true,
         "discover_deny_clean": true,
         "discover_dev_valid_any": 6,
-        "discover_runs": 12,
+        "discover_config": "revision 12, committed world, medium effort",
+        "discover_config_runs": 3,
+        "discover_config_lower": 0.09,
+        "discover_config_upper": 0.99,
         "discover_share": 0.56,
-        "discover_rework_events": 4
+        "discover_rework_events": 4,
+        "discover_history_runs": 28
       },
       "measured_at": "2026-10-28T03:21:27.939Z"
     },
@@ -354,6 +367,11 @@
         "draft_earlier_by_min": 146,
         "wait_v1_min": 166,
         "wait_adopted_min": 57,
+        "dev_cases": 15,
+        "dev_median_wait_delta_min": 0,
+        "dev_moved": 5,
+        "dev_shorter": 4,
+        "dev_longer": 1,
         "withheld_case": "c-2a14921a"
       },
       "measured_at": "2026-10-30T01:24:26.096Z"
