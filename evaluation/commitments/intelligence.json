@@ -458,6 +458,49 @@
         "insufficient_evidence_default": false
       },
       "hash": "bb888f4cf5ec81d0ff0d831162eb474cc92e5db023971983617aa7378733b122"
+    },
+    {
+      "revision": 13,
+      "at": "2026-10-30T06:45:45.727Z",
+      "reason": "Revision 13 (lane G8). The hospital's aim in the shared system prompt changes from no extra rework to a per-case rework budget: at most 10 minutes of extra rework on any one case, read from the hospital's aim configuration, assessed by the dev gate (rework_within_budget) and accepted by the person who adopts the change (recorded on version.adopted). Reason: the revision 11 runs showed that every working form of the planted change, the planted one included, adds document revisions, so no extra rework read literally had no answer, and revision 12 only made proposals state the cost without resolving the objective. Tools, settings and stage texts are unchanged. Runs under revisions 1 to 12 are not re-scored; the budget applies forward.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "e977c8628d0d569daa3e5622760209e7edc42041197d6c478f0c21dd6b7901a7",
+            "tools": "796d6f517ceab48f8966f19d71b7a3f48f8546c96fded2bab487ca5b6352a7c1"
+          },
+          "a3": {
+            "prompt": "5dbce3ee17abafc04e752e6be9cb4dccfbef3810db1f69d338b845f3d5816ba1",
+            "tools": "ebd093c38f470db76c9ed635053427d01e13fc2efb2c8a4257472defbd173085"
+          },
+          "a4": {
+            "prompt": "e8ec6284738bcbf0c3145f68a3b5c7dd7bd168f85de078d79caaf4606b920b0f",
+            "tools": "d521daaa52592aef67c9b70682b669f3a554da08e264fc093df87c873b0ec0d4"
+          },
+          "prior": {
+            "prompt": "b5e9d9ed28dac42d2256fae49fefa9f86c39b1f95f58c68a4bf4ef195c270914",
+            "tools": "a69f44f1678b28a5d05fe8a6b7ce1d69df7da8c6025662abb41092d1d4399167"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "adaptive_controller": "cycle",
+          "adaptive_efforts": [
+            "medium",
+            "high"
+          ],
+          "adaptive_max_calls": 80,
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 30000,
+          "history_chars": 70000,
+          "turn_result_chars": 20000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "f1a582e36b52a1eed11f39f46ade76d7a126eef92a7f34081b540c006541ffa2"
     }
   ]
 }

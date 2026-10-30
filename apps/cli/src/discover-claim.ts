@@ -9,6 +9,9 @@ export const INVARIANCE_FROM_REVISION = 10;
 // The world the hospital's records come from; its planted answer needs two operations, so it is the pair.
 export const COMMITTED_WORLD = "pair";
 
+// From this commitment revision the dev gate assesses extra rework against the per-case budget approved at adoption; earlier runs are not re-scored.
+export const REWORK_BUDGET_FROM_REVISION = 13;
+
 // What the answer-invariance test holds byte-identical across the three worlds, and what it leaves free to differ.
 export const INVARIANCE_COVERS = "the instructions (system prompt, opening request, stage texts, app-written texts) and the tool interface (tool definitions per stage, precondition table, registries, statistics method, sweep rule)";
 export const INVARIANCE_EXCLUDES = "the evidence (case records, statistics values, experiment and sweep results) and the workflow definition (steps, edges, triggers), which vary by world";
@@ -65,7 +68,7 @@ const kOf = (cs: Row[], f: (c: Row) => boolean) => {
 };
 
 // Adds the discovery claim's summary to discovery.json from the runs already in it; nothing is re-scored and the runs are untouched.
-export function discoverSummary(d: Row, o: { invariancePass: boolean; adopted: string | null; tradeOffs: { metric: string; sum_delta: number }[] }): Row {
+export function discoverSummary(d: Row, o: { invariancePass: boolean; adopted: string | null; tradeOffs: { metric: string; sum_delta: number }[]; currentRevision?: number }): Row {
   const a = d["adaptive_runs"] as Row;
   const groups = ["runs", "cycle_runs", "variant_runs", "rev11_runs", "rev12_runs"].map((k) => a[k]).filter(Boolean);
   const runs = groups.flatMap((g) => (Array.isArray(g) ? g : ((g as Row)["runs"] as Run[]) ?? [])) as Run[];
@@ -101,6 +104,7 @@ export function discoverSummary(d: Row, o: { invariancePass: boolean; adopted: s
     discover_reconciliation: `${valid(history).length} of ${history.length} is the development history across commitment revisions, not a success rate: the ${runs.length} runs listed with full records here plus the ${summaryOnly.length} earlier runs kept only as summaries (adaptive_runs.summary_only_runs, ${valid(summaryOnly).length} dev-valid). ${valid(runs).length} of ${runs.length} counts the same ${valid(runs).length} dev-valid runs over the listed runs only, and ${valid(gated).length} of ${gated.length} those at revision ${INVARIANCE_FROM_REVISION} or later, under the answer-invariance gate. The rate of the system as it stands is the latest configuration's, discover_config_*.`,
     discover_configurations: configs,
     discover_config: `revision ${String(latest["revision"])}, committed world, ${String(latest["effort"])} effort`,
+    discover_current_revision: o.currentRevision ?? latestRev,
     discover_config_revision: latest["revision"], discover_config_runs: latest["runs"], discover_config_dev_valid: latest["dev_valid"],
     discover_config_rate: latest["rate"], discover_config_lower: latest["lower_95"], discover_config_upper: latest["upper_95"],
     discover_config_interval: "exact two-sided 95% (Clopper-Pearson)",
@@ -108,6 +112,8 @@ export function discoverSummary(d: Row, o: { invariancePass: boolean; adopted: s
     discover_invariance_pass: o.invariancePass, discover_deny_clean: gated.every((r) => r.needs?.deny_list === true),
     discover_invariance_covers: INVARIANCE_COVERS, discover_invariance_excludes: INVARIANCE_EXCLUDES,
     discover_dev_valid_runs: valid(gated).map((r) => ({ run_id: r.run_id, revision: r.commitment?.revision ?? null, variant: r.variant ?? null })),
+    discover_rework_budget_from_revision: REWORK_BUDGET_FROM_REVISION,
+    discover_rework_budget_note: `From commitment revision ${REWORK_BUDGET_FROM_REVISION} the hospital's aim allows extra rework up to a per-case budget that the dev gate assesses and the adopting person approves, instead of no extra rework. Runs under revisions 1 to ${REWORK_BUDGET_FROM_REVISION - 1}, the adopted proposal included, were validated before that rule and are not re-scored.`,
     discover_adopted: o.adopted, discover_share: share, discover_rework_events: delta("rework_events"), discover_rework_min: delta("rework_min"),
     discover_note: "Counts read from the runs already in this file; nothing is re-scored. A change that helps at a stated cost, not the best change. The answer-invariance test is the one in the intelligence package, run on this commit; it covers the instructions and tool interface, not the evidence or the workflow definition."
   };
@@ -119,7 +125,8 @@ if (process.argv[1]?.endsWith("discover-claim.ts")) {
   const flag = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
   const file = flag("file") ?? "evaluation/results/discovery.json";
   const d = JSON.parse(readFileSync(file, "utf8")) as Row;
-  const s = discoverSummary(d, { invariancePass: flag("invariance") === "pass", adopted: flag("adopted") ?? null, tradeOffs: JSON.parse(flag("trade-offs") ?? "[]") });
+  const commitments = JSON.parse(readFileSync(flag("commitments") ?? "evaluation/commitments/intelligence.json", "utf8")) as { revisions: { revision: number }[] };
+  const s = discoverSummary(d, { invariancePass: flag("invariance") === "pass", adopted: flag("adopted") ?? null, tradeOffs: JSON.parse(flag("trade-offs") ?? "[]"), currentRevision: commitments.revisions.at(-1)!.revision });
   const kept = Object.fromEntries(Object.entries(d).filter(([k]) => !k.startsWith("discover_")));
   writeFileSync(file, `${JSON.stringify({ ...kept, ...s }, null, 1)}\n`);
   console.log(JSON.stringify(Object.fromEntries(Object.entries(s).filter(([k]) => !["discover_dev_valid_runs", "discover_configurations", "discover_history_by_revision"].includes(k)))));

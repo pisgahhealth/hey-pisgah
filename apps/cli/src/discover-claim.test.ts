@@ -5,6 +5,7 @@ import { devDistribution } from "./dev-distribution.js";
 import { discoverSummary, exactInterval } from "./discover-claim.js";
 
 const repo = join(import.meta.dirname, "..", "..", "..");
+const commitments = JSON.parse(readFileSync(join(repo, "evaluation", "commitments", "intelligence.json"), "utf8")) as { revisions: { revision: number }[] };
 const read = (f: string) => JSON.parse(readFileSync(join(repo, "evaluation", "results", f), "utf8")) as Record<string, unknown>;
 
 describe("discovery counts", () => {
@@ -19,7 +20,7 @@ describe("discovery counts", () => {
 
   it("reconciles 6 of 28 with 6 of 26, reads the latest configuration's rate, and matches the committed file", () => {
     const d = read("discovery.json");
-    const s = discoverSummary(d, { invariancePass: true, adopted: "p-a563fe32", tradeOffs: [{ metric: "rework_events", sum_delta: 4 }, { metric: "rework_min", sum_delta: 4 }] });
+    const s = discoverSummary(d, { invariancePass: true, adopted: "p-a563fe32", tradeOffs: [{ metric: "rework_events", sum_delta: 4 }, { metric: "rework_min", sum_delta: 4 }], currentRevision: commitments.revisions.at(-1)!.revision });
     expect([s["discover_history_dev_valid"], s["discover_history_runs"]]).toEqual([6, 28]);
     expect([s["discover_dev_valid_any"], s["discover_runs_listed"]]).toEqual([6, 26]);
     expect([s["discover_dev_valid"], s["discover_runs"]]).toEqual([4, 12]);
