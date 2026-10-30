@@ -81,6 +81,8 @@ export interface EmrPort {
   readBack?(owner: string, visitId: string, prov: Provenance): Promise<ReadBack>;
   // The tests and medicines the owner may order by voice, by the words that name them.
   orderables?(): Orderables;
+  // The clinicians whose verbal orders this owner may take, by the words that name them.
+  verbalIssuers?(owner: string): Record<string, { words: readonly string[]; label: string }>;
   // The discharge paperwork filled from the record, read back before the owner confirms.
   readPaperwork?(owner: string, admissionId: string, prov: Provenance): Promise<PaperworkReadBack>;
   // Which side of a delegation this owner's agent follows, the teams it may hand work to, and the reads of a delegation.
@@ -93,7 +95,7 @@ export interface EmrPort {
 }
 
 // Prescribed and dispensed stay apart; each exception is for the responsible doctor to confirm, and the digest binds the confirmation to this reading.
-export type PaperworkReadBack = { digest: string; diagnosis: string | null; dispensed: string[]; exceptions: string[]; tests: { resulted: number; total: number }; unsigned: number };
+export type PaperworkReadBack = { digest: string; diagnosis: string | null; dispensed: string[]; exceptions: string[]; tests: { resulted: number; total: number }; unsigned: number; pending?: string[] };
 
 // The hospital seals each read-back, so the countersign that follows proves which batch was shown and when.
 export type ReadBack = { items: { stateId: string; label: string; kind: string; controlled: boolean; sentAt: string | null }[]; itemsDigest: string | null; readBackAt: string; seal: string | null; awaitingSecond: { stateId: string; label: string }[]; changed: { stateId: string; label: string }[] };

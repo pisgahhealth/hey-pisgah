@@ -64,7 +64,11 @@ describe("buildKeywords", () => {
     expect(k).toEqual(["Ward A", "Discharge summary", "nurse", "bed A-1"]);
   });
 
-  it("drops a hint longer than six words, which the service refuses", () => {
+  it("drops a hint over 30 characters, which both endpoints refuse", () => {
+    expect(buildKeywords({ wards: ["abcdefghij abcdefghij abcdefgh", "abcdefghij abcdefghij abcdefghi"], documents: [], staff: [], beds: [] })).toEqual(["abcdefghij abcdefghij abcdefgh"]);
+  });
+
+  it("drops a hint longer than six words", () => {
     expect(buildKeywords({ wards: ["one two three four five six", "one two three four five six seven"], documents: [], staff: [], beds: [] })).toEqual(["one two three four five six"]);
   });
 });

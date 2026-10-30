@@ -103,7 +103,9 @@ export const DoorProfile = z.strictObject({
     // The discharge paperwork the hospital fills from the record, and where each part of it sits in the answer.
     paperwork: ReadSpec.extend({
       digest: Dotted, diagnosis: Dotted, medicines: Dotted, medicine_name: Dotted, medicine_dispensed: Dotted,
-      exceptions: Dotted, exception_text: Dotted, tests: Dotted, test_resulted: Dotted, unsigned: Dotted.optional()
+      exceptions: Dotted, exception_text: Dotted, tests: Dotted, test_resulted: Dotted, unsigned: Dotted.optional(),
+      // Tests still without a result at discharge, which the hospital discloses on the paperwork, and the sentence it gives each.
+      pending: Dotted.optional(), pending_text: Dotted.optional()
     }).optional()
   }),
   // The tests and medicines an owner may order by voice: the words that name each, the hospital's own name or id, and whether a medicine is controlled.
@@ -117,6 +119,10 @@ export const DoorProfile = z.strictObject({
   watches: z.record(z.string(), ReadSpec.extend({ facts: z.record(z.string(), Fact) })).default({}),
   inbox: ReadSpec.extend({ list_path: Dotted, id: Dotted, subject: Dotted, at: Dotted, detail: ReadSpec.extend({ patient: Dotted }).optional() }).optional(),
   page_targets: z.record(z.string(), z.strictObject({ words: Words, vars: z.record(z.string(), z.string()) })).default({}),
+  // The hospital's own name for each value of a variable, such as the consent purposes the agent heard; a value with no name here is not sent.
+  // The clinicians whose verbal orders each receiving owner may take: the words that name them and the hospital's id; the hospital still checks every one.
+  verbal_issuers: z.record(z.string().regex(/^[a-z0-9_]{1,40}$/), z.strictObject({ words: Words, id: EmrId, label: z.string().min(1).max(60), receivers: z.array(z.string()).min(1) })).default({}),
+  value_maps: z.record(z.string().regex(/^[a-z_]{1,40}$/), z.record(z.string(), z.string().min(1).max(80))).default({}),
   clinics: z.record(z.string(), z.strictObject({ words: Words, id: EmrId })).default({}),
   // Wards the owner may name for an admission or a bed, with the ward's class.
   wards: z.record(z.string(), z.strictObject({ words: Words, id: EmrId, class: z.string().regex(/^[a-z_]{1,30}$/) })).default({}),
@@ -128,6 +134,8 @@ export const DoorProfile = z.strictObject({
   result_orders: ReadSpec.extend({ list: Dotted, id: Dotted, test: Dotted, state: Dotted, states: z.array(z.string().regex(/^[A-Za-z_]{1,40}$/)).min(1).max(20) }).optional(),
   targets: z.strictObject({ admission_by_patient: z.record(EmrId, EmrId), episode_by_admission: z.record(EmrId, EmrId) }),
   vocabulary: z.array(z.string().min(1).max(60)).max(60).default([]),
+  // Staff names for the recognition hints; when absent, the owners' own labels are used.
+  staff_hints: z.array(z.string().min(1).max(30)).max(60).optional(),
   // Only the sandbox integration test reads this block.
   sandbox: z.record(z.string(), z.json()).optional(),
   versions: VersionsSpec.optional(),
@@ -140,6 +148,13 @@ export const DoorProfile = z.strictObject({
   pages: z.partialRecord(z.enum(["triage", "doctor_workspace", "admissions", "reception_identity"]), z.string().regex(/^\/[a-z0-9/_-]*$/)).default({})
 });
 export type DoorProfile = z.infer<typeof DoorProfile>;
+
+const TITLE = /^(dr|doctor|nurse|matron|sister|mr|mrs|ms|prof)\.?\s+/i;
+// The staff names the serve sends as hints: the profile's own list, or each owner's label and that label without its title.
+export function staffHintsOf(p: { staff_hints?: readonly string[] | undefined; owners: readonly { label: string }[] }): string[] {
+  if (p.staff_hints) return [...p.staff_hints];
+  return [...new Set(p.owners.flatMap((o) => [o.label, o.label.replace(TITLE, "")]).map((x) => x.trim()).filter((x) => x && x.length <= 30))];
+}
 
 export function profilePath(env: NodeJS.ProcessEnv = process.env): string {
   return env["HEY_PISGAH_DOOR_PROFILE"] || DEFAULT_PROFILE_PATH;

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-30T09:40:48.981Z",
-  "commit": "bfd758e",
+  "generated_at": "2026-10-30T14:17:51.901Z",
+  "commit": "8b21965",
   "claims": [
     {
       "claim_id": "C-01",
@@ -292,6 +292,9 @@
         "local_vitals_p50_ms": 4268,
         "local_vitals_p90_ms": 6781,
         "local_vitals_errors": 0,
+        "meta_parakeet_vitals_p50_ms": 4231,
+        "meta_parakeet_vitals_p90_ms": 4802,
+        "meta_parakeet_vitals_errors": 0,
         "missing": [
           "rows",
           "errors_listed",

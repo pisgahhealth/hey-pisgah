@@ -117,6 +117,10 @@ export class PisgahPort implements EmrPort {
       return [{ id, test: name ? byName.get(name.toLowerCase()) ?? null : null, state: opt(pick(x, spec.state)) }];
     });
   }
+  verbalIssuers(owner: string): Record<string, { words: readonly string[]; label: string }> {
+    return Object.fromEntries(Object.entries(this.profile.verbal_issuers).filter(([, v]) => v.receivers.includes(owner)).map(([k, v]) => [k, { words: v.words, label: v.label }]));
+  }
+
   orderables(): Orderables {
     const o = this.profile.orders;
     return { tests: Object.fromEntries(Object.entries(o?.tests ?? {}).map(([k, v]) => [k, v.words])), drugs: Object.fromEntries(Object.entries(o?.drugs ?? {}).map(([k, v]) => [k, { words: v.words, controlled: v.controlled }])) };
@@ -163,7 +167,8 @@ export class PisgahPort implements EmrPort {
         .map((m) => `${str(pick(m, op.medicine_name))?.slice(0, 60) ?? "Medicine"} ${str(pick(m, op.medicine_dispensed))}`),
       exceptions: list(op.exceptions).map((e) => str(pick(e, op.exception_text))?.slice(0, 160) ?? "").filter(Boolean),
       tests: { resulted: tests.filter((x) => pick(x, op.test_resulted) === true).length, total: tests.length },
-      unsigned: Number.isFinite(unsigned) ? unsigned : 0
+      unsigned: Number.isFinite(unsigned) ? unsigned : 0,
+      pending: op.pending ? list(op.pending).map((x) => str(pick(x, op.pending_text ?? "text"))?.slice(0, 200) ?? "").filter(Boolean).slice(0, 20) : []
     };
   }
 
@@ -386,6 +391,11 @@ export class PisgahPort implements EmrPort {
     if (!v["visit_id"] && patient) v["visit_id"] = this.learned.visit_by_patient.get(patient);
     if (typeof a["bp"] === "string") { const [sys, dia] = a["bp"].split("/").map(Number); v["bp_sys"] = sys; v["bp_dia"] = dia; }
     if (typeof a["temp_c"] === "string") v["temp_num"] = Number(a["temp_c"]);
+    for (const [name, map] of Object.entries(this.profile.value_maps)) {
+      const x = v[name];
+      if (typeof x === "string") v[name] = map[x];
+      else if (Array.isArray(x)) { const named = x.map((y) => (typeof y === "string" ? map[y] : undefined)).filter((y): y is string => !!y); v[name] = named.length ? named : undefined; }
+    }
     if (kind === OBSERVATION_KIND) { const r = [a["corrects_record_id"] ? `Corrects entry ${String(a["corrects_record_id"])}.` : null, a["remark"] ?? null].filter(Boolean).join(" "); if (r) v["remarks"] = r; }
     if (kind === "record_note") v["note_body"] = a["label"] === "handover" && !/^handover\b/i.test(String(a["text"])) ? `Handover. ${String(a["text"])}` : a["text"];
     const label = (a["admission_id"] ? this.learned.label.get(String(a["admission_id"])) : undefined) ?? (patient ? this.learned.label.get(patient) : undefined);
@@ -407,6 +417,11 @@ export class PisgahPort implements EmrPort {
     if (kind === "schedule_review") v["review_title"] = `Review: ${String(a["title"])}`.slice(0, 200);
     if (kind === "order_test") { const tst = this.profile.orders?.tests[String(a["test"])]; if (tst) v["test_name"] = tst.name; }
     if (kind === "prescribe") { const d = this.profile.orders?.drugs[String(a["drug"])]; if (d) { v["drug_catalog_id"] = d.id; v["duration"] = a["duration_days"]; } }
+    if (kind === "take_verbal_order") {
+      v["issuer_id"] = this.profile.verbal_issuers[String(a["issuer"])]?.id;
+      if (a["test"]) v["test_name"] = this.profile.orders?.tests[String(a["test"])]?.name;
+      if (a["drug"]) v["drug_catalog_id"] = this.profile.orders?.drugs[String(a["drug"])]?.id;
+    }
     if (kind === "countersign") v["first_item_id"] = (a["item_ids"] as string[] | undefined)?.[0];
     if (kind === "delegate_task" || kind === "request_ward_review") {
       // A team is named by its key; who takes it in the EMR comes from the profile, never from the words.
