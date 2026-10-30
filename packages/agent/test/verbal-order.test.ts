@@ -35,6 +35,8 @@ describe("a verbal order taken by its receiver", () => {
     expect(verbalOrderSaid("Verbal order, urinalysis and a full blood count, read back.", O)).toEqual({ missing: ["issuer", "order"] });
     expect(verbalOrderSaid("Verbal order from Doctor Edikan, paracetamol, read back.", O)).toEqual({ missing: ["dose", "frequency", "duration", "quantity"] });
     expect(verbalOrderSaid("Give paracetamol 1 g now.", O)).toBeNull();
+    // Two prescribers named is not one prescriber.
+    expect(verbalOrderSaid("Verbal order from Doctor Edikan or Doctor Ime, urinalysis, read back.", O)).toEqual({ missing: ["issuer"] });
   });
 
   it("proposes the order on the nurse's own matched read-back with its token, holds an unmatched voice and refuses the doctor's voice reading it", async () => {
@@ -53,6 +55,11 @@ describe("a verbal order taken by its receiver", () => {
     await a.rt.say(said("Verbal order from Doctor Edikan, full blood count, read back again.", vp(2)));
     await a.rt.settled();
     expect(port.writes.length).toBe(before);
+    // A typed line carries no voice, so it waits for her matched yes too.
+    const typed = await a.rt.say({ owner: NURSE, target: { patient_id: PAT }, text: "Verbal order from Doctor Edikan, full blood count, read back once more." });
+    await a.rt.settled();
+    expect(port.writes.length).toBe(before);
+    expect(a.rt.view(typed.task_id)!.actions.find((x) => x.line_id === typed.line_id)).toMatchObject({ state: "proposed", awaiting: "owner_voice" });
     // An incomplete one is never guessed at.
     await a.rt.say(said("Verbal order from Doctor Edikan, paracetamol, read back.", vp(8)));
     await a.rt.settled();
