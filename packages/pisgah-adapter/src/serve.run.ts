@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { languageBiasFrom, nodeSocket, recordingSocket, replaySocket } from "@hey-pisgah/voice";
 import { KEPT_LEVERS, asrSwitch, earSwitch, keepingContext, leversFrom, localDirs, recordingTranscriber, sherpaEmbedder, startEmrServe, voiceTranscriber } from "@hey-pisgah/agent";
-import { loadProfile } from "./profile.js";
+import { loadProfile, staffHintsOf } from "./profile.js";
 import { PisgahPort } from "./port.js";
 import { SandboxBlock, mintAgentBearer, sandboxQuery } from "./sandbox.js";
 
@@ -46,7 +46,9 @@ async function main(): Promise<void> {
     // Without a recordings folder no model request is kept, since gate requests carry heard words; the second ear is on unless turned off.
     recordModel: !!rec || process.env["HEY_PISGAH_RECORD_MODEL"] === "1", ears: process.env["HEY_PISGAH_SECOND_EAR"] === "off" ? "off" : earSwitch(process.env["HEY_PISGAH_EAR"]),
     // Every ear switch is off unless set: HEY_PISGAH_EAR=parakeet, HEY_PISGAH_ASR=stream or meta-stream (models under HEY_PISGAH_ASR_DIR), HEY_PISGAH_LANGUAGE_BIAS=1.
-    asr, ...(realtimeSocket ? { realtimeSocket } : {}), languageBias: languageBiasFrom(process.env["HEY_PISGAH_LANGUAGE_BIAS"]), local: { ...localDirs(process.env["HEY_PISGAH_ASR_DIR"] ?? join(process.cwd(), ".hey-pisgah", "asr")), sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] },
+    asr, ...(realtimeSocket ? { realtimeSocket } : {}), languageBias: languageBiasFrom(process.env["HEY_PISGAH_LANGUAGE_BIAS"]),
+    // Staff names go in the hints: with names in them Voice Transcribe heard 26 of 26 names said, against 4 of 26 with the vitals words alone (G9).
+    staffHints: staffHintsOf(profile), local: { ...localDirs(process.env["HEY_PISGAH_ASR_DIR"] ?? join(process.cwd(), ".hey-pisgah", "asr")), sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] },
     ...(embed ? { embed } : {}),
     // The replay defence is on for the live serve; presence becomes required once the strip sends its liveness marker.
     listen: { replay: process.env["HEY_PISGAH_REPLAY_GUARD"] === "off" ? "off" : "refuse", presence: process.env["HEY_PISGAH_PRESENCE"] === "required" ? "required" : "observed" },

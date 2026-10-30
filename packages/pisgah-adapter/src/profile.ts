@@ -128,6 +128,8 @@ export const DoorProfile = z.strictObject({
   result_orders: ReadSpec.extend({ list: Dotted, id: Dotted, test: Dotted, state: Dotted, states: z.array(z.string().regex(/^[A-Za-z_]{1,40}$/)).min(1).max(20) }).optional(),
   targets: z.strictObject({ admission_by_patient: z.record(EmrId, EmrId), episode_by_admission: z.record(EmrId, EmrId) }),
   vocabulary: z.array(z.string().min(1).max(60)).max(60).default([]),
+  // Staff names for the recognition hints; when absent, the owners' own labels are used.
+  staff_hints: z.array(z.string().min(1).max(30)).max(60).optional(),
   // Only the sandbox integration test reads this block.
   sandbox: z.record(z.string(), z.json()).optional(),
   versions: VersionsSpec.optional(),
@@ -140,6 +142,13 @@ export const DoorProfile = z.strictObject({
   pages: z.partialRecord(z.enum(["triage", "doctor_workspace", "admissions", "reception_identity"]), z.string().regex(/^\/[a-z0-9/_-]*$/)).default({})
 });
 export type DoorProfile = z.infer<typeof DoorProfile>;
+
+const TITLE = /^(dr|doctor|nurse|matron|sister|mr|mrs|ms|prof)\.?\s+/i;
+// The staff names the serve sends as hints: the profile's own list, or each owner's label and that label without its title.
+export function staffHintsOf(p: { staff_hints?: readonly string[] | undefined; owners: readonly { label: string }[] }): string[] {
+  if (p.staff_hints) return [...p.staff_hints];
+  return [...new Set(p.owners.flatMap((o) => [o.label, o.label.replace(TITLE, "")]).map((x) => x.trim()).filter((x) => x && x.length <= 30))];
+}
 
 export function profilePath(env: NodeJS.ProcessEnv = process.env): string {
   return env["HEY_PISGAH_DOOR_PROFILE"] || DEFAULT_PROFILE_PATH;
