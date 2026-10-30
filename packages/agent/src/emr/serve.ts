@@ -77,6 +77,8 @@ const AUDIO_LIMIT = 8 * 1024 * 1024;
 
 // How long speech after an emergency phrase is held for the arrival before it is let go as not kept.
 export const PENDING_MAX_MS = 60_000;
+// A new listening session with no patient on its page keeps the patient the agent is with only if that patient was chosen this recently.
+export const SUBJECT_KEEP_MS = 30 * 60_000;
 // Two hearings of the emergency phrase this close together are one phrase, so one arrival.
 export const ARRIVAL_SAME_PHRASE_MS = 10_000;
 type Track = { page: string; history: { target: EmrTarget | null; since: number }[] };
@@ -168,6 +170,15 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   const wakeLog = join(o.storeRoot, "..", "wake.jsonl");
   // The patient each listening session started with keeps the session's own id, so a session that never moves reads as before.
   const firstSubject = new Map<string, string>();
+  const sessionsSeen = new Set<string>();
+  // The first chunk of a new session on a page with no patient starts with no patient when the one the agent is with was chosen long ago.
+  const freshSession = (owner: string, session: string, page: EmrTarget, at: number) => {
+    if (sessionsSeen.has(session)) return;
+    sessionsSeen.add(session);
+    if (sessionsSeen.size > 1000) sessionsSeen.delete(sessionsSeen.values().next().value!);
+    const last = tracked.get(owner)?.history.at(-1);
+    if (!pageKey(page) && last?.target && at - last.since > SUBJECT_KEEP_MS) moveTo(owner, null, at);
+  };
   // A page with a patient moves the agent to it from the moment the words were captured; leaving a page keeps the patient it was with.
   const subjectFor = (owner: string, page: EmrTarget, at: number): EmrTarget | null => {
     const key = pageKey(page);
@@ -282,6 +293,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       });
       return [202, { session_id: b.session_id, seq: b.seq, accepted: true, utterances: [], partial: null, pending: true, task_id: held.task_id }];
     }
+    freshSession(b.owner, b.session_id, page, at);
     const target = subjectFor(b.owner, page, at);
     if (!wav && !target) return [202, { session_id: b.session_id, seq: b.seq, accepted: true, utterances: [], partial: null }];
     if (wav && (!target || b.hint === "emergency")) { setStatus(b.owner, b.session_id, b.seq, { status: "accepted" }); return [202, await listenUntracked(b.owner, b.session_id, b.seq, wav, at, b.hint)]; }

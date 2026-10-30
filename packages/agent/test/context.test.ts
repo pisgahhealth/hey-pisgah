@@ -83,6 +83,17 @@ describe("the patient the clinician is with", () => {
     await s.close();
   });
 
+  it("starts a new session with no patient when the one the agent is with was chosen long ago", async () => {
+    const { s } = await boot(["she is breathing comfortably now."]);
+    await post(`${s.url}/tasks/emergency`, { owner: OWNER, spokenAt: new Date(Date.now() - 40 * 60_000).toISOString() });
+    await s.runtime.settled();
+    expect(await tracking(s.url)).toEqual({ patient_id: ARRIVAL });
+    const r = await listen(s.url, { session: "s-later", seq: 0 });
+    expect(r.no_patient).toBe(true);
+    expect(await tracking(s.url)).toBeNull();
+    await s.close();
+  });
+
   it("never moves the active patient when a task for another patient is handed to this owner", async () => {
     const { s, port } = await boot(["first words on A.", "second words on A."]);
     const a = await listen(s.url, { session: "s-1", seq: 0, patientId: PAGE_A });
