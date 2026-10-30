@@ -6,7 +6,7 @@ export const WORK_KINDS = [
   OBSERVATION_KIND, "draft_consult_note", "request_admission", "record_triage_vitals", "add_care_plan_item",
   "record_note", "draft_handover", "page_staff", "schedule_follow_up", "prepare_bill", "send_pay_link",
   "open_consult", "record_clerking", "record_allergy", "admit_patient", "assign_bed", "schedule_review",
-  "order_test", "prescribe", "countersign"
+  "order_test", "prescribe", "countersign", "release_home"
 ] as const;
 export type WorkKind = (typeof WORK_KINDS)[number];
 // Kinds that only read the record and report back; they change nothing in it.
@@ -72,7 +72,9 @@ export const WORK_ARGS: Record<Exclude<WorkKind, typeof OBSERVATION_KIND>, z.Zod
     frequency: z.number().int().min(1).max(4).optional(), duration_days: z.number().int().min(1).max(365).optional(), quantity: z.number().int().min(1).max(1000), route: z.enum(DRUG_ROUTES).optional()
   }),
   // Countersigns exactly the batch the owner was shown: its item ids, digest and the moment it was read back.
-  countersign: z.strictObject({ visit_id: EmrId, item_ids: z.array(EmrId).min(1).max(100), items_digest: z.string().regex(/^[0-9a-f]{64}$/), read_back_at: z.iso.datetime({ offset: true }), read_back_seal: z.string().regex(/^[A-Za-z0-9_-]{43}$/), labels: z.array(z.string().max(120)).max(100) })
+  countersign: z.strictObject({ visit_id: EmrId, item_ids: z.array(EmrId).min(1).max(100), items_digest: z.string().regex(/^[0-9a-f]{64}$/), read_back_at: z.iso.datetime({ offset: true }), read_back_seal: z.string().regex(/^[A-Za-z0-9_-]{43}$/), labels: z.array(z.string().max(120)).max(100) }),
+  // The clinical close of a stay; the diagnosis and medicines come from the record's paperwork, never from the words.
+  release_home: z.strictObject({ admission_id: EmrId, instructions: Text.max(2000).optional(), follow_up_date: z.iso.date().optional() })
 };
 
 // What each kind means to the speech gate; the gate prompt lists only the kinds the owner holds.
@@ -95,7 +97,8 @@ export const WORK_TEXT: Record<Exclude<WorkKind, typeof OBSERVATION_KIND>, strin
   schedule_review: "schedule_review: a review of the patient at a later time; title in the clinician's words and in_minutes as said.",
   order_test: "order_test: send a test for the patient in context: test (one of the tests listed below) and priority (routine, urgent, stat) only when said.",
   prescribe: "prescribe: prescribe a medicine for the patient in context: drug (one of the medicines listed below), dose as said (such as 1 g or 500 mg), frequency (doses per day, 1 to 4), duration_days, quantity and route (oral, iv, im, sc), all as said.",
-  countersign: "countersign: you never name it; the clinician says sign everything."
+  countersign: "countersign: you never name it; the clinician says sign everything.",
+  release_home: "release_home: the clinician says the admitted patient may go home now, closing the stay; instructions are the advice said for the patient, follow_up_date only when a date is said, as YYYY-MM-DD. The diagnosis and medicines are read from the record, never from the words.",
 };
 
 // The value fields the wider gate tool adds for these kinds; the observation-only tool stays as committed.
@@ -152,6 +155,7 @@ export function summariseWork(kind: string, a: Record<string, unknown>): string 
     case "schedule_review": return `Review due ${String(a["due_at"]).slice(11, 16)} UTC on the ward board: ${t(a["title"], 60)}`;
     case "order_test": return `Send the test: ${String(a["test"]).replace(/_/g, " ")}${a["priority"] && a["priority"] !== "routine" ? `, ${a["priority"]}` : ""}, as a voice order awaiting your countersign`;
     case "prescribe": return `Prescribe ${String(a["drug"]).replace(/_/g, " ")}${a["dose"] ? ` ${t(a["dose"], 30)}` : ""}${a["route"] ? ` ${String(a["route"]).toUpperCase()}` : ""}${a["frequency"] ? `, ${a["frequency"]} times a day` : ""}${a["duration_days"] ? ` for ${a["duration_days"]} days` : ""}, quantity ${a["quantity"]}, as a voice order awaiting your countersign`;
+    case "release_home": return `Discharge the patient home${a["follow_up_date"] ? `, follow-up ${a["follow_up_date"]}` : ""}${a["instructions"] ? `, advice: "${t(a["instructions"], 60)}"` : ""}`;
     case "countersign": return `Countersign ${(a["item_ids"] as unknown[]).length} voice order${(a["item_ids"] as unknown[]).length === 1 ? "" : "s"}: ${((a["labels"] as string[] | undefined) ?? []).join(", ").slice(0, 120)}`;
     default: return kind;
   }

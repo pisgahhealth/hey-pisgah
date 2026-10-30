@@ -65,7 +65,7 @@ export type VersionsSpec = z.infer<typeof VersionsSpec>;
 export const DoorProfile = z.strictObject({
   base_url: z.url(),
   timeout_ms: z.number().int().min(1000).max(900_000).default(300_000),
-  headers: z.strictObject({ on_behalf_of: HeaderName, origin: HeaderName, evidence: HeaderName, spoken_at: HeaderName, idempotency: HeaderName, replayed: HeaderName, authorisation: HeaderName.optional(), confirmation: HeaderName.optional() }),
+  headers: z.strictObject({ on_behalf_of: HeaderName, origin: HeaderName, evidence: HeaderName, spoken_at: HeaderName, idempotency: HeaderName, replayed: HeaderName, authorisation: HeaderName.optional(), confirmation: HeaderName.optional(), read_back_digest: HeaderName.optional() }),
   origin_value: z.string().regex(/^[a-z][a-z_]{0,39}$/),
   // Paths the port never calls, whatever asks; checked before the allowlist.
   deny: z.array(z.string().regex(/^[a-z0-9_-]+(\/[a-z0-9_-]+)*$/)).min(1),
@@ -82,7 +82,12 @@ export const DoorProfile = z.strictObject({
     patient_context: ReadSpec.extend({ list_path: Dotted, match: Dotted, label: Dotted, visit: Dotted, facts: z.record(z.string(), Dotted).default({}) }).optional(),
     // Where the hospital matches a segment's voiceprint, and where it reads back the batch awaiting countersign.
     speaker: z.strictObject({ path: PathTpl }).optional(),
-    read_back: ReadSpec.optional()
+    read_back: ReadSpec.optional(),
+    // The discharge paperwork the hospital fills from the record, and where each part of it sits in the answer.
+    paperwork: ReadSpec.extend({
+      digest: Dotted, diagnosis: Dotted, medicines: Dotted, medicine_name: Dotted, medicine_dispensed: Dotted,
+      exceptions: Dotted, exception_text: Dotted, tests: Dotted, test_resulted: Dotted, unsigned: Dotted.optional()
+    }).optional()
   }),
   // The tests and medicines an owner may order by voice: the words that name each, the hospital's own name or id, and whether a medicine is controlled.
   orders: z.strictObject({

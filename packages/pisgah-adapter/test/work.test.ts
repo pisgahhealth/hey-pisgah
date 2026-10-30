@@ -147,6 +147,9 @@ describe("profile-driven work over the door", () => {
       const port = new PisgahPort(DoorProfile.parse({ ...base, headers: { ...base.headers, confirmation: "X-Confirm" }, confirm: ["stay/out/pay-link"] }), { bearers: { [DOC]: "b" } });
       expect(await port.request("POST", "stay/out/pay-link", prov(DOC), { body: {} })).toEqual({ kind: "refused", reason: "needs_confirmation" });
       expect((await port.request("POST", "stay/out/pay-link", { ...prov(DOC), voice: { confirmation: tok } }, { body: { admissionId: ADM } })).kind).toBe("response");
+      // With a read-back header configured, the confirmation must also name the reading it confirmed.
+      const bound = new PisgahPort(DoorProfile.parse({ ...base, headers: { ...base.headers, confirmation: "X-Confirm", read_back_digest: "X-Digest" }, confirm: ["stay/out/pay-link"] }), { bearers: { [DOC]: "b" } });
+      expect(await bound.request("POST", "stay/out/pay-link", { ...prov(DOC), voice: { confirmation: tok } }, { body: {} })).toEqual({ kind: "refused", reason: "needs_confirmation" });
       expect(d.st.seen.filter((x) => x.path === "POST stay/out/pay-link")).toHaveLength(1);
     } finally { await d.close(); }
   });

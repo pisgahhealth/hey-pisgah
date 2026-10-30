@@ -10,6 +10,7 @@ The routes, header names and target ids are not in this repository. They live in
 | Owners | One agent bearer per owner; each owner holds its own kinds, watches and offers |
 | Deny list | Paths the port never calls, checked before anything else; `deny_exact` refuses one path but not its longer siblings |
 | Confirm paths | Paths the port calls only with the owner's matched confirmation line; without one the call is refused and nothing is sent |
+| Paperwork read-back | Before a clinical discharge the port reads the paperwork the hospital filled from the record; the owner confirms that reading, and its digest goes with the write so a changed record is refused |
 | Allowlist | The only routes the port may call: the profile's reads, its writes and their proofs |
 | Refusals | Every refused call is counted and nothing is sent |
 | `serve.run.ts` | Starts the strip-facing serve over this port, on `HEY_PISGAH_EMR_PORT` (default 4100) |
@@ -23,7 +24,7 @@ A correction never edits the first entry. It adds a correcting entry whose remar
 
 | Part | What it does |
 | --- | --- |
-| Work kinds | Observations, a consultation draft, an admission request, triage, care-plan items, notes, a handover draft, pages, a follow-up booking, the bill view and the pay link |
+| Work kinds | Observations, a consultation draft, an admission request, triage, care-plan items, notes, a handover draft, pages, a follow-up booking, the bill view, the pay link (proved by the bill's read-back, which shows neither an SMS nor a payment) and a clinical discharge behind the owner's spoken confirmation |
 | Hand-offs | An agent that needs another role's work pages that person through the paging door and watches the record; it never messages the other agent directly |
 | Watches | Each open task reads what its owner watches, such as a discharge stage, with no model call; a change becomes a note in the strip |
 | Offers | When a watched value reaches what the owner's work waits on, the agent asks its owner once; it acts only on the owner's words |

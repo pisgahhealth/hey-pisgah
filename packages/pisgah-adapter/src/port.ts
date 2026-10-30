@@ -2,7 +2,7 @@ import { canonical, sha256 } from "@hey-pisgah/contracts";
 import {
   EMERGENCY_KIND, EmrId, EmrPortError, OBSERVATION_KIND, ObservationArgs, READ_ONLY_KINDS,
   type EmrCommit, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type EmrWriteKind, type InboxPage, type Orderables, type Provenance,
-  type ReadBack, type SayableNames, type SpeakerVerdict, type WatchOffer, type WatchRead, type WorkArgs
+  type PaperworkReadBack, type ReadBack, type SayableNames, type SpeakerVerdict, type WatchOffer, type WatchRead, type WorkArgs
 } from "@hey-pisgah/agent";
 import { fillPath, fillTemplate, pathPattern, pick, type DoorProfile } from "./profile.js";
 
@@ -53,11 +53,13 @@ export class PisgahPort implements EmrPort {
   // Present only when the profile names the hospital's speaker match and read-back, so an older profile keeps attribution off.
   readonly speaker?: (owner: string, voiceprint: readonly number[], prov: Provenance) => Promise<SpeakerVerdict>;
   readonly readBack?: (owner: string, visitId: string, prov: Provenance) => Promise<ReadBack>;
+  readonly readPaperwork?: (owner: string, admissionId: string, prov: Provenance) => Promise<PaperworkReadBack>;
 
   constructor(readonly profile: DoorProfile, private readonly o: PisgahPortOptions) {
     const ops = profile.ops;
     if (ops.speaker) this.speaker = (owner, voiceprint, prov) => this.matchSpeaker(owner, voiceprint, prov);
     if (ops.read_back) this.readBack = (owner, visitId, prov) => this.readBackFor(owner, visitId, prov);
+    if (ops.paperwork) this.readPaperwork = (owner, admissionId, prov) => this.paperworkFor(owner, admissionId, prov);
     const reads = [
       ...(ops.patient_context ? [ops.patient_context.path] : []), ...profile.owners.flatMap((o) => (o.context ? [o.context.path] : [])), ...Object.values(profile.watches).map((w) => w.path),
       ...(profile.inbox ? [profile.inbox.path, ...(profile.inbox.detail ? [profile.inbox.detail.path] : [])] : []),
@@ -67,6 +69,7 @@ export class PisgahPort implements EmrPort {
     this.allow = [
       ops.read_admission, ops.write_observation, ...(ops.census ? [ops.census] : []),
       ...(ops.speaker ? [{ method: "POST", path: ops.speaker.path }] : []), ...(ops.read_back ? [{ method: "GET", path: ops.read_back.path }] : []),
+      ...(ops.paperwork ? [{ method: "GET", path: ops.paperwork.path }] : []),
       ...reads.map((path) => ({ method: "GET", path })), ...writes.map((path) => ({ method: "POST", path }))
     ].map((x) => ({ method: x.method, re: pathPattern(x.path) }));
     for (const a of this.allow) for (const d of [...profile.deny, ...profile.deny_exact]) if (a.re.test(d)) throw new Error("the profile allows a denied path");
@@ -122,6 +125,26 @@ export class PisgahPort implements EmrPort {
     };
   }
 
+  // The paperwork as the hospital filled it from the record; a missing or malformed digest fails, so nothing can be confirmed unread.
+  private async paperworkFor(owner: string, admissionId: string, prov: Provenance): Promise<PaperworkReadBack> {
+    const op = this.profile.ops.paperwork!;
+    const j = await this.read(op, { admission_id: admissionId }, { ...prov, owner });
+    const digest = pick(j, op.digest);
+    if (typeof digest !== "string" || !/^[0-9a-f]{64}$/.test(digest)) throw new EmrPortError("no_paperwork", "the hospital returned no paperwork to read back");
+    const list = (path: string) => { const v = pick(j, path); return (Array.isArray(v) ? v : []) as unknown[]; };
+    const tests = list(op.tests);
+    const unsigned = op.unsigned ? Number(pick(j, op.unsigned) ?? 0) : 0;
+    return {
+      digest,
+      diagnosis: str(pick(j, op.diagnosis))?.slice(0, 200) ?? null,
+      dispensed: list(op.medicines).filter((m) => pick(m, op.medicine_dispensed) !== null && pick(m, op.medicine_dispensed) !== undefined)
+        .map((m) => `${str(pick(m, op.medicine_name))?.slice(0, 60) ?? "Medicine"} ${str(pick(m, op.medicine_dispensed))}`),
+      exceptions: list(op.exceptions).map((e) => str(pick(e, op.exception_text))?.slice(0, 160) ?? "").filter(Boolean),
+      tests: { resulted: tests.filter((x) => pick(x, op.test_resulted) === true).length, total: tests.length },
+      unsigned: Number.isFinite(unsigned) ? unsigned : 0
+    };
+  }
+
   refusedCount(): number { return this.refusals.length; }
   private now(): Date { return this.o.now?.() ?? new Date(); }
 
@@ -143,11 +166,13 @@ export class PisgahPort implements EmrPort {
     if (!bearer) return this.refuse(method, clean, "no_bearer_for_owner");
     if (!EVIDENCE.test(prov.evidence) || Number.isNaN(Date.parse(prov.spoken_at)) || (init.idempotencyKey !== undefined && !IDEM.test(init.idempotencyKey))) return this.refuse(method, clean, "bad_header");
     if ([prov.voice?.authorisation, prov.voice?.confirmation].some((v) => v !== undefined && !VOICE.test(v))) return this.refuse(method, clean, "bad_header");
-    if (this.profile.confirm.includes(clean) && (method !== "POST" || !this.profile.headers.confirmation || !prov.voice?.confirmation)) return this.refuse(method, clean, "needs_confirmation");
+    if (prov.read_back_digest !== undefined && !/^[0-9a-f]{64}$/.test(prov.read_back_digest)) return this.refuse(method, clean, "bad_header");
+    if (this.profile.confirm.includes(clean) && (method !== "POST" || !this.profile.headers.confirmation || !prov.voice?.confirmation || (!!this.profile.headers.read_back_digest && !prov.read_back_digest))) return this.refuse(method, clean, "needs_confirmation");
     const h = this.profile.headers;
     const shown: Record<string, string> = {
       [h.on_behalf_of]: prov.owner, [h.origin]: this.profile.origin_value, [h.evidence]: prov.evidence, [h.spoken_at]: prov.spoken_at,
       ...(h.authorisation && prov.voice?.authorisation ? { [h.authorisation]: prov.voice.authorisation } : {}), ...(h.confirmation && prov.voice?.confirmation ? { [h.confirmation]: prov.voice.confirmation } : {}),
+      ...(h.read_back_digest && prov.read_back_digest ? { [h.read_back_digest]: prov.read_back_digest } : {}),
       ...(init.idempotencyKey ? { [h.idempotency]: init.idempotencyKey } : {}), ...(init.body !== undefined ? { "content-type": "application/json" } : {}), accept: "application/json"
     };
     const t0 = performance.now();

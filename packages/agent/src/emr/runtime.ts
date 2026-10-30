@@ -7,7 +7,7 @@ import { DEFAULT_INTENT_ROUTE, FALLBACK_INTENT_ROUTE, decideIntent, tempText, ty
 import { primaryClass } from "./classes.js";
 import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
-import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type Provenance, type WorkArgs } from "./port.js";
+import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
 import { READ_ONLY_KINDS, WORK_ARGS, afterSaid, cadenceSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareReadings, disagreementQuestion, normValue, quotedQuestion, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
@@ -32,6 +32,8 @@ export type EmrAction = {
   awaiting: "owner_voice" | "confirm" | null; authorised_by_line: string | null; confirmed_by_line: string | null;
   // The page that shows this work, bound to the action's encounter and command id.
   screen: ScreenPlan | null;
+  // The paperwork read back from the record before a discharge, which the owner's confirmation covers.
+  read_back: PaperworkReadBack | null;
 };
 // Where an ambient line came from: its listening session, the chunks that made it, and when the speech ended.
 export type AmbientMeta = { session_id: string; seqs: number[]; raw_text: string; ended_at: string; final_at: string; trailing_silence_ms: number; finished_by: string };
@@ -206,10 +208,11 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
         corrects_action_id: (x["corrects_action_id"] as string | null) ?? null, state: "proposed", intent_key: null, written: null, proof: null, reason: null,
         proposed_at: e.wall_at, written_at: null, completed_at: null, report: null, draft: null, unverified: false, ears: !!x["ears"],
         awaiting: (x["awaiting"] as EmrAction["awaiting"] | undefined) ?? null, authorised_by_line: (x["authorised_by_line"] as string | null | undefined) ?? null, confirmed_by_line: null,
-        screen: (x["screen"] as ScreenPlan | undefined) ?? null
+        screen: (x["screen"] as ScreenPlan | undefined) ?? null, read_back: null
       });
       t.order.push(String(x["action_id"]));
       break;
+    case "action.read_back": if (act) act.read_back = x["read_back"] as PaperworkReadBack; break;
     case "action.intent": if (act) { act.state = "sent"; act.intent_key = String(x["intent_key"]); if (x["args"]) act.args = x["args"] as WorkArgs; } break;
     case "action.written": if (act) { act.state = "acknowledged"; act.written = x["written"] as EmrAction["written"]; act.written_at = e.wall_at; } break;
     case "action.completed": if (act) { act.state = "completed"; act.proof = x["proof"] as EmrProof; act.completed_at = e.wall_at; } break;
@@ -382,6 +385,17 @@ export const emrIntentKey = (taskId: string, actionId: string, args: unknown) =>
 export const SPOKEN_PAUSE = /^(?:(?:ok(?:ay)?|right|sorry|wait)[,.!]?\s+)?(?:stop|hold on|hang on|pause)\b(?:[\s,.!-]+(?:i'?ll|i will|we'?ll|let me)\s+come back to (?:this|that|it|her|him)(?:\s+later)?)?[\s.!]*$|\bi'?ll come back to (?:this|that|it)\b/i;
 // "Sign everything" asks for the read-back of the owner's voice orders awaiting countersign; the yes that follows signs that batch.
 export const SIGN_EVERYTHING = /^(?:(?:ok(?:ay)?|right|now|and)\s+)?(?:please\s+)?(?:countersign|sign)\s+(?:everything|it all|them all|all of (?:it|them)|all (?:the )?(?:voice )?orders|the orders)(?:\s+please)?$/;
+// Work that needs the owner's explicit spoken confirmation of what was read back from the record (R-3).
+export const CONFIRM_KINDS: ReadonlySet<string> = new Set(["release_home"]);
+
+// The discharge read-back the owner confirms: prescribed and dispensed kept apart, exceptions named for the responsible doctor.
+export function paperworkAsk(summary: string, rb: PaperworkReadBack): string {
+  const meds = rb.dispensed.length ? `Medicines from the dispense record: ${rb.dispensed.join(", ")}.` : "No medicine was dispensed.";
+  const ex = rb.exceptions.length ? ` For you to confirm against dispensing: ${rb.exceptions.join("; ")}.` : "";
+  const tests = rb.tests.total ? ` Tests: ${rb.tests.resulted} of ${rb.tests.total} resulted; the rest are not billed.` : "";
+  return `${summary}. Diagnosis from the record: ${rb.diagnosis}. ${meds}${ex}${tests} Say confirm to discharge.`.slice(0, 1200);
+}
+
 export const PAY_LINK_VERIFIED_NOTE = "Pay link request verified: the bill shows it recorded. This does not show that an SMS arrived or that anyone paid; payment is simulated.";
 
 export const OWNER_YES = /^(?:yes|yeah|yes please|yes sign(?: them| it| everything)?|sign(?: them| it)?|go ahead|send it|do it|confirm(?:ed)?|i confirm|yes confirm)$/;
@@ -1163,6 +1177,12 @@ export class EmrRuntime {
         break;
       }
       case "draft_handover": case "prepare_bill": case "send_pay_link": if (!needAdmission()) return; raw = { admission_id: t.admission_id }; break;
+      case "release_home": {
+        if (!needAdmission()) return;
+        const advice = said(c.text);
+        raw = { admission_id: t.admission_id, ...(advice ? { instructions: advice.slice(0, 2000) } : {}), ...(c.date && dateSaid(c.date, line) ? { follow_up_date: c.date } : {}) };
+        break;
+      }
       case "page_staff": {
         const targets = this.o.port.names?.().page_targets ?? {};
         const to = c.to && targets[c.to] ? c.to : null;
@@ -1370,7 +1390,7 @@ export class EmrRuntime {
     const args = DOCUMENTATION_KINDS.has(kind) && who && who.speaker !== "owner" ? this.attributed(kind, rawArgs, who) : rawArgs;
     let awaiting: EmrAction["awaiting"] = needsOwner && who?.speaker !== "owner" ? "owner_voice" : null;
     const controlled = kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(args["drug"])]?.controlled;
-    if (!awaiting && controlled) awaiting = "confirm";
+    if (!awaiting && (controlled || CONFIRM_KINDS.has(kind))) awaiting = "confirm";
     const authorisedBy = kind === "countersign" || (ORDER_KINDS.has(kind) && who?.speaker === "owner") ? lineId : null;
     const actionId = `a-${shortHash(t.task_id, lineId, t.order.length + 1)}`;
     const ears = this.startCheck(l, actionId, lineId, own);
@@ -1379,8 +1399,9 @@ export class EmrRuntime {
     const screen = this.screenOf(t, kind, args);
     this.append(l, "action.proposed", { action_id: actionId, kind, args, summary, line_id: lineId, corrects_action_id: correctsId, hold_ms: this.o.holdMs ?? 0, ...this.holdUntil(anchor), ...(ears ? { ears: true } : {}), ...(awaiting ? { awaiting } : {}), ...(authorisedBy ? { authorised_by_line: authorisedBy } : {}), ...(screen ? { screen } : {}) });
     if (awaiting === "owner_voice") this.ask(l, lineId, `Held: ${summary}. ${who ? "I could not match the voice to you" : "I heard no voice to match"}, so it waits until you say yes yourself.`, null, { kind: "authorise", action_id: actionId });
-    if (awaiting === "confirm") this.ask(l, lineId, `${summary}. This is a controlled drug: say confirm to send it.`, null, { kind: "confirm", action_id: actionId });
+    if (awaiting === "confirm" && !CONFIRM_KINDS.has(kind)) this.ask(l, lineId, `${summary}. This is a controlled drug: say confirm to send it.`, null, { kind: "confirm", action_id: actionId });
     this.settle(l, "proposed");
+    if (CONFIRM_KINDS.has(kind)) void this.readBackPaperwork(l, lineId, actionId);
     this.noteHold(actionId, anchor);
     if (t.state === "running" && !awaiting) this.hold(l, actionId, anchor);
   }
@@ -1423,6 +1444,32 @@ export class EmrRuntime {
   }
 
   // What a short line says to the voice-order rules: sign everything, or a yes or no to the latest open order question.
+  // Reads the discharge paperwork from the record and asks the owner to confirm exactly that reading.
+  private async readBackPaperwork(l: Live, lineId: string, actionId: string): Promise<void> {
+    const t = l.task;
+    const a = t.actions.get(actionId);
+    if (!a || !t.admission_id || !this.o.port.readPaperwork) {
+      if (a) this.append(l, "action.cancelled", { action_id: actionId, reason: "no_paperwork_read" });
+      this.note(l, "I cannot read the discharge paperwork here, so nothing was discharged.");
+      return this.settle(l, "no_paperwork");
+    }
+    let rb: PaperworkReadBack;
+    try { rb = await this.o.port.readPaperwork(t.owner, t.admission_id, this.provFor(t, a)); } catch (e) {
+      this.append(l, "action.cancelled", { action_id: actionId, reason: "paperwork_read_failed" });
+      this.note(l, `I could not read the discharge paperwork (${e instanceof Error ? e.message.slice(0, 80) : "read failed"}), so nothing was discharged. Say it again.`);
+      return this.settle(l, "paperwork_read_failed");
+    }
+    this.append(l, "action.read_back", { action_id: actionId, read_back: rb });
+    if (!rb.diagnosis) {
+      this.append(l, "action.cancelled", { action_id: actionId, reason: "no_diagnosis_in_record" });
+      this.note(l, "The record has no diagnosis for this stay, so I did not ask you to confirm a discharge. Record the diagnosis first.");
+      return this.settle(l, "no_diagnosis");
+    }
+    if (rb.unsigned > 0) this.note(l, `${rb.unsigned} voice order${rb.unsigned === 1 ? " still awaits" : "s still await"} your countersign; the hospital will not discharge until you say sign everything.`);
+    if (t.actions.get(actionId)?.awaiting === "confirm") this.ask(l, lineId, paperworkAsk(a.summary, rb), null, { kind: "confirm", action_id: actionId });
+    this.settle(l, "read_back");
+  }
+
   private orderWords(t: EmrTask, lineId: string): { sign: boolean; yes: boolean; no: boolean; q: EmrQuestion | null } | null {
     const line = t.lines.find((x) => x.id === lineId);
     if (!line || line.decided || t.state !== "running") return null;
@@ -1468,9 +1515,20 @@ export class EmrRuntime {
     const a = t.actions.get(rule.action_id);
     if (!a || a.state !== "proposed" || !a.awaiting) { this.note(l, "There was nothing waiting for your word."); this.settle(l, "nothing_waiting"); return true; }
     const controlled = a.kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(a.args["drug"])]?.controlled;
+    const confirmKind = CONFIRM_KINDS.has(a.kind);
     if (a.awaiting === "owner_voice") {
-      this.append(l, "action.authorised", { action_id: a.action_id, line_id: lineId, as: "authorise", awaiting: controlled ? "confirm" : null });
+      this.append(l, "action.authorised", { action_id: a.action_id, line_id: lineId, as: "authorise", awaiting: controlled || confirmKind ? "confirm" : null });
       if (controlled) { this.ask(l, lineId, `${a.summary}. This is a controlled drug: say confirm to send it.`, null, { kind: "confirm", action_id: a.action_id }); this.settle(l, "asked"); return true; }
+      if (confirmKind) {
+        if (a.read_back) this.ask(l, lineId, paperworkAsk(a.summary, a.read_back), null, { kind: "confirm", action_id: a.action_id });
+        this.settle(l, "asked");
+        return true;
+      }
+    } else if (confirmKind && (!a.read_back || lineId === a.line_id)) {
+      // A discharge is confirmed only on its read-back, by a line after the instruction.
+      this.note(l, "The paperwork has not been read back yet, so nothing was confirmed. Say confirm once it shows.");
+      this.settle(l, "read_back_pending");
+      return true;
     } else {
       this.append(l, "action.authorised", { action_id: a.action_id, line_id: lineId, as: "confirm", awaiting: null });
     }
@@ -1751,6 +1809,12 @@ export class EmrRuntime {
   private provFor(t: EmrTask, a: EmrAction): Provenance {
     const line = t.lines.find((x) => x.id === a.line_id);
     const base: Provenance = { owner: t.owner, evidence: `transcript:${a.line_id}`, spoken_at: line?.at ?? t.created_at };
+    // A discharge carries the owner's matched instruction (or the yes that authorised it) and the later matched confirmation.
+    const voicedLine = (lineId: string | null) => { const tok = lineId ? this.tokens.get(lineId) : undefined; return lineId && tok ? `transcript:${lineId}~${tok}` : undefined; };
+    if (CONFIRM_KINDS.has(a.kind)) {
+      const authorisation = voicedLine(a.authorised_by_line ?? a.line_id), confirmation = voicedLine(a.confirmed_by_line);
+      return { ...base, ...(a.read_back ? { read_back_digest: a.read_back.digest } : {}), voice: { ...(authorisation ? { authorisation } : {}), ...(confirmation ? { confirmation } : {}) } };
+    }
     if (!a.kind || !ORDER_KINDS.has(a.kind)) return base;
     // An order carries the owner's matched lines as "evidence~token"; a token lost on restart leaves the header out, and the hospital refuses the write.
     const voiced = (lineId: string | null) => { const tok = lineId ? this.tokens.get(lineId) : undefined; return lineId && tok ? `transcript:${lineId}~${tok}` : undefined; };
@@ -1769,7 +1833,12 @@ export class EmrRuntime {
       if (!(await this.earsAgree(l, a))) return;
       if (!(await this.doseAgreed(l, a))) return;
       // A note section is sent with every section already written, so the draft always holds the whole note as it stands.
-      const args = a.kind === CLERKING_KIND ? { ...a.args, note: this.noteSoFar(t, a) } : a.args;
+      // A discharge carries the diagnosis the record holds, never one taken from the words.
+      if (CONFIRM_KINDS.has(a.kind) && (!a.read_back?.diagnosis || !a.confirmed_by_line)) {
+        this.append(l, "action.refused", { action_id: actionId, reason: a.read_back?.diagnosis ? "not_confirmed" : "no_diagnosis_in_record", status: null, counted: false });
+        return this.settle(l, "write_refused");
+      }
+      const args = a.kind === CLERKING_KIND ? { ...a.args, note: this.noteSoFar(t, a) } : CONFIRM_KINDS.has(a.kind) ? { ...a.args, primary_diagnosis: a.read_back!.diagnosis } : a.args;
       this.append(l, "action.intent", { action_id: actionId, intent_key: emrIntentKey(t.task_id, actionId, args), args });
     }
     if (a.state !== "sent" && a.state !== "acknowledged") return;

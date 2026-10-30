@@ -24,7 +24,7 @@ export type EmrTarget = { admission_id?: string; patient_id?: string };
 // admission_id is empty while the patient is not yet admitted; visit_id names the arrival then.
 export type EmrContext = { admission_id: string; patient_id: string | null; visit_id?: string | null; label: string; facts: Record<string, string | null>; keywords: string[] };
 // Who the write is for and which spoken line asked for it; an order also carries the owner's matched lines that authorised and, for a controlled drug, confirmed it.
-export type Provenance = { owner: string; evidence: string; spoken_at: string; voice?: { authorisation?: string; confirmation?: string } };
+export type Provenance = { owner: string; evidence: string; spoken_at: string; voice?: { authorisation?: string; confirmation?: string }; read_back_digest?: string };
 // A read-only kind returns what it found as report; a draft is held for the owner to review before anything is written.
 export type EmrCommit =
   | { ok: true; record_id: string; record_version: number; event_ids: string[]; replayed: boolean; report?: string; draft?: string }
@@ -74,7 +74,12 @@ export interface EmrPort {
   readBack?(owner: string, visitId: string, prov: Provenance): Promise<ReadBack>;
   // The tests and medicines the owner may order by voice, by the words that name them.
   orderables?(): Orderables;
+  // The discharge paperwork filled from the record, read back before the owner confirms.
+  readPaperwork?(owner: string, admissionId: string, prov: Provenance): Promise<PaperworkReadBack>;
 }
+
+// Prescribed and dispensed stay apart; each exception is for the responsible doctor to confirm, and the digest binds the confirmation to this reading.
+export type PaperworkReadBack = { digest: string; diagnosis: string | null; dispensed: string[]; exceptions: string[]; tests: { resulted: number; total: number }; unsigned: number };
 
 // The hospital seals each read-back, so the countersign that follows proves which batch was shown and when.
 export type ReadBack = { items: { stateId: string; label: string; kind: string; controlled: boolean; sentAt: string | null }[]; itemsDigest: string | null; readBackAt: string; seal: string | null; awaitingSecond: { stateId: string; label: string }[]; changed: { stateId: string; label: string }[] };
