@@ -229,6 +229,8 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   const listenUntracked = async (owner: string, sessionId: string, seq: number, wav: Uint8Array, arrived: number, hint?: "emergency" | "after_wake"): Promise<unknown> => {
     let text = "";
     setStatus(owner, sessionId, seq, { status: "processing" });
+    // The voiceprint is worked out beside the words, so a spoken acceptance is attributed like any other line.
+    const print = o.embed ? o.embed(wav).catch(() => null) : null;
     try { text = afterWake((await transcribe(wav, [], `${sessionId}-${seq}`.slice(0, 64))).text); } catch (e) {
       if (!(e instanceof VoiceError)) throw e;
       o.log?.(`listen with no patient: the ear refused the audio (${e.code})`);
@@ -246,7 +248,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       return { session_id: sessionId, seq, accepted: true, utterances: [{ id: r.line_id, line_id: r.line_id, task_id: r.task_id, text, class: "instruction", classes: ["instruction"] }], partial: null, entry: "emergency" };
     }
     // "Accepted <task>" heard with no patient open reaches the one task handed to this owner that it names.
-    const handed = text ? rt.delegationLine(owner, text, spokenAt, "audio") : null;
+    const handed = text ? rt.delegationLine(owner, text, spokenAt, "audio", undefined, print ? await print : undefined) : null;
     if (handed) setStatus(owner, sessionId, seq, { status: "completed", task_id: handed.task_id, line_id: handed.line_id });
     if (handed) return { session_id: sessionId, seq, accepted: true, utterances: [{ id: handed.line_id, line_id: handed.line_id, task_id: handed.task_id, text, class: "instruction", classes: ["instruction"] }], partial: null, entry: "delegation" };
     const known = rt.openSubjects(owner).map((x) => ({ label: rt.task(x.task_id)?.label ?? "", target: x.target })).filter((k) => k.label);
