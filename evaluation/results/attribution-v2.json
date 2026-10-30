@@ -1,0 +1,449 @@
+{
+ "thresholds": {
+  "revision": 2,
+  "hash": "9cb7016f9bcd113583d4bf4232f6df454ee36cd5fee24e605e7da21ba7ab7eaa",
+  "frozen_at": "2026-10-29T20:00:00Z"
+ },
+ "built_at": "2026-10-30T07:28:43.786Z",
+ "script": {
+  "lines": 446,
+  "non_owner_lines": 318,
+  "owner_lines": 144,
+  "overlap": 36,
+  "replays": 20,
+  "short_answers": 25,
+  "tuning": 115,
+  "held_out": 331,
+  "by_person": {
+   "S": 164,
+   "N": 110,
+   "C": 99,
+   "U": 109
+  }
+ },
+ "synthetic": {
+  "rows": 153,
+  "identity": {
+   "right": {
+    "k": 113,
+    "n": 120
+   },
+   "per_person": {
+    "B (colleague)": {
+     "k": 17,
+     "n": 19
+    },
+    "C (colleague)": {
+     "k": 23,
+     "n": 26
+    },
+    "N (colleague)": {
+     "k": 6,
+     "n": 7
+    },
+    "P (unenrolled)": {
+     "k": 14,
+     "n": 15
+    },
+    "R (unenrolled)": {
+     "k": 5,
+     "n": 5
+    },
+    "S (owner)": {
+     "k": 48,
+     "n": 48
+    }
+   },
+   "short_answers_too_short_to_match": {
+    "k": 0,
+    "n": 20
+   }
+  },
+  "addressee": {
+   "agent_or_not_right": {
+    "k": 49,
+    "n": 60
+   }
+  },
+  "intent": {
+   "instruction_or_not_right": {
+    "k": 52,
+    "n": 60
+   },
+   "short_yes_read_as_yes": {
+    "k": 3,
+    "n": 19
+   }
+  },
+  "authority": {
+   "false_authority": {
+    "k": 0,
+    "n": 48,
+    "upper95": 0.0605,
+    "waiting_for_gate": 24,
+    "ids": []
+   },
+   "false_authority_per_person": {
+    "B": {
+     "k": 0,
+     "n": 16,
+     "upper95": 0.1707,
+     "waiting_for_gate": 3
+    },
+    "C": {
+     "k": 0,
+     "n": 5,
+     "upper95": 0.4507,
+     "waiting_for_gate": 21
+    },
+    "N": {
+     "k": 0,
+     "n": 7,
+     "upper95": 0.3482,
+     "waiting_for_gate": 0
+    },
+    "P": {
+     "k": 0,
+     "n": 15,
+     "upper95": 0.181,
+     "waiting_for_gate": 0
+    },
+    "R": {
+     "k": 0,
+     "n": 5,
+     "upper95": 0.4507,
+     "waiting_for_gate": 0
+    }
+   },
+   "voice_and_presence_would_pass": {
+    "k": 1,
+    "n": 72,
+    "upper95": 0.0642,
+    "ids": [
+     "syn-H47"
+    ]
+   },
+   "voice_and_presence_would_pass_per_person": {
+    "B": {
+     "k": 0,
+     "n": 19,
+     "upper95": 0.1459
+    },
+    "C": {
+     "k": 0,
+     "n": 26,
+     "upper95": 0.1088
+    },
+    "N": {
+     "k": 0,
+     "n": 7,
+     "upper95": 0.3482
+    },
+    "P": {
+     "k": 1,
+     "n": 15,
+     "upper95": 0.2794
+    },
+    "R": {
+     "k": 0,
+     "n": 5,
+     "upper95": 0.4507
+    }
+   },
+   "waiting_for_gate": 33,
+   "owner_acted": {
+    "k": 15,
+    "n": 20,
+    "missed_ids": [
+     "syn-H51",
+     "syn-Y-S1",
+     "syn-Y-S2",
+     "syn-Y-S5",
+     "syn-K7"
+    ]
+   },
+   "owner_wrongly_acted": {
+    "k": 1,
+    "n": 19
+   }
+  },
+  "patient_speech": {
+   "named_owner": {
+    "k": 1,
+    "n": 20,
+    "upper95": 0.2161
+   },
+   "given_authority": {
+    "k": 0,
+    "n": 20,
+    "upper95": 0.1391,
+    "waiting_for_gate": 0
+   }
+  },
+  "overlap": {
+   "colleague_under_owner_yes": {
+    "k": 0,
+    "n": 4,
+    "upper95": 0.5271,
+    "waiting_for_gate": 9
+   },
+   "colleague_under_owner_yes_voice_passes": {
+    "k": 1,
+    "n": 13,
+    "upper95": 0.3163
+   },
+   "owner_with_talk_over_acted": {
+    "k": 3,
+    "n": 3,
+    "voice_still_owner": {
+     "k": 12,
+     "n": 12
+    }
+   }
+  },
+  "owner_to_colleague": {
+   "k": 1,
+   "n": 4,
+   "upper95": 0.7514,
+   "waiting_for_gate": 0
+  },
+  "similar_colleague": {
+   "k": 0,
+   "n": 0,
+   "upper95": null,
+   "waiting_for_gate": 15,
+   "voice_passes": {
+    "k": 0,
+    "n": 15,
+    "upper95": 0.181
+   }
+  },
+  "changed": {
+   "patient": {
+    "k": 0,
+    "n": 2,
+    "upper95": 0.7764,
+    "waiting_for_gate": 0
+   },
+   "batch": {
+    "k": 0,
+    "n": 2,
+    "upper95": 0.7764,
+    "waiting_for_gate": 0
+   },
+   "bound_yes_acted": {
+    "k": 2,
+    "n": 3
+   }
+  },
+  "replay": {
+   "voice_says_owner": {
+    "k": 33,
+    "n": 33
+   },
+   "digital_copy_refused_by_session": {
+    "k": 11,
+    "n": 11
+   },
+   "played_owner_away_held_by_presence": {
+    "k": 11,
+    "n": 11
+   },
+   "played_owner_present_acted": {
+    "k": 10,
+    "n": 11
+   },
+   "false_authority": {
+    "k": 0,
+    "n": 22,
+    "upper95": 0.1273,
+    "waiting_for_gate": 0,
+    "note": "played while the owner is at the screen is excluded: session and presence cannot see it; the countersign window is the check"
+   }
+  },
+  "presence_on_live_lines": {
+   "k": 120,
+   "n": 120
+  }
+ },
+ "real": {
+  "rows": 82,
+  "identity": {
+   "right": {
+    "k": 56,
+    "n": 58
+   },
+   "per_person": {
+    "N (unenrolled)": {
+     "k": 4,
+     "n": 4
+    },
+    "S (owner)": {
+     "k": 52,
+     "n": 54
+    }
+   },
+   "short_answers_too_short_to_match": {
+    "k": 0,
+    "n": 0
+   }
+  },
+  "addressee": {
+   "agent_or_not_right": {
+    "k": 34,
+    "n": 46
+   }
+  },
+  "intent": {
+   "instruction_or_not_right": {
+    "k": 39,
+    "n": 46
+   },
+   "short_yes_read_as_yes": {
+    "k": 0,
+    "n": 0
+   }
+  },
+  "authority": {
+   "false_authority": {
+    "k": 0,
+    "n": 4,
+    "upper95": 0.5271,
+    "waiting_for_gate": 0,
+    "ids": []
+   },
+   "false_authority_per_person": {
+    "N": {
+     "k": 0,
+     "n": 4,
+     "upper95": 0.5271,
+     "waiting_for_gate": 0
+    }
+   },
+   "voice_and_presence_would_pass": {
+    "k": 0,
+    "n": 4,
+    "upper95": 0.5271,
+    "ids": []
+   },
+   "voice_and_presence_would_pass_per_person": {
+    "N": {
+     "k": 0,
+     "n": 4,
+     "upper95": 0.5271
+    }
+   },
+   "waiting_for_gate": 12,
+   "owner_acted": {
+    "k": 10,
+    "n": 11,
+    "missed_ids": [
+     "real-H06"
+    ]
+   },
+   "owner_wrongly_acted": {
+    "k": 6,
+    "n": 31
+   }
+  },
+  "patient_speech": {
+   "named_owner": {
+    "k": 0,
+    "n": 4,
+    "upper95": 0.5271
+   },
+   "given_authority": {
+    "k": 0,
+    "n": 4,
+    "upper95": 0.5271,
+    "waiting_for_gate": 0
+   }
+  },
+  "overlap": {
+   "colleague_under_owner_yes": {
+    "k": 0,
+    "n": 0,
+    "upper95": null,
+    "waiting_for_gate": 0
+   },
+   "colleague_under_owner_yes_voice_passes": {
+    "k": 0,
+    "n": 0,
+    "upper95": null
+   },
+   "owner_with_talk_over_acted": {
+    "k": 0,
+    "n": 0,
+    "voice_still_owner": {
+     "k": 11,
+     "n": 12
+    }
+   }
+  },
+  "owner_to_colleague": {
+   "k": 1,
+   "n": 4,
+   "upper95": 0.7514,
+   "waiting_for_gate": 0
+  },
+  "similar_colleague": {
+   "k": 0,
+   "n": 0,
+   "upper95": null,
+   "waiting_for_gate": 0,
+   "voice_passes": {
+    "k": 0,
+    "n": 0,
+    "upper95": null
+   }
+  },
+  "changed": {
+   "patient": {
+    "k": 0,
+    "n": 0,
+    "upper95": null,
+    "waiting_for_gate": 0
+   },
+   "batch": {
+    "k": 0,
+    "n": 0,
+    "upper95": null,
+    "waiting_for_gate": 0
+   },
+   "bound_yes_acted": {
+    "k": 0,
+    "n": 0
+   }
+  },
+  "replay": {
+   "voice_says_owner": {
+    "k": 22,
+    "n": 24
+   },
+   "digital_copy_refused_by_session": {
+    "k": 8,
+    "n": 8
+   },
+   "played_owner_away_held_by_presence": {
+    "k": 8,
+    "n": 8
+   },
+   "played_owner_present_acted": {
+    "k": 6,
+    "n": 8
+   },
+   "false_authority": {
+    "k": 0,
+    "n": 16,
+    "upper95": 0.1707,
+    "waiting_for_gate": 0,
+    "note": "played while the owner is at the screen is excluded: session and presence cannot see it; the countersign window is the check"
+   }
+  },
+  "presence_on_live_lines": {
+   "k": 58,
+   "n": 58
+  }
+ },
+ "reading_cost_usd_kept_rows": 1.0833
+}
