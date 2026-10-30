@@ -22,6 +22,8 @@ export const NUMBER_JOIN_WAIT_MS = 3000;
 // How long audio held at the cap waits for a next chunk or the strip's end marker before it is finished alone; longer than one capped chunk.
 export const HELD_END_WAIT_MS = CHUNK_CAP_MS + 2000;
 
+// One stretch the streaming ear ended at a pause, with its words, its audio and the quiet already heard at its end.
+export type StreamSegment = { owner: string; target: EmrTarget; session_id: string; samples: Float32Array; rate: number; raw: string; trailing_ms: number; arrived: number; heard_at?: number };
 export type ListenChunk = { owner: string; target: EmrTarget; session_id: string; seq: number; wav: Uint8Array; arrived_at?: number; captured_at?: number; presence?: LivenessMarker | null };
 // The strip's end-of-utterance marker: no audio, only the place in the session where speech stopped.
 export type ListenEnd = Omit<ListenChunk, "wav">;
@@ -97,14 +99,7 @@ export class ListenSessions {
   }
 
   private async queue(c: ListenEnd, audioMs: number, work: (s: Session) => Promise<ListenOutcome>, wait: boolean): Promise<ListenReply> {
-    let s = this.sessions.get(c.session_id);
-    if (s && s.owner !== c.owner) throw new ListenError(403, "the session belongs to another owner");
-    if (!s) {
-      const ctx = await this.rt.port.resolve(c.target, { owner: c.owner, evidence: `transcript:listen-${c.session_id}`.slice(0, 200), spoken_at: new Date(c.arrived_at ?? this.now()).toISOString() });
-      s = this.sessions.get(c.session_id) ?? { owner: c.owner, ctx, next: 0, held: null, waiting: null, timer: null, heldTimer: null, outcomes: new Map(), chain: Promise.resolve(), dropped: 0, unreported: [], errors: [] };
-      this.sessions.set(c.session_id, s);
-    }
-    const sess = s;
+    const sess = await this.sessionFor(c.owner, c.target, c.session_id, c.arrived_at ?? this.now());
     this.status(sess, c.session_id, [c.seq], { status: "accepted" });
     const run = sess.chain.then(() => { this.status(sess, c.session_id, [c.seq], { status: "processing" }); return work(sess); }).then((out) => this.after(sess, c.session_id, out)).catch((e: unknown): ListenOutcome => {
       const msg = e instanceof Error ? e.message.slice(0, 200) : "listen failed";
@@ -117,6 +112,67 @@ export class ListenSessions {
     const utterances = sess.unreported.splice(0).map((u) => this.withClass(u));
     const errors = sess.errors.splice(0);
     return { session_id: c.session_id, seq: c.seq, accepted: true, utterances, partial: null, ...(outcome ? { outcome } : {}), ...(errors.length ? { errors } : {}) };
+  }
+
+  private async sessionFor(owner: string, target: EmrTarget, sessionId: string, at: number): Promise<Session> {
+    let s = this.sessions.get(sessionId);
+    if (s && s.owner !== owner) throw new ListenError(403, "the session belongs to another owner");
+    if (!s) {
+      const ctx = await this.rt.port.resolve(target, { owner, evidence: `transcript:listen-${sessionId}`.slice(0, 200), spoken_at: new Date(at).toISOString() });
+      s = this.sessions.get(sessionId) ?? { owner, ctx, next: 0, held: null, waiting: null, timer: null, heldTimer: null, outcomes: new Map(), chain: Promise.resolve(), dropped: 0, unreported: [], errors: [] };
+      this.sessions.set(sessionId, s);
+    }
+    return s;
+  }
+
+  // One finished stretch from the streaming ear: its words are already heard, so only the join and delivery rules run; a number wait counts the quiet already heard.
+  async segment(c: StreamSegment): Promise<ListenUtterance[]> {
+    const s = await this.sessionFor(c.owner, c.target, c.session_id, c.arrived);
+    const seq = s.next++;
+    const run = s.chain.then(async () => {
+      const v = vitalsVocabulary(cleanTranscript(c.raw));
+      const print = this.o.embed ? this.o.embed(encodeWav(c.samples, c.rate)).catch(() => null) : Promise.resolve(null);
+      const heard: Heard = {
+        samples: [c.samples], seqs: [seq], rate: c.rate, audio_ms: totalMs([c.samples], c.rate), trailing_ms: c.trailing_ms, arrived: c.arrived,
+        text: v.text, raw: c.raw, cost_usd: 0, keywords_dropped: false, rewrites: v.rewrites, strong: false, joined: false, heard_at: c.heard_at ?? this.now(), voiceprint: await print
+      };
+      if (!heard.text) return;
+      const w = s.waiting;
+      if (w && w.rate === c.rate) {
+        this.clearWait(s);
+        // A strong cut is always joined; a number is joined only when these words carry it on.
+        if (w.strong || continuesNumber(heard.text)) {
+          const raw = `${w.raw.replace(/[.,;:!?]+$/, "")} ${c.raw}`;
+          const jv = vitalsVocabulary(cleanTranscript(raw));
+          const joined: Heard = { ...heard, samples: [...w.samples, c.samples], seqs: [...w.seqs, seq], audio_ms: w.audio_ms + heard.audio_ms, text: jv.text, raw, rewrites: jv.rewrites, joined: true, voiceprint: w.voiceprint ?? heard.voiceprint };
+          await this.settleHeard(s, c.session_id, joined, "joined_across_cut", joined.trailing_ms);
+          return;
+        }
+        await this.deliver(s, c.session_id, w, "number_alone");
+      } else if (w) {
+        this.clearWait(s);
+        await this.deliver(s, c.session_id, w, "number_alone");
+      }
+      await this.settleHeard(s, c.session_id, heard, "quiet_tail", heard.trailing_ms);
+    }).catch((e: unknown) => { s.errors.push(`segment ${seq}: ${e instanceof Error ? e.message.slice(0, 200) : "listen failed"}`); });
+    s.chain = run;
+    await run;
+    return s.unreported.splice(0).map((u) => this.withClass(u));
+  }
+
+  // Words the streaming ear hears while a number-ended line waits: two or more words that do not carry the number on let the line go now.
+  nextWords(sessionId: string, partial: string): void {
+    const s = this.sessions.get(sessionId);
+    const w = s?.waiting;
+    if (!s || !w || w.strong || partial.trim().split(/\s+/).length < 2 || continuesNumber(vitalsVocabulary(cleanTranscript(partial)).text)) return;
+    this.clearWait(s);
+    s.chain = s.chain.then(() => this.deliver(s, sessionId, w, "number_alone")).catch((e: unknown) => { s.errors.push(e instanceof Error ? e.message.slice(0, 200) : "listen failed"); });
+  }
+
+  // Utterances finished since the last read, and errors, for a caller that does not post chunks.
+  unreportedOf(sessionId: string): { utterances: ListenUtterance[]; errors: string[] } {
+    const s = this.sessions.get(sessionId);
+    return { utterances: (s?.unreported.splice(0) ?? []).map((u) => this.withClass(u)), errors: s?.errors.splice(0) ?? [] };
   }
 
   private status(s: Session, sessionId: string, seqs: readonly number[], st: UtteranceStatus): void {
@@ -292,7 +348,7 @@ export class ListenSessions {
   }
 
   // Delivers a finished transcript, or keeps it waiting for the next chunk when it ends mid-number.
-  private async settleHeard(s: Session, sessionId: string, h: Heard, why: ListenOutcome["why"]): Promise<ListenUtterance | null> {
+  private async settleHeard(s: Session, sessionId: string, h: Heard, why: ListenOutcome["why"], quietHeardMs = 0): Promise<ListenUtterance | null> {
     if (!h.text) return null;
     const end = danglingEnd(h.text);
     if (!end || this.closed) return this.deliver(s, sessionId, h, why);
@@ -304,7 +360,7 @@ export class ListenSessions {
       s.timer = null;
       s.chain = s.chain.then(async () => { if (s.waiting === h) { s.waiting = null; await this.deliver(s, sessionId, h, "number_alone"); } })
         .catch((e: unknown) => { s.errors.push(e instanceof Error ? e.message.slice(0, 200) : "listen failed"); });
-    }, h.strong ? this.o.strongJoinWaitMs ?? STRONG_JOIN_WAIT_MS : this.o.numberJoinWaitMs ?? NUMBER_JOIN_WAIT_MS);
+    }, Math.max(0, (h.strong ? this.o.strongJoinWaitMs ?? STRONG_JOIN_WAIT_MS : this.o.numberJoinWaitMs ?? NUMBER_JOIN_WAIT_MS) - quietHeardMs));
     timer.unref?.();
     s.timer = timer;
     return null;

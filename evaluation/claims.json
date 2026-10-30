@@ -522,7 +522,7 @@
         "pass": "Wake {wake_p50_ms} ms, vitals {vitals_p50_ms} ms and an order {order_p50_ms} ms at p50 from the end of the words to the verified record, over {rows} actions with the errors listed",
         "partial": "Measured over {rows} actions with errors listed; p50 wake {wake_p50_ms} ms, vitals {vitals_p50_ms} ms, order {order_p50_ms} ms, one or more above its target",
         "fail": "No speed rows with errors beside them",
-        "not_measured": "Not measured yet"
+        "not_measured": "Acceptance run not measured yet. Lane integration floor on synthetic voices: vitals p50 {floor_vitals_p50_ms} ms and p90 {floor_vitals_p90_ms} ms with {floor_vitals_errors} errors on the default ears; {local_vitals_p50_ms} ms p50 and {local_vitals_p90_ms} ms p90 with {local_vitals_errors} errors with both local ears switched on, where Meta still decides and reads every number"
       },
       "evidence_links": []
     },
@@ -1049,6 +1049,22 @@
         }
       },
       "reason": "Revision 12 now has two measured efforts on the committed world, 8 runs each: medium (rev12_runs) and low (rev12_low_runs, run by G7). The discovery summary reads both as separate configuration rows with Wilson intervals for dev-valid and for the planted form, and the wording quotes both. The predicate is unchanged and still reads the medium configuration (CLAIM_EFFORT in discover-claim.ts); no run is re-scored."
+    },
+    {
+      "date": "2026-10-30",
+      "by": "G6",
+      "claims": [
+        "C-21"
+      ],
+      "previous_wording": {
+        "C-21": {
+          "pass": "Wake {wake_p50_ms} ms, vitals {vitals_p50_ms} ms and an order {order_p50_ms} ms at p50 from the end of the words to the verified record, over {rows} actions with the errors listed",
+          "partial": "Measured over {rows} actions with errors listed; p50 wake {wake_p50_ms} ms, vitals {vitals_p50_ms} ms, order {order_p50_ms} ms, one or more above its target",
+          "fail": "No speed rows with errors beside them",
+          "not_measured": "Not measured yet"
+        }
+      },
+      "reason": "D17 and R-26: the measured floor is published with its tails. C-21's predicate and its pass, partial and fail wording are unchanged and still read the acceptance run's fields. Its not-measured wording now reports the lane's integration floor from speed.json, which G6 writes without the acceptance fields, so the claim stays not measured until the acceptance run writes them. The floor is the default ears (Voice Transcribe and the Spark audio ear) beside both local ears switched on (the streaming first ear and Parakeet), with p50, p90 and the errors of each."
     }
   ]
 }
