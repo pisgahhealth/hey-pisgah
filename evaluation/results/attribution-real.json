@@ -3710,6 +3710,16 @@
     "H47",
     "H48"
    ]
+  },
+  "numbers_voice_transcribe_fixed": {
+   "clips": 22,
+   "values": 30,
+   "heard": 30,
+   "right_after_normaliser": 30,
+   "wrong_after_normaliser": 0,
+   "lost_by_normaliser": 0,
+   "failures": [],
+   "note": "Re-scored on the same kept transcripts after the number normaliser learned one thirty, one fifty, over hundred and hundred and twelve (29 Oct 2026); numbers_voice_transcribe keeps the score R1.b measured before the fix."
   }
  }
 }

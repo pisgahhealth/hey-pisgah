@@ -14,4 +14,6 @@ export { adoptedVersion, caseFacts, changedSteps, checkOffer, readVersion, versi
 export { KEPT_LEVERS, FIRST_LOOKS, FIRST_STAGE_PROMPT, FIRST_STAGE_RULES, FIRST_STAGE_TOOL, FirstLook, LEVERS_OFF, LEVERS_ON, MAX_PARALLEL_LINES, PROOF_HEDGE_MS, firstLook, firstStageCommitment, firstStageMessage, firstStageTool, hedgedRead, holdLeftMs, leverList, leversFrom, sharedMeasures, willWriteNumber, type FirstStageResult, type SpeedLevers } from "./speed.js";
 export { DOCUMENTATION_KINDS, ORDER_KINDS, SPEAKER_MODEL, VOICEPRINT_DIM, authorityOf, recordOf, sherpaEmbedder, to16k, type Authority, type Embedder, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
 export { DRUG_ROUTES, ORDER_PRIORITIES, prescriptionSaid } from "./work.js";
+export { OWNER_NO, OWNER_YES, SIGN_EVERYTHING, type OrderRule } from "./runtime.js";
+export { ORDER_REFERENCE_KINDS, ORDER_RULES, OrderClause, OrderOutput, holdsOrders } from "./gate.js";
 export type { Orderables, ReadBack } from "./port.js";
