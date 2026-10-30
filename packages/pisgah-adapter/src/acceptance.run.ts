@@ -249,6 +249,11 @@ async function openBrowser(): Promise<void> {
   await ctx.addInitScript((serve) => { try { window.localStorage.setItem("pisgah-agent-serve", serve); } catch { /* storage off */ } }, `http://localhost:${SERVE_PORT}`);
   page = await ctx.newPage();
   setOffline = (on) => ctx.setOffline(on);
+  // What the strip sends the serve and any page error, so a stopped ear shows in the log rather than as silence.
+  const pg = page as unknown as { on: (ev: string, f: (x: unknown) => void) => void };
+  pg.on("response", (r) => { const x = r as { url: () => string; status: () => number; request: () => { method: () => string } }; const u = x.url(); if (x.request().method() === "POST" && u.includes(`:${SERVE_PORT}/tasks/`)) appendFileSync(join(OUT, "strip-posts.log"), `${now()} ${u.replace(/^.*\/tasks/, "/tasks").slice(0, 80)} ${x.status()}\n`); });
+  pg.on("requestfailed", (r) => { const x = r as { url: () => string; failure: () => { errorText: string } | null }; if (x.url().includes(`:${SERVE_PORT}/`)) appendFileSync(join(OUT, "strip-posts.log"), `${now()} FAILED ${x.url().replace(/^.*\/tasks/, "/tasks").slice(0, 80)} ${x.failure()?.errorText ?? ""}\n`); });
+  pg.on("console", (m) => { const x = m as { type: () => string; text: () => string }; if (x.type() === "error") appendFileSync(join(OUT, "strip-posts.log"), `${now()} console ${x.text().slice(0, 200)}\n`); });
   browserClose = () => browser.close();
   await page.goto(`${APP}/login?next=%2Fdoctor`, { timeout: 120_000 });
   await page.fill('input[name="username"]', script.people["doctor"]!.login);
