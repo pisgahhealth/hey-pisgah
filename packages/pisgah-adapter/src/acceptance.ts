@@ -39,6 +39,8 @@ export const Line = z.strictObject({
   offline_s: z.number().int().min(2).max(60).optional(),
   // The doctor mutes the strip, the words are said, and the strip is unmuted; nothing said while muted may reach any record.
   muted: z.boolean().optional(),
+  // The page reloads just before the line, as a server restart does; the strip must be listening again with no touch.
+  reload: z.boolean().optional(),
   confirm: z.enum(["r3", "countersign"]).optional(), speed: z.enum(["vitals", "order"]).optional(),
   after: z.array(z.strictObject({ nudged: z.enum(WHO) })).optional(), expect: z.array(Expect).default([]), timeout_s: z.number().int().min(5).max(3600).optional(), note: z.string().max(400).optional()
 }).refine((l) => (["speak", "play", "remote", "type"].includes(l.mode) ? !!l.text : true), "a spoken or typed line needs its text")
@@ -115,7 +117,7 @@ export function stepStatus(checks: readonly CheckOutcome[], blocked: boolean): S
   return checks.filter((c) => !c.optional).every((c) => c.ok) ? "partial" : "failed";
 }
 
-export type Fault = { kind: "interrupt" | "restart" | "lost_ack" | "offline" | "mute"; line: string; at: string; killed_during: string | null; restarted_in_ms: number | null; outcome: string; ok: boolean };
+export type Fault = { kind: "interrupt" | "restart" | "lost_ack" | "offline" | "mute" | "reload"; line: string; at: string; killed_during: string | null; restarted_in_ms: number | null; outcome: string; ok: boolean };
 export type AccTouches = { emr: number | null; strip: number | null; source: "strip counter read from the browser" | "strip counter read off the screen by a person" | "not counted"; by_line: Record<string, number>; other_people: { line: string; who: string; what: string }[] };
 export type DelegationRow = { id: string; team: string; acknowledged: boolean; acknowledged_by_voice: boolean; completed_from_record: boolean; acknowledged_counted_as_done: boolean };
 export type SpeakerRow = { line: string; who: Who; heard_as: string | null; acted_as_owner: boolean; order_written: boolean };

@@ -249,6 +249,20 @@ async function openBrowser(): Promise<void> {
   await ctx.addInitScript((serve) => { try { window.localStorage.setItem("pisgah-agent-serve", serve); } catch { /* storage off */ } }, `http://localhost:${SERVE_PORT}`);
   page = await ctx.newPage();
   setOffline = (on) => ctx.setOffline(on);
+  // The lab's own window, its own sign-in, opened now so the lab page is compiled before the run needs it.
+  if (DRIVER !== "human" && script.lines.some((l) => l.op === "acc_lab_cancel")) {
+    const labCtx = await browser.newContext({ viewport: { width: 1200, height: 860 } });
+    browserNewContext = async () => labCtx;
+    const lw = await labCtx.newPage();
+    await lw.goto(`${APP}/login?next=%2Flab`, { timeout: 120_000 });
+    await lw.fill('input[name="username"]', "lab.grace");
+    await lw.fill('input[name="password"]', env("ACC_PASSWORD", "ZzTestW0-2026"));
+    await lw.click('button[type="submit"]');
+    await lw.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 90_000 }).catch(() => undefined);
+    await lw.goto(`${APP}/lab/orders/00000000-0000-4000-8000-000000000000`, { timeout: 120_000 }).catch(() => undefined);
+    labWindow = lw;
+    log("browser: lab.grace signed in on her own window; the lab order page is compiled");
+  }
   // What the strip sends the serve and any page error, so a stopped ear shows in the log rather than as silence.
   const pg = page as unknown as { on: (ev: string, f: (x: unknown) => void) => void };
   pg.on("response", (r) => { const x = r as { url: () => string; status: () => number; request: () => { method: () => string } }; const u = x.url(); if (x.request().method() === "POST" && u.includes(`:${SERVE_PORT}/tasks/`)) appendFileSync(join(OUT, "strip-posts.log"), `${now()} ${u.replace(/^.*\/tasks/, "/tasks").slice(0, 80)} ${x.status()}\n`); });
@@ -287,6 +301,7 @@ async function openBrowser(): Promise<void> {
   }
 }
 let setOffline: (on: boolean) => Promise<void> = async () => undefined;
+let reloadBack = false;
 async function touchesNow(): Promise<{ emr: number; strip: number } | null> {
   if (!page) return null;
   return page.evaluate((o) => ({ emr: Number(sessionStorage.getItem(`pisgah-agent-touches:${o}`) ?? "0"), strip: Number(sessionStorage.getItem(`pisgah-agent-strip-touches:${o}`) ?? "0") }), DOCTOR).catch(() => null);
@@ -408,7 +423,7 @@ async function runLine(line: Line): Promise<void> {
     // A settle names the amount owed, so the stay's bill is read first, as the accounts person reads it on screen.
     if (line.op === "settle" && !vars["outstanding"] && hospital.hasPerson("bill")) { const b = await hospital.person("bill", vars); vars["outstanding"] = String((b.json as { bill?: { outstandingNgn?: string } } | null)?.bill?.outstandingNgn ?? "0.00"); }
     if (HOSPITAL === "sandbox" && line.op === "acc_lab_result") { const r = await labResult(vars); note = r.note; if (!r.ok) errors.push(r.note); }
-    else if (HOSPITAL === "sandbox" && line.op === "acc_lab_cancel") { const r = await labCancel(vars); note = r.note; if (!r.ok) errors.push(r.note); }
+    else if (HOSPITAL === "sandbox" && line.op === "acc_lab_cancel") { const r = await labCancelOnScreen(vars); note = r.note; if (!r.ok) errors.push(r.note); }
     else if (!hospital.hasPerson(line.op!)) { blocked = true; errors.push(`person op ${line.op} is not in the profile`); }
     else { const r = await hospital.person(line.op!, vars); note = `person ${line.op}: ${r.status} ${r.note ?? ""}`.trim(); if (!r.ok) errors.push(note); }
     otherTouches.push({ line: line.id, who: line.who, what: `person step ${line.op} at that person's screen` });
@@ -419,6 +434,7 @@ async function runLine(line: Line): Promise<void> {
     if (line.lose_ack && PROXY_PORT) dropNext = { path: line.lose_ack.path, hit: null };
     if (line.muted && page && DRIVER === "human") { process.stdout.write("\n  MUTE: press the strip's mute button (the crossed microphone), then press Enter here.\n"); await rl!.question(""); }
     else if (line.muted && page) { await page.click(`${STRIP} button[aria-label="Mute the agent"]`).catch(() => harnessErrors.push(`${line.id}: no Mute button`)); await wait(800); }
+    if (line.reload && page) { const pg = page as unknown as { reload: (o?: unknown) => Promise<unknown> }; await pg.reload({ timeout: 120_000 }).catch(() => harnessErrors.push(`${line.id}: the page did not reload`)); const back = await page.waitForFunction((st: string) => /Listening|Hearing you/.test(document.querySelector(`${st} header`)?.textContent ?? ""), STRIP, { timeout: 60_000 }).then(() => true, () => false); log(`${line.id}: page reloaded; listening again with no touch: ${back}`); reloadBack = back; }
     if (line.offline_s && page) await setOffline(true);
     const d = await deliver(line).catch((e: unknown) => ({ lineEnd: null, note: `delivery failed: ${e instanceof Error ? e.message.slice(0, 160) : String(e)}` }));
     lineEnd = d.lineEnd; note = d.note;
@@ -447,6 +463,7 @@ async function runLine(line: Line): Promise<void> {
     faults.push({ kind: "lost_ack", line: line.id, at: started, killed_during: hit, restarted_in_ms: null, outcome: hit ? `reply to ${hit} dropped; ${kinds.map((c) => c.detail).join("; ")}` : "no matching write was seen", ok: !!hit && kinds.every((c) => c.ok) });
     dropNext = null;
   }
+  if (line.reload && page) faults.push({ kind: "reload", line: line.id, at: started, killed_during: null, restarted_in_ms: null, outcome: `listening again with no touch: ${reloadBack}; ${outcomes.map((c) => c.detail).join("; ").slice(0, 240)}`, ok: reloadBack && outcomes.filter((c) => !c.optional).every((c) => c.ok) });
   if (line.offline_s && page) faults.push({ kind: "offline", line: line.id, at: started, killed_during: null, restarted_in_ms: null, outcome: outcomes.map((c) => c.detail).join("; ").slice(0, 300), ok: outcomes.filter((c) => !c.optional).every((c) => c.ok) });
   if (line.muted && page) faults.push({ kind: "mute", line: line.id, at: started, killed_during: null, restarted_in_ms: null, outcome: outcomes.map((c) => c.detail).join("; ").slice(0, 300), ok: outcomes.filter((c) => !c.optional).every((c) => c.ok) });
   const lineIds = new Set([heard?.line_id].filter(Boolean) as string[]);
@@ -481,6 +498,32 @@ async function labResult(vars: Record<string, string>): Promise<{ ok: boolean; n
   }
   return { ok: true, note: steps.join("; ") };
 }
+
+// The lab scientist cancels the test on her own lab screen in a second Chrome window: Samuel's run asks her to, the rehearsal clicks it for her.
+let labWindow: Page | null = null;
+async function labCancelOnScreen(vars: Record<string, string>): Promise<{ ok: boolean; note: string }> {
+  const o = (await hospital.query("acc_order_for_test", { visit: vars["visit"] ?? "", test: vars["test"] ?? "" }))[0];
+  if (!o?.["order_id"]) return { ok: false, note: `no ${vars["test"]} order on the visit` };
+  const url = `${APP}/lab/orders/${String(o["order_id"])}`;
+  if (DRIVER === "human") {
+    process.stdout.write(`\n  LAB STEP: in a second browser window, sign in as lab.grace and open ${url}; under "Cancel before testing" pick "Requester cancelled", tick the box, press Cancel diagnostic case. Press Enter here when done.\n`);
+    await rl!.question("");
+  } else {
+    if (!labWindow || !browserNewContext) return { ok: false, note: "no browser for the lab screen" };
+    const w = labWindow as unknown as { goto: (u: string, o?: unknown) => Promise<unknown>; locator: (s: string) => { first: () => { click: () => Promise<void>; selectOption: (v: string) => Promise<unknown>; check: () => Promise<void> } }; getByRole: (r: string, o: unknown) => { click: () => Promise<void> }; getByText: (t: string, o?: unknown) => { first: () => { click: () => Promise<void>; waitFor: (o?: unknown) => Promise<void> } } };
+    try {
+      await w.goto(url, { timeout: 120_000 });
+      await w.getByText("Cancel before testing").first().click();
+      await w.locator('select[name="reasonCode"]').first().selectOption("requester_cancelled");
+      await w.locator('details input[type="checkbox"]').first().check();
+      await w.getByRole("button", { name: "Cancel diagnostic case" }).click();
+      await w.getByText("cancelled", { exact: false }).first().waitFor({ timeout: 30_000 });
+    } catch (e) { return { ok: false, note: `lab screen: ${e instanceof Error ? e.message.slice(0, 160) : String(e)}` }; }
+  }
+  const after = (await hospital.query("acc_order_cancelled", { visit: vars["visit"] ?? "", test: vars["test"] ?? "" })).length;
+  return { ok: after > 0, note: `lab.grace cancelled the ${vars["test"]} on the lab screen${DRIVER === "human" ? " (a person)" : " (clicked by the harness for her)"}: ${after ? "cancelled" : "not cancelled"}` };
+}
+let browserNewContext: (() => Promise<unknown>) | null = null;
 
 // The lab scientist cancels a never-started test at her own screen; the web offers this and the door does not, so the harness calls her server action under her own web session.
 async function labCancel(vars: Record<string, string>): Promise<{ ok: boolean; note: string }> {
@@ -585,7 +628,7 @@ async function finish(): Promise<void> {
     model: { calls, usd: Number(usd.toFixed(4)), rate_limited: rateLimited },
     harness_errors: harnessErrors, completion: { complete: false, reasons: [] }
   };
-  result.completion = completion(result, script.lines.filter((l) => l.mode === "fault" || l.interrupt).length + (PROXY_PORT ? script.lines.filter((l) => l.lose_ack).length : 0) + (page ? script.lines.filter((l) => l.offline_s || l.muted).length : 0));
+  result.completion = completion(result, script.lines.filter((l) => l.mode === "fault" || l.interrupt).length + (PROXY_PORT ? script.lines.filter((l) => l.lose_ack).length : 0) + (page ? script.lines.filter((l) => l.offline_s || l.muted || l.reload).length : 0));
   void signedIds;
   const root = KIND === "final" ? env("ACC_PUBLISH_ROOT") : OUT;
   const files = writeAccResults(root, result, { previews_with_names: Number(process.env["ACC_PREVIEWS_WITH_NAMES"] ?? "0"), privilege_gained: 0 });
