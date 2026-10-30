@@ -156,7 +156,8 @@ export function writeAccResults(root: string, r: AccResult, extra: { previews_wi
   const head = { measured_at: r.measured_at, source: `acceptance ${r.kind} run ${r.run_id} (${r.driver} voice, browser ${r.browser}); payment simulated`, run_id: r.run_id, kind: r.kind };
   const written: string[] = [];
   const put = (name: string, v: unknown) => { const f = join(dir, name); writeFileSync(f, `${JSON.stringify(v, null, 2)}\n`); written.push(f); };
-  put("acceptance.json", { ...r, claims: fields });
+  const summary = Object.fromEntries((["verified", "partial", "failed", "blocked", "skipped"] as const).map((k) => [k, r.steps.filter((x) => x.status === k).map((x) => x.line)]));
+  put("acceptance.json", { ...r, summary, claims: fields });
   for (const [claim, file] of Object.entries(CLAIM_FILES)) put(file, { ...head, ...fields[claim as keyof typeof CLAIM_FILES] });
   const speedFile = join(dir, "speed.json");
   const prior = existsSync(speedFile) ? (JSON.parse(readFileSync(speedFile, "utf8")) as Record<string, unknown>) : {};

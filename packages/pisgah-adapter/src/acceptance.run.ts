@@ -280,11 +280,13 @@ const otherTouches: AccResult["touches"]["other_people"] = [];
 async function runLine(line: Line): Promise<void> {
   const started = now();
   const errors: string[] = [];
+  // A line whose precondition never came is failed, whatever its own checks say, since it ran on a state the script did not expect.
+  let unmet = false;
   await readTracking();
   for (const a of line.after ?? []) {
     const end = Date.now() + 180_000;
     while (!nudgedOwner(a.nudged, line.patient) && Date.now() < end) await wait(500);
-    if (!nudgedOwner(a.nudged, line.patient)) errors.push(`${a.nudged} was never nudged for this patient`);
+    if (!nudgedOwner(a.nudged, line.patient)) { errors.push(`${a.nudged} was never nudged for this patient`); unmet = true; }
   }
   const before = new Set((views.get(DOCTOR) ?? []).map((t) => t.task_id));
   const touchBefore = (await touchesNow())?.emr ?? 0;
@@ -305,7 +307,8 @@ async function runLine(line: Line): Promise<void> {
     const vars = Object.fromEntries(Object.entries(line.vars ?? {}).map(([k, v]) => [k, resolveVar(v)]));
     // A settle names the amount owed, so the stay's bill is read first, as the accounts person reads it on screen.
     if (line.op === "settle" && !vars["outstanding"] && hospital.hasPerson("bill")) { const b = await hospital.person("bill", vars); vars["outstanding"] = String((b.json as { bill?: { outstandingNgn?: string } } | null)?.bill?.outstandingNgn ?? "0.00"); }
-    if (!hospital.hasPerson(line.op!)) { blocked = true; errors.push(`person op ${line.op} is not in the profile`); }
+    if (HOSPITAL === "sandbox" && line.op === "acc_lab_result") { const r = await labResult(vars); note = r.note; if (!r.ok) errors.push(r.note); }
+    else if (!hospital.hasPerson(line.op!)) { blocked = true; errors.push(`person op ${line.op} is not in the profile`); }
     else { const r = await hospital.person(line.op!, vars); note = `person ${line.op}: ${r.status} ${r.note ?? ""}`.trim(); if (!r.ok) errors.push(note); }
     otherTouches.push({ line: line.id, who: line.who, what: `person step ${line.op} at that person's screen` });
     lineEnd = now();
@@ -335,7 +338,7 @@ async function runLine(line: Line): Promise<void> {
     return { kind: a.kind, owner: whoOf(a.owner), action_id: a.action_id, record_id: a.proof?.record_id ?? null, verified_at: at, ms_from_line_end: at && lineEnd ? Date.parse(at) - Date.parse(heard?.ended ?? lineEnd) : null };
   });
   const touchAfter = (await touchesNow())?.emr ?? 0;
-  const status = stepStatus(outcomes, blocked);
+  const status = unmet && !blocked ? "failed" : stepStatus(outcomes, blocked);
   const out: StepOutcome = { line: line.id, patient: line.patient, step: line.step, who: line.who, mode: line.mode, did_by: didBy(line, DRIVER), text: line.text ?? null, heard: heard?.text ?? null, line_id: heard?.line_id ?? null, line_end_at: heard?.ended ?? lineEnd, verified, checks: outcomes, status, confirm: line.confirm ?? null, touches_during: touchAfter - touchBefore, errors: [...errors, ...outcomes.filter((c) => !c.ok && !c.optional).map((c) => `${Object.keys(c.expect)[0]}: ${c.detail}`)], started_at: started, ended_at: now() };
   steps.push(out);
   log(`${line.id} ${status.toUpperCase()} ${line.step} [${out.did_by.split(" (")[0]}] ${note ?? ""}`);
@@ -343,6 +346,23 @@ async function runLine(line: Line): Promise<void> {
   if (page && process.env["ACC_SHOTS"] !== "0") await page.screenshot({ path: join(OUT, `${line.id}.png`) }).catch(() => undefined);
   writeFileSync(join(OUT, "steps.json"), `${JSON.stringify(steps, null, 1)}\n`);
   if (STOP_ON_FAIL && status === "failed") throw new Error(`stopped at ${line.id}`);
+}
+
+// The lab scientist's result at her screen: the order and its case and specimen versions are read, then accession, collection and the result, each as her own door call.
+async function labResult(vars: Record<string, string>): Promise<{ ok: boolean; note: string }> {
+  const read = async () => (await hospital.query("acc_order_for_test", { visit: vars["visit"] ?? "", test: vars["test"] ?? "" }))[0] as Record<string, unknown> | undefined;
+  const steps: string[] = [];
+  const as = (o: Record<string, unknown>) => ({ order_id: String(o["order_id"]), case_version: Number(o["case_version"]), specimen_id: String(o["specimen_id"] ?? ""), specimen_version: Number(o["specimen_version"] ?? 0), raw_text: vars["raw_text"] ?? "ZZ-TEST result" }) as unknown as Record<string, string>;
+  let o = await read();
+  if (!o) return { ok: false, note: `no ${vars["test"]} order on the visit` };
+  for (const [op, need] of [["acc_lab_accession", () => !o!["specimen_id"]], ["acc_lab_record", () => !["collected", "received", "in_process", "processed"].includes(String(o!["specimen_state"] ?? ""))], ["acc_lab_result_post", () => true]] as const) {
+    if (!need()) continue;
+    const r = await hospital.person(op, as(o));
+    steps.push(`${op} ${r.status}${r.note ? ` ${r.note.slice(0, 120)}` : ""}`);
+    if (!r.ok) return { ok: false, note: steps.join("; ") };
+    o = (await read()) ?? o;
+  }
+  return { ok: true, note: steps.join("; ") };
 }
 
 // Kills the serve while the named write is under way, then restarts it, and records whether the write ended verified once.
