@@ -415,6 +415,49 @@
         "insufficient_evidence_default": false
       },
       "hash": "89cff7ea206636bf1f8ee3226cacd11443cc57bbe5cc8dde28bfacc3eacb14ef"
+    },
+    {
+      "revision": 12,
+      "at": "2026-10-30T00:20:10.904Z",
+      "reason": "Revision 12 (lane E6.d, after the revision 11 runs). Control structure only, keeping all of revision 11. (a) In the interpret stage the controller offers submit_proposal only once a delivered experiment has made the post sign-off wait better on the cases it moved, and the stage message lists, as data, each such experiment's side effects from its receipt (every metric that moved the wrong way on those cases, with its summed delta). On the adaptive arm submit_proposal takes a required trade_offs field that must state every side effect of its cited experiments, and is refused with the list, using no proposal slot, when one is missing. The dev gate and the hospital's aim are unchanged, so a proposal with rework can still fail the gate, and that is a valid result. Reason: all three revision 11 runs delivered the planted change with a better wait, read one or two added document revisions in the receipt as a breach of the no-extra-rework aim, and spent every remaining cycle trying to remove them without proposing. (b) The committed world's call cap at effort medium rises from 60 to 80 (settings.adaptive_max_calls). The new texts name no step, edge or event.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "8db50d70738eea48382029ed3a1ccef81c5bf6a71bc8d2328b8d76d4792eaf90",
+            "tools": "796d6f517ceab48f8966f19d71b7a3f48f8546c96fded2bab487ca5b6352a7c1"
+          },
+          "a3": {
+            "prompt": "51ff7132ebd91ba44b17fd48ae5ae59edc4067af775aef6d367878733ada7b20",
+            "tools": "ebd093c38f470db76c9ed635053427d01e13fc2efb2c8a4257472defbd173085"
+          },
+          "a4": {
+            "prompt": "1845942bb57e76c652ab55c9dc51ceafe6629b811f7c3888cca0da00ffe68307",
+            "tools": "d521daaa52592aef67c9b70682b669f3a554da08e264fc093df87c873b0ec0d4"
+          },
+          "prior": {
+            "prompt": "02476de654455522f74e0a8e400800bdbe4833ef2ac391745127050677c5de19",
+            "tools": "a69f44f1678b28a5d05fe8a6b7ce1d69df7da8c6025662abb41092d1d4399167"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "adaptive_controller": "cycle",
+          "adaptive_efforts": [
+            "medium",
+            "high"
+          ],
+          "adaptive_max_calls": 80,
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 30000,
+          "history_chars": 70000,
+          "turn_result_chars": 20000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "bb888f4cf5ec81d0ff0d831162eb474cc92e5db023971983617aa7378733b122"
     }
   ]
 }
