@@ -457,46 +457,58 @@
  },
  "owner_v2": {
   "held_out": {
-   "rows": 120,
+   "rows": 150,
    "unusable": [
-    "v2-R011-away: 36 dB below the live take",
-    "v2-R011-here: 36 dB below the live take",
-    "v2-R012-away: 35 dB below the live take",
-    "v2-R012-here: 35 dB below the live take",
-    "v2-R013-away: 31 dB below the live take",
-    "v2-R013-here: 31 dB below the live take",
-    "v2-R014-away: 29 dB below the live take",
-    "v2-R014-here: 29 dB below the live take",
-    "v2-R015-away: 29 dB below the live take",
-    "v2-R015-here: 29 dB below the live take",
-    "v2-R017-away: 24 dB below the live take",
-    "v2-R017-here: 24 dB below the live take",
-    "v2-R018-away: 26 dB below the live take",
-    "v2-R018-here: 26 dB below the live take",
-    "v2-R019-away: 26 dB below the live take",
-    "v2-R019-here: 26 dB below the live take",
-    "v2-R020-away: 22 dB below the live take",
-    "v2-R020-here: 22 dB below the live take",
-    "v2-R021-away: 29 dB below the live take",
-    "v2-R021-here: 29 dB below the live take",
-    "v2-R022-away: 27 dB below the live take",
-    "v2-R022-here: 27 dB below the live take",
-    "v2-R023-away: 27 dB below the live take",
-    "v2-R023-here: 27 dB below the live take",
-    "v2-R026-away: 24 dB below the live take",
-    "v2-R026-here: 24 dB below the live take",
-    "v2-R027-away: 24 dB below the live take",
-    "v2-R027-here: 24 dB below the live take"
+    "v2-R011-away: superseded by the 2026-10-30 re-recording; was 36 dB below the live take",
+    "v2-R011-here: superseded by the 2026-10-30 re-recording; was 36 dB below the live take",
+    "v2-R012-away: superseded by the 2026-10-30 re-recording; was 35 dB below the live take",
+    "v2-R012-here: superseded by the 2026-10-30 re-recording; was 35 dB below the live take",
+    "v2-R013-away: superseded by the 2026-10-30 re-recording; was 31 dB below the live take",
+    "v2-R013-here: superseded by the 2026-10-30 re-recording; was 31 dB below the live take",
+    "v2-R014-away: superseded by the 2026-10-30 re-recording; was 29 dB below the live take",
+    "v2-R014-here: superseded by the 2026-10-30 re-recording; was 29 dB below the live take",
+    "v2-R015-away: superseded by the 2026-10-30 re-recording; was 29 dB below the live take",
+    "v2-R015-here: superseded by the 2026-10-30 re-recording; was 29 dB below the live take",
+    "v2-R016-away: superseded by the 2026-10-30 re-recording",
+    "v2-R016-here: superseded by the 2026-10-30 re-recording",
+    "v2-R017-away: superseded by the 2026-10-30 re-recording; was 24 dB below the live take",
+    "v2-R017-here: superseded by the 2026-10-30 re-recording; was 24 dB below the live take",
+    "v2-R018-away: superseded by the 2026-10-30 re-recording; was 26 dB below the live take",
+    "v2-R018-here: superseded by the 2026-10-30 re-recording; was 26 dB below the live take",
+    "v2-R019-away: superseded by the 2026-10-30 re-recording; was 26 dB below the live take",
+    "v2-R019-here: superseded by the 2026-10-30 re-recording; was 26 dB below the live take",
+    "v2-R020-away: superseded by the 2026-10-30 re-recording; was 22 dB below the live take",
+    "v2-R020-here: superseded by the 2026-10-30 re-recording; was 22 dB below the live take",
+    "v2-R021-away: superseded by the 2026-10-30 re-recording; was 29 dB below the live take",
+    "v2-R021-here: superseded by the 2026-10-30 re-recording; was 29 dB below the live take",
+    "v2-R022-away: superseded by the 2026-10-30 re-recording; was 27 dB below the live take",
+    "v2-R022-here: superseded by the 2026-10-30 re-recording; was 27 dB below the live take",
+    "v2-R023-away: superseded by the 2026-10-30 re-recording; was 27 dB below the live take",
+    "v2-R023-here: superseded by the 2026-10-30 re-recording; was 27 dB below the live take",
+    "v2-R024-away: superseded by the 2026-10-30 re-recording",
+    "v2-R024-here: superseded by the 2026-10-30 re-recording",
+    "v2-R025-away: superseded by the 2026-10-30 re-recording",
+    "v2-R025-here: superseded by the 2026-10-30 re-recording",
+    "v2-R026-away: superseded by the 2026-10-30 re-recording; was 24 dB below the live take",
+    "v2-R026-here: superseded by the 2026-10-30 re-recording; was 24 dB below the live take",
+    "v2-R027-away: superseded by the 2026-10-30 re-recording; was 24 dB below the live take",
+    "v2-R027-here: superseded by the 2026-10-30 re-recording; was 24 dB below the live take",
+    "v2-R028-away: superseded by the 2026-10-30 re-recording",
+    "v2-R028-here: superseded by the 2026-10-30 re-recording",
+    "v2-R029-away: superseded by the 2026-10-30 re-recording",
+    "v2-R029-here: superseded by the 2026-10-30 re-recording",
+    "v2-R030-away: superseded by the 2026-10-30 re-recording",
+    "v2-R030-here: superseded by the 2026-10-30 re-recording"
    ],
    "identity": {
     "right": {
-     "k": 70,
-     "n": 98
+     "k": 71,
+     "n": 100
     },
     "per_person": {
      "S (owner)": {
-      "k": 70,
-      "n": 98
+      "k": 71,
+      "n": 100
      }
     },
     "short_answers_too_short_to_match": {
@@ -536,7 +548,7 @@
      "ids": []
     },
     "voice_and_presence_would_pass_per_person": {},
-    "waiting_for_gate": 0,
+    "waiting_for_gate": 2,
     "owner_acted": {
      "k": 18,
      "n": 30,
@@ -631,46 +643,46 @@
    },
    "replay": {
     "voice_says_owner": {
-     "k": 10,
-     "n": 22
+     "k": 26,
+     "n": 50
     },
     "digital_copy_refused_by_session": {
      "k": 10,
      "n": 10
     },
     "played_owner_away_held_by_presence": {
-     "k": 6,
-     "n": 6
+     "k": 20,
+     "n": 20
     },
     "played_owner_present_acted": {
-     "k": 0,
-     "n": 6
+     "k": 4,
+     "n": 20
     },
     "false_authority": {
      "k": 0,
-     "n": 16,
-     "upper95": 0.1707,
+     "n": 30,
+     "upper95": 0.095,
      "waiting_for_gate": 0,
      "note": "played while the owner is at the screen is excluded: session and presence cannot see it; the countersign window is the check"
     }
    },
    "presence_on_live_lines": {
-    "k": 98,
-    "n": 98
+    "k": 100,
+    "n": 100
    }
   },
   "tuning": {
-   "rows": 43,
+   "rows": 44,
    "unusable": [],
    "identity": {
     "right": {
-     "k": 36,
-     "n": 43
+     "k": 37,
+     "n": 44
     },
     "per_person": {
      "S (owner)": {
-      "k": 36,
-      "n": 43
+      "k": 37,
+      "n": 44
      }
     },
     "short_answers_too_short_to_match": {
@@ -710,7 +722,7 @@
      "ids": []
     },
     "voice_and_presence_would_pass_per_person": {},
-    "waiting_for_gate": 0,
+    "waiting_for_gate": 1,
     "owner_acted": {
      "k": 13,
      "n": 22,
@@ -826,8 +838,8 @@
     }
    },
    "presence_on_live_lines": {
-    "k": 43,
-    "n": 43
+    "k": 44,
+    "n": 44
    }
   },
   "numbers": {
@@ -947,5 +959,5 @@
    ]
   }
  },
- "reading_cost_usd_kept_rows": 1.9393
+ "reading_cost_usd_kept_rows": 2.137
 }

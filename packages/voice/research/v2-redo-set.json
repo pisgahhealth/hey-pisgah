@@ -1,0 +1,303 @@
+{
+ "cut_at": "2026-10-30T11:06:23.985Z",
+ "sources": {
+  "O-S-redo.m4a": "3692c7ab4a8f3ca96b65780d039f055ef30decf6447896d1584254f2bf98d4ad",
+  "R-S-replay-2.m4a": "64e49ff6ee3875a1e041c6f75bb02602c709518a24ad602df62bfb0322633e57",
+  "R-S-replay-1.5-2.m4a": "a87293720cdcb9e9b426b44ef857a75b433a5fbfffa76c18bc704f99793d60f7"
+ },
+ "cuts": [
+  {
+   "id": "O045",
+   "file": "O-S-redo",
+   "start_s": 4.66,
+   "end_s": 8.15,
+   "sha256": "a559d0197756b1ba3d50cc16a60cb366b7e0902352273b66e452b56df1a3c222",
+   "heard": "Sat ninety one on room air, respiratory rate twenty two.",
+   "id_heard": true,
+   "matched": 8,
+   "of": 10,
+   "status": "ok"
+  },
+  {
+   "id": "O083",
+   "file": "O-S-redo",
+   "start_s": 10.02,
+   "end_s": 12.39,
+   "sha256": "78b947b224b06c98f890aa16ecdbf0ed8e962a2ed2163b60db65bfe9782f5ac2",
+   "heard": "sorry, sorry, it will soon be fine.",
+   "id_heard": true,
+   "matched": 7,
+   "of": 7,
+   "status": "ok"
+  },
+  {
+   "id": "O084",
+   "file": "O-S-redo",
+   "start_s": 13.46,
+   "end_s": 15.6,
+   "sha256": "8f5b1e8ce467d56e3e315355333f06c0b8d6f3f4e5e94448d39109444e19006b",
+   "heard": "Has she been passing you in?",
+   "id_heard": true,
+   "matched": 4,
+   "of": 5,
+   "status": "ok"
+  },
+  {
+   "id": "R011",
+   "file": "R-S-replay-2",
+   "start_s": 5.14,
+   "end_s": 9.26,
+   "sha256": "254e3f68fc4074f837e4d791e8e2f2fa9ed44a44f0809b9af0b81bc88aa6e6c3",
+   "heard": "Okay, let's get a full block count and a UV analysis.",
+   "id_heard": true,
+   "matched": 8,
+   "of": 10,
+   "status": "ok"
+  },
+  {
+   "id": "R012",
+   "file": "R-S-replay-2",
+   "start_s": 17.24,
+   "end_s": 22.4,
+   "sha256": "fabc720e211a7eab224c4f8872463d38e93cc755673627b0d7078554f4651a66",
+   "heard": "Let's do an FBC. E I knew and I random blood sugar.",
+   "id_heard": true,
+   "matched": 9,
+   "of": 12,
+   "status": "ok"
+  },
+  {
+   "id": "R013",
+   "file": "R-S-replay-2",
+   "start_s": 28.02,
+   "end_s": 31.14,
+   "sha256": "5c4b0004dc1149587f893b8770d108cc4dd81925aebc50c26edb30516581f1c9",
+   "heard": "Same MP for her as well.",
+   "id_heard": true,
+   "matched": 5,
+   "of": 8,
+   "status": "ok"
+  },
+  {
+   "id": "R014",
+   "file": "R-S-replay-2",
+   "start_s": 38.92,
+   "end_s": 42.7,
+   "sha256": "d384c6fcd3fe42fcfebdb6675bae3e2a9b3b05461961423ef2cd1fc822a6a9bf",
+   "heard": "Yeah, right. She needs to come in to the general.",
+   "id_heard": true,
+   "matched": 7,
+   "of": 8,
+   "status": "ok"
+  },
+  {
+   "id": "R015",
+   "file": "R-S-replay-2",
+   "start_s": 50.38,
+   "end_s": 55.84,
+   "sha256": "970c00bd17cc3cbf93a72e3e6e8acea44641b6076721998575f2645a352e694b",
+   "heard": "Um let's I mean let's admit her to the female Under me.",
+   "id_heard": true,
+   "matched": 7,
+   "of": 9,
+   "status": "ok"
+  },
+  {
+   "id": "R016",
+   "file": "R-S-replay-2",
+   "start_s": 58.64,
+   "end_s": 63.65,
+   "sha256": "e4afb63729f09258c7cab396e23ea99b8c6ee6e9f405a4ea8ee5490dfaa8994c",
+   "heard": "Statue on IV fluids, normal saline, one liter over four hours.",
+   "id_heard": true,
+   "matched": 9,
+   "of": 12,
+   "status": "ok"
+  },
+  {
+   "id": "R017",
+   "file": "R-S-replay-2",
+   "start_s": 66.26,
+   "end_s": 72.46,
+   "sha256": "997932bd5712e5cc8c61a6faef7d3beb242ad47f7d6184f57a4fa75c0f564a9f",
+   "heard": "Give her paracetamol 1 gram IV starch. What?",
+   "id_heard": true,
+   "matched": 5,
+   "of": 7,
+   "status": "ok"
+  },
+  {
+   "id": "R018",
+   "file": "R-S-replay-2",
+   "start_s": 75.64,
+   "end_s": 80.68,
+   "sha256": "15e20f3317f6c42dcf21ecd9c9221dec02d6c8afa8d0ebc4f4c806ef85d110b9",
+   "heard": "Let's start triazone one gram IV twelve hourly.",
+   "id_heard": true,
+   "matched": 7,
+   "of": 8,
+   "status": "ok"
+  },
+  {
+   "id": "R019",
+   "file": "R-S-replay-2",
+   "start_s": 83.6,
+   "end_s": 86.18,
+   "sha256": "a858e084835bd573580304b1ac1d0b8367ea0ee18f77a8025566eaef27682469",
+   "heard": "Get a chest x-ray for her today.",
+   "id_heard": true,
+   "matched": 7,
+   "of": 7,
+   "status": "ok"
+  },
+  {
+   "id": "R020",
+   "file": "R-S-replay-2",
+   "start_s": 89.92,
+   "end_s": 93.14,
+   "sha256": "0c51127a2236356b0fe05585aab67be4aca22bb2457f36fa95d9850ebbe603f3",
+   "heard": "We'll do an abdominal scan uh tomorrow morning.",
+   "id_heard": true,
+   "matched": 8,
+   "of": 8,
+   "status": "ok"
+  },
+  {
+   "id": "R021",
+   "file": "R-S-replay-1.5-2",
+   "start_s": 6.9,
+   "end_s": 10.88,
+   "sha256": "c78398cfba0a7f7b8c6894728f9524d05d4c31124754b914303a168af3e532b6",
+   "heard": "Okay. and a urinal",
+   "id_heard": true,
+   "matched": 3,
+   "of": 10,
+   "status": "words_changed"
+  },
+  {
+   "id": "R022",
+   "file": "R-S-replay-1.5-2",
+   "start_s": 14.6,
+   "end_s": 19.3,
+   "sha256": "aa40990d41b2f1db922d598ad13d8329f71b886c5a88420337bebd8985453cac",
+   "heard": "Dual FBC. and a random blood sugar.",
+   "id_heard": true,
+   "matched": 6,
+   "of": 12,
+   "status": "ok"
+  },
+  {
+   "id": "R023",
+   "file": "R-S-replay-1.5-2",
+   "start_s": 23.1,
+   "end_s": 25.7,
+   "sha256": "e89dc8747cce9466a0905f8b8e6e63c169f085a243a33586f2476232b02a9e33",
+   "heard": "Sell Ed. Wow.",
+   "id_heard": true,
+   "matched": 1,
+   "of": 8,
+   "status": "words_changed"
+  },
+  {
+   "id": "R024",
+   "file": "R-S-replay-1.5-2",
+   "start_s": 30.76,
+   "end_s": 34.66,
+   "sha256": "c9ef56e1635e36455961aa71a50e459f4be31f2b49fdf0f71246f5d1aa9167f7",
+   "heard": "Yeah right. She needs to come in. Mm-hmm.",
+   "id_heard": true,
+   "matched": 6,
+   "of": 8,
+   "status": "ok"
+  },
+  {
+   "id": "R025",
+   "file": "R-S-replay-1.5-2",
+   "start_s": 39.92,
+   "end_s": 42.28,
+   "sha256": "2f3428adbae8ab370a16f9880fae91c5477c08e208edfcc4b351886728890d99",
+   "heard": "Let's admit her to the female",
+   "id_heard": true,
+   "matched": 5,
+   "of": 9,
+   "status": "ok"
+  },
+  {
+   "id": "R026",
+   "file": "R-S-replay-1.5-2",
+   "start_s": 46.86,
+   "end_s": 50.84,
+   "sha256": "4c60b6adb619f0d8c7357c9ccf751ad3e923e8f18ce5de14bfca066761e07258",
+   "heard": "That's how on Ivy. Some literature.",
+   "id_heard": true,
+   "matched": 1,
+   "of": 12,
+   "status": "words_changed"
+  },
+  {
+   "id": "R027",
+   "file": "R-S-replay-1.5-2",
+   "start_s": 56.08,
+   "end_s": 60.92,
+   "sha256": "c985b4d6baef8eef830832c113fdd45f2173fc8e3a54f9d1c1b213dfaf4650c5",
+   "heard": "gram IV stack. There are two eight.",
+   "id_heard": false,
+   "matched": 2,
+   "of": 7,
+   "status": "words_changed"
+  },
+  {
+   "id": "R028",
+   "file": "R-S-replay-1.5-2",
+   "start_s": 62.2,
+   "end_s": 66.34,
+   "sha256": "bc4d5208ac75685cdc8da23dca1b2973911fe73774d9f92186cb5e7f343498e4",
+   "heard": "Let's start septrians. Go ahead.",
+   "id_heard": false,
+   "matched": 2,
+   "of": 8,
+   "status": "words_changed"
+  },
+  {
+   "id": "R029",
+   "file": "R-S-replay-1.5-2",
+   "start_s": 69.42,
+   "end_s": 71.68,
+   "sha256": "6d95393208558f8cc389ec4738fcc7c635fa8ddeefad72364b17a34db9571665",
+   "heard": "Get a chest x-ray for hunting.",
+   "id_heard": true,
+   "matched": 5,
+   "of": 7,
+   "status": "ok"
+  },
+  {
+   "id": "R030",
+   "file": "R-S-replay-1.5-2",
+   "start_s": 76.86,
+   "end_s": 78.66,
+   "sha256": "2023b9112aae139a35948a94a728b36a8f9e43cea7329d3e95476eb10c90fe28",
+   "heard": "Do an abdominal scan.",
+   "id_heard": true,
+   "matched": 4,
+   "of": 8,
+   "status": "ok"
+  }
+ ],
+ "denoise_check": {
+  "O045": {
+   "plain": 0.578,
+   "denoised": 0.5602,
+   "best": 0.578
+  },
+  "O083": {
+   "plain": 0.3858,
+   "denoised": 0.3689,
+   "best": 0.3858
+  },
+  "O084": {
+   "plain": 0.5011,
+   "denoised": 0.4253,
+   "best": 0.5011
+  }
+ }
+}
