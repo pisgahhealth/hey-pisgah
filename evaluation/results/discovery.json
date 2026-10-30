@@ -13022,7 +13022,7 @@
   }
  ],
  "discover_config": "revision 12, committed world, medium effort",
- "discover_current_revision": 13,
+ "discover_current_revision": 15,
  "discover_config_revision": 12,
  "discover_config_runs": 3,
  "discover_config_dev_valid": 2,
@@ -13060,8 +13060,8 @@
    "variant": "pair"
   }
  ],
- "discover_rework_budget_from_revision": 13,
- "discover_rework_budget_note": "From commitment revision 13 the hospital's aim allows extra rework up to a per-case budget that the dev gate assesses and the adopting person approves, instead of no extra rework. Runs under revisions 1 to 12, the adopted proposal included, were validated before that rule and are not re-scored.",
+ "discover_rework_budget_from_revision": 15,
+ "discover_rework_budget_note": "From commitment revision 15 the hospital's aim allows extra rework up to a per-case budget that the dev gate assesses and the adopting person approves, where revisions 1 to 12 said no extra rework and revisions 13 and 14 left a stated cost to the gate. Runs under revisions 1 to 14, the adopted proposal included, were validated before that rule and are not re-scored.",
  "discover_adopted": "p-a563fe32",
  "discover_share": 0.56,
  "discover_rework_events": 4,

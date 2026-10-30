@@ -23,9 +23,9 @@ export function eventRow(e: SimEvent): Row {
 
 export function listCases(pool: DiscoveryPool): Row {
   return {
-    cases: pool.ids().map((id) => {
+    cases: pool.listed().map((id) => {
       const c = pool.get(id)!;
-      return { case_id: c.case_id, ward_id: c.ward_id, payer_type: c.payer_type, requirement_version: c.requirement_version, source: c.source, events: c.events.length, notes: c.notes.length, opening_facts: c.facts };
+      return { case_id: c.case_id, ward_id: c.ward_id, payer_type: c.payer_type, requirement_version: c.requirement_version, source: c.source, ...(c.source === "outcome" ? { workflow_version: c.workflow_version ?? null } : {}), events: c.events.length, notes: c.notes.length, opening_facts: c.facts };
     })
   };
 }

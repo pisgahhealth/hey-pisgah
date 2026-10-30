@@ -10,7 +10,7 @@ export const INVARIANCE_FROM_REVISION = 10;
 export const COMMITTED_WORLD = "pair";
 
 // From this commitment revision the dev gate assesses extra rework against the per-case budget approved at adoption; earlier runs are not re-scored.
-export const REWORK_BUDGET_FROM_REVISION = 13;
+export const REWORK_BUDGET_FROM_REVISION = 15;
 
 // What the answer-invariance test holds byte-identical across the three worlds, and what it leaves free to differ.
 export const INVARIANCE_COVERS = "the instructions (system prompt, opening request, stage texts, app-written texts) and the tool interface (tool definitions per stage, precondition table, registries, statistics method, sweep rule)";
@@ -113,7 +113,7 @@ export function discoverSummary(d: Row, o: { invariancePass: boolean; adopted: s
     discover_invariance_covers: INVARIANCE_COVERS, discover_invariance_excludes: INVARIANCE_EXCLUDES,
     discover_dev_valid_runs: valid(gated).map((r) => ({ run_id: r.run_id, revision: r.commitment?.revision ?? null, variant: r.variant ?? null })),
     discover_rework_budget_from_revision: REWORK_BUDGET_FROM_REVISION,
-    discover_rework_budget_note: `From commitment revision ${REWORK_BUDGET_FROM_REVISION} the hospital's aim allows extra rework up to a per-case budget that the dev gate assesses and the adopting person approves, instead of no extra rework. Runs under revisions 1 to ${REWORK_BUDGET_FROM_REVISION - 1}, the adopted proposal included, were validated before that rule and are not re-scored.`,
+    discover_rework_budget_note: `From commitment revision ${REWORK_BUDGET_FROM_REVISION} the hospital's aim allows extra rework up to a per-case budget that the dev gate assesses and the adopting person approves, where revisions 1 to 12 said no extra rework and revisions 13 and 14 left a stated cost to the gate. Runs under revisions 1 to ${REWORK_BUDGET_FROM_REVISION - 1}, the adopted proposal included, were validated before that rule and are not re-scored.`,
     discover_adopted: o.adopted, discover_share: share, discover_rework_events: delta("rework_events"), discover_rework_min: delta("rework_min"),
     discover_note: "Counts read from the runs already in this file; nothing is re-scored. A change that helps at a stated cost, not the best change. The answer-invariance test is the one in the intelligence package, run on this commit; it covers the instructions and tool interface, not the evidence or the workflow definition."
   };

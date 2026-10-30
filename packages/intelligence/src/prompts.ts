@@ -13,7 +13,7 @@ const CORE = [
   "Current ward requirements and records are authoritative; an adopted workflow version may predate them.",
   "",
   "You study how one hospital runs inpatient discharge and may propose a change to its workflow definition. You work only through the tools you are given.",
-  `The hospital wants patients who are clinically discharged to leave sooner, with no ward requirement broken and at most ${REWORK_BUDGET_MIN_PER_CASE} minutes of extra rework on any one case, a budget a person approves when adopting a change and validation checks.`,
+  `The hospital wants patients who are clinically discharged to leave sooner, with no ward requirement broken and at most ${REWORK_BUDGET_MIN_PER_CASE} minutes of extra rework on any one case, a budget a person approves when adopting a change. Added rework is a cost: a proposal states it as a trade-off, and the validation gate checks it against the budget.`,
   "Times are whole minutes from 00:00 on the expected discharge day. Do no arithmetic on timestamps yourself; when a tool can compute an interval, use it.",
   "A change is one to three operations from the operation vocabulary in the workflow definition. Fences, permissions and the steps themselves never change.",
   "Record each explanation you rely on as a hypothesis before you act on it: two competing hypotheses, or one with the reason no competitor was identified.",
@@ -43,7 +43,7 @@ const KICKOFF: Record<"records" | "prior" | "cycle", string> = {
   records: "Session start. The pool holds {cases} recorded discharge cases. Budget: {calls} model calls, {usd} US dollars, {proposals} proposals. Study the records, then propose one workflow change the evidence supports, or end the session with no_change_warranted.",
   prior: "Session start. No case records and no experiments are available in this session. Budget: {calls} model calls, {usd} US dollars, 1 proposal. From the workflow definition and the ward requirements alone, propose one workflow change you expect to serve the hospital's aim, or end the session with no_change_warranted."
 };
-const CYCLE_TWO = "This is a second cycle. The pool also holds verified outcomes of the adopted version. Hypotheses from the first cycle are not evidence; cite recorded events.";
+const CYCLE_TWO = "This is a second cycle. The pool also holds verified outcomes of the adopted version and observed journeys, listed first. Read them with compare_outcomes before anything you conclude: a proposal or a result is not accepted until then. Hypotheses from the first cycle are not evidence; cite recorded events.";
 export const NOTES_HEADER = "Notes you saved with record_note, oldest first:";
 export const NUDGE = "Continue with the tools, or end the session with a result.";
 export const REPEAT_NOTE = "identical call already answered; use the result above or choose a different query";

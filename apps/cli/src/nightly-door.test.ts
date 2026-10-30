@@ -33,7 +33,7 @@ function sources(): nightly.NightSources {
 }
 const memoFor = (s: nightly.NightSources, id: string) => nightly.composeMemo(s, s.recipients.find((r) => r.id === id)!, nightly.computeFacts(s), [], NOW);
 
-type Seen = { path: string; headers: IncomingHttpHeaders; body: { recipientId: string; payloadHash: string; memo: unknown } };
+type Seen = { path: string; headers: IncomingHttpHeaders; body: { recipientId: string; payloadHash: string; kind: string; memo?: unknown; alert?: unknown } };
 // A stand-in memo route: it refuses the planted recipient as the record would, and can be told to fail with a server error.
 async function fakeMemoDoor(o: { failWith500?: boolean } = {}) {
   const seen: Seen[] = [];
@@ -46,14 +46,14 @@ async function fakeMemoDoor(o: { failWith500?: boolean } = {}) {
     if (o.failWith500) return send(500, { error: { code: "server", retryable: true } });
     // The door marks this refusal retryable, so a transport that retried on that flag would call twice.
     if (body.recipientId === INTRUDER) return send(409, { error: { code: "conflict", retryable: true, message: "The record does not authorise this person for an encounter the memo names." } });
-    send(200, { ok: true, id: (body.memo as { memo_id: string }).memo_id, status: "delivered" });
+    send(200, { ok: true, id: ((body.memo ?? body.alert) as { memo_id: string }).memo_id, status: "delivered" });
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const port = (server.address() as { port: number }).port;
   return { seen, base: `http://127.0.0.1:${port}/door`, close: () => new Promise<void>((r) => server.close(() => r())) };
 }
 
-const profile = (base: string, deny = ["ward/close"]) => DoorProfile.parse({
+const profile = (base: string, deny = ["ward/close"], alerts = false) => DoorProfile.parse({
   base_url: base, timeout_ms: 2000,
   headers: { on_behalf_of: "X-Door-For", origin: "X-Door-Origin", evidence: "X-Door-Evidence", spoken_at: "X-Door-Spoken", idempotency: "X-Door-Key", replayed: "X-Door-Replayed" },
   origin_value: "voice", deny,
@@ -62,10 +62,10 @@ const profile = (base: string, deny = ["ward/close"]) => DoorProfile.parse({
     write_observation: { method: "POST", path: "ward/entry", body: {}, writes_path: "writes", primary_store: "obs" }
   },
   targets: { admission_by_patient: {}, episode_by_admission: {} },
-  memos: { path: "night/memo", sender: SENDER, sender_label: "Synthetic department lead (disclosed)" }
+  memos: { path: "night/memo", ...(alerts ? { alerts_path: "night/memo/alerts" } : {}), sender: SENDER, sender_label: "Synthetic department lead (disclosed)" }
 });
-const publisherOver = (s: nightly.NightSources, base: string, deny?: string[]) => {
-  const door = doorMemoTransport(new PisgahPort(profile(base, deny), { bearers: { [SENDER]: "test-bearer" } }), { run_id: "run-test", now: () => new Date("2026-10-30T01:00:00.000Z") });
+const publisherOver = (s: nightly.NightSources, base: string, deny?: string[], alerts = false) => {
+  const door = doorMemoTransport(new PisgahPort(profile(base, deny, alerts), { bearers: { [SENDER]: "test-bearer" } }), { run_id: "run-test", now: () => new Date("2026-10-30T01:00:00.000Z") });
   return { door, p: nightly.memoPublisher({ sources: s, transport: door, now: () => NOW }) };
 };
 
@@ -102,13 +102,28 @@ describe("the nightly memo through the door", () => {
     } finally { await d.close(); }
   });
 
-  it("holds the urgent task alert, since the door takes a memo only, and still delivers the memo with the urgent items inside", async () => {
+  it("sends each urgent item first as its own task alert on the alert route, then the memo", async () => {
+    const d = await fakeMemoDoor();
+    try {
+      const s = sources();
+      const r = await publisherOver(s, d.base, undefined, true).p.publish(memoFor(s, DOC));
+      expect(r.status).toBe("delivered");
+      expect(r.not_sent).toEqual([]);
+      expect(d.seen.map((x) => [x.path, x.body.kind])).toEqual([["night/memo/alerts", "urgent"], ["night/memo", "memo"]]);
+      expect(d.seen[0]!.body.alert).toMatchObject({ items: [{ item_id: "oi-2", state: "overdue" }] });
+      expect(d.seen[0]!.body.payloadHash).toBe(nightly.alertHash(d.seen[0]!.body.alert));
+      expect(d.seen[0]!.headers["x-door-key"]).toMatch(/^urgent-m-[0-9a-f]{8}-[0-9a-f]{16}$/);
+      expect(r.delivered.map((x) => x.kind)).toEqual(["urgent", "memo"]);
+    } finally { await d.close(); }
+  });
+
+  it("holds the urgent task alert when the profile names no alert route, and still delivers the memo with the urgent items inside", async () => {
     const d = await fakeMemoDoor();
     try {
       const s = sources();
       const r = await publisherOver(s, d.base).p.publish(memoFor(s, DOC));
       expect(r.status).toBe("delivered");
-      expect(r.not_sent).toEqual([{ kind: "task", refused: false, reason: "no door route for a task alert" }]);
+      expect(r.not_sent).toEqual([{ kind: "urgent", refused: false, reason: "no door route for a task alert" }]);
       expect(d.seen).toHaveLength(1);
       expect((d.seen[0]!.body.memo as nightly.Memo).urgent.map((i) => i.item_id)).toEqual(["oi-2"]);
     } finally { await d.close(); }

@@ -9,16 +9,17 @@ export const ClaimsRegistry = z.object({ schema_version: z.number().int(), claim
 export type ClaimsCheckOptions = { commit?: string; now?: () => string; resultsRoot?: string };
 type StatusFile = z.infer<typeof ClaimsStatusFile>;
 
-// Learning words wait for two results: the second cycle reading its own outcomes, and a passed reversed-evidence test.
+// Learning words wait for two results: the second cycle reading its own outcomes, and its latest reversed-evidence run responding to the contradiction.
 export const LEARNING_WORD = /\blearn(s|ed|ing|t)?\b/i;
-export const REVERSED_EVIDENCE_RESULT = "evaluation/results/reversed-evidence.json";
 const readResult = (file: string): unknown => { try { return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : null; } catch { return null; } };
 
-// Whether the system may be said to learn: C-10's file shows outcomes read and the reversed-evidence result passed.
+// Whether the system may be said to learn, read from C-10's own result file.
 export function learningEarned(resultsRoot: string): { c10_reads_outcomes: boolean; reversed_evidence_passed: boolean } {
-  const outcomes = fieldAt(readResult(`${resultsRoot}/evaluation/results/cycle2.json`), "read.outcomes");
-  const reversed = readResult(`${resultsRoot}/${REVERSED_EVIDENCE_RESULT}`) as { passed?: unknown } | null;
-  return { c10_reads_outcomes: typeof outcomes === "number" && outcomes >= 1, reversed_evidence_passed: reversed?.passed === true };
+  const c2 = readResult(`${resultsRoot}/evaluation/results/cycle2.json`);
+  const outcomes = fieldAt(c2, "read.outcomes");
+  const runs = fieldAt(c2, "counter_evidence.runs");
+  const last = Array.isArray(runs) ? (runs.at(-1) as { responded_to_contradiction?: unknown } | undefined) : undefined;
+  return { c10_reads_outcomes: typeof outcomes === "number" && outcomes >= 1, reversed_evidence_passed: last?.responded_to_contradiction === true };
 }
 
 // Every claim text that uses a learning word while either result is missing; the wording until then is "discovers and adapts under approval".

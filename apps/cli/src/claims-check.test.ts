@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { claimStatus, completionMatrix, parseClaimPredicate, parsePredicate, evaluate, validationSummary, PredicateError } from "@hey-pisgah/evaluator";
 import { loadV1 } from "@hey-pisgah/hospital";
-import { ClaimsRegistry, REVERSED_EVIDENCE_RESULT, claimsCheck, learningEarned, learningWordProblems } from "./claims-check.js";
+import { ClaimsRegistry, claimsCheck, learningEarned, learningWordProblems } from "./claims-check.js";
 
 const repo = join(import.meta.dirname, "..", "..", "..");
 const registry = ClaimsRegistry.parse(JSON.parse(readFileSync(join(repo, "evaluation", "claims.json"), "utf8")));
@@ -72,9 +72,9 @@ describe("no learning words before the system has earned them", () => {
     return reg;
   };
 
-  it("finds no learning word in the registry while C-10 has read no outcome or no reversed-evidence result passed", () => {
-    expect(repoEarned.c10_reads_outcomes && repoEarned.reversed_evidence_passed).toBe(false);
+  it("finds no learning word in the registry while either result is missing", () => {
     expect(learningWordProblems(registry.claims, repoEarned)).toEqual([]);
+    expect(learningWordProblems(registry.claims, { c10_reads_outcomes: false, reversed_evidence_passed: false })).toEqual([]);
   });
 
   it("flags a planted learning word in any claim text until both results hold", () => {
@@ -93,17 +93,20 @@ describe("no learning words before the system has earned them", () => {
     expect(learningWordProblems(near.claims, { c10_reads_outcomes: false, reversed_evidence_passed: false })).toEqual([]);
   });
 
-  it("makes claims:check refuse a registry with the word, and reads both results from the files", () => {
+  it("makes claims:check refuse a registry with the word, and reads both results from the second cycle's file", () => {
     const root = mkdtempSync(join(tmpdir(), "claims-learn-"));
     mkdirSync(join(root, "evaluation", "results"), { recursive: true });
     writeFileSync(join(root, "evaluation", "claims.json"), JSON.stringify(withWord()));
     const run = () => claimsCheck(root, { commit: "abc1234", now: () => "2026-10-30T12:00:00.000Z" });
+    const cycle2 = (outcomes: number, responded: (boolean | null)[]) => writeFileSync(join(root, "evaluation", "results", "cycle2.json"), JSON.stringify({ read: { outcomes }, counter_evidence: { runs: responded.map((r) => ({ responded_to_contradiction: r })) } }));
     expect(run).toThrow(/C-26 wording\.pass uses a learning word/);
-    writeFileSync(join(root, "evaluation", "results", "cycle2.json"), JSON.stringify({ read: { outcomes: 2 } }));
+    cycle2(2, []);
     expect(run).toThrow(/learning word/);
-    writeFileSync(join(root, REVERSED_EVIDENCE_RESULT), JSON.stringify({ passed: false }));
+    cycle2(2, [true, false]);
     expect(run).toThrow(/learning word/);
-    writeFileSync(join(root, REVERSED_EVIDENCE_RESULT), JSON.stringify({ passed: true }));
+    cycle2(0, [true]);
+    expect(run).toThrow(/learning word/);
+    cycle2(2, [false, true]);
     expect(learningEarned(root)).toEqual({ c10_reads_outcomes: true, reversed_evidence_passed: true });
     expect(run().claims).toHaveLength(28);
   });

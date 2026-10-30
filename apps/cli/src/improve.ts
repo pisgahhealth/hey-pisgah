@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { HospitalPort, VERSIONS_STREAM, VersionDesk, loadCases, project, readVersion, caseFacts, type Counterparts } from "@hey-pisgah/agent";
+import { HospitalPort, VERSIONS_STREAM, VersionDesk, deployCheck, loadCases, project, readVersion, caseFacts, type Counterparts } from "@hey-pisgah/agent";
 import { findCase } from "@hey-pisgah/cases";
 import { definitionHash, type WorkflowDefinition as WD } from "@hey-pisgah/contracts";
 import { loadManifests, runAcceptance, runCase } from "@hey-pisgah/evaluator";
@@ -120,10 +120,24 @@ if (argv[0] === "child") {
     // The EMR reading of the adopted version per M4.c's counterparts; only statuses and step ids are published, never the EMR's own fact names.
     const prof = flag("profile");
     const emr = prof && existsSync(prof) ? (() => {
-      const spec = (JSON.parse(readFileSync(prof, "utf8")) as { versions: { ward_id: string; requirement_version: string; facts: Record<string, string> } & Counterparts }).versions;
+      const file = JSON.parse(readFileSync(prof, "utf8")) as { versions: { ward_id: string; requirement_version: string; facts: Record<string, string> } & Counterparts; owners?: { id: string; kinds: string[] }[] };
+      const spec = file.versions;
       const r = readVersion(def, v1, spec, caseFacts(spec));
-      return { ward_id: spec.ward_id, resolved_version: desk.registry.current(caseFacts(spec)).version, offers: r.offers.length, lines: r.lines, changed: r.readings.filter((x) => x.changed).map((x) => ({ step_id: x.step_id, document_id: x.document_id, stage: x.stage, status: x.status, reason: x.status === "offer" ? "offer" : x.reason })) };
+      const d = deployCheck(def, v1, spec, file.owners ?? []);
+      return {
+        ward_id: spec.ward_id, resolved_version: desk.registry.current(caseFacts(spec)).version, offers: r.offers.filter((o) => o.changed).length, lines: r.lines,
+        changed: r.readings.filter((x) => x.changed).map((x) => ({ step_id: x.step_id, document_id: x.document_id, stage: x.stage, status: x.status, reason: x.status === "offer" ? "offer" : x.reason })),
+        deployment: { deployable: d.deployable, reason: d.reason, changed: d.changed.map((x) => ({ step_id: x.step_id, trigger: x.trigger, event: x.event, status: x.status, reason: x.reason, owners: x.owners.length })) }
+      };
     })() : null;
+    // The fresh EMR journey under the adopted version: the offers the agents made there, read from that run's public version file.
+    const jv = flag("journey-version") && existsSync(flag("journey-version")!) ? JSON.parse(readFileSync(flag("journey-version")!, "utf8")) as Row : null;
+    const journeyOffers = jv ? Number(jv["offers_made"] ?? 0) : null;
+    // The same version on a live stay through the real door reads, beside version 1 on the same stay; only counts, steps and the time are published.
+    const stay = (f: string | undefined) => (f && existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) as { version: number; offers_made: number; offers: { step_id: string; at: string }[]; questions: string[] } : null);
+    const sv2 = stay(flag("stay-offer")), sv1 = stay(flag("stay-offer-v1"));
+    const stayOffers = sv2 ? { mode: "sandbox door reads, no model call", adopted: { version: sv2.version, offers_made: sv2.offers_made, steps: sv2.offers.map((o) => o.step_id), at: sv2.offers.map((o) => o.at) }, version_1: sv1 ? { version: sv1.version, offers_made: sv1.offers_made } : null } : null;
+    const blocked = flag("journey-blocked") ?? null;
     const dev = devDistribution(adoptedValidation(store, created));
     const out = {
       measured_at: new Date().toISOString(), measured: true, source: "simulator_demo_cases", set: "demo", measured_in: "simulator",
@@ -144,6 +158,16 @@ if (argv[0] === "child") {
         counterfactual: cf[String(wh["case_id"])]
       },
       emr_offers: emr,
+      // C-27 claims an improvement only for a version this EMR can carry, and only once the fresh journey showed its offer or says why not.
+      deployable: emr?.deployment.deployable ?? false,
+      deployment_reason: emr?.deployment.reason ?? "no EMR profile was read, so the deploy check did not run",
+      emr_journey: jv ? { source: flag("journey-version"), mode: jv["mode"], version: jv["version"], offers_made: journeyOffers, offers_blocked: jv["offers_blocked"], lines: jv["lines"], measured_at: jv["measured_at"] } : null,
+      emr_stay_offers: stayOffers,
+      emr_journey_blocked: blocked,
+      emr_offers_made: journeyOffers ?? 0,
+      emr_offer_seen: (journeyOffers ?? 0) >= 1 || (stayOffers?.adopted.offers_made ?? 0) >= 1,
+      emr_offer_reason: journeyOffers ? `the agent offered the changed step on the fresh EMR journey ${journeyOffers} time${journeyOffers === 1 ? "" : "s"}`
+        : `${jv ? `no offer on the fresh EMR journey (${((jv["lines"] as string[] | undefined) ?? []).join(" ") || "no line"})` : blocked ? `the fresh EMR journey could not run: ${blocked}` : "no fresh EMR journey under this version was read"}${stayOffers ? `; on a live stay through the door the adopted version offered it ${stayOffers.adopted.offers_made} time${stayOffers.adopted.offers_made === 1 ? "" : "s"} at its trigger point and version 1 ${stayOffers.version_1?.offers_made ?? "not run"}` : ""}`,
       applicable_case: app["case_id"], withheld_case: wh["case_id"],
       draft_earlier_by_min: app["summary_draft_at"] !== null && appCf["v1"]?.["summary_draft_start"] != null ? Number(appCf["v1"]!["summary_draft_start"]) - Number(app["summary_draft_at"]) : null,
       wait_v1_min: appCf["v1"]?.["post_signoff_wait_min"] ?? null, wait_adopted_min: app["post_signoff_wait_min"], rework_added: app["rework_events"],
@@ -163,6 +187,6 @@ if (argv[0] === "child") {
   writeFileSync(file, `${JSON.stringify({ ...cur, measured_in: "simulator", dev_distribution: dev, ...devFields(dev) }, null, 1)}\n`);
   console.log(JSON.stringify(devFields(dev)));
 } else {
-  console.log("improve child --parent-file f --parent id --wards A --note text --out f | improve report --store dir --applicable task --withheld task [--profile f] --out f | improve dev --store dir --file improve.json");
+  console.log("improve child --parent-file f --parent id --wards A --note text --out f | improve report --store dir --applicable task --withheld task [--profile f] [--journey-version f] [--stay-offer f --stay-offer-v1 f] [--journey-blocked reason] --out f | improve dev --store dir --file improve.json");
   process.exit(2);
 }

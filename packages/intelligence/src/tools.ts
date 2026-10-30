@@ -58,6 +58,7 @@ export const TOOL_ARGS = {
     known_exceptions: z.array(z.object({ condition: Loose, behaviour: z.literal("not_applied") }))
   }),
   get_validation_report: z.object({ proposal_id: z.string() }),
+  compare_outcomes: z.object({}),
   list_ledger: z.object({}),
   record_note: z.object({ note: z.string() }),
   end_session: z.object({ result: z.enum(["no_change_warranted"]), note: z.string(), evidence_event_ids: z.array(z.string()) })
@@ -88,6 +89,7 @@ export const DESCRIPTIONS: Record<ToolName, string> = {
   get_precondition_table: "The engine's start, completion and trigger rules, and for each operation kind the rule it edits and the condition under which that edit can change what the engine does; the same table for every definition.",
   run_sweep: "Run every legal single operation of the named op_kinds that touches the scope steps, and every pair of them, on the same 1 to 6 pool cases and seeds; the scope is both steps of each of the top_k critical segments from get_derived_statistics (default 3), or target_steps. An operation touches the scope when its target is a scope step, or, for an edge removal, either end of the edge is. Cells the definition rules refuse are skipped, and cells the static test calls a no-op are not run. Returns counts, the 20 best cells by summed wait delta and up to 10 delivered cells whose wait did not move, each with its operations, whether a targeted step's start or completion moved, the median and summed wait deltas, cases better and worse, and the steps whose minutes shifted. A sweep takes 1 to 60 single operations, uses no experiment, and runs at most 3 times a session.",
   record_note: "Save a short free-text note, up to 600 characters, for later turns. Saved notes are shown as a numbered list at the top of every later turn; at most 20 notes are kept.",
+  compare_outcomes: "Second cycle only. The verified outcomes and observed journeys beside the histories: for each outcome, the version it ran under, its wait from the clinical sign-off to departure and its document revisions, against the median of its ward's histories, with the difference and its direction; for each observed journey, its events and the minutes from sign-off to clearance where both were seen; and whether the outcomes under a changed version did worse or better than before. When they did worse, no_change_warranted is refused and a proposal must cite at least one event of those outcomes.",
   end_session: "End the session with a result, a note and the recorded event ids inspected. no_change_warranted is a valid result."
 };
 
@@ -98,7 +100,7 @@ const CLOSE: ToolName[] = ["submit_proposal", "get_validation_report", "list_led
 // The tool set of each arm; A3 differs from the adaptive arm only by the experiment tools.
 export function armTools(arm: Arm): ToolName[] {
   switch (arm) {
-    case "adaptive": return [...READS, "get_derived_statistics", "record_hypothesis", "set_hypothesis_status", "choose_question", "get_precondition_table", "run_sweep", "run_experiment", "get_experiment", ...CLOSE, "next_cycle"];
+    case "adaptive": return [...READS, "compare_outcomes", "get_derived_statistics", "record_hypothesis", "set_hypothesis_status", "choose_question", "get_precondition_table", "run_sweep", "run_experiment", "get_experiment", ...CLOSE, "next_cycle"];
     case "a3": return [...READS, ...RECORDS, ...CLOSE];
     case "a4": return [...READS, ...RECORDS, "get_listed_experiment", "get_experiment", ...CLOSE];
     case "prior": return ["get_ward_requirements", "get_workflow_definition", "submit_proposal", "end_session"];
@@ -161,5 +163,6 @@ export async function dispatch(s: Session, name: string, argText: string, o: { p
     case "run_sweep": return s.runSweep(args);
     case "record_note": return s.recordNote(args);
     case "end_session": return s.endSession(args);
+    case "compare_outcomes": return s.compareOutcomes();
   }
 }

@@ -663,15 +663,15 @@
         "table": "fresh applicable case and withheld case under the adopted version"
       },
       "acceptance": {
-        "command": "version adopt through serve, two live demo tasks, then npx tsx apps/cli/src/improve.ts report",
+        "command": "version adopt through serve, two live demo tasks, the version offer read on a live stay and the fresh EMR journey, then npx tsx apps/cli/src/improve.ts report --profile <EMR profile> --stay-offer f --stay-offer-v1 f [--journey-version f | --journey-blocked reason]",
         "result_path": "evaluation/results/improve.json",
-        "predicate": "adopted_by_person == true && human_approval == true && fresh_applicable.executed_differently == true && fresh_applicable.actions_open == 0 && fresh_applicable.state == 'done' && withheld.version_withheld == true && withheld.actions_open == 0 && withheld.state == 'done' ; amber: adopted_by_person == true && fresh_applicable.executed_differently == true && withheld.version_withheld == true",
+        "predicate": "adopted_by_person == true && human_approval == true && deployable == true && emr_offers_made >= 1 && fresh_applicable.executed_differently == true && fresh_applicable.actions_open == 0 && fresh_applicable.state == 'done' && withheld.version_withheld == true && withheld.actions_open == 0 && withheld.state == 'done' ; amber: adopted_by_person == true && deployable == true && emr_offer_seen == true && fresh_applicable.executed_differently == true && withheld.version_withheld == true",
         "measured_on": "dev"
       },
       "wording": {
-        "pass": "A person adopted the change; in the simulator, on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes; on the {dev_cases} dev cases the median wait change was {dev_median_wait_delta_min} minutes, with {dev_moved} cases moved ({dev_shorter} shorter, {dev_longer} longer); on {withheld_case} it was withheld by its scope",
-        "partial": "In the simulator, ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes); on the {dev_cases} dev cases the median wait change was {dev_median_wait_delta_min} minutes, with {dev_moved} cases moved ({dev_shorter} shorter, {dev_longer} longer); withheld on {withheld_case}; adopted by the disclosed synthetic ward manager, awaiting Samuel's approval",
-        "fail": "The adopted change did not run differently on the fresh case, or was not withheld where its scope says",
+        "pass": "A person adopted the change; in the simulator, on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes; on the {dev_cases} dev cases the median wait change was {dev_median_wait_delta_min} minutes, with {dev_moved} cases moved ({dev_shorter} shorter, {dev_longer} longer); it was withheld on {withheld_case} by its scope, and in the EMR {emr_offer_reason}",
+        "partial": "In the simulator, ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes); on the {dev_cases} dev cases the median wait change was {dev_median_wait_delta_min} minutes, with {dev_moved} cases moved ({dev_shorter} shorter, {dev_longer} longer); withheld on {withheld_case}, adopted by the disclosed synthetic ward manager; in the EMR {emr_offer_reason}; awaiting Samuel's approval",
+        "fail": "The adopted change did not run differently on the fresh case, was not withheld where its scope says, or this EMR cannot carry it or offered it nowhere: {deployment_reason}",
         "not_measured": "Not measured yet"
       },
       "evidence_links": []
@@ -690,12 +690,12 @@
       "acceptance": {
         "command": "npx tsx apps/cli/src/nightly.ts over the day's evidence and task stores, delivered through the door with a record expectation per recipient",
         "result_path": "evaluation/results/memo.json",
-        "predicate": "verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0 && authorised_recipients >= 1 && authorised_delivered == authorised_recipients && correct_refusals == refusals && incorrect_outcomes == 0 ; amber: verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0",
+        "predicate": "verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0 && authorised_recipients >= 1 && authorised_delivered == authorised_recipients && correct_refusals == refusals && incorrect_outcomes == 0 && urgent_alerts_authorised == urgent_items_authorised ; amber: verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0",
         "measured_on": "dev"
       },
       "wording": {
-        "pass": "Every memo was checked against the records; {authorised_delivered} of {authorised_recipients} authorised recipients received it through the door, {correct_refusals} of {refusals} refusals were correct, {checks_failed_closed} of {checks_tried} planted faults were refused and no preview named a patient",
-        "partial": "Every memo passed its checks and {checks_failed_closed} of {checks_tried} planted faults were refused, but only {authorised_delivered} of {authorised_recipients} authorised recipients received it and {correct_refusals} of {refusals} refusals were correct",
+        "pass": "Every memo was checked against the records; {authorised_delivered} of {authorised_recipients} authorised recipients received it through the door and {urgent_alerts_authorised} of {urgent_items_authorised} urgent items rang as their own alerts, {correct_refusals} of {refusals} refusals were correct, {checks_failed_closed} of {checks_tried} planted faults were refused and no preview named a patient",
+        "partial": "Every memo passed its checks and {checks_failed_closed} of {checks_tried} planted faults were refused, but only {authorised_delivered} of {authorised_recipients} authorised recipients received it, {urgent_alerts_authorised} of {urgent_items_authorised} urgent items rang on their own, and {correct_refusals} of {refusals} refusals were correct",
         "fail": "A memo failed its checks, named a patient where it must not, or a planted fault was published",
         "not_measured": "Not measured yet"
       },
@@ -906,6 +906,44 @@
     },
     {
       "date": "2026-10-30",
+      "by": "F3b",
+      "claims": [
+        "C-27"
+      ],
+      "previous_predicates": {
+        "C-27": "adopted_by_person == true && human_approval == true && fresh_applicable.executed_differently == true && fresh_applicable.actions_open == 0 && fresh_applicable.state == 'done' && withheld.version_withheld == true && withheld.actions_open == 0 && withheld.state == 'done' ; amber: adopted_by_person == true && fresh_applicable.executed_differently == true && withheld.version_withheld == true"
+      },
+      "previous_wording": {
+        "C-27": {
+          "pass": "A person adopted the change; on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes, and on {withheld_case} it was withheld by its scope",
+          "partial": "Ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes) and was withheld on {withheld_case}, adopted by the disclosed synthetic ward manager; awaiting Samuel's approval",
+          "fail": "The adopted change did not run differently on the fresh case, or was not withheld where its scope says",
+          "not_measured": "Not measured yet"
+        }
+      },
+      "reason": "The review found the adopted version made no offer in the EMR: its trigger (the round entry) had no EMR counterpart, so the improvement held only on the simulator. C-27 now also needs the deploy check (every changed step has a watched EMR trigger point, a work kind that prepares it and an owner whose agent holds that kind) and an offer seen in the EMR: green needs the offer on the fresh EMR journey, amber accepts the offer on a live stay through the door when the fresh journey could not run, and every wording says which and why. Nothing was loosened: every earlier clause stays."
+    },
+    {
+      "date": "2026-10-30",
+      "by": "F3b",
+      "claims": [
+        "C-28"
+      ],
+      "previous_predicates": {
+        "C-28": "verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0 && authorised_recipients >= 1 && authorised_delivered == authorised_recipients && correct_refusals == refusals && incorrect_outcomes == 0 ; amber: verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0"
+      },
+      "previous_wording": {
+        "C-28": {
+          "pass": "Every memo was checked against the records; {authorised_delivered} of {authorised_recipients} authorised recipients received it through the door, {correct_refusals} of {refusals} refusals were correct, {checks_failed_closed} of {checks_tried} planted faults were refused and no preview named a patient",
+          "partial": "Every memo passed its checks and {checks_failed_closed} of {checks_tried} planted faults were refused, but only {authorised_delivered} of {authorised_recipients} authorised recipients received it and {correct_refusals} of {refusals} refusals were correct",
+          "fail": "A memo failed its checks, named a patient where it must not, or a planted fault was published",
+          "not_measured": "Not measured yet"
+        }
+      },
+      "reason": "The review found urgent items had no route of their own and rang only inside the memo. The memo is now kept and its bell opens an authorised page, and each urgent item of a recipient the record authorises goes first as its own alert through its own door route. Green now also needs every such urgent item to have rung as its own alert; amber and red are unchanged. Nothing was loosened."
+    },
+    {
+      "date": "2026-10-30",
       "by": "G8",
       "claims": [
         "C-06",
@@ -939,9 +977,9 @@
           "not_measured": "Not measured yet"
         },
         "C-27": {
-          "pass": "A person adopted the change; on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes, and on {withheld_case} it was withheld by its scope",
-          "partial": "Ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes) and was withheld on {withheld_case}, adopted by the disclosed synthetic ward manager; awaiting Samuel's approval",
-          "fail": "The adopted change did not run differently on the fresh case, or was not withheld where its scope says",
+          "pass": "A person adopted the change; on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes, it was withheld on {withheld_case} by its scope, and in the EMR {emr_offer_reason}",
+          "partial": "Ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes) and was withheld on {withheld_case}, adopted by the disclosed synthetic ward manager; in the EMR {emr_offer_reason}; awaiting Samuel's approval",
+          "fail": "The adopted change did not run differently on the fresh case, was not withheld where its scope says, or this EMR cannot carry it or offered it nowhere: {deployment_reason}",
           "not_measured": "Not measured yet"
         }
       },
@@ -952,7 +990,7 @@
       "previous_tables": {
         "C-26": "adaptive runs per commitment revision, k of n, with the answer-invariance gate"
       },
-      "reason": "Wave G wording corrections, results unchanged and no run re-scored. C-26 and C-06 now read the per-configuration rate of the latest configuration (revision 12, committed world, medium: 2 of 3, exact 95% interval 0.09 to 0.99) instead of 4 of 12 pooled over revisions 10 to 12; discovery.json keeps the development history (6 of 28: the 26 listed runs plus 2 earlier runs kept as summaries) and the 6 of 26 over listed runs, reconciled in discover_reconciliation. Green now needs a dev-valid run under that configuration, which is stricter. The wording says the invariance test covers the instructions and tool interface, not the evidence or the workflow definition that vary by world. C-27 and C-07 say simulator and carry the dev-case distribution beside the fresh case (median wait change 0, 5 of 15 moved, 4 shorter and 1 longer). C-10 and C-11 questions drop learning words: the system discovers and adapts under approval until C-10 reads outcomes and a reversed-evidence result exists."
+      "reason": "Wave G wording corrections, results unchanged and no run re-scored. C-26 and C-06 now read the per-configuration rate of the latest configuration (revision 12, committed world, medium: 2 of 3, exact 95% interval 0.09 to 0.99) instead of 4 of 12 pooled over revisions 10 to 12; discovery.json keeps the development history (6 of 28: the 26 listed runs plus 2 earlier runs kept as summaries) and the 6 of 26 over listed runs, reconciled in discover_reconciliation. Green now needs a dev-valid run under that configuration, which is stricter. The wording says the invariance test covers the instructions and tool interface, not the evidence or the workflow definition that vary by world. C-27 and C-07 say simulator and carry the dev-case distribution beside the fresh case (median wait change 0, 5 of 15 moved, 4 shorter and 1 longer); C-27 keeps F3b's EMR clauses. C-10 and C-11 questions drop learning words: the system discovers and adapts under approval until C-10 reads outcomes and a reversed-evidence run responds to the contradiction, and claims:check now refuses a learning word before then."
     },
     {
       "date": "2026-10-30",
@@ -975,7 +1013,7 @@
           "not_measured": "Not measured yet"
         }
       },
-      "reason": "Intelligence commitment revision 13 sets the hospital's aim to a per-case rework budget (10 minutes on any one case) that the dev gate assesses and the adopting person approves, instead of no extra rework. Revision 13 has no runs yet, so the discovery wording names the latest measured configuration (revision 12); predicates and results are unchanged, and the revision 12 runs and the adopted proposal are not re-scored under the budget."
+      "reason": "Intelligence commitment revision 15 sets the hospital's aim to a per-case rework budget (10 minutes on any one case) that the dev gate assesses and the adopting person approves, where revision 13 had left the gate to decide on a stated cost and earlier revisions said no extra rework. Revision 15 has no discovery runs yet, so the discovery wording names the latest measured configuration (revision 12); predicates and results are unchanged, and the revision 12 runs and the adopted proposal are not re-scored under the budget."
     }
   ]
 }
