@@ -20,5 +20,8 @@
     "@hey-pisgah/voice": "*",
     "@hey-pisgah/workflow": "*",
     "zod": "^4.6.7"
+  },
+  "optionalDependencies": {
+    "sherpa-onnx-node": "^2.0.1"
   }
 }
