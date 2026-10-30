@@ -4,7 +4,7 @@ import { ModelError, callStructured, type ChatMessage, type ChatTool, type Model
 import { DEFAULT_INTENT_ROUTE, FALLBACK_INTENT_ROUTE, type IntentRoute } from "./intent.js";
 import { OBSERVATION_KIND, type EmrContext, type EmrWriteKind, type SayableNames } from "./port.js";
 import { FIRST_STAGE_PROMPT, firstLook, firstStageCommitment, firstStageTool, type FirstStageResult } from "./speed.js";
-import { ADMISSION_TYPES, ALLERGY_SEVERITIES, CLERKING_SECTIONS, ITEM_KINDS, NOTE_TYPES, OBLIGATION_AFTER, PRIORITIES, WARD_CLASSES, WORK_TEXT, type WorkField } from "./work.js";
+import { ADMISSION_TYPES, ALLERGY_SEVERITIES, CLERKING_SECTIONS, DRUG_ROUTES, ITEM_KINDS, NOTE_TYPES, OBLIGATION_AFTER, ORDER_PRIORITIES, PRIORITIES, WARD_CLASSES, WORK_TEXT, type WorkField } from "./work.js";
 
 export const SPEECH_CLASSES = ["instruction", "correction", "option", "conditional", "question_to_staff", "aside", "unclear"] as const;
 // An owner who holds the clerking note also hears findings as documentation and patient or relative speech as reported, never as an instruction.
@@ -12,8 +12,10 @@ export const CLERK_CLASSES = [...SPEECH_CLASSES, "finding", "patient_reported"] 
 export type SpeechClass = (typeof CLERK_CLASSES)[number];
 export const CLERKING_KIND = "record_clerking" as const;
 // Kinds the runtime does for the note itself; the gate never names them.
-export const INTERNAL_KINDS: ReadonlySet<string> = new Set(["open_consult", CLERKING_KIND]);
+export const INTERNAL_KINDS: ReadonlySet<string> = new Set(["open_consult", CLERKING_KIND, "countersign"]);
 export const holdsClerking = (kinds: readonly EmrWriteKind[]): boolean => kinds.includes(CLERKING_KIND);
+// An owner who may give voice orders also hears tests and medicines as instructions of their own kinds.
+export const holdsOrders = (kinds: readonly EmrWriteKind[]): boolean => holdsClerking(kinds) && (kinds.includes("order_test") || kinds.includes("prescribe"));
 // Below this confidence an instruction or correction becomes a question in the strip (settled 28 Oct).
 export const CONFIDENCE_FLOOR = 0.7;
 export const MAX_CLAUSES = 6;
@@ -51,12 +53,20 @@ export const ClerkClause = WorkClause.extend({
 });
 export type ClerkClause = z.infer<typeof ClerkClause>;
 export const ClerkOutput = z.strictObject({ clauses: z.array(ClerkClause).min(1).max(MAX_CLAUSES) });
+// The order owner's clause adds the test or medicine and how it is given, each only as said.
+export const OrderClause = ClerkClause.extend({
+  test: nullish(z.string().max(40)), drug: nullish(z.string().max(40)), dose: nullish(z.string().max(60)), frequency: nullish(z.number().int()),
+  duration_days: nullish(z.number().int()), quantity: nullish(z.number().int()), route: nullish(z.enum(DRUG_ROUTES)), order_priority: nullish(z.enum(ORDER_PRIORITIES))
+});
+export type OrderClause = z.infer<typeof OrderClause>;
+export const OrderOutput = z.strictObject({ clauses: z.array(OrderClause).min(1).max(MAX_CLAUSES) });
+const outputFor = (kinds: readonly EmrWriteKind[]) => (holdsOrders(kinds) ? OrderOutput : holdsClerking(kinds) ? ClerkOutput : isWide(kinds) ? WorkOutput : GateOutput);
 // True when the owner holds any kind besides observations, so the wider prompt and tool apply.
 export const isWide = (kinds: readonly EmrWriteKind[]): boolean => kinds.some((k) => k !== OBSERVATION_KIND);
 
 export const GATE_TOOL = "gate";
 export function gateTool(kinds: readonly EmrWriteKind[] = [OBSERVATION_KIND]): ChatTool {
-  const { $schema: _drop, ...parameters } = z.toJSONSchema(holdsClerking(kinds) ? ClerkOutput : isWide(kinds) ? WorkOutput : GateOutput, { io: "input" }) as Record<string, unknown>;
+  const { $schema: _drop, ...parameters } = z.toJSONSchema(outputFor(kinds), { io: "input" }) as Record<string, unknown>;
   return {
     type: "function",
     function: {
@@ -104,16 +114,32 @@ export function gatePrompt(kinds: readonly EmrWriteKind[], names?: SayableNames)
     base.splice(at + 1, 0, ...CLERKING_CLASS_TEXT);
     base.splice(2, 0, "clinician_said holds everything the microphone heard, so the patient or a relative may be the one speaking; tell who speaks from the words.");
   }
+  const orders = holdsOrders(kinds);
+  if (orders) {
+    const i = base.findIndex((x) => x.startsWith("An instruction for anything that is not one of your kinds"));
+    base[i] = "An instruction for anything that is not one of your kinds, such as a treatment decision, sign-off or a payment, keeps class instruction with kind null and asked_for in a few words. It is shown to the clinician and not done.";
+  }
   return [
     ...base,
     "Each instruction clause names one kind. A clause that asks for two kinds of work is two clauses.",
     "Copy text, title and reasons from the clinician's own words; never add findings, numbers or plans they did not say.",
-    "A request to another department that you can carry by page is page_staff; ordering tests or medicines, prescribing, signing off, sending the patient home, settling or marking a bill paid stay with staff and are kind null.",
+    orders
+      ? "A request to another department that you can carry by page is page_staff. Sending a test is order_test and prescribing a medicine is prescribe, only for the tests and medicines listed below and only when the clinician settles it now; signing off, sending the patient home, settling or marking a bill paid stay with staff and are kind null."
+      : "A request to another department that you can carry by page is page_staff; ordering tests or medicines, prescribing, signing off, sending the patient home, settling or marking a bill paid stay with staff and are kind null.",
+    ...(orders ? ORDER_RULES : []),
+    ...(orders ? [`Tests you may name in test: ${list(names?.tests)}.`, `Medicines you may name in drug: ${list(names?.drugs)}.`] : []),
     `Page targets you may name in to: ${list(names?.page_targets)}.`,
     `Clinics you may name in clinic: ${list(names?.clinics)}.`,
     ...(holdsClerking(kinds) ? [...CLERKING_RULES.filter((r) => !r.startsWith("Vitals") || kinds.includes(OBSERVATION_KIND)), `Wards you may name in ward: ${list(names?.wards)}.`] : [])
   ].join("\n");
 }
+
+// The order owner's rules, after the general ones.
+export const ORDER_RULES = [
+  "For order_test set test to one key from the list and order_priority only when routine, urgent or stat was said.",
+  "For prescribe set drug to one key from the list; dose, frequency, duration_days, quantity and route only as said, and never work one out from another.",
+  "A medicine or test the clinician only considers, or names for later, is option or conditional and is not ordered."
+] as const;
 
 // The two classes a clerking owner's gate adds, placed after unclear in the class list.
 export const CLERKING_CLASS_TEXT = [
@@ -144,7 +170,7 @@ const WIDE_KEYS: readonly string[] = [...VALUE_KEYS, "spo2", "weight_kg", "title
 // The user message for one finalised utterance: the patient in context as untrusted data, the task's actions by number, then the clinician's words.
 export function gateMessage(i: GateInput): string {
   const wide = isWide(i.kinds);
-  const keys: readonly string[] = holdsClerking(i.kinds) ? [...WIDE_KEYS, "section", "substance", "ward", "due_at"] : wide ? WIDE_KEYS : VALUE_KEYS;
+  const keys: readonly string[] = holdsOrders(i.kinds) ? [...WIDE_KEYS, "section", "substance", "ward", "due_at", "test", "drug", "dose", "quantity"] : holdsClerking(i.kinds) ? [...WIDE_KEYS, "section", "substance", "ward", "due_at"] : wide ? WIDE_KEYS : VALUE_KEYS;
   const acts = i.actions.map((a) => {
     const vals = keys.filter((k) => a.args[k] !== undefined).map((k) => `${k} ${String(a.args[k]).slice(0, 60)}`).join(", ");
     return `- #${a.n} ${a.kind} ${vals}: ${a.state}${a.corrects ? ` (corrects #${a.corrects})` : ""}`;
@@ -204,9 +230,17 @@ export function gateCommitment(): Record<string, unknown> {
   return {
     ...gateCommitmentBody(),
     clerking: { kinds, prompt, prompt_sha256: sha256(prompt), tool_sha256: hashJson(tool), classes: [...CLERK_CLASSES], rules: [...CLERKING_RULES], deny_hits: denyHits(`${prompt}\n${JSON.stringify(tool)}`) },
-    first_stage: { ...firstStageCommitment(), settings: { effort: GATE_SETTINGS.effort, route: GATE_SETTINGS.route, confidence_floor: GATE_SETTINGS.confidence_floor }, deny_hits: denyHits(`${FIRST_STAGE_PROMPT}\n${JSON.stringify(firstStageTool())}`) }
+    first_stage: { ...firstStageCommitment(), settings: { effort: GATE_SETTINGS.effort, route: GATE_SETTINGS.route, confidence_floor: GATE_SETTINGS.confidence_floor }, deny_hits: denyHits(`${FIRST_STAGE_PROMPT}\n${JSON.stringify(firstStageTool())}`) },
+    orders: (() => {
+      const ok = [...ORDER_REFERENCE_KINDS];
+      const p = gatePrompt(ok, { ...names, tests: {}, drugs: {} });
+      const tl = gateTool(ok);
+      return { kinds: ok, prompt: p, prompt_sha256: sha256(p), tool_sha256: hashJson(tl), rules: [...ORDER_RULES], deny_hits: denyHits(`${p}\n${JSON.stringify(tl)}`) };
+    })()
   };
 }
+// The reference order owner: the clerking doctor's kinds with voice orders added.
+export const ORDER_REFERENCE_KINDS = [...CLERKING_REFERENCE_KINDS, "order_test", "prescribe", "countersign"] as const;
 
 export type GateResult = {
   value: GateOutput; provider: ProviderId; model: string; response_id: string | null; cost_usd: number; ledger: { stream_id: string; seq: number }; repairs: number; fallback_reason: string | null; prompt_sha256: string;
@@ -220,7 +254,7 @@ export async function gateUtterance(client: ModelClient, input: GateInput, meta:
   if (denyHits(prompt).length) throw new Error("the gate prompt holds a denied term");
   const messages: ChatMessage[] = [{ role: "system", content: prompt }, { role: "user", content: gateMessage(input) }];
   const run = async (r: IntentRoute, fallback_reason: string | null): Promise<GateResult> => {
-    const out = await callStructured(client, (holdsClerking(input.kinds) ? ClerkOutput : isWide(input.kinds) ? WorkOutput : GateOutput) as typeof GateOutput, {
+    const out = await callStructured(client, outputFor(input.kinds) as typeof GateOutput, {
       provider: r.provider, model: r.model, effort: settings.effort, messages, tools: [gateTool(input.kinds)], parallel_tool_calls: false,
       purpose: "emr.gate", run_id: meta.run_id, task_id: meta.task_id, task_state: "running", thread: "main", affinity_key: meta.task_id
     }, { maxRepairs: 1, toolName: GATE_TOOL });

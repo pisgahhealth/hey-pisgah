@@ -12,6 +12,11 @@ export { GATE_COMMITMENT_FILE, commitGate, committedGateHash, currentGateHash } 
 export { EAR_FALLBACK, EAR_ROUTE, EAR_SETTINGS, EAR_SYSTEM, MEASURE_LABEL, answerChoice, compareReadings, disagreementQuestion, normValue, quotedQuestion, sparkEar, type Choice, type EarReading, type EarsCheck, type MeasureCheck, type SecondEar } from "./ears.js";
 export { adoptedVersion, caseFacts, changedSteps, checkOffer, readVersion, versionWiring, type Counterparts, type OfferCheck, type RequirementsNow, type TriggerReading, type TriggerStatus, type VersionOffer, type VersionRules, type VersionWiring, type WatchCondition } from "./version-offers.js";
 export { KEPT_LEVERS, FIRST_LOOKS, FIRST_STAGE_PROMPT, FIRST_STAGE_RULES, FIRST_STAGE_TOOL, FirstLook, LEVERS_OFF, LEVERS_ON, MAX_PARALLEL_LINES, PROOF_HEDGE_MS, firstLook, firstStageCommitment, firstStageMessage, firstStageTool, hedgedRead, holdLeftMs, leverList, leversFrom, sharedMeasures, willWriteNumber, type FirstStageResult, type SpeedLevers } from "./speed.js";
+export { DOCUMENTATION_KINDS, ORDER_KINDS, SPEAKER_MODEL, VOICEPRINT_DIM, authorityOf, recordOf, sherpaEmbedder, to16k, type Authority, type Embedder, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
+export { DRUG_ROUTES, ORDER_PRIORITIES, prescriptionSaid } from "./work.js";
+export { OWNER_NO, OWNER_YES, SIGN_EVERYTHING, type OrderRule } from "./runtime.js";
+export { ORDER_REFERENCE_KINDS, ORDER_RULES, OrderClause, OrderOutput, holdsOrders } from "./gate.js";
+export type { Orderables, ReadBack } from "./port.js";
 export { EMERGENCY_KIND, EMERGENCY_LINE, EmergencyArgs, RULE_ONLY_KINDS, WAKE_LINE, emergencyReason, identityFrom, spokenPatient, unidentifiedRef, type EmrIdentityHold, type KnownPatient, type SpokenIdentity } from "./entry.js";
 export { SCREENS, SCREEN_PAGES, screenFor, type ScreenPage, type ScreenPlan } from "./screens.js";
 export { KWS_KEYWORDS, KWS_MODEL_FILES, KWS_SOURCES, kwsReady, prepareKwsAssets } from "./kws.js";

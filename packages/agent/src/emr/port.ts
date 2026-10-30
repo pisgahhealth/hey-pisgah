@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { SpeakerVerdict } from "./speaker.js";
 
 // The one write kind an EMR agent holds in M1, and the shape of its arguments.
 export const OBSERVATION_KIND = "record_observation" as const;
@@ -22,8 +23,8 @@ export type EmrTarget = { admission_id?: string; patient_id?: string };
 // What the agent may know about the patient in context; every string came from the record, so prompts wrap it as untrusted text.
 // admission_id is empty while the patient is not yet admitted; visit_id names the arrival then.
 export type EmrContext = { admission_id: string; patient_id: string | null; visit_id?: string | null; label: string; facts: Record<string, string | null>; keywords: string[] };
-// Who the write is for and which spoken line asked for it.
-export type Provenance = { owner: string; evidence: string; spoken_at: string };
+// Who the write is for and which spoken line asked for it; an order also carries the owner's matched lines that authorised and, for a controlled drug, confirmed it.
+export type Provenance = { owner: string; evidence: string; spoken_at: string; voice?: { authorisation?: string; confirmation?: string } };
 // A read-only kind returns what it found as report; a draft is held for the owner to review before anything is written.
 export type EmrCommit =
   | { ok: true; record_id: string; record_version: number; event_ids: string[]; replayed: boolean; report?: string; draft?: string }
@@ -44,7 +45,7 @@ export type WatchRead = { facts: Record<string, string | null>; labels: Record<s
 export type WatchOffer = { fact: string; equals: string; kind: string; ask: string };
 export type InboxPage = { page_id: string; subject: string; at: string; patient_id: string | null };
 // Names the owner may say for page targets and clinics, so the gate and its guards know them.
-export type SayableNames = { page_targets: Record<string, readonly string[]>; clinics: Record<string, readonly string[]>; wards?: Record<string, readonly string[]> };
+export type SayableNames = { page_targets: Record<string, readonly string[]>; clinics: Record<string, readonly string[]>; wards?: Record<string, readonly string[]>; tests?: Record<string, readonly string[]>; drugs?: Record<string, readonly string[]> };
 
 // The hospital port for a live EMR: reads for context, journaled writes, and a fresh read that proves each write.
 export interface EmrPort {
@@ -67,4 +68,14 @@ export interface EmrPort {
   pageHref?(page: string): string | undefined;
   // The watched facts whose change means a result came back, for work held until then.
   resultFacts?(owner: string): readonly string[];
+  // Who spoke one segment, matched by the hospital against its enrolled voices; the template never leaves the hospital.
+  speaker?(owner: string, voiceprint: readonly number[], prov: Provenance): Promise<SpeakerVerdict>;
+  // The batch of voice orders the owner may countersign now on one visit, read back with its digest.
+  readBack?(owner: string, visitId: string, prov: Provenance): Promise<ReadBack>;
+  // The tests and medicines the owner may order by voice, by the words that name them.
+  orderables?(): Orderables;
 }
+
+// The hospital seals each read-back, so the countersign that follows proves which batch was shown and when.
+export type ReadBack = { items: { stateId: string; label: string; kind: string; controlled: boolean; sentAt: string | null }[]; itemsDigest: string | null; readBackAt: string; seal: string | null; awaitingSecond: { stateId: string; label: string }[]; changed: { stateId: string; label: string }[] };
+export type Orderables = { tests: Record<string, readonly string[]>; drugs: Record<string, { words: readonly string[]; controlled: boolean }> };
