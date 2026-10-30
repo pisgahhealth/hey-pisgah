@@ -5,7 +5,7 @@ import { z } from "zod";
 import { Claim, ClaimsStatusFile } from "@hey-pisgah/contracts";
 import { claimStatus, fieldAt, parseClaimPredicate } from "@hey-pisgah/evaluator";
 
-export const ClaimsRegistry = z.object({ schema_version: z.number().int(), claims: z.array(Claim).length(19), revisions: z.array(z.unknown()).optional() });
+export const ClaimsRegistry = z.object({ schema_version: z.number().int(), claims: z.array(Claim).length(28), revisions: z.array(z.unknown()).optional() });
 export type ClaimsCheckOptions = { commit?: string; now?: () => string; resultsRoot?: string };
 type StatusFile = z.infer<typeof ClaimsStatusFile>;
 

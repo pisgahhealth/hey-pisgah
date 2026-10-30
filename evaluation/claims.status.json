@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-28T13:47:46.060Z",
-  "commit": "cae19a0",
+  "generated_at": "2026-10-30T01:57:01.102Z",
+  "commit": "ed0983e",
   "claims": [
     {
       "claim_id": "C-01",
@@ -111,14 +111,15 @@
     },
     {
       "claim_id": "C-10",
-      "status": "red",
+      "status": "amber",
       "values": {
-        "cycle2_result_recorded": false,
+        "cycle2_result_recorded": true,
         "no_hypothesis_cited_as_evidence": true,
-        "result": "no_result",
-        "stop": "budget_calls (60 calls)"
+        "read.outcomes": 0,
+        "result": "new_proposal",
+        "stop": "dev_valid_proposal (p-9335e542)"
       },
-      "measured_at": "2026-10-28T13:41:04.839Z"
+      "measured_at": "2026-10-30T01:33:10.514Z"
     },
     {
       "claim_id": "C-11",
@@ -245,6 +246,123 @@
         "questions": 7
       },
       "measured_at": "2026-10-28T12:10:16.388Z"
+    },
+    {
+      "claim_id": "C-20",
+      "status": "not_measured",
+      "values": {
+        "touches_counted": null,
+        "silent_steps": null,
+        "touches": null,
+        "touches_allowed": null
+      },
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-21",
+      "status": "not_measured",
+      "values": {
+        "rows": null,
+        "errors_listed": null,
+        "wake_p50_ms": null,
+        "vitals_p50_ms": null,
+        "order_p50_ms": null
+      },
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-22",
+      "status": "not_measured",
+      "values": {
+        "batch_signed_by_voice": null,
+        "changed_after_batch_unsigned": null,
+        "unmatched_voice_orders": null,
+        "batch_orders": null
+      },
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-23",
+      "status": "not_measured",
+      "values": {
+        "false_authority": null,
+        "unmatched_orders": null,
+        "other_clinician_recorded": null
+      },
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-24",
+      "status": "not_measured",
+      "values": {
+        "accepted_by_voice": null,
+        "completed_from_record": null,
+        "acknowledged_counted_as_done": null,
+        "previews_with_names": null,
+        "privilege_gained": null
+      },
+      "measured_at": null
+    },
+    {
+      "claim_id": "C-25",
+      "status": "green",
+      "values": {
+        "applied_on_fresh_encounter": true,
+        "applied_source_visible": true,
+        "candidate_held_before_scope": true,
+        "withheld_where_scope_says": 1,
+        "applied_value_in_record": "q2h"
+      },
+      "measured_at": "2026-10-30T01:13:45.517Z"
+    },
+    {
+      "claim_id": "C-26",
+      "status": "green",
+      "values": {
+        "discover_dev_valid": 4,
+        "discover_invariance_pass": true,
+        "discover_deny_clean": true,
+        "discover_dev_valid_any": 6,
+        "discover_runs": 12,
+        "discover_share": 0.56,
+        "discover_rework_events": 4
+      },
+      "measured_at": "2026-10-28T03:21:27.939Z"
+    },
+    {
+      "claim_id": "C-27",
+      "status": "amber",
+      "values": {
+        "adopted_by_person": true,
+        "human_approval": false,
+        "fresh_applicable.executed_differently": true,
+        "fresh_applicable.actions_open": 0,
+        "fresh_applicable.state": "done",
+        "withheld.version_withheld": true,
+        "withheld.actions_open": 0,
+        "withheld.state": "done",
+        "applicable_case": "c-110f6ad7",
+        "draft_earlier_by_min": 146,
+        "wait_v1_min": 166,
+        "wait_adopted_min": 57,
+        "withheld_case": "c-2a14921a"
+      },
+      "measured_at": "2026-10-30T01:24:26.096Z"
+    },
+    {
+      "claim_id": "C-28",
+      "status": "amber",
+      "values": {
+        "delivered": false,
+        "verified": true,
+        "names_in_previews": 0,
+        "unauthorised_names": 0,
+        "checks_failed_closed": 5,
+        "checks_tried": 5,
+        "deny_hits": 0,
+        "delivery": "held: E4 merged the memo notification kind but no door route sends a memo, so the publisher's transport holds the deliveries"
+      },
+      "measured_at": "2026-10-30T01:52:46.750Z"
     }
   ]
 }
