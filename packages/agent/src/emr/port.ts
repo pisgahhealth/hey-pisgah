@@ -57,6 +57,8 @@ export interface EmrPort {
   commit(kind: EmrWriteKind, args: WorkArgs, intentKey: string, prov: Provenance): Promise<EmrCommit>;
   prove(kind: EmrWriteKind, args: WorkArgs, written: { record_id: string; record_version: number; event_ids: string[] }, prov: Provenance): Promise<EmrProof | null>;
   refusedCount(): number;
+  // The record a write under this key made, read from the hospital without writing, for a write whose answer was lost; several candidates or none give found null.
+  findWrite?(kind: EmrWriteKind, args: WorkArgs, sought: { intent_key: string; since: string }, prov: Provenance): Promise<{ found: { record_id: string; record_version: number; event_ids: string[] } | null; why?: string }>;
   watch?(owner: string, subject: EmrTarget & { visit_id?: string | null }, prov: Provenance): Promise<WatchRead | null>;
   offers?(owner: string): readonly WatchOffer[];
   inbox?(owner: string, prov: Provenance): Promise<InboxPage[]>;

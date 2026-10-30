@@ -350,7 +350,8 @@ export class PisgahPort implements EmrPort {
     if (r.status === 429 || r.status >= 500) return { ok: false, reason: `door_${r.status}`, status: r.status, retryable: true, counted: false };
     if (r.status < 200 || r.status > 299) {
       const code = pick(r.json, "error.code");
-      return { ok: false, reason: `door_${r.status}${typeof code === "string" && /^[a-z_]{1,40}$/.test(code) ? `_${code}` : ""}`, status: r.status, retryable: false, counted: false };
+      // A door that says to ask again, such as a key whose first request is still running, has not refused the write.
+      return { ok: false, reason: `door_${r.status}${typeof code === "string" && /^[a-z_]{1,40}$/.test(code) ? `_${code}` : ""}`, status: r.status, retryable: pick(r.json, "error.retryable") === true, counted: false };
     }
     const writes = pick(r.json, op.writes_path);
     const list = Array.isArray(writes) ? writes.filter((w): w is { store: string; id: string } => !!w && typeof w === "object" && typeof (w as P).store === "string" && typeof (w as P).id === "string") : [];
@@ -486,7 +487,8 @@ export class PisgahPort implements EmrPort {
     if (r.status === 429 || r.status >= 500) return { ok: false, reason: `door_${r.status}`, status: r.status, retryable: true, counted: false };
     if (r.status < 200 || r.status > 299) {
       const code = pick(r.json, "error.code");
-      return { ok: false, reason: `door_${r.status}${typeof code === "string" && /^[a-z_]{1,40}$/.test(code) ? `_${code}` : ""}`, status: r.status, retryable: false, counted: false };
+      // A door that says to ask again, such as a key whose first request is still running, has not refused the write.
+      return { ok: false, reason: `door_${r.status}${typeof code === "string" && /^[a-z_]{1,40}$/.test(code) ? `_${code}` : ""}`, status: r.status, retryable: pick(r.json, "error.retryable") === true, counted: false };
     }
     if (op.ack.positive && !(Number(pick(r.json, op.ack.positive)) > 0)) return { ok: false, reason: "no_recipient", status: r.status, retryable: false, counted: false };
     let id: string | null = op.ack.id_path ? str(pick(r.json, op.ack.id_path)) : null;
@@ -500,17 +502,37 @@ export class PisgahPort implements EmrPort {
     for (const [store, path] of Object.entries(op.ack.also ?? {})) { const v = str(pick(r.json, path)); if (v) events.push(`${store}:${v}`); }
     id ??= str(a["admission_id"] ?? a["visit_id"]);
     if (!id) return { ok: false, reason: "ack_without_record", status: r.status, retryable: false, counted: false };
-    // A new unnamed patient's arrival and label are learned at once, so the next words and reads reach that arrival.
-    if (kind === EMERGENCY_KIND && EmrId.safeParse(id).success) {
-      const visit = str(pick(r.json, op.ack.also?.["visit"] ?? "visitId"));
-      if (visit && EmrId.safeParse(visit).success) this.learned.visit_by_patient.set(id, visit);
-      this.learned.label.set(id, String(a["unidentified_ref"] ?? "the unnamed patient"));
-    }
+    if (kind === EMERGENCY_KIND) this.learnArrival(id, str(pick(r.json, op.ack.also?.["visit"] ?? "visitId")), a);
     if ((kind === "request_admission" || kind === "admit_patient") && EmrId.safeParse(id).success && vars["patient_id"]) {
       this.learned.admission_by_patient.set(String(vars["patient_id"]), id);
       this.learned.patient_by_admission.set(id, String(vars["patient_id"]));
     }
     return { ok: true, record_id: id, record_version: 1, event_ids: events.length ? events : [`${op.ack.store}:${id}`], replayed: r.replayed };
+  }
+
+  // A new unnamed patient's arrival and label are learned at once, so the next words and reads reach that arrival.
+  private learnArrival(id: string, visit: string | null, a: WorkArgs): void {
+    if (!EmrId.safeParse(id).success) return;
+    if (visit && EmrId.safeParse(visit).success) this.learned.visit_by_patient.set(id, visit);
+    this.learned.label.set(id, String(a["unidentified_ref"] ?? "the unnamed patient"));
+  }
+
+  // The record a write made, found by the profile's lookup: exactly one row matching the arguments and made after the intent, never one made before it.
+  async findWrite(kind: string, a: WorkArgs, sought: { intent_key: string; since: string }, prov: Provenance): Promise<{ found: { record_id: string; record_version: number; event_ids: string[] } | null; why?: string }> {
+    const op = this.profile.work[kind];
+    if (!op || !("method" in op) || !op.lookup) return { found: null, why: "no_lookup" };
+    const spec = op.lookup;
+    const vars = this.varsFor(kind, a);
+    const json = await this.read(spec, vars, prov);
+    const since = Date.parse(sought.since);
+    const rows = pickAll(json, spec.find.list).filter((x) => Object.entries(spec.find.where).every(([k, want]) => checkOne(pick(x, k), want, vars)) && Date.parse(String(pick(x, spec.made_at) ?? "")) >= since);
+    if (rows.length !== 1) return { found: null, why: rows.length ? "ambiguous" : "absent" };
+    const id = str(pick(rows[0], spec.id));
+    if (!id) return { found: null, why: "absent" };
+    const events = [`${op.ack.store}:${id}`];
+    for (const [store, path] of Object.entries(spec.also ?? {})) { const v = str(pick(rows[0], path)); if (v) events.push(`${store}:${v}`); }
+    if (kind === EMERGENCY_KIND) this.learnArrival(id, str(pick(rows[0], spec.also?.["visit"] ?? "visitId")), a);
+    return { found: { record_id: id, record_version: 1, event_ids: events } };
   }
 
   // A fresh read after the write must show it; a read-only kind proves itself by reading again.

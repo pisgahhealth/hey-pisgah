@@ -68,6 +68,8 @@ export type EmrServeOptions = {
   kwsDir?: string;
   // The A&E clinic an emergency opened by voice lands on.
   emergencyClinicId?: string;
+  // How long held speech waits for an arrival, for tests; PENDING_MAX_MS by default.
+  pendingMaxMs?: number;
   // Preference memory is on unless turned off; it lives in the same store as the tasks.
   preferences?: boolean;
 };
@@ -112,6 +114,8 @@ const AUDIO_LIMIT = 8 * 1024 * 1024;
 
 // How long speech after an emergency phrase is held for the arrival before it is let go as not kept.
 export const PENDING_MAX_MS = 60_000;
+// The longest speech is held for an arrival whose write is still uncertain or awaiting verification, so held words wait for its outcome rather than fail.
+export const PENDING_UNSETTLED_MAX_MS = 10 * 60_000;
 // A new listening session with no patient on its page keeps the patient the agent is with only if that patient was chosen this recently.
 export const SUBJECT_KEEP_MS = 30 * 60_000;
 // Two hearings of the emergency phrase this close together are one phrase, so one arrival.
@@ -278,7 +282,17 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     arrivals.set(owner, { reply: r, at: said });
     const v = rt.view(r.task_id);
     if (!v?.patient_id && !pending.has(owner)) {
-      const timer = setTimeout(() => { void release(owner, null, "arrival_not_confirmed"); }, PENDING_MAX_MS);
+      const wait = o.pendingMaxMs ?? PENDING_MAX_MS;
+      const opened = Date.now();
+      // An arrival whose write is still open has an outcome nobody knows yet, so its held words wait for it up to the longer bound.
+      const expire = () => {
+        const a = rt.view(r.task_id)?.actions.find((x) => x.action_id === r.action_id);
+        const unsettled = !!a && (a.state === "sent" || a.state === "uncertain" || (a.state === "acknowledged" && !!a.awaiting_verification));
+        const p = pending.get(owner);
+        if (unsettled && p?.task_id === r.task_id && Date.now() - opened < PENDING_UNSETTLED_MAX_MS) { p.timer = setTimeout(expire, wait); p.timer.unref?.(); return; }
+        void release(owner, null, "arrival_not_confirmed");
+      };
+      const timer = setTimeout(expire, wait);
       timer.unref?.();
       pending.set(owner, { task_id: r.task_id, reply: r, since: Date.parse(e.spoken_at), page: trackOf(owner).page, held: [], timer });
     }
