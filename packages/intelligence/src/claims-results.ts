@@ -1,5 +1,7 @@
 import { LedgerRow, type HypothesisRecord, type WorkflowChangeProposal } from "@hey-pisgah/contracts";
 import { readStream } from "@hey-pisgah/store";
+import { loadV1 } from "@hey-pisgah/hospital";
+import { outcomeComparison } from "./outcomes.js";
 import { DiscoveryPool, type OutcomeCase } from "./pool.js";
 import { STREAMS, sessionStreamId } from "./session.js";
 
@@ -32,7 +34,7 @@ export function discoveryClaims(discovery: Row): Row {
 // The second cycle as a result: what it read, how it ended, and whether any earlier hypothesis was cited as evidence.
 export function cycle2Result(storeRoot: string, runId: string, o: { observed: readonly OutcomeCase[]; outcomes: readonly OutcomeCase[] }): Row {
   const log = readStream(storeRoot, sessionStreamId(runId));
-  const opened = log.find((e) => e.record_type === "session.opened")?.payload as Row;
+  const opened = (log.find((e) => e.record_type === "session.opened")?.payload ?? null) as Row | null;
   const stopped = (log.find((e) => e.record_type === "session.stopped")?.payload ?? null) as Row | null;
   const declared = (log.find((e) => e.record_type === "session.result")?.payload ?? null) as Row | null;
   const pool = new DiscoveryPool(undefined, o.outcomes, o.observed);
@@ -52,6 +54,8 @@ export function cycle2Result(storeRoot: string, runId: string, o: { observed: re
     try { args = JSON.parse(String(p["args"])) as Row; } catch { args = {}; }
     for (const id of [args["case_id"], ...((args["case_ids"] as unknown[]) ?? [])]) if (typeof id === "string") read.set(id, (read.get(id) ?? 0) + 1);
   }
+  // compare_outcomes takes no ids: the cases it read are the ones its answer carried, as the session logged them.
+  for (const e of log.filter((x) => x.record_type === "outcomes.compared")) for (const id of ((e.payload as Row)["read_case_ids"] as string[]) ?? []) read.set(id, (read.get(id) ?? 0) + 1);
   const bySource = (s: string) => pool.ids().filter((id) => pool.get(id)!.source === s);
   const readOf = (s: string) => bySource(s).filter((id) => read.has(id));
   const cited = (s: string) => new Set(citedEvents.filter((id) => pool.event(id) && pool.get(pool.event(id)!.case_id)!.source === s)).size;
@@ -60,10 +64,21 @@ export function cycle2Result(storeRoot: string, runId: string, o: { observed: re
   const rows = readStream(storeRoot, `ledger/${runId}`).filter((e) => e.record_type === "model.call").map((e) => LedgerRow.parse(e.payload));
   return {
     measured_at: new Date().toISOString(), measured: true, source: "cycle2_run", set: "dev", run_id: runId,
-    commitment: opened["commitment"], effort: opened["effort"] ?? (opened["settings"] as Row | undefined)?.["effort"] ?? null, model: opened["model"] ?? null,
+    commitment: opened?.["commitment"] ?? null, effort: opened?.["effort"] ?? (opened?.["settings"] as Row | undefined)?.["effort"] ?? null, model: opened?.["model"] ?? null,
     pool: { histories: bySource("history").length, outcomes: bySource("outcome").length, observed: bySource("observed").length },
     read: { histories: readOf("history").length, outcomes: readOf("outcome").length, observed: readOf("observed").length, observed_case_ids: readOf("observed"), outcome_case_ids: readOf("outcome") },
     cited_events: { histories: cited("history"), outcomes: cited("outcome"), observed: cited("observed") },
+    // Before and after adoption, computed by the same rule the second cycle's own read uses.
+    outcome_comparison: (() => { const c = outcomeComparison(pool, loadV1()); return { before: c.before, after: c.after.map(({ case_id, ward_id, workflow_version, post_signoff_wait_min, before_median_wait_min, wait_delta_min, rework_events, before_median_rework, rework_delta, direction }) => ({ case_id, ward_id, workflow_version, post_signoff_wait_min, before_median_wait_min, wait_delta_min, rework_events, before_median_rework, rework_delta, direction })), observed: c.observed.length, contradicts_adopted: c.contradicts_adopted, supports_adopted: c.supports_adopted }; })(),
+    compared_outcomes: log.some((x) => x.record_type === "outcomes.compared"),
+    // A response is insufficient_evidence declared, or a dev-valid proposal that cites an event of an outcome that did worse under the adopted version.
+    responded_to_contradiction: (() => {
+      const c = outcomeComparison(pool, loadV1());
+      if (!c.contradicts_adopted) return null;
+      const worse = new Set(c.after.filter((r) => r.direction === "worse" && r.workflow_version !== 1).map((r) => r.case_id));
+      const cites = props.some((p) => p.evidence.event_ids.some((id) => worse.has(pool.event(id)?.case_id ?? "")));
+      return declared?.["result"] === "insufficient_evidence" || (valid && cites);
+    })(),
     hypotheses: hyps.length, proposals: props.length, validations: reports.map((r) => r["status"]),
     result, declared: declared ? { result: declared["result"], note: declared["note"] } : null,
     stop: stopped ? `${String(stopped["stop"])} (${String(stopped["detail"])})` : "not stopped",
@@ -103,4 +118,36 @@ export function adoptionClaims(demo: { runs: DemoRun[] }, emr: EmrVersion, appro
 // Distinct events one run's hypotheses cite as evidence.
 export function citedEventCount(storeRoot: string, runId: string): number {
   return new Set(readStream(storeRoot, STREAMS.hypotheses).filter((e) => e.record_type === "hypothesis.recorded" && (e.payload as Row)["session_id"] === runId).flatMap((e) => (e.payload as HypothesisRecord).evidence.map((x) => x.event_id))).size;
+}
+
+export type PairResponse = "insufficient_evidence" | "proposed_rollback" | "declined" | "re_proposed_adopted" | "no_change_warranted" | "other_proposal" | "no_response";
+// How one second cycle answered its outcomes: insufficient evidence declared, a proposal other than the adopted change citing the adopted version's outcomes, the change proposed again, or declined (no proposal of it, the outcomes cited in its hypotheses).
+export function cycleResponse(storeRoot: string, runId: string, o: { observed: readonly OutcomeCase[]; outcomes: readonly OutcomeCase[]; adoptedOps: readonly unknown[] }): Row {
+  const r = cycle2Result(storeRoot, runId, o) as Row & { outcome_comparison: { after: { case_id: string; direction: string; workflow_version: number | null }[]; contradicts_adopted: boolean } };
+  const pool = new DiscoveryPool(undefined, o.outcomes, o.observed);
+  const log = readStream(storeRoot, sessionStreamId(runId));
+  const declared = (log.find((e) => e.record_type === "session.result")?.payload ?? null) as Row | null;
+  const linked = new Set(log.filter((e) => e.record_type === "proposal.linked").map((e) => String((e.payload as Row)["proposal_id"])));
+  const props = readStream(storeRoot, STREAMS.proposals).filter((e) => e.record_type === "proposal.submitted" && linked.has(String((e.payload as Row)["proposal_id"]))).map((e) => e.payload as unknown as WorkflowChangeProposal);
+  const hyps = readStream(storeRoot, STREAMS.hypotheses).filter((e) => e.record_type === "hypothesis.recorded" && (e.payload as Row)["session_id"] === runId).map((e) => e.payload as unknown as HypothesisRecord);
+  const adopted = r.outcome_comparison.after.filter((x) => x.workflow_version !== null && x.workflow_version !== 1).map((x) => x.case_id);
+  const onAdopted = (id: string) => adopted.includes(pool.event(id)?.case_id ?? "");
+  const key = (x: unknown) => JSON.stringify(x, Object.keys(x as object).sort());
+  const repeats = (p: WorkflowChangeProposal) => o.adoptedOps.every((a) => p.ops.some((b) => key(b) === key(a)));
+  const citing = hyps.flatMap((h) => h.evidence.filter((e) => onAdopted(e.event_id)).map((e) => ({ hypothesis_id: h.hypothesis_id, event_id: e.event_id, stance: e.stance, status: h.status })));
+  const propCites = props.flatMap((p) => p.evidence.event_ids.filter(onAdopted));
+  const response: PairResponse = declared?.["result"] === "insufficient_evidence" ? "insufficient_evidence"
+    : props.some((p) => !repeats(p) && p.evidence.event_ids.some(onAdopted)) ? "proposed_rollback"
+    : props.some(repeats) ? "re_proposed_adopted"
+    : declared?.["result"] === "no_change_warranted" ? "no_change_warranted"
+    : props.length ? "other_proposal"
+    : citing.length > 0 ? "declined"
+    : "no_response";
+  return {
+    run_id: runId, commitment: r["commitment"], response, outcomes_contradict_adopted: r.outcome_comparison.contradicts_adopted,
+    read: { outcomes: (r["read"] as Row)["outcomes"], observed: (r["read"] as Row)["observed"] }, compared_outcomes: r["compared_outcomes"],
+    adopted_outcome_events_cited: { by_hypotheses: citing.length, contradicting: citing.filter((c) => c.stance === "contradicts").length, by_proposals: propCites.length },
+    proposals: props.map((p) => ({ proposal_id: p.proposal_id, ops: p.ops, scope: p.scope, repeats_adopted: repeats(p) })), validations: r["validations"],
+    declared: declared ? { result: declared["result"], note: declared["note"] } : null, stop: r["stop"], calls: r["calls"], cost_usd: r["cost_usd"]
+  };
 }

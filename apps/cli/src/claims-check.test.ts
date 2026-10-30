@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { claimStatus, completionMatrix, parseClaimPredicate, parsePredicate, evaluate, validationSummary, PredicateError } from "@hey-pisgah/evaluator";
 import { loadV1 } from "@hey-pisgah/hospital";
-import { ClaimsRegistry, claimsCheck } from "./claims-check.js";
+import { ClaimsRegistry, claimsCheck, learningEarned, learningWordProblems } from "./claims-check.js";
 
 const repo = join(import.meta.dirname, "..", "..", "..");
 const registry = ClaimsRegistry.parse(JSON.parse(readFileSync(join(repo, "evaluation", "claims.json"), "utf8")));
@@ -56,9 +56,63 @@ describe("claims:check", () => {
     expect(c06.result_path).toBe(c26.result_path);
     expect(c06.predicate).toBe(c26.predicate);
     const file = c06.result_path.split("/").at(-1)!;
-    const base = { discover_dev_valid: 0, discover_dev_valid_any: 0, discover_invariance_pass: false, discover_deny_clean: false };
+    const base = { discover_config_dev_valid: 0, discover_dev_valid_any: 0, discover_invariance_pass: false, discover_deny_clean: false };
     expect(planted({ [file]: base })("C-06").status).toBe("red");
     expect(planted({ [file]: { ...base, discover_dev_valid_any: 2 } })("C-06").status).toBe("amber");
-    expect(planted({ [file]: { discover_dev_valid: 1, discover_dev_valid_any: 1, discover_invariance_pass: true, discover_deny_clean: true } })("C-06").status).toBe("green");
+    expect(planted({ [file]: { ...base, discover_dev_valid_any: 4, discover_invariance_pass: true, discover_deny_clean: true } })("C-26").status).toBe("amber");
+    expect(planted({ [file]: { discover_config_dev_valid: 1, discover_dev_valid_any: 1, discover_invariance_pass: true, discover_deny_clean: true } })("C-06").status).toBe("green");
+  });
+});
+
+describe("no learning words before the system has earned them", () => {
+  const repoEarned = learningEarned(repo);
+  const withWord = () => {
+    const reg = structuredClone(registry);
+    reg.claims.find((c) => c.claim_id === "C-26")!.wording.pass = "The system learns a better workflow";
+    return reg;
+  };
+
+  it("finds no learning word in the registry while either result is missing", () => {
+    expect(learningWordProblems(registry.claims, repoEarned)).toEqual([]);
+    expect(learningWordProblems(registry.claims, { c10_reads_outcomes: false, reversed_evidence_passed: false })).toEqual([]);
+  });
+
+  it("flags a planted learning word in any claim text until both results hold", () => {
+    const reg = withWord();
+    expect(learningWordProblems(reg.claims, { c10_reads_outcomes: false, reversed_evidence_passed: false })).toEqual([expect.stringContaining("C-26 wording.pass")]);
+    expect(learningWordProblems(reg.claims, { c10_reads_outcomes: true, reversed_evidence_passed: false })).toHaveLength(1);
+    expect(learningWordProblems(reg.claims, { c10_reads_outcomes: false, reversed_evidence_passed: true })).toHaveLength(1);
+    expect(learningWordProblems(reg.claims, { c10_reads_outcomes: true, reversed_evidence_passed: true })).toEqual([]);
+    for (const w of ["learned", "learning", "Learns", "learnt"]) {
+      const r = structuredClone(registry);
+      r.claims[0]!.question = `It ${w} things`;
+      expect(learningWordProblems(r.claims, { c10_reads_outcomes: false, reversed_evidence_passed: false }), w).toHaveLength(1);
+    }
+    const near = structuredClone(registry);
+    near.claims[0]!.question = "Applied the lesson to the learner record";
+    expect(learningWordProblems(near.claims, { c10_reads_outcomes: false, reversed_evidence_passed: false })).toEqual([]);
+  });
+
+  it("makes claims:check refuse a registry with the word, and reads both results from the second cycle's file", () => {
+    const root = mkdtempSync(join(tmpdir(), "claims-learn-"));
+    mkdirSync(join(root, "evaluation", "results"), { recursive: true });
+    writeFileSync(join(root, "evaluation", "claims.json"), JSON.stringify(withWord()));
+    const run = () => claimsCheck(root, { commit: "abc1234", now: () => "2026-10-30T12:00:00.000Z" });
+    const cycle2 = (outcomes: number, responded: (boolean | null)[]) => writeFileSync(join(root, "evaluation", "results", "cycle2.json"), JSON.stringify({ read: { outcomes }, counter_evidence: { runs: responded.map((r) => ({ responded_to_contradiction: r })) } }));
+    expect(run).toThrow(/C-26 wording\.pass uses a learning word/);
+    cycle2(2, []);
+    expect(run).toThrow(/learning word/);
+    cycle2(2, [true, false]);
+    expect(run).toThrow(/learning word/);
+    cycle2(0, [true]);
+    expect(run).toThrow(/learning word/);
+    cycle2(2, [false, true]);
+    expect(learningEarned(root)).toEqual({ c10_reads_outcomes: true, reversed_evidence_passed: true });
+    expect(run().claims).toHaveLength(28);
+  });
+
+  it("keeps the README's description of the system free of the word too", () => {
+    const readme = readFileSync(join(repo, "README.md"), "utf8");
+    if (!(repoEarned.c10_reads_outcomes && repoEarned.reversed_evidence_passed)) expect(readme.match(/\blearns\b/gi) ?? []).toEqual([]);
   });
 });

@@ -20,6 +20,9 @@ export const STAGE_TOOLS: Record<Stage, readonly string[]> = {
   interpret: ["get_experiment", "set_hypothesis_status", "record_hypothesis", "submit_proposal", "get_validation_report", "list_ledger", "next_cycle", "end_session"]
 };
 
+// Added to these stages only in a second cycle whose pool holds outcomes or observed journeys.
+export const SECOND_CYCLE_TOOLS: Partial<Record<Stage, readonly string[]>> = { prior: ["compare_outcomes"], observe: ["compare_outcomes"] };
+
 export type CycleOptions = LoopOptions & { effort: "low" | "medium" | "high" | "xhigh" };
 
 function casesOf(args: string): string[] {
@@ -49,7 +52,7 @@ export async function runCycleLoop(o: CycleOptions): Promise<LoopOutcome> {
   let definitionSeen = false;
   const arm = new Set<string>(armTools("adaptive"));
   // submit_proposal is offered in interpret only once a delivered experiment made the primary metric better on the cases it moved.
-  const offered = (st: Stage) => new Set(STAGE_TOOLS[st].filter((t) => arm.has(t) && (t !== "submit_proposal" || s.improvedExperiments().length > 0)));
+  const offered = (st: Stage) => new Set([...STAGE_TOOLS[st], ...(s.hasNewEvidence() ? SECOND_CYCLE_TOOLS[st] ?? [] : [])].filter((t) => arm.has(t) && (t !== "submit_proposal" || s.improvedExperiments().length > 0)));
 
   for (s.cycle = 0; !stop && s.cycle < CYCLE.max_cycles; s.cycle++) {
     s.question = null;

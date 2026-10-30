@@ -17,6 +17,15 @@ export type EmergencyArgs = z.infer<typeof EmergencyArgs>;
 export const EMERGENCY_LINE = /^\s*(?:(?:ok(?:ay)?|hey|hi|hay|a)[,\s]+)?(?:pisgah|pizgah|pisga|pisgar|pisca)[,.!\s]+(?:this is an?\s+|we have an?\s+)?emergency\b/i;
 export const WAKE_LINE = /^\s*(?:(?:ok(?:ay)?|hey|hi|hay|a)[,\s]+)(?:pisgah|pizgah|pisga|pisgar|pisca)\b[,.!\s]*/i;
 
+// Audio carried across the wake starts with the phrase itself, so the phrase is dropped unless it is the emergency phrase, which is kept whole.
+export function afterWake(line: string): string {
+  if (EMERGENCY_LINE.test(line) || !CARRIED_WAKE.test(line)) return line;
+  const rest = line.replace(CARRIED_WAKE, "").trim();
+  return rest || line;
+}
+// The carried audio may begin partway through the phrase, so the greeting before the name is optional here.
+const CARRIED_WAKE = /^\s*(?:(?:ok(?:ay)?|hey|hi|hay|a)[,\s]+)?(?:pisgah|pizgah|pisga|pisgar|pisca)\b[,.!\s]*/i;
+
 // A transcript of audio the device already heard as "emergency": the word early, after something like the wake word or a bare greeting, as "Hypiska, hey, emergency".
 export function emergencyHeardLoosely(line: string): boolean {
   const m = /^\W*((?:\S+\W+){0,4}?)emergency\b/i.exec(line);
@@ -25,8 +34,12 @@ export function emergencyHeardLoosely(line: string): boolean {
   return /h[aeiy]{0,2}\W*p[iy]\W*[sz]?\W*[gk]|pisg|pizg|pisk|pesk/i.test(before.replace(/\s+/g, "")) || /^(?:hey|hi|hay|okay|ok)\W*$/i.test(before);
 }
 
+// The line an Emergency press leaves as its evidence: what happened, not words nobody said.
+export const EMERGENCY_PRESS = "Emergency button pressed";
+
 // What the clinician said after the phrase, kept as the arrival reason when it is more than the phrase.
 export function emergencyReason(line: string): string {
+  if (line === EMERGENCY_PRESS) return "Emergency arrival, opened by a press; reason not yet stated";
   const rest = line.replace(EMERGENCY_LINE, "").replace(/^[\s,.:;-]+/, "").trim();
   return rest.length >= 3 ? `Emergency arrival: ${rest}`.slice(0, 500) : "Emergency arrival, opened by voice; reason not yet stated";
 }
@@ -38,27 +51,24 @@ export function unidentifiedRef(at: Date, timeZone = "Africa/Lagos"): string {
 }
 
 export type SpokenIdentity = { name: string; phone: string | null; words: string };
-const NAME = "([A-Z][a-z'-]+(?:\\s+[A-Z][a-z'-]+){1,3})";
-const IDENTITY = [
-  new RegExp(`\\b(?:[Hh]er|[Hh]is|[Tt]heir|[Tt]he patient'?s|[Pp]atient'?s)\\s+name\\s+is\\s+${NAME}`),
-  new RegExp(`\\b(?:[Ss]he|[Hh]e)\\s+(?:is called|says (?:she|he) is|says (?:her|his) name is|is named)\\s+${NAME}`),
-  new RegExp(`\\b[Tt]he patient is\\s+(?:called\\s+)?${NAME}`)
-];
+// The words that introduce a name, as people say them, Nigerian English included ("her name na").
+const NAMING = /\b(?:(?:her|his|their|the patient'?s|patient'?s)\s+name\s+(?:is|na)|(?:she|he)\s+(?:is called|is named|says (?:she|he) is|says (?:her|his) name is)|(?:she|he)'s called|(?:they|people) call (?:her|him)|the patient is(?:\s+called)?)\b/i;
+const NAME_RUN = /[A-Z][a-z'-]+(?:\s+[A-Z][a-z'-]+){1,3}/g;
+const NOT_NAME = /^(?:And|Phone|Her|His|She|He|The|Number|Em|Eh|Er|Um|Uh)$/;
 const PHONE = /(?:\+?234|0)\s*[789]\s*[01](?:[\s-]*\d){8}/;
 
-// The name, and the phone when said, from a line that names the patient; the name must be two to four capitalised words as transcribed.
+// The name, and the phone when said, from a line that names the patient: the longest run of two to four capitalised words after the naming words, so "Grace, Grace Okafor" reads as Grace Okafor.
 export function identityFrom(line: string): SpokenIdentity | null {
-  for (const re of IDENTITY) {
-    const m = re.exec(line);
-    if (!m) continue;
-    const name = m[1]!.replace(/\s+(?:And|Phone|Her|His|She|He|The)$/, "").trim();
-    if (name.split(/\s+/).length < 2) continue;
-    const p = PHONE.exec(digitsSpoken(line));
-    const digits = p ? p[0].replace(/\D/g, "") : null;
-    const phone = digits ? (digits.startsWith("234") ? `0${digits.slice(3)}` : digits) : null;
-    return { name, phone: phone && /^0[789][01]\d{8}$/.test(phone) ? phone : null, words: m[0] };
-  }
-  return null;
+  const m = NAMING.exec(line);
+  if (!m) return null;
+  const rest = line.slice(m.index + m[0].length).replace(/\.{2,}|…/g, ",").split(/[.!?;]\s|\bnumber\b|\bphone\b/i)[0]!;
+  const runs = [...rest.matchAll(NAME_RUN)].map((r) => r[0].split(/\s+/).filter((w) => !NOT_NAME.test(w)).join(" ")).filter((n) => n.split(" ").length >= 2);
+  const name = runs.sort((x, y) => y.length - x.length)[0];
+  if (!name) return null;
+  const p = PHONE.exec(digitsSpoken(line));
+  const digits = p ? p[0].replace(/\D/g, "") : null;
+  const phone = digits ? (digits.startsWith("234") ? `0${digits.slice(3)}` : digits) : null;
+  return { name, phone: phone && /^0[789][01]\d{8}$/.test(phone) ? phone : null, words: `${m[0]} ${name}` };
 }
 
 const DIGIT_WORDS: Record<string, string> = { zero: "0", oh: "0", o: "0", one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9" };

@@ -8,6 +8,7 @@ import { openStream } from "@hey-pisgah/store";
 import { Registry } from "@hey-pisgah/workflow";
 import type { VersionsSpec } from "../src/profile.js";
 import { adoptedForEmr } from "../src/versions.js";
+import { factValue } from "../src/port.js";
 
 const A_PRIOR = (JSON.parse(readFileSync(new URL("../../agent/fixtures/proposals/a-prior.json", import.meta.url), "utf8")) as { proposal: { ops: unknown[]; scope: { wards: "all"; condition: null } } }).proposal;
 const meta = { author: { kind: "model_session" as const, id: "p-test0003" }, proposal_id: "p-test0003", source_evidence: { event_ids: [], hypothesis_ids: [], experiment_ids: [], validation_report_id: null }, model_provenance: null };
@@ -48,5 +49,18 @@ describe("the adopted version wired for an EMR", () => {
     expect(a.wiring.check(offer).ok).toBe(true);
     current = { ...current, requirement_version: "r2" };
     expect(a.wiring.check(offer)).toMatchObject({ ok: false, requirement_version: "r2" });
+  });
+});
+
+describe("watched facts that stand for a workflow event", () => {
+  it("reads the round entry and the take-home order as present words, and nothing when the record has neither", () => {
+    const stay = { latestNote: { body: "Seen on the round", timeLabel: "30 Oct · 09:10" } };
+    const discharge = { stage: "clinical_pending", paperwork: { medicines: [{ takeHome: false }, { takeHome: true }] } };
+    expect(factValue(stay, { path: "latestNote.timeLabel", present: "recorded" })).toBe("recorded");
+    expect(factValue({ latestNote: null }, { path: "latestNote.timeLabel", present: "recorded" })).toBeNull();
+    expect(factValue(discharge, { path: "paperwork.medicines[].takeHome", present: "ordered" })).toBe("ordered");
+    expect(factValue({ paperwork: { medicines: [{ takeHome: false }] } }, { path: "paperwork.medicines[].takeHome", present: "ordered" })).toBeNull();
+    expect(factValue({ paperwork: { medicines: [] } }, { path: "paperwork.medicines[].takeHome", present: "ordered" })).toBeNull();
+    expect(factValue(discharge, { path: "stage" })).toBe("clinical_pending");
   });
 });

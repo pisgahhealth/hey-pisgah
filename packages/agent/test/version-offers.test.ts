@@ -6,7 +6,7 @@ import { readStream } from "@hey-pisgah/store";
 import { Registry } from "@hey-pisgah/workflow";
 import type { WorkflowDefinition as WD } from "@hey-pisgah/contracts";
 import { EmrRuntime } from "../src/emr/runtime.js";
-import { caseFacts, changedSteps, checkOffer, readVersion, versionWiring, type Counterparts, type RequirementsNow } from "../src/emr/version-offers.js";
+import { caseFacts, changedSteps, checkOffer, deployCheck, readVersion, versionWiring, type Counterparts, type RequirementsNow } from "../src/emr/version-offers.js";
 import { emrRoot, gater, until } from "./emr-helpers.js";
 import { ADMIT, NURSE, WorkFake } from "./work-helpers.js";
 
@@ -134,5 +134,55 @@ describe("version offers in the EMR runtime", () => {
     expect(ty.filter((x) => x.startsWith("version.") || x === "offer.made")).toEqual(["version.rules", "version.check_failed", "version.revision_proposed"]);
     expect(port.writes).toHaveLength(0);
     await rt.stop();
+  });
+});
+
+// The change a person adopted for Ward A on 30 Oct: the summary draft starts after the round entry instead of after sign-off.
+const ADOPTED_OPS = [{ op: "remove_soft_edge", edge_id: "e04" }, { op: "set_prep_trigger", target: { step: "st06" }, when: { after: { step: "st01" } } }];
+function adopted(): { v1: WD; v2: WD } {
+  const r = Registry.load([loadV1()]);
+  const v2 = r.propose(1, ADOPTED_OPS as never, meta, { scope: { wards: ["A"], condition: null }, fallback: 1 }).version!;
+  return { v1: r.get(1), v2 };
+}
+// The counterparts the EMR profile held before this lane: sign-off and clearance only, and no work kind for any document.
+const SIGNOFF_ONLY: Counterparts = { steps: { st05: { fact: "discharge.stage", equals: "clinical_done" }, st13: { fact: "discharge.stage", equals: "cleared" } }, events: {}, documents: {} };
+// The round entry, the take-home order and sign-off each mapped to a watched EMR fact, and a nurse's kind that drafts the summary.
+const MAPPED: Counterparts = {
+  steps: { st01: { fact: "stay.round", equals: "recorded" }, st02: { fact: "discharge.take_home", equals: "ordered" }, ...SIGNOFF_ONLY.steps },
+  events: {},
+  documents: { "discharge_summary.draft": { kind: "draft_discharge_summary", ask: "The round entry is in. Say draft the summary when you want it." } }
+};
+const OWNERS = [{ id: "nurse", kinds: ["record_observation", "draft_discharge_summary"] }, { id: "doctor", kinds: ["record_note"] }];
+
+describe("the adopted version against this EMR's events", () => {
+  it("reproduces the review: under the old counterparts the adopted version yields no offer, and the deploy check says why", () => {
+    const { v1, v2 } = adopted();
+    const r = readVersion(v2, v1, SIGNOFF_ONLY, facts("self_pay"));
+    expect(r.offers).toHaveLength(0);
+    expect(r.lines).toEqual(["Nothing to offer under version 2: no watched fact in this EMR shows after st01."]);
+    const d = deployCheck(v2, v1, SIGNOFF_ONLY, OWNERS);
+    expect(d.deployable).toBe(false);
+    expect(d.changed).toMatchObject([{ step_id: "st06", status: "no_trigger_counterpart", event: "round entry" }]);
+  });
+
+  it("offers the summary draft at the round entry once the round entry, take-home order and sign-off are mapped, and the version deploys", () => {
+    const { v1, v2 } = adopted();
+    const r = readVersion(v2, v1, MAPPED, facts("self_pay"));
+    expect(r.offers.map((o) => [o.step_id, o.kind, o.when, o.changed])).toEqual([["st06", "draft_discharge_summary", [{ fact: "stay.round", equals: "recorded" }], true]]);
+    expect(r.lines).toEqual([]);
+    const d = deployCheck(v2, v1, MAPPED, OWNERS);
+    expect(d).toMatchObject({ deployable: true, changed: [{ step_id: "st06", status: "deployable", event: "round entry", owners: ["nurse"] }] });
+    // Version 1 offers the same draft only at sign-off, so the two versions differ in the EMR exactly where the change says.
+    expect(readVersion(v1, null, MAPPED, facts("self_pay")).offers.map((o) => o.when)).toEqual([[{ fact: "discharge.stage", equals: "clinical_done" }]]);
+  });
+
+  it("fails the deploy check when no owner's agent holds the kind, or the change touches a person's step", () => {
+    const { v1, v2 } = adopted();
+    expect(deployCheck(v2, v1, MAPPED, [{ id: "doctor", kinds: ["record_note"] }]).changed[0]).toMatchObject({ status: "no_owner" });
+    expect(deployCheck(v2, v1, { ...MAPPED, documents: {} }, OWNERS).changed[0]).toMatchObject({ status: "no_document_counterpart" });
+    const r = Registry.load([loadV1()]);
+    const person = r.propose(1, [{ op: "remove_soft_edge", edge_id: "e05" }] as never, meta, { scope: { wards: "all", condition: null }, fallback: 1 }).version!;
+    expect(deployCheck(person, r.get(1), MAPPED, OWNERS)).toMatchObject({ deployable: false, changed: [{ step_id: "st14", status: "not_agent_work" }] });
+    expect(deployCheck(r.get(1), r.get(1), MAPPED, OWNERS)).toMatchObject({ deployable: false, reason: "version 1 changes no step against its parent" });
   });
 });

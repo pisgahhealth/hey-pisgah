@@ -71,6 +71,16 @@ describe("hands-free entry rules", () => {
     expect(identityFrom("pulse 110, BP 90 over 60")).toBeNull();
   });
 
+  it("takes a name and phone said the way people say them, hesitations and repeats included", () => {
+    expect(identityFrom("Her name is Grace, Grace Okafor, the number is oh-eight-oh-three, one two three, four five six seven.")).toMatchObject({ name: "Grace Okafor", phone: "08031234567" });
+    expect(identityFrom("Em, her name na Grace Okafor, her number na zero eight zero three one two three four five six seven")).toMatchObject({ name: "Grace Okafor", phone: "08031234567" });
+    expect(identityFrom("the bystander said she's called, eh, Blessing... Blessing Adeyemi")).toMatchObject({ name: "Blessing Adeyemi", phone: null });
+    expect(identityFrom("They call him Chukwuemeka Obi, he no get phone")).toMatchObject({ name: "Chukwuemeka Obi", phone: null });
+    // A first name alone, or a name nobody gave for this patient, is not taken.
+    expect(identityFrom("her name is Grace, we don't know the surname yet")).toBeNull();
+    expect(identityFrom("call Dr Ime Udo for the review")).toBeNull();
+  });
+
   it("moves to a patient only when one known name matches after a switch phrase", () => {
     const known = [{ label: "Bassey Okon", target: { patient_id: OTHER } }, { label: "Unknown arrival 19:42", target: { patient_id: PATIENT } }];
     expect(spokenPatient("now Mr Okon, his pulse is 90", known)?.target).toEqual({ patient_id: OTHER });

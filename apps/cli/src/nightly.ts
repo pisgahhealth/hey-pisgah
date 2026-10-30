@@ -35,23 +35,6 @@ export function openWork(storeRoot: string, departmentOf: (owner: string) => str
   return { open, labels: [...labels] };
 }
 
-// The five faults the publication path must refuse, made from the real memo of this run: each must end anything but delivered.
-async function negatives(s: nightly.NightSources, m: nightly.Memo): Promise<{ tried: number; refused: number; cases: Record<string, string> }> {
-  const f0 = m.facts[0]!;
-  const tamper: Record<string, nightly.Memo> = {
-    invented_figure: { ...m, facts: m.facts.map((f) => (f === f0 ? { ...f, value: f.value + 7 } : f)) },
-    false_completion: { ...m, unfinished: m.unfinished.map((i, k) => (k === 0 ? { ...i, state: "done" as const } : i)) },
-    patient_name: { ...m, preview: `${m.preview} ${s.labels[0] ?? "x"}` }
-  };
-  const cases: Record<string, string> = {};
-  for (const [k, x] of Object.entries(tamper)) cases[k] = (await nightly.memoPublisher({ sources: s, transport: nightly.heldTransport(), now: () => new Date(`${s.day}T23:00:00.000Z`) }).publish(x)).verdict.status;
-  const v = nightly.verifyMemo(m, s);
-  cases["changed_after_verification"] = (await nightly.sendOnVerdict({ ...m, preview: `${m.preview} ` }, v, nightly.heldTransport())).reason;
-  cases["checker_error"] = (await nightly.memoPublisher({ sources: s, transport: nightly.heldTransport(), check: () => { throw new Error("checker failed"); } }).publish(m)).verdict.status;
-  const refused = Object.values(cases).filter((x) => x !== "verified" && x !== "delivered").length;
-  return { tried: Object.keys(cases).length, refused, cases };
-}
-
 type Expect = Record<string, { expect: "deliver" | "refuse"; why: string }>;
 // One recipient's delivery against what the record says should happen; a refusal is correct only when the record does not authorise the recipient.
 export function deliveryOutcome(r: nightly.PublishResult, expect: Expect[string] | undefined): { memo: string; reason: string | null; expected: string | null; correct: boolean | null } {
@@ -65,11 +48,16 @@ if (process.argv[1]?.endsWith("nightly.ts")) {
   const roster = JSON.parse(readFileSync(need("roster"), "utf8")) as { recipients: (nightly.Recipient & { authorise_own?: boolean })[]; departments: Record<string, string> };
   const dept = (owner: string) => roster.departments[owner] ?? "unknown";
   const observed = JSON.parse(readFileSync(need("observed"), "utf8")) as { cases: nightly.DayCase[] };
-  const work = all("emr-store").map((d) => openWork(d, dept));
-  const open = work.flatMap((w) => w.open);
-  // A clinician is authorised for the encounters their own agent worked on; anyone else only for the encounters the roster file declares.
-  const recipients = roster.recipients.map(({ authorise_own, ...r }) => ({ ...r, authorised: [...new Set([...r.authorised, ...(authorise_own ? open.filter((i) => i.owner === r.id).map((i) => i.encounter) : [])])] }));
-  const sources: nightly.NightSources = { day: need("day"), cases: observed.cases, open, recipients, labels: work.flatMap((w) => w.labels) };
+  // The day's sources from the task stores; read once to write the memos and again right before each one is published.
+  const readSources = (): nightly.NightSources => {
+    const work = all("emr-store").map((d) => openWork(d, dept));
+    const open = work.flatMap((w) => w.open);
+    // A clinician is authorised for the encounters their own agent worked on; anyone else only for the encounters the roster file declares.
+    const recipients = roster.recipients.map(({ authorise_own, ...r }) => ({ ...r, authorised: [...new Set([...r.authorised, ...(authorise_own ? open.filter((i) => i.owner === r.id).map((i) => i.encounter) : [])])] }));
+    return { day: need("day"), cases: observed.cases, open, recipients, labels: work.flatMap((w) => w.labels) };
+  };
+  const sources = readSources();
+  const recipients = sources.recipients;
   const facts = nightly.computeFacts(sources);
   const runId = need("run-id");
   const client = createModelClient({ storeRoot: need("store"), mode: (process.env["HEY_PISGAH_MODE"] as "live" | "mock" | "replay" | undefined) ?? "mock", recordingsDir: flag("recordings") ?? `${need("store")}/../recordings`, timeoutMs: 120_000 });
@@ -93,11 +81,19 @@ if (process.argv[1]?.endsWith("nightly.ts")) {
     transport = door;
   }
   const expect = (flag("expect") ? JSON.parse(readFileSync(need("expect"), "utf8")).recipients : {}) as Expect;
-  const publisher = nightly.memoPublisher({ sources, transport, now: () => new Date(`${sources.day}T23:00:00.000Z`) });
+  const at = new Date(`${sources.day}T23:00:00.000Z`);
+  // On a change the memo is written again from the fresh records with the same investigations, then checked again before it goes.
+  // One bounded repair from the records: a failed statement is left out and the memo rebuilt, then checked again; still failing, it is withheld with its reasons.
+  const dropped: { memo_id: string; finding_id: string; code: string; detail: string }[] = [];
+  const publisher = nightly.memoPublisher({
+    sources, transport, now: () => at, refresh: readSources, maxRepairs: 1, repair: nightly.repairFromRecords(sources, inv.investigations, at, dropped),
+    recompose: (fresh, m) => nightly.composeMemo(fresh, fresh.recipients.find((r) => r.id === m.recipient_id)!, nightly.computeFacts(fresh), inv.investigations, at)
+  });
   const results = [];
   for (const r of recipients) {
     const memo = nightly.composeMemo(sources, r, facts, inv.investigations, new Date(`${sources.day}T23:00:00.000Z`));
-    results.push({ memo, result: await publisher.publish(memo) });
+    const result = await publisher.publish(memo);
+    results.push({ memo: result.final, result });
   }
   client.close();
   // Cost and calls from the ledger, so a repaired call is counted with the attempt it replaced.
@@ -108,8 +104,8 @@ if (process.argv[1]?.endsWith("nightly.ts")) {
   const throughDoor = !!doorProfile;
   // Delivered means every recipient the record authorises received the memo and every refusal was one the record calls for.
   const deliveredAll = throughDoor && outcomes.length > 0 && outcomes.every((x) => x.out.correct === true) && outcomes.some((x) => x.result.status === "delivered");
-  const closed = await negatives(sources, results.find((x) => x.memo.unfinished.length && x.memo.facts.length)!.memo);
-  const priv = { sources_hash: nightly.sourcesHash(sources), facts, investigations: inv.investigations, deny_hits: hits, results, held_deliveries: held.sent, door_log: doorLog, expect, sender, calls: inv.calls, cost_usd: inv.cost_usd, ms: Date.now() - t0 };
+  const closed = await nightly.plantedFaults(sources, results.map((x) => x.memo), at);
+  const priv = { repaired_out: dropped, sources_hash: nightly.sourcesHash(sources), facts, investigations: inv.investigations, deny_hits: hits, results, held_deliveries: held.sent, door_log: doorLog, expect, sender, calls: inv.calls, cost_usd: inv.cost_usd, ms: Date.now() - t0 };
   mkdirSync(dirname(need("out-private")), { recursive: true });
   writeFileSync(need("out-private"), `${JSON.stringify(priv, null, 1)}\n`);
   // The public file keeps statuses, counts and check codes only: no encounter id, no title, no name.
@@ -128,7 +124,13 @@ if (process.argv[1]?.endsWith("nightly.ts")) {
     authorised_delivered: outcomes.filter((x) => x.out.expected === "deliver" && x.result.status === "delivered").length,
     refusals: outcomes.filter((x) => x.out.memo === "refused").length, correct_refusals: outcomes.filter((x) => x.out.memo === "refused" && x.out.correct === true).length,
     incorrect_outcomes: outcomes.filter((x) => x.out.correct !== true).length,
-    delivery_results: outcomes.map(({ memo, result, out }) => ({ recipient_role: recipients.find((x) => x.id === memo.recipient_id)!.role, incoming: recipients.find((x) => x.id === memo.recipient_id)!.incoming, ...out, why: expect[memo.recipient_id]?.why ?? null, task_alerts_not_sent: result.not_sent.filter((x) => x.kind === "task").length })), checks_failed_closed: closed.refused, checks_tried: closed.tried, negative_cases: closed.cases,
+    delivery_results: outcomes.map(({ memo, result, out }) => ({ recipient_role: recipients.find((x) => x.id === memo.recipient_id)!.role, incoming: recipients.find((x) => x.id === memo.recipient_id)!.incoming, ...out, why: expect[memo.recipient_id]?.why ?? null, task_alerts_not_sent: result.not_sent.filter((x) => x.kind !== "memo").length, urgent_alerts_sent: result.delivered.filter((x) => x.kind === "urgent").length })), checks_failed_closed: closed.refused, checks_tried: closed.tried, negative_cases: closed.cases, negative_not_applicable: closed.not_applicable,
+    repairs: results.reduce((n, x) => n + x.result.repairs, 0), repaired_out: dropped.map(({ finding_id, code }) => ({ finding_id, code })),
+    withheld_reasons: results.filter((x) => x.result.status === "withheld").map((x) => ({ recipient_role: recipients.find((r) => r.id === x.memo.recipient_id)!.role, codes: x.result.verdict.failures.map((f) => f.code) })),
+    refreshed: results.map((x) => x.result.refreshed), urgent_alerts: results.reduce((n, x) => n + x.result.delivered.filter((d) => d.kind === "urgent").length, 0), urgent_items: results.reduce((n, x) => n + x.memo.urgent.length, 0),
+    // Each urgent item of a recipient the record authorises must ring as its own alert, not only inside the memo.
+    urgent_items_authorised: outcomes.filter((x) => x.out.expected === "deliver").reduce((n, x) => n + x.memo.urgent.length, 0),
+    urgent_alerts_authorised: outcomes.filter((x) => x.out.expected === "deliver").reduce((n, x) => n + x.result.delivered.filter((d) => d.kind === "urgent").length, 0),
     tests: "packages/intelligence/test/nightly.test.ts", model_mode: process.env["HEY_PISGAH_MODE"] ?? "mock", calls: inv.calls, cost_usd: inv.cost_usd, effort: "medium", purposes: ["draft_text", "other"], model: "meta-models/Muse-Spark-Open-816B-A42B"
   };
   writeFileSync(need("out"), `${JSON.stringify(pub, null, 1)}\n`);

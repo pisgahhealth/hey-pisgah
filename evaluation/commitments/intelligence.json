@@ -458,6 +458,135 @@
         "insufficient_evidence_default": false
       },
       "hash": "bb888f4cf5ec81d0ff0d831162eb474cc92e5db023971983617aa7378733b122"
+    },
+    {
+      "revision": 13,
+      "at": "2026-10-30T05:59:57.727Z",
+      "reason": "Revision 13 (lane F3b, from the 30 Oct review, items 7 and 2 of the relearning brief). (a) The second cycle reads the new evidence first: list_cases puts the verified outcomes, then the observed journeys, before the histories, and outcome rows carry the workflow version they ran under; a new tool compare_outcomes, offered only in a second cycle whose pool holds outcomes or observed journeys (prior and observe stages), returns each outcome's wait from sign-off to departure and its document revisions against the median of its ward's histories, with the difference and direction, and each observed journey's figures; in a second cycle a proposal or a session result is refused until compare_outcomes has been called, and no_change_warranted is refused while the outcomes under the adopted version are worse than before (the answer is then a proposal, or insufficient_evidence, which a second cycle may now declare). CYCLE_TWO says so. Reason: run-e6c20001 read 0 of 2 outcomes and 0 of 7 observed journeys and cited only histories. (b) The aim line no longer says no extra rework: it says added rework is a cost a proposal states as a trade-off and the validation gate decides. Reason: the dev gate (no regression, no prohibited attempt, exception check, fences, documents kept) accepts rework, and even the planted change adds 4 revisions, so the old aim sent revision 11's three runs and part of revision 12's budget into removing a cost the gate accepts. No new text names a step, edge, event or operation; the deny-list scan stays clean.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "30f7e07c84a2f70b7f73c97f24c40ae358c9c33cb02d223e782c04532580a783",
+            "tools": "35e287b717c363ad060bd5dfe1ace0f3043a50461c63bb36cd230415fc51e7d6"
+          },
+          "a3": {
+            "prompt": "1650668a1f0e6d6124b1469fd1e15e72a6dab7e37936a3aba93dd221a3bf9c51",
+            "tools": "ebd093c38f470db76c9ed635053427d01e13fc2efb2c8a4257472defbd173085"
+          },
+          "a4": {
+            "prompt": "feb02bca8d29121c1f59be1181fa104287d3b78ab6c957fb2dcdd395df67bd9d",
+            "tools": "d521daaa52592aef67c9b70682b669f3a554da08e264fc093df87c873b0ec0d4"
+          },
+          "prior": {
+            "prompt": "8537544495fa7ad07fcf6413425658c09d9294135e527d3b076a43fb89ad76d9",
+            "tools": "a69f44f1678b28a5d05fe8a6b7ce1d69df7da8c6025662abb41092d1d4399167"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "adaptive_controller": "cycle",
+          "adaptive_efforts": [
+            "medium",
+            "high"
+          ],
+          "adaptive_max_calls": 80,
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 30000,
+          "history_chars": 70000,
+          "turn_result_chars": 20000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "6a26178e3fa374c8eb4364a4d0239710e30e11617929fab573a849602112e9e3"
+    },
+    {
+      "revision": 14,
+      "at": "2026-10-30T06:07:06.303Z",
+      "reason": "Revision 14 (lane F3b, after the first counter-evidence run). When compare_outcomes shows the outcomes under the adopted version did worse than their ward's histories, a proposal is refused unless it cites at least one event of those outcomes; insufficient_evidence stays the other answer and no_change_warranted stays refused. The compare_outcomes description says so. Reason: run-f3bc2r01 (revision 13, outcomes reversed) read both outcomes and all observed journeys, then re-proposed the adopted change widened to ward B citing no outcome event, which the rule counted as a response although it ignored the contradiction. The rule only acts when outcomes contradict the adopted version, so the revision 13 run on the true outcomes is unaffected; it is rerun under revision 14 anyway. No new text names a step, edge, event or operation.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "30f7e07c84a2f70b7f73c97f24c40ae358c9c33cb02d223e782c04532580a783",
+            "tools": "87265ba7404334a7710c1964b36097d966822c14988664e9dee5d5c900dab5e7"
+          },
+          "a3": {
+            "prompt": "1650668a1f0e6d6124b1469fd1e15e72a6dab7e37936a3aba93dd221a3bf9c51",
+            "tools": "ebd093c38f470db76c9ed635053427d01e13fc2efb2c8a4257472defbd173085"
+          },
+          "a4": {
+            "prompt": "feb02bca8d29121c1f59be1181fa104287d3b78ab6c957fb2dcdd395df67bd9d",
+            "tools": "d521daaa52592aef67c9b70682b669f3a554da08e264fc093df87c873b0ec0d4"
+          },
+          "prior": {
+            "prompt": "8537544495fa7ad07fcf6413425658c09d9294135e527d3b076a43fb89ad76d9",
+            "tools": "a69f44f1678b28a5d05fe8a6b7ce1d69df7da8c6025662abb41092d1d4399167"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "adaptive_controller": "cycle",
+          "adaptive_efforts": [
+            "medium",
+            "high"
+          ],
+          "adaptive_max_calls": 80,
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 30000,
+          "history_chars": 70000,
+          "turn_result_chars": 20000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "aaa7b4bf5516a9365591c0c1e59141450d4ee1c34d85adc8d1ed0d42646b6ea7"
+    },
+    {
+      "revision": 15,
+      "at": "2026-10-30T06:53:23.232Z",
+      "reason": "Revision 15 (lane G8, from the 30 Oct wording review). The aim line in the shared system prompt now states a per-case rework budget: no ward requirement broken and at most 10 minutes of extra rework on any one case, a budget a person approves when adopting a change; added rework is still a cost a proposal states as a trade-off, and the validation gate now checks it against the budget. The figure is read from the hospital's aim configuration; the dev gate reports rework_within_budget and the version desk records the budget the approver accepted on version.adopted. Reason: revision 13 removed no extra rework but left the objective to the gate without a figure; the review asked for a budget assessed at the gate and approved at adoption instead of only stating the cost. Tools, settings and stage texts are unchanged from revision 14. Runs under revisions 1 to 14, the adopted proposal included, are not re-scored; the budget applies forward.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "19ea3fe7cd45807a276893a8d41c285904cf71f3f592a8681df621a898f1d9ee",
+            "tools": "87265ba7404334a7710c1964b36097d966822c14988664e9dee5d5c900dab5e7"
+          },
+          "a3": {
+            "prompt": "56779d96a9979cbcb35e75eea6e4edcd7f1d59043786bd8ca56fd7904e7c2795",
+            "tools": "ebd093c38f470db76c9ed635053427d01e13fc2efb2c8a4257472defbd173085"
+          },
+          "a4": {
+            "prompt": "87deaf979e5521d9fbbe7fc02b767145a4aabb61da73dffae2715476e7fed1c2",
+            "tools": "d521daaa52592aef67c9b70682b669f3a554da08e264fc093df87c873b0ec0d4"
+          },
+          "prior": {
+            "prompt": "135c34ab4c48a3f27d454f33b26ab45ac8cc6d120d65329f1d44d4f0d9f9b58d",
+            "tools": "a69f44f1678b28a5d05fe8a6b7ce1d69df7da8c6025662abb41092d1d4399167"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "adaptive_controller": "cycle",
+          "adaptive_efforts": [
+            "medium",
+            "high"
+          ],
+          "adaptive_max_calls": 80,
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 30000,
+          "history_chars": 70000,
+          "turn_result_chars": 20000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "cbca7dda1117924ab44ed3ee0001d000d28e9c24b9687751273899657823082b"
     }
   ]
 }
