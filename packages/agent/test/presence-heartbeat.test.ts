@@ -85,6 +85,11 @@ describe("one live check for chunks and frames, and the hands-free heartbeat (D3
     r.beat("s1", key, 0);
     expect(await refusal(r.chunk("s1", 1, tone(1000, 220)))).toBe("accepted");
     expect(r.frame("s1", tone(1000, 230))).toBe("accepted");
+    // Past the owner-voice window the session is still heard, or the owner's voice could never be matched again.
+    r.clock.now += HEARTBEAT_RULE.owner_voice_ms + 1;
+    r.beat("s1", key, 1);
+    expect(r.beats.present(DOC, "s1")).toEqual({ live: false, reason: "no_recent_owner_voice" });
+    expect(await refusal(r.chunk("s1", 2, tone(1000, 225)))).toBe("accepted");
     // A remote feed under another session id has no key, so it never beats.
     expect(await refusal(r.chunk("remote", 0, tone(1000, 240)))).toBe("no_presence");
     await r.rt.stop();

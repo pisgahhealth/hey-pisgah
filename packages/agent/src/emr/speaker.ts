@@ -252,8 +252,10 @@ export class ReplayGuard {
     return this.judge(c, key);
   }
 
+  // A session past the owner-voice window is still heard and matched, since refusing it would stop the owner's voice from ever being matched again; only the beat itself is required.
   private beatOf(owner: string, sessionId: string): ChunkPresence {
-    return this.heartbeat ? this.heartbeat(owner, sessionId) : { live: false, reason: "no_heartbeat" };
+    const p = this.heartbeat ? this.heartbeat(owner, sessionId) : { live: false as const, reason: "no_heartbeat" };
+    return p.live === false && p.reason === "no_recent_owner_voice" ? { live: true } : p;
   }
 
   private judge(c: GuardChunk, key: string): GuardVerdict {
