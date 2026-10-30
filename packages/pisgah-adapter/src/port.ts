@@ -400,6 +400,11 @@ export class PisgahPort implements EmrPort {
   private async commitWork(kind: string, a: WorkArgs, intentKey: string, prov: Provenance): Promise<EmrCommit> {
     const op = this.profile.work[kind];
     if (!op) return { ok: false, reason: "kind_not_in_profile", status: null, retryable: false, counted: false };
+    // Both matched lines must travel, and they must be two lines, before such work reaches the network.
+    if (this.profile.confirm_kinds.includes(kind) && (!prov.voice?.authorisation || !prov.voice.confirmation || prov.voice.authorisation.split("~")[0] === prov.voice.confirmation.split("~")[0] || prov.voice.authorisation.split("~")[0] !== prov.evidence)) {
+      this.refusals.push({ at: this.now().toISOString(), method: "POST", path: `kind:${kind}`, reason: "needs_confirmation" });
+      return { ok: false, reason: "needs_confirmation", status: null, retryable: false, counted: true };
+    }
     const vars = this.varsFor(kind, a);
     if (READ_ONLY_KINDS.has(kind) || "reads" in op) {
       if (!("reads" in op)) return { ok: false, reason: "kind_not_in_profile", status: null, retryable: false, counted: false };

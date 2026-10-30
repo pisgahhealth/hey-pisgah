@@ -87,6 +87,8 @@ export const DoorProfile = z.strictObject({
   deny_exact: z.array(z.string().regex(/^[a-z0-9_-]+(\/[a-z0-9_-]+)*$/)).default([]),
   // Paths called only with the owner's matched confirmation line, such as a clinical discharge; anything else is refused before the network.
   confirm: z.array(z.string().regex(/^[a-z0-9_-]+(\/[a-z0-9_-]+)*$/)).default([]),
+  // Kinds sent only with the owner's matched instruction and a later matched confirmation, on a path other work shares.
+  confirm_kinds: z.array(z.string().regex(/^[a-z_]{1,40}$/)).default([]),
   ops: z.strictObject({
     read_admission: z.strictObject({ method: z.literal("GET"), path: PathTpl, label: Dotted, facts: z.record(z.string(), Dotted), proof: z.record(z.string(), Dotted) }),
     write_observation: z.strictObject({ method: z.literal("POST"), path: PathTpl, body: z.record(z.string(), z.json()), writes_path: Dotted, primary_store: z.string().min(1) }),

@@ -62,6 +62,10 @@ describe("speech gate", () => {
       expect(last.home[k].deny_hits).toEqual([]);
       expect(last.home[k].prompt).not.toMatch(/sending the patient home[^.]*stay with staff/);
     }
+    // Revision 7 adds the owner who may state the diagnosis; the home owners stay revision 6's bytes.
+    const rev6 = JSON.parse(readFileSync(GATE_COMMITMENT_FILE, "utf8")).revisions[5].body;
+    expect(last.home).toEqual(rev6.home);
+    expect(last.diagnosis.deny_hits).toEqual([]);
     expect(gateCommitmentBody().prompt_sha256).toBe(rev2.prompt_sha256);
     expect(denyHits(gatePrompt(["record_observation"]))).toEqual([]);
     expect(denyHits("we did it earlier")).not.toEqual([]);
