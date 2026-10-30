@@ -83,3 +83,35 @@ describe("one live check for chunks and frames, and the hands-free heartbeat (D3
     await r.rt.stop();
   });
 });
+
+describe("the agent service's heartbeat routes and health", () => {
+  it("names its presence mode in health, so the strip beats from listening start, and takes a signed beat over HTTP", async () => {
+    const { ModelClient } = await import("@hey-pisgah/model");
+    const { startEmrServe } = await import("../src/emr/serve.js");
+    const { FakeEmr, emrRoot } = await import("./emr-helpers.js");
+    const boot = async (presence?: "heartbeat") => {
+      const root = emrRoot();
+      const client = new ModelClient({ storeRoot: root, mode: "mock", mock: () => { throw new Error("no model call"); } });
+      return startEmrServe({ storeRoot: root, port: new FakeEmr(), client, listenPort: 0, preferences: false, ears: "off", runtime: { holdMs: 0 }, ...(presence ? { listen: { presence } } : {}) });
+    };
+    const STRIP = "http://localhost:3311";
+    const post = (url: string, body: unknown) => fetch(url, { method: "POST", headers: { "content-type": "application/json", origin: STRIP }, body: JSON.stringify(body) });
+    const plain = await boot();
+    const s = await boot("heartbeat");
+    try {
+      expect(((await (await fetch(`${plain.url}/health`)).json()) as { presence: string }).presence).toBe("observed");
+      expect(((await (await fetch(`${s.url}/health`)).json()) as { presence: string }).presence).toBe("heartbeat");
+      const opened = (await (await post(`${s.url}/tasks/presence/open`, { owner: DOC, session_id: "strip-1" })).json()) as { key: string; beat_ms: number };
+      expect(opened.beat_ms).toBe(HEARTBEAT_RULE.beat_ms);
+      const b = { session_id: "strip-1", seq: 0, at: Date.now(), visible: true, mic_live: true };
+      const ok = await post(`${s.url}/tasks/presence/beat`, { owner: DOC, ...b, mac: beatMac(opened.key, b) });
+      expect([ok.status, await ok.json()]).toEqual([200, { session_id: "strip-1", present: true }]);
+      // Negative control: a beat signed with another key is refused and asks for nothing new.
+      const bad = await post(`${s.url}/tasks/presence/beat`, { owner: DOC, ...b, seq: 1, mac: beatMac("A".repeat(43), { ...b, seq: 1 }) });
+      expect([bad.status, ((await bad.json()) as { error: string }).error]).toEqual([409, "bad_mac"]);
+    } finally {
+      await s.close();
+      await plain.close();
+    }
+  });
+});
