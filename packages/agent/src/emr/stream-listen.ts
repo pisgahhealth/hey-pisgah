@@ -15,7 +15,9 @@ const FRAME_MS = 20;
 export const STREAM_LIVE_SLACK_MS = 2000;
 
 type Live = {
-  owner: string; target: EmrTarget; rate: number; frame: number; dec: StreamDecoder; carry: Float32Array;
+  owner: string; target: EmrTarget; sid: string; sids: Set<string>; stretch: { target: EmrTarget; sid: string } | null; rate: number; frame: number; dec: StreamDecoder; carry: Float32Array;
+  // capAt is when the end of the last frame heard was captured; startAt when the stretch being said began.
+  capAt: number; startAt: number;
   pre: Float32Array[]; buf: Float32Array[]; speech: boolean; quiet_ms: number; speech_ms: number; partial: string; work: Promise<unknown>; errors: string[]; opened: number; fed: number;
 };
 
@@ -26,39 +28,55 @@ export class StreamRefused extends Error { constructor(readonly reason: "faster_
 // Audio frames as they are spoken: the local model decodes while the clinician talks, a pause of STREAM_ENDPOINT_MS ends a stretch, and the listen rules take it from there.
 export class StreamListener {
   private readonly live = new Map<string, Live>();
-  constructor(private readonly listen: ListenSessions, private readonly asr: StreamAsr, private readonly o: { endpointMs?: number; now?: () => number; refuseFasterThanLive?: boolean } = {}) {}
+  constructor(private readonly listen: ListenSessions, private readonly asr: StreamAsr, private readonly o: { endpointMs?: number; now?: () => number; refuseFasterThanLive?: boolean; onHeard?: (sessionId: string, us: ListenUtterance[]) => void } = {}) {}
 
-  open(c: { owner: string; target: EmrTarget; session_id: string; rate: number }): void {
+  // Opens a stream under session_id; its lines go to listen_sid's listening session, which is session_id unless given.
+  open(c: { owner: string; target: EmrTarget; session_id: string; rate: number; listen_sid?: string }): void {
     if (this.live.has(c.session_id)) throw new Error("this listening session is already streaming");
+    const sid = c.listen_sid ?? c.session_id;
     this.live.set(c.session_id, {
-      owner: c.owner, target: c.target, rate: c.rate, frame: Math.round((c.rate * FRAME_MS) / 1000), dec: this.asr.open(), carry: new Float32Array(0),
+      owner: c.owner, target: c.target, sid, sids: new Set([sid]), stretch: null, rate: c.rate, frame: Math.round((c.rate * FRAME_MS) / 1000), dec: this.asr.open(), carry: new Float32Array(0), capAt: this.o.now?.() ?? Date.now(), startAt: 0,
       pre: [], buf: [], speech: false, quiet_ms: 0, speech_ms: 0, partial: "", work: Promise.resolve(), errors: [], opened: this.o.now?.() ?? Date.now(), fed: 0
     });
   }
 
-  // Takes any number of samples; whole frames are decoded at once and the rest waits for the next call.
-  feed(sessionId: string, samples: Float32Array): void {
+  // Takes any number of samples, captured from capturedAt on; whole frames are decoded at once and the rest waits for the next call.
+  feed(sessionId: string, samples: Float32Array, capturedAt?: number): void {
     const l = this.live.get(sessionId);
     if (!l) throw new Error("this listening session is not streaming");
     l.fed += samples.length;
     // The same rule the chunk path's replay guard applies: with refusal on, audio that runs ahead of the clock is refused before it is heard.
     if (this.o.refuseFasterThanLive && (l.fed / l.rate) * 1000 > (this.o.now?.() ?? Date.now()) - l.opened + STREAM_LIVE_SLACK_MS) throw new StreamRefused("faster_than_live");
     const all = l.carry.length ? concat([l.carry, samples]) : samples;
+    const now = this.o.now?.() ?? Date.now();
+    const from = (capturedAt ?? now - (samples.length / l.rate) * 1000) - (l.carry.length / l.rate) * 1000;
     let i = 0;
-    for (; i + l.frame <= all.length; i += l.frame) this.frame(sessionId, l, all.slice(i, i + l.frame));
+    for (; i + l.frame <= all.length; i += l.frame) { l.capAt = from + ((i + l.frame) / l.rate) * 1000; this.frame(sessionId, l, all.slice(i, i + l.frame)); }
     l.carry = all.slice(i);
   }
 
   // Ends the stream: speech still open is finished as it stands, every stretch is handed on, and a line waiting on a number goes alone.
-  async end(sessionId: string): Promise<{ utterances: ListenUtterance[]; errors: string[] }> {
+  // With dropOpen the stretch still being said is not handed on, since the sender will send it another way; kept_until is when the last kept audio was captured.
+  async end(sessionId: string, o: { dropOpen?: boolean } = {}): Promise<{ utterances: ListenUtterance[]; errors: string[]; kept_until: number | null }> {
     const l = this.live.get(sessionId);
-    if (!l) return { utterances: [], errors: [] };
-    if (l.speech) this.cut(sessionId, l);
+    if (!l) return { utterances: [], errors: [], kept_until: null };
+    const keptUntil = o.dropOpen && l.speech ? l.startAt : l.capAt;
+    if (l.speech && !o.dropOpen) this.cut(sessionId, l);
     this.live.delete(sessionId);
     await l.work;
-    await this.listen.flush(sessionId);
-    const r = this.listen.unreportedOf(sessionId);
-    return { utterances: r.utterances, errors: [...l.errors, ...r.errors] };
+    for (const sid of l.sids) await this.listen.flush(sid);
+    const utterances: ListenUtterance[] = [], errors = [...l.errors];
+    for (const sid of l.sids) { const r = this.listen.unreportedOf(sid); utterances.push(...r.utterances); errors.push(...r.errors); }
+    return { utterances, errors, kept_until: keptUntil };
+  }
+
+  // A patient change: the stretch being said keeps the patient it began with, as a chunk keeps the page its words began on, and the next stretch takes the new one.
+  async retarget(sessionId: string, c: { target: EmrTarget; listen_sid: string }): Promise<void> {
+    const l = this.live.get(sessionId);
+    if (!l) throw new Error("this listening session is not streaming");
+    l.target = c.target;
+    l.sid = c.listen_sid;
+    l.sids.add(c.listen_sid);
   }
 
   // Waits for every stretch handed on so far.
@@ -74,6 +92,8 @@ export class StreamListener {
         return;
       }
       l.speech = true;
+      l.startAt = l.capAt - (l.pre.length + 1) * FRAME_MS;
+      l.stretch = { target: l.target, sid: l.sid };
       l.buf = [...l.pre, x];
       l.pre = [];
       l.quiet_ms = 0;
@@ -85,7 +105,8 @@ export class StreamListener {
     l.quiet_ms = quiet ? l.quiet_ms + FRAME_MS : 0;
     // While a line that ended on a number waits, the next words are looked at as they are said, after every stretch before them.
     const said = l.dec.text();
-    if (said !== l.partial) { l.partial = said; l.work = l.work.then(() => this.listen.nextWords(sessionId, said)); }
+    const sid = l.stretch?.sid ?? l.sid;
+    if (said !== l.partial) { l.partial = said; l.work = l.work.then(() => this.listen.nextWords(sid, said)); }
     if (l.quiet_ms >= (this.o.endpointMs ?? STREAM_ENDPOINT_MS) || l.speech_ms >= STREAM_MAX_MS) this.cut(sessionId, l);
   }
 
@@ -93,12 +114,15 @@ export class StreamListener {
   private cut(sessionId: string, l: Live): void {
     const raw = streamRepair(l.dec.finish());
     const samples = concat(l.buf);
-    const trailing = l.quiet_ms;
     const now = this.o.now?.() ?? Date.now();
+    // Counted from when the end of the speech was captured, so a late upload is never measured as faster than it was.
+    const trailing = Math.max(l.quiet_ms, now - (l.capAt - l.quiet_ms));
+    const { target, sid } = l.stretch ?? { target: l.target, sid: l.sid };
     l.dec = this.asr.open();
-    l.speech = false; l.buf = []; l.quiet_ms = 0; l.speech_ms = 0; l.partial = "";
+    l.speech = false; l.buf = []; l.quiet_ms = 0; l.speech_ms = 0; l.partial = ""; l.stretch = null;
     if (!raw) return;
-    l.work = l.work.then(() => this.listen.segment({ owner: l.owner, target: l.target, session_id: sessionId, samples, rate: l.rate, raw, trailing_ms: trailing, arrived: now, heard_at: now }))
+    l.work = l.work.then(() => this.listen.segment({ owner: l.owner, target, session_id: sid, samples, rate: l.rate, raw, trailing_ms: trailing, arrived: now, heard_at: now }))
+      .then((us) => { if (us.length) this.o.onHeard?.(sid, us); })
       .catch((e: unknown) => { l.errors.push(e instanceof Error ? e.message.slice(0, 200) : "segment failed"); });
   }
 }
