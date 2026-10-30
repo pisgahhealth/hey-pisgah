@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-30T14:17:51.901Z",
-  "commit": "8b21965",
+  "generated_at": "2026-10-30T20:30:26.435Z",
+  "commit": "274d992",
   "claims": [
     {
       "claim_id": "C-01",
@@ -295,6 +295,12 @@
         "meta_parakeet_vitals_p50_ms": 4231,
         "meta_parakeet_vitals_p90_ms": 4802,
         "meta_parakeet_vitals_errors": 0,
+        "strip_meta_vitals_p50_ms": 4171,
+        "strip_meta_vitals_p90_ms": 5680,
+        "strip_meta_vitals_errors": 0,
+        "strip_local_vitals_p50_ms": 4193,
+        "strip_local_vitals_p90_ms": 5545,
+        "strip_local_vitals_errors": 0,
         "missing": [
           "rows",
           "errors_listed",

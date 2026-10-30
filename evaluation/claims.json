@@ -522,7 +522,7 @@
         "pass": "Wake {wake_p50_ms} ms, vitals {vitals_p50_ms} ms and an order {order_p50_ms} ms at p50 from the end of the words to the verified record, over {rows} actions with the errors listed",
         "partial": "Measured over {rows} actions with errors listed; p50 wake {wake_p50_ms} ms, vitals {vitals_p50_ms} ms, order {order_p50_ms} ms, one or more above its target",
         "fail": "No speed rows with errors beside them",
-        "not_measured": "Acceptance run not measured yet. Lane integration floor on synthetic voices: vitals p50 {floor_vitals_p50_ms} ms and p90 {floor_vitals_p90_ms} ms with {floor_vitals_errors} errors on the default ears; {local_vitals_p50_ms} ms p50 and {local_vitals_p90_ms} ms p90 with {local_vitals_errors} errors with both local ears switched on, where Meta still decides and reads every number; with Meta's realtime ear and Parakeet {meta_parakeet_vitals_p50_ms} ms p50 and {meta_parakeet_vitals_p90_ms} ms p90 with {meta_parakeet_vitals_errors} errors, Meta reading the words and deciding"
+        "not_measured": "Acceptance run not measured yet. Lane integration floor on synthetic voices: vitals p50 {floor_vitals_p50_ms} ms and p90 {floor_vitals_p90_ms} ms with {floor_vitals_errors} errors on the default ears; {local_vitals_p50_ms} ms p50 and {local_vitals_p90_ms} ms p90 with {local_vitals_errors} errors with both local ears switched on, where Meta still decides and reads every number; with Meta's realtime ear and Parakeet {meta_parakeet_vitals_p50_ms} ms p50 and {meta_parakeet_vitals_p90_ms} ms p90 with {meta_parakeet_vitals_errors} errors, Meta reading the words and deciding; through the real strip in Chrome sending 80 ms frames, {strip_meta_vitals_p50_ms} ms p50 and {strip_meta_vitals_p90_ms} ms p90 with {strip_meta_vitals_errors} errors on Meta's realtime ear, {strip_local_vitals_p50_ms} ms p50 and {strip_local_vitals_p90_ms} ms p90 with {strip_local_vitals_errors} errors on the local streaming ear"
       },
       "evidence_links": []
     },
@@ -1078,6 +1078,19 @@
         }
       },
       "reason": "R-26 and D17: G9 added Meta's realtime Voice Transcribe ear (HEY_PISGAH_ASR=meta-stream) and measured it on the sandbox beside G6's rows. The predicate and the pass, partial and fail wording are unchanged and still read the acceptance run's fields, so C-21 stays not measured. Its not-measured wording adds the realtime row with Parakeet as the second ear; speed.json also carries the realtime row with the Spark ear, the D17 whole-number release rows, and G9's order reruns timed to the lab board."
+    },
+    {
+      "date": "2026-10-30",
+      "by": "G10",
+      "claims": [
+        "C-21"
+      ],
+      "previous_wording": {
+        "C-21": {
+          "not_measured": "Acceptance run not measured yet. Lane integration floor on synthetic voices: vitals p50 {floor_vitals_p50_ms} ms and p90 {floor_vitals_p90_ms} ms with {floor_vitals_errors} errors on the default ears; {local_vitals_p50_ms} ms p50 and {local_vitals_p90_ms} ms p90 with {local_vitals_errors} errors with both local ears switched on, where Meta still decides and reads every number; with Meta's realtime ear and Parakeet {meta_parakeet_vitals_p50_ms} ms p50 and {meta_parakeet_vitals_p90_ms} ms p90 with {meta_parakeet_vitals_errors} errors, Meta reading the words and deciding"
+        }
+      },
+      "reason": "G10: the strip now sends 80 ms frames as numbered parts to the streaming ears, and the 8 vitals lines were timed through the real strip in Chrome (fake microphone, two runs per ear, D17 on as in the serve). The predicate and the pass, partial and fail wording are unchanged and still read the acceptance run's fields, so C-21 stays not measured; its not-measured wording adds the two strip rows from speed.json."
     }
   ]
 }

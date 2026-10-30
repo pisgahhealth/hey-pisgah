@@ -148,8 +148,10 @@ export class ListenSessions {
   async segment(c: StreamSegment): Promise<ListenUtterance[]> {
     const s = await this.sessionFor(c.owner, c.target, c.session_id, c.arrived);
     const seq = s.next++;
+    this.status(s, c.session_id, [seq], { status: "processing" });
     const run = s.chain.then(async () => {
-      const v = vitalsVocabulary(cleanTranscript(c.raw));
+      // The words carried across a wake are dropped from the line here too, as on the chunk path.
+      const v = vitalsVocabulary(afterWake(cleanTranscript(c.raw)));
       const print = this.o.embed ? this.o.embed(encodeWav(c.samples, c.rate)).catch(() => null) : Promise.resolve(null);
       const heard: Heard = {
         samples: [c.samples], seqs: [seq], rate: c.rate, audio_ms: totalMs([c.samples], c.rate), trailing_ms: c.trailing_ms, arrived: c.arrived,
