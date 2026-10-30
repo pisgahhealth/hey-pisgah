@@ -127,6 +127,9 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       const r = await rt.emergency(owner, { text, spoken_at: spokenAt, args: { unidentified_ref: unidentifiedRef(new Date(arrived)), reason: emergencyReason(text), ...(o.emergencyClinicId ? { clinic_id: o.emergencyClinicId } : {}) } });
       return { session_id: sessionId, seq, accepted: true, utterances: [{ id: r.line_id, line_id: r.line_id, task_id: r.task_id, text, class: "instruction", classes: ["instruction"] }], partial: null, entry: "emergency" };
     }
+    // "Accepted <task>" heard with no patient open reaches the one task handed to this owner that it names.
+    const handed = text ? rt.delegationLine(owner, text, spokenAt, "audio") : null;
+    if (handed) return { session_id: sessionId, seq, accepted: true, utterances: [{ id: handed.line_id, line_id: handed.line_id, task_id: handed.task_id, text, class: "instruction", classes: ["instruction"] }], partial: null, entry: "delegation" };
     const known = rt.openSubjects(owner).map((x) => ({ label: rt.task(x.task_id)?.label ?? "", target: x.target })).filter((k) => k.label);
     const moved = spokenPatient(text, known);
     if (moved) onSubject(owner, moved.target);
@@ -219,6 +222,9 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       const page = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
       // A typed line with no patient open goes to the patient the agent is with, and opens an arrival on the emergency phrase.
       const target = hasTarget(b) ? page : subjectFor(b.owner, page);
+      // A spoken acceptance of a task handed to this owner needs no patient open: the task names its own.
+      const handed = target ? null : rt.delegationLine(b.owner, b.text, b.spokenAt ?? new Date().toISOString(), "text");
+      if (handed) return [202, handed];
       if (!target) {
         if (!EMERGENCY_LINE.test(b.text)) throw new HttpError(400, "No patient is open yet; say hey Pisgah, emergency, or open a patient");
         const at = b.spokenAt ?? new Date().toISOString();

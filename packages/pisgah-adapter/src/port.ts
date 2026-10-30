@@ -86,7 +86,8 @@ export class PisgahPort implements EmrPort {
   delegationSide(owner: string): "none" | "assignee" | "delegator" | "both" {
     return this.profile.delegations ? this.profile.owners.find((x) => x.id === owner)?.delegation ?? "none" : "none";
   }
-  delegationOwners(): readonly string[] { return this.profile.owners.filter((x) => this.delegationSide(x.id) !== "none").map((x) => x.id); }
+  // Only owners this serve holds a bearer for are polled, so an owner left out of a run is never a refused read.
+  delegationOwners(): readonly string[] { return this.profile.owners.filter((x) => this.delegationSide(x.id) !== "none" && this.o.bearers[x.id]).map((x) => x.id); }
   // The teams are the hospital's, the same for every owner who may hand work on.
   delegationTeams(owner: string): Record<string, DelegationTeam> {
     const side = this.delegationSide(owner);
@@ -96,7 +97,7 @@ export class PisgahPort implements EmrPort {
   // The open tasks handed to the owner, or handed on by them, as the door lists them.
   async delegations(owner: string, as: "assignee" | "delegator", prov: Provenance): Promise<DelegationRead[]> {
     const spec = this.profile.delegations;
-    if (!spec || this.delegationSide(owner) === "none") return [];
+    if (!spec || this.delegationSide(owner) === "none" || !this.o.bearers[owner]) return [];
     const json = await this.read(spec.list, { as }, prov);
     const list = pick(json, spec.list.list_path);
     return (Array.isArray(list) ? list : []).map(delegationOf).filter((d): d is DelegationRead => d !== null);
