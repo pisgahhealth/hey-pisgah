@@ -58,7 +58,10 @@ const ListenMeta = z.strictObject({
   owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional(),
   session_id: z.string().min(1).max(80).regex(/^[A-Za-z0-9_.:-]+$/), seq: z.coerce.number().int().min(0).max(1_000_000),
   // Set when the device spotted "emergency" with no wake before it, so this audio is checked by transcript for the phrase.
-  hint: z.enum(["emergency", "after_wake"]).optional()
+  hint: z.enum(["emergency", "after_wake"]).optional(),
+  // When the strip's recorder began this chunk, and its liveness marker for the replay defence.
+  captured_at: z.coerce.number().int().positive().optional(),
+  presence: z.strictObject({ visible: z.boolean(), mic_live: z.boolean(), input_age_ms: z.number().min(0).nullable() }).optional()
 });
 const Emergency = z.strictObject({ owner: Owner, text: z.string().min(1).max(300).default("hey Pisgah, emergency"), spokenAt: z.iso.datetime({ offset: true }), wake: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).optional() });
 // One wake measured in the browser: phrase end to the visible armed state, on the page's clock.
@@ -94,6 +97,7 @@ function parse<T>(schema: z.ZodType<T>, v: unknown): T {
   if (!r.success) throw new HttpError(400, r.error.issues.map((i) => `${i.path.join(".") || "$"}: ${i.message}`).join("; "));
   return r.data;
 }
+const jsonField = (v: string): unknown => { try { return JSON.parse(v); } catch { throw new HttpError(400, "presence: not JSON"); } };
 const field = (f: FormData, k: string): string | undefined => { const v = f.get(k); return typeof v === "string" && v.length ? v : undefined; };
 
 // The EMR-facing serve on port 4100: the strip reads tasks and posts words, audio and Stop; serve alone talks to the hospital door.
@@ -171,6 +175,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     if (!audio || typeof audio === "string") throw new HttpError(400, "audio: a WAV file part is required");
     const b = parse(ListenMeta, {
       owner: field(form, "owner"), session_id: field(form, "session_id"), seq: field(form, "seq"), ...(field(form, "hint") ? { hint: field(form, "hint") } : {}),
+      ...(field(form, "captured_at") ? { captured_at: field(form, "captured_at") } : {}), ...(field(form, "presence") ? { presence: jsonField(field(form, "presence")!) } : {}),
       ...(field(form, "admissionId") ? { admissionId: field(form, "admissionId") } : {}), ...(field(form, "patientId") ? { patientId: field(form, "patientId") } : {})
     });
     const page = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
@@ -184,7 +189,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const sessionId = first === subjectKey ? b.session_id : `${b.session_id.slice(0, 60)}.${shortHash(subjectKey)}`;
     try {
       const wait = new URL(req.url ?? "/", "http://serve").searchParams.get("wait") === "1";
-      const reply = await listening.chunk({ owner: b.owner, target, session_id: sessionId, seq: b.seq, wav, arrived_at: arrived }, wait);
+      const reply = await listening.chunk({ owner: b.owner, target, session_id: sessionId, seq: b.seq, wav, arrived_at: arrived, ...(b.captured_at ? { captured_at: b.captured_at } : {}), ...(b.presence ? { presence: b.presence } : {}) }, wait);
       return [202, { ...reply, session_id: b.session_id, tracking: target }];
     } catch (e) {
       if (e instanceof ListenError) throw new HttpError(e.status, e.message);
