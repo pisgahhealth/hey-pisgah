@@ -168,6 +168,7 @@ export function summariseWork(kind: string, a: Record<string, unknown>): string 
     case "record_diagnosis": return `Record the diagnosis: "${t(a["diagnosis"], 120)}"`;
     case "release_home": return `Discharge the patient home${a["follow_up_date"] ? `, follow-up ${a["follow_up_date"]}` : ""}${a["instructions"] ? `, advice: "${t(a["instructions"], 60)}"` : ""}`;
     case "countersign": return `Countersign ${(a["item_ids"] as unknown[]).length} voice order${(a["item_ids"] as unknown[]).length === 1 ? "" : "s"}: ${((a["labels"] as string[] | undefined) ?? []).join(", ").slice(0, 120)}`;
+    case "take_verbal_order": return `Record a verbal order from ${String(a["issuer"]).replace(/_/g, " ")}: ${a["order_kind"] === "lab" ? `test ${String(a["test"]).replace(/_/g, " ")}` : `${String(a["drug"]).replace(/_/g, " ")} ${t(a["dose"], 30)}, ${a["frequency"]} times a day for ${a["duration_days"]} days`}, read back by you, awaiting the prescriber's signature`;
     default: return delegationSummary(kind, a) ?? kind;
   }
 }

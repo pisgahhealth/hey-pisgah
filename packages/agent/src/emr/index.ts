@@ -14,6 +14,7 @@ export { TRIGGER_EVENTS, adoptedVersion, caseFacts, changedSteps, checkOffer, de
 export { KEPT_LEVERS, FIRST_LOOKS, FIRST_STAGE_PROMPT, FIRST_STAGE_RULES, FIRST_STAGE_TOOL, FirstLook, LEVERS_OFF, LEVERS_ON, MAX_PARALLEL_LINES, PROOF_HEDGE_MS, firstLook, firstStageCommitment, firstStageMessage, firstStageTool, hedgedRead, holdLeftMs, leverList, leversFrom, sharedMeasures, willWriteNumber, type FirstStageResult, type SpeedLevers } from "./speed.js";
 export { DOCUMENTATION_KINDS, ORDER_KINDS, PRESENCE_RULE, ReplayGuard, SPEAKER_MODEL, VOICEPRINT_DIM, authorityOf, presenceOf, recordOf, sherpaEmbedder, to16k, type Authority, type ChunkPresence, type Embedder, type GuardVerdict, type LivenessMarker, type PresenceMode, type PresenceRule, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
 export { DRUG_ROUTES, ORDER_PRIORITIES, prescriptionSaid } from "./work.js";
+export { VERBAL_LINE, VERBAL_ORDER_ARGS, VERBAL_ORDER_KIND, verbalMissingNote, verbalOrderSaid, type VerbalOrderArgs, type VerbalOrderables } from "./verbal.js";
 export { CONFIRM_KINDS, OWNER_NO, OWNER_YES, PAY_LINK_VERIFIED_NOTE, SIGN_EVERYTHING, paperworkAsk, type OrderRule } from "./runtime.js";
 export { ORDER_REFERENCE_KINDS, ORDER_RULES, OrderClause, OrderOutput, holdsOrders } from "./gate.js";
 export type { OrderResult, Orderables, PaperworkReadBack, ReadBack } from "./port.js";
