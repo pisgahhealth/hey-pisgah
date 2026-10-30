@@ -129,7 +129,7 @@ describe("the streaming first ear", () => {
     const rows = readdirSync(join(root, "ledger")).filter((f) => f.endsWith(".jsonl")).flatMap((f) => readStream(root, `ledger/${f.replace(/\.jsonl$/, "")}`)).filter((e) => e.record_type === "reading.call").map((e) => e.payload as Record<string, unknown>);
     expect(rows.map((x) => [x["provider"], x["model"], x["purpose"]])).toEqual([["meta", "muse-voice-transcribe-1.0", "verify_number"], ["meta", "muse-voice-transcribe-1.0", "verify_number"]]);
     const health = (await (await fetch(`${s.url}/health`)).json()) as Record<string, any>;
-    expect(health["ears"]).toEqual({ first_ear: "local:scripted-stream", second_ear: "given", meta_reading_on_numbers: true });
+    expect(health["ears"]).toEqual({ first_ear: "local:scripted-stream", second_ear: "given", meta_reading_on_numbers: true, frames: { route: "/tasks/listen/stream", parts: true, frame_ms: 80, rate: 16000, idle_ms: 15000 } });
     await s.close();
   });
 
