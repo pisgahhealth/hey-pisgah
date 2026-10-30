@@ -15,8 +15,8 @@ export const META_JOIN_QUIET_MS = 1_000;
 export const META_PAD_AFTER_MS = 250;
 // Padding brings the audio sent to within this much of the clock.
 export const META_PAD_LAG_MS = 100;
-// Audio that arrives late is sent no further than this ahead of the clock, well inside Meta's five seconds ahead of processing.
-export const META_LEAD_MAX_MS = 1_500;
+// Audio is sent no further than this ahead of the session's clock, inside Meta's five seconds ahead of processing, so the audio held while a session opens still goes at once.
+export const META_LEAD_MAX_MS = 4_000;
 // A join waits at most this long for the old session to finish and close; past it the old one is closed and the join completes.
 export const META_JOIN_WAIT_MS = 8_000;
 const PAD_TICK_MS = 100;

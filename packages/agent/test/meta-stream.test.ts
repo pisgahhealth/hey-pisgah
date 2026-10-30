@@ -420,6 +420,17 @@ describe("the realtime session rules", () => {
     expect(Math.max(...leads.slice(5))).toBeLessThan(500);
   }, 10_000);
 
+  it("sends the audio held while the session opened at once, so the whole stream is not heard late", async () => {
+    const meta = fakeMeta([[]]);
+    const { l } = chain();
+    const m = new MetaStreamListener(l, { key: () => "k", socket: meta.factory, now: () => 0, padAfterMs: 0 });
+    await m.open({ owner: OWNER, target: { admission_id: ADM }, session_id: "held", rate: RATE });
+    // The strip kept 2.5 s while the handshake ran, and it arrives in one part.
+    m.feed("held", quiet(2500), -2500);
+    expect((meta.conns[0]!.sentBytes / 2 / RATE) * 1000).toBe(2500);
+    await m.end("held");
+  });
+
   it("opens the session again after a dropped connection and sends the line it was cut in again, so its words are not lost", async () => {
     let now = 0;
     // The second session hears the resent audio from the start of the cut line, so its positions count from there.
