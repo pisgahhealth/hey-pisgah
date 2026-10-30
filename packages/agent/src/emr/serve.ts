@@ -12,6 +12,7 @@ import type { Embedder } from "./speaker.js";
 import { EmrId, EmrPortError, type EmrPort, type EmrTarget } from "./port.js";
 import { EMERGENCY_LINE, emergencyHeardLoosely, emergencyReason, spokenPatient, unidentifiedRef } from "./entry.js";
 import { shortHash } from "../ids.js";
+import { PreferenceError, PreferenceMemory, SCOPE_KINDS, describePref, describeScope, describeSource } from "./preferences.js";
 
 export const EMR_SERVE_PORT = 4100;
 
@@ -40,8 +41,10 @@ export type EmrServeOptions = {
   kwsDir?: string;
   // The A&E clinic an emergency opened by voice lands on.
   emergencyClinicId?: string;
+  // Preference memory is on unless turned off; it lives in the same store as the tasks.
+  preferences?: boolean;
 };
-export type EmrServe = { urls: string[]; url: string; runtime: EmrRuntime; client: ModelClient; listening: ListenSessions; close: () => Promise<void> };
+export type EmrServe = { urls: string[]; url: string; runtime: EmrRuntime; client: ModelClient; listening: ListenSessions; preferences: PreferenceMemory | null; close: () => Promise<void> };
 
 const Owner = z.string().min(1).max(80).regex(/^[A-Za-z0-9_.:-]+$/);
 const hasTarget = (b: { admissionId?: string | undefined; patientId?: string | undefined }) => b.admissionId !== undefined || b.patientId !== undefined;
@@ -63,6 +66,9 @@ const Wake = z.strictObject({ owner: Owner, keyword: z.enum(["wake", "emergency"
 const KWS_FILE = /^[A-Za-z0-9_.-]{1,120}$/;
 const KWS_TYPES: Record<string, string> = { ".js": "text/javascript", ".wasm": "application/wasm", ".onnx": "application/octet-stream", ".txt": "text/plain", ".json": "application/json" };
 const Interrupt = z.strictObject({ owner: Owner.optional(), task_id: z.string().optional() });
+const Scope = z.strictObject({ owner: Owner, scope: z.enum([...SCOPE_KINDS, "no"]) });
+// A hospital rule given as text by a person, under the scope they name; a patient scope comes only from a correction or a spoken rule.
+const External = z.strictObject({ owner: Owner, text: z.string().min(3).max(600), scope: z.enum(["me", "ward", "everyone"]), ward: z.string().min(1).max(120).optional() });
 const JSON_LIMIT = 64 * 1024;
 const AUDIO_LIMIT = 8 * 1024 * 1024;
 
@@ -98,7 +104,8 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   // The patient each owner's agent is with: the page's patient when it changes, a spoken name, or an arrival it opened, the latest winning.
   const tracked = new Map<string, { target: EmrTarget | null; page: string }>();
   const onSubject = (owner: string, target: EmrTarget) => { tracked.set(owner, { target, page: tracked.get(owner)?.page ?? "" }); };
-  const rt = new EmrRuntime({ ...(o.runtime ?? {}), storeRoot: o.storeRoot, client, port: o.port, ...(secondEar ? { secondEar } : {}), ...(o.log ? { log: o.log } : {}), onSubject, ...(o.emergencyClinicId ? { emergencyClinicId: o.emergencyClinicId } : {}) });
+  const prefs = o.preferences === false ? null : o.runtime?.preferences ?? new PreferenceMemory(o.storeRoot);
+  const rt = new EmrRuntime({ ...(o.runtime ?? {}), storeRoot: o.storeRoot, client, port: o.port, ...(secondEar ? { secondEar } : {}), ...(o.log ? { log: o.log } : {}), onSubject, ...(o.emergencyClinicId ? { emergencyClinicId: o.emergencyClinicId } : {}), ...(prefs ? { preferences: prefs } : {}) });
   runtime = rt;
   rt.start();
   const transcribe = o.transcribe ?? voiceTranscriber;
@@ -231,6 +238,22 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     }
     if (m === "GET" && url.pathname === "/wake") return [200, wakeSummary(wakeLog, url.searchParams.get("owner"))];
     if (m === "POST" && url.pathname === "/voice/embed") return embedPassage(req);
+    if (parts[0] === "preferences") {
+      if (!prefs) throw new HttpError(404, "preference memory is off");
+      // What one clinician may see: their own preferences and shared ward or hospital rules, each with its source and scope.
+      if (parts.length === 1 && m === "GET") {
+        const owner = parse(Owner, url.searchParams.get("owner") ?? "");
+        return [200, prefs.visibleTo(owner).map((p) => ({ pref_id: p.pref_id, state: p.state, text: describePref(p), scope: describeScope(p.scope), source: describeSource(p.source, owner), field: p.field, item_kind: p.item_kind, value: p.value, decided: p.decided }))];
+      }
+      if (parts.length === 2 && parts[1] === "external" && m === "POST") {
+        const b = parse(External, await json(req));
+        try {
+          const p = prefs.external({ by: b.owner, text: b.text, scope: b.scope, ward: b.ward ?? null });
+          return [201, { pref_id: p.pref_id, text: describePref(p), scope: describeScope(p.scope), source: describeSource(p.source, b.owner) }];
+        } catch (e) { if (e instanceof PreferenceError) throw new HttpError(422, e.message); throw e; }
+      }
+      throw new HttpError(404, "no such route");
+    }
     if (parts[0] !== "tasks") throw new HttpError(404, "no such route");
     if (parts.length === 1 && m === "GET") {
       const owner = url.searchParams.get("owner");
@@ -285,6 +308,14 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       if (b.owner !== undefined && b.owner !== task.owner) throw new HttpError(403, "the task belongs to another owner");
       return [200, { task_id: id, resumed: rt.resumeTask(id, task.owner), state: rt.stateOf(id) }];
     }
+    // The strip's scope buttons for a candidate preference; only the task's owner may choose.
+    if (parts.length === 5 && parts[2] === "preferences" && parts[4] === "scope" && m === "POST") {
+      const b = parse(Scope, await json(req));
+      if (!task) throw new HttpError(404, "unknown task");
+      if (b.owner !== task.owner) throw new HttpError(403, "the task belongs to another owner");
+      const r = rt.scopePreference(id, b.owner, parts[3]!, b.scope);
+      return [r.ok ? 200 : r.reason === "unknown_preference" ? 404 : r.reason === "not_yours" ? 403 : 409, r];
+    }
     if (parts.length === 3 && parts[2] === "interrupt" && m === "POST") {
       const b = parse(Interrupt, await json(req));
       if (!task) throw new HttpError(404, "unknown task");
@@ -329,11 +360,12 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     if (typeof addr === "object" && addr) urls.push(`http://${host.includes(":") ? `[${host}]` : host}:${addr.port}`);
   }
   return {
-    urls, url: urls[0] ?? "", runtime: rt, client, listening,
+    urls, url: urls[0] ?? "", runtime: rt, client, listening, preferences: prefs,
     close: async () => {
       await Promise.all(servers.map((s) => new Promise<void>((r) => s.close(() => r()))));
       listening.close();
       await rt.stop();
+      if (prefs && !o.runtime?.preferences) prefs.close();
       if (!o.client) client.close();
     }
   };

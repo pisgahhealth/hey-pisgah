@@ -1,14 +1,14 @@
 {
- "measured_at": "2026-10-28T13:41:04.839Z",
+ "measured_at": "2026-10-30T01:33:10.514Z",
  "measured": true,
  "source": "cycle2_run",
  "set": "dev",
- "run_id": "run-7e501502",
+ "run_id": "run-e6c20001",
  "commitment": {
-  "hash": "45421eeb06d7decc267ada6eae1421d66553fb492e13f726cd3ef9f80f6192c8",
-  "revision": 7
+  "hash": "bb888f4cf5ec81d0ff0d831162eb474cc92e5db023971983617aa7378733b122",
+  "revision": 12
  },
- "effort": "xhigh",
+ "effort": "medium",
  "model": "meta-models/Muse-Spark-Open-816B-A42B",
  "pool": {
   "histories": 12,
@@ -16,35 +16,112 @@
   "observed": 7
  },
  "read": {
-  "histories": 8,
-  "outcomes": 2,
-  "observed": 4,
-  "observed_case_ids": [
-   "c-07b1c852",
-   "c-0bf23f2b",
-   "c-4d93e936",
-   "c-b4d6187c"
-  ],
-  "outcome_case_ids": [
-   "c-110f6ad7",
-   "c-2a14921a"
-  ]
+  "histories": 11,
+  "outcomes": 0,
+  "observed": 0,
+  "observed_case_ids": [],
+  "outcome_case_ids": []
  },
  "cited_events": {
-  "histories": 21,
+  "histories": 16,
   "outcomes": 0,
   "observed": 0
  },
- "hypotheses": 13,
- "proposals": 0,
- "validations": [],
- "result": "no_result",
+ "hypotheses": 12,
+ "proposals": 1,
+ "validations": [
+  "dev_validated"
+ ],
+ "result": "new_proposal",
  "declared": null,
- "stop": "budget_calls (60 calls)",
- "cycle2_result_recorded": false,
+ "stop": "dev_valid_proposal (p-9335e542)",
+ "cycle2_result_recorded": true,
  "no_hypothesis_cited_as_evidence": true,
  "cited_not_an_event": 0,
  "cited_foreign_hypotheses": 0,
- "calls": 60,
- "cost_usd": 2.2492
+ "calls": 72,
+ "cost_usd": 2.1011,
+ "proposal": {
+  "proposal_id": "p-9335e542",
+  "ops": [
+   {
+    "edge_id": "e04",
+    "op": "remove_soft_edge"
+   },
+   {
+    "op": "set_prep_trigger",
+    "target": {
+     "step": "st06"
+    },
+    "when": {
+     "after": {
+      "step": "st02"
+     }
+    }
+   }
+  ],
+  "scope": {
+   "wards": "all",
+   "condition": null
+  },
+  "dev_gain_min": 383,
+  "dev_rework_min": 13,
+  "share_of_planted": 1,
+  "adopted_dev_gain_min": 216,
+  "adopted_dev_rework_min": 22,
+  "note": "Same two operations as the planted change. The investigator read 0 of 2 outcome cases and 0 of 7 observed journeys and cited only histories, so the new verified events were in the pool but did not inform it. n = 1."
+ },
+ "outcomes_source": "two live simulator runs on the demo cases: the fresh applicable case under the adopted Ward A version and the withheld Ward B case on version 1",
+ "earlier_runs": [
+  {
+   "measured_at": "2026-10-28T13:41:04.839Z",
+   "measured": true,
+   "source": "cycle2_run",
+   "set": "dev",
+   "run_id": "run-7e501502",
+   "commitment": {
+    "hash": "45421eeb06d7decc267ada6eae1421d66553fb492e13f726cd3ef9f80f6192c8",
+    "revision": 7
+   },
+   "effort": "xhigh",
+   "model": "meta-models/Muse-Spark-Open-816B-A42B",
+   "pool": {
+    "histories": 12,
+    "outcomes": 2,
+    "observed": 7
+   },
+   "read": {
+    "histories": 8,
+    "outcomes": 2,
+    "observed": 4,
+    "observed_case_ids": [
+     "c-07b1c852",
+     "c-0bf23f2b",
+     "c-4d93e936",
+     "c-b4d6187c"
+    ],
+    "outcome_case_ids": [
+     "c-110f6ad7",
+     "c-2a14921a"
+    ]
+   },
+   "cited_events": {
+    "histories": 21,
+    "outcomes": 0,
+    "observed": 0
+   },
+   "hypotheses": 13,
+   "proposals": 0,
+   "validations": [],
+   "result": "no_result",
+   "declared": null,
+   "stop": "budget_calls (60 calls)",
+   "cycle2_result_recorded": false,
+   "no_hypothesis_cited_as_evidence": true,
+   "cited_not_an_event": 0,
+   "cited_foreign_hypotheses": 0,
+   "calls": 60,
+   "cost_usd": 2.2492
+  }
+ ]
 }

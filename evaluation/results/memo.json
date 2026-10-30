@@ -1,0 +1,138 @@
+{
+ "measured_at": "2026-10-30T01:52:46.750Z",
+ "measured": true,
+ "source": "nightly_run",
+ "set": "sandbox",
+ "run_id": "run-night001",
+ "day": "2026-10-30",
+ "sources_hash": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+ "departments": [
+  {
+   "department": "accounts_clerk",
+   "causes": 2,
+   "challenged": 0,
+   "changes": 2,
+   "nothing_warrants_change": false
+  },
+  {
+   "department": "doctor",
+   "causes": 2,
+   "challenged": 1,
+   "changes": 2,
+   "nothing_warrants_change": false
+  },
+  {
+   "department": "nurse",
+   "causes": 2,
+   "challenged": 0,
+   "changes": 1,
+   "nothing_warrants_change": false
+  }
+ ],
+ "memos": [
+  {
+   "recipient_role": "doctor",
+   "incoming": false,
+   "status": "delivered",
+   "verdict": "verified",
+   "failures": [],
+   "repairs": 0,
+   "facts": 3,
+   "causes": 2,
+   "changes": 2,
+   "unfinished": 5,
+   "urgent": 2,
+   "encounters_named": 5,
+   "preview": "Night memo: 3 recorded facts, 5 unfinished items for you, 2 urgent.",
+   "nothing_warrants_change": false,
+   "publish_ms": 2
+  },
+  {
+   "recipient_role": "doctor",
+   "incoming": true,
+   "status": "delivered",
+   "verdict": "verified",
+   "failures": [],
+   "repairs": 0,
+   "facts": 3,
+   "causes": 2,
+   "changes": 2,
+   "unfinished": 5,
+   "urgent": 2,
+   "encounters_named": 1,
+   "preview": "Night memo: 3 recorded facts, 5 unfinished items for you, 2 urgent.",
+   "nothing_warrants_change": false,
+   "publish_ms": 2
+  },
+  {
+   "recipient_role": "nurse",
+   "incoming": true,
+   "status": "delivered",
+   "verdict": "verified",
+   "failures": [],
+   "repairs": 0,
+   "facts": 4,
+   "causes": 2,
+   "changes": 1,
+   "unfinished": 0,
+   "urgent": 0,
+   "encounters_named": 0,
+   "preview": "Night memo: 4 recorded facts, 0 unfinished items for you.",
+   "nothing_warrants_change": false,
+   "publish_ms": 1
+  }
+ ],
+ "verified": true,
+ "names_in_previews": 0,
+ "unauthorised_names": 0,
+ "deny_hits": 0,
+ "delivered": false,
+ "delivery": "held: E4 merged the memo notification kind but no door route sends a memo, so the publisher's transport holds the deliveries",
+ "checks_failed_closed": 5,
+ "checks_tried": 5,
+ "negative_cases": {
+  "invented_figure": "unsupported_or_incomplete",
+  "false_completion": "unsupported_or_incomplete",
+  "patient_name": "unsupported_or_incomplete",
+  "changed_after_verification": "payload_changed_after_verification",
+  "checker_error": "verifier_error"
+ },
+ "tests": "packages/intelligence/test/nightly.test.ts",
+ "calls": 9,
+ "cost_usd": 0.053,
+ "effort": "medium",
+ "purposes": [
+  "draft_text",
+  "other"
+ ],
+ "model": "meta-models/Muse-Spark-Open-816B-A42B",
+ "recorded": {
+  "mode": "live",
+  "at": "2026-10-30T01:51:56Z",
+  "replayed_after": "urgent items sent first as their own alert",
+  "replay_same_memos": true
+ },
+ "held_deliveries": [
+  {
+   "kind": "task",
+   "preview": "Urgent: 2 items for you."
+  },
+  {
+   "kind": "memo",
+   "preview": "Night memo: 3 recorded facts, 5 unfinished items for you, 2 urgent."
+  },
+  {
+   "kind": "task",
+   "preview": "Urgent: 2 items for you."
+  },
+  {
+   "kind": "memo",
+   "preview": "Night memo: 3 recorded facts, 5 unfinished items for you, 2 urgent."
+  },
+  {
+   "kind": "memo",
+   "preview": "Night memo: 4 recorded facts, 0 unfinished items for you."
+  }
+ ],
+ "cost_note": "from the ledger of the live run, repairs included"
+}

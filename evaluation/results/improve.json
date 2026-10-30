@@ -1,0 +1,255 @@
+{
+ "measured_at": "2026-10-30T01:24:26.096Z",
+ "measured": true,
+ "source": "simulator_demo_cases",
+ "set": "demo",
+ "proposal": {
+  "adopted": "p-494e0f14",
+  "parent": "p-a563fe32",
+  "ops": [
+   {
+    "edge_id": "e04",
+    "op": "remove_soft_edge"
+   },
+   {
+    "op": "set_prep_trigger",
+    "target": {
+     "step": "st06"
+    },
+    "when": {
+     "after": {
+      "step": "st01"
+     }
+    }
+   }
+  ],
+  "scope": {
+   "condition": null,
+   "wards": [
+    "A"
+   ]
+  },
+  "trade_offs": [
+   {
+    "metric": "rework_events",
+    "sum_delta": 4
+   },
+   {
+    "metric": "rework_min",
+    "sum_delta": 4
+   }
+  ]
+ },
+ "version": 2,
+ "definition_hash": "c6574e8e7111737a0dddedf0d0f2e7703a9124ad6a490c66d7429e7bbd6fd6b3",
+ "fallback_version": 1,
+ "adopted_by_person": true,
+ "approver": "Synthetic Ward A manager (disclosed; a person's role played on the coordinator's instruction by the E6 build lane)",
+ "approver_id": "wm_a_synthetic",
+ "human_approval": false,
+ "human_approval_note": "Adopted by the disclosed synthetic ward manager on the coordinator's instruction; green needs Samuel's own approval at review.",
+ "fresh_applicable": {
+  "task_id": "t-157de412",
+  "case_id": "c-110f6ad7",
+  "ward_id": "A",
+  "workflow_version": 2,
+  "definition_hash": "c6574e8e7111737a0dddedf0d0f2e7703a9124ad6a490c66d7429e7bbd6fd6b3",
+  "state": "done",
+  "reason": "every_condition_proved",
+  "actions": 7,
+  "actions_proved": 6,
+  "actions_refused": 1,
+  "actions_open": 0,
+  "completed_with_proof": 6,
+  "acceptance": {
+   "pass": 12,
+   "of": 12,
+   "failed": []
+  },
+  "round_entry_at": 519,
+  "signoff_at": 683,
+  "summary_draft_at": 537,
+  "prepared": [
+   {
+    "document_id": "discharge_summary",
+    "stage": "draft",
+    "at": 537,
+    "state": "completed",
+    "proved": true
+   },
+   {
+    "document_id": "discharge_summary",
+    "stage": "final",
+    "at": 683,
+    "state": "completed",
+    "proved": true
+   },
+   {
+    "document_id": "refund_voucher",
+    "stage": "draft",
+    "at": 685,
+    "state": "refused",
+    "proved": false
+   },
+   {
+    "document_id": "refund_voucher",
+    "stage": "draft",
+    "at": 740,
+    "state": "completed",
+    "proved": true
+   },
+   {
+    "document_id": "refund_voucher",
+    "stage": "final",
+    "at": 742,
+    "state": "completed",
+    "proved": true
+   }
+  ],
+  "post_signoff_wait_min": 57,
+  "rework_events": 0,
+  "rework_min": 0,
+  "effect_set_hash": "52eb46db378201197f68018ae8f774b146a2499bb0942fd83aab9c91d4dadf8b",
+  "check_failed": 0,
+  "calls": 43,
+  "cost_usd": 0.40957,
+  "efforts": [
+   "low"
+  ],
+  "models": [
+   "meta-models/Muse-Spark-Open-816B-A42B"
+  ],
+  "resolved_version": 2,
+  "executed_differently": true,
+  "v1_counterfactual": {
+   "summary_draft_start": 683,
+   "signoff": 683,
+   "post_signoff_wait_min": 166,
+   "rework_events": 0,
+   "rework_min": 0
+  },
+  "adopted_counterfactual": {
+   "summary_draft_start": 519,
+   "signoff": 683,
+   "post_signoff_wait_min": 57,
+   "rework_events": 2,
+   "rework_min": 2
+  }
+ },
+ "withheld": {
+  "task_id": "t-5e01ea5d",
+  "case_id": "c-2a14921a",
+  "ward_id": "B",
+  "workflow_version": 1,
+  "definition_hash": "173c977f5c68754a062e4399deb69b2d3a9d53df4860e51e0bffc33e74bd8805",
+  "state": "done",
+  "reason": "every_condition_proved",
+  "actions": 14,
+  "actions_proved": 10,
+  "actions_refused": 4,
+  "actions_open": 0,
+  "completed_with_proof": 10,
+  "acceptance": {
+   "pass": 12,
+   "of": 12,
+   "failed": []
+  },
+  "round_entry_at": 541,
+  "signoff_at": 661,
+  "summary_draft_at": 661,
+  "prepared": [
+   {
+    "document_id": "discharge_summary",
+    "stage": "draft",
+    "at": 661,
+    "state": "refused",
+    "proved": false
+   },
+   {
+    "document_id": "discharge_summary",
+    "stage": "draft",
+    "at": 671,
+    "state": "completed",
+    "proved": true
+   },
+   {
+    "document_id": "discharge_summary",
+    "stage": "final",
+    "at": 677,
+    "state": "completed",
+    "proved": true
+   },
+   {
+    "document_id": "refund_voucher",
+    "stage": "draft",
+    "at": 752,
+    "state": "completed",
+    "proved": true
+   },
+   {
+    "document_id": "refund_voucher",
+    "stage": "final",
+    "at": 754,
+    "state": "completed",
+    "proved": true
+   }
+  ],
+  "post_signoff_wait_min": 91,
+  "rework_events": 0,
+  "rework_min": 0,
+  "effect_set_hash": "e4cc8ce4c76bcd3f0e590e74f932a62721b7c6fb46b0fa3107cdb0cd6f15dc39",
+  "check_failed": 1,
+  "calls": 60,
+  "cost_usd": 0.557727,
+  "efforts": [
+   "low"
+  ],
+  "models": [
+   "meta-models/Muse-Spark-Open-816B-A42B"
+  ],
+  "resolved_version": 1,
+  "version_withheld": true,
+  "why": "the adopted scope is wards [\"A\"] and this case is in ward B",
+  "drafted_before_signoff": false,
+  "counterfactual": {
+   "v1": {
+    "summary_draft_start": 661,
+    "signoff": 661,
+    "post_signoff_wait_min": 91,
+    "rework_events": 0,
+    "rework_min": 0
+   },
+   "adopted": {
+    "summary_draft_start": 541,
+    "signoff": 661,
+    "post_signoff_wait_min": 91,
+    "rework_events": 2,
+    "rework_min": 2
+   }
+  }
+ },
+ "emr_offers": {
+  "ward_id": "A",
+  "resolved_version": 2,
+  "offers": 0,
+  "lines": [
+   "Nothing to offer under version 2: no watched fact in this EMR shows after st01."
+  ],
+  "changed": [
+   {
+    "step_id": "st06",
+    "document_id": "discharge_summary",
+    "stage": "draft",
+    "status": "no_counterpart",
+    "reason": "no watched fact in this EMR shows after st01"
+   }
+  ]
+ },
+ "applicable_case": "c-110f6ad7",
+ "withheld_case": "c-2a14921a",
+ "draft_earlier_by_min": 146,
+ "wait_v1_min": 166,
+ "wait_adopted_min": 57,
+ "rework_added": 0,
+ "cost_usd": 0.967297
+}

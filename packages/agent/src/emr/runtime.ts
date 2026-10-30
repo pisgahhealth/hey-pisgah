@@ -20,6 +20,7 @@ import {
   acceptedTask, consentSaid, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
   type DelegationRead, type EmrDelegation
 } from "./delegate.js";
+import { FROM_NOW_ON, PreferenceError, SCOPE_KINDS, describePref, describeScope, describeSource, readRule, scopeAnswer, type PrefField, type PreferenceMemory } from "./preferences.js";
 
 export type EmrActionState = "proposed" | "sent" | "acknowledged" | "completed" | "refused" | "cancelled" | "failed";
 export type EmrAction = {
@@ -47,7 +48,9 @@ export type EmrRefusal = { line_id: string; kind: string | null; asked_for: stri
 export type QuestionChoice = Choice & { kind: string; base: Record<string, unknown>; corrects_action_id: string | null };
 // A question about a voice order is settled by the owner's own matched "yes" or "confirm", never by a model.
 export type OrderRule = { kind: "countersign"; args: WorkArgs } | { kind: "confirm" | "authorise"; action_id: string };
-export type EmrQuestion = { question_id: string; text: string; line_id: string; answered_by: string | null; at: string; choice: QuestionChoice | null; rule: OrderRule | null };
+export type EmrQuestion = { question_id: string; text: string; line_id: string; answered_by: string | null; at: string; choice: QuestionChoice | null; rule: OrderRule | null; pref_id: string | null };
+// One use of a remembered preference in this task, or one it did not use and why, each with its source for the strip.
+export type PrefUse = { pref_id: string; field: string; value: string; text: string; scope: string; source: string; line_id: string; action_id: string | null; reason: string | null; at: string };
 // One comparison of the two readings before a vitals write.
 export type EarsRecord = { action_id: string; line_id: string; session_id: string | null; agree: boolean; measures: EarsCheck["measures"]; error: string | null };
 // One change the agent saw in what it watches, and the page it found in its own inbox.
@@ -77,6 +80,7 @@ export type EmrTask = {
   identities: EmrIdentityHold[]; unidentified: boolean; label: string;
   // Work this owner's agent handed on or was handed, each state as the record showed it.
   delegations: EmrDelegation[];
+  prefs: { applied: PrefUse[]; withheld: PrefUse[]; candidates: string[] };
 };
 // The strip's view of one task.
 export type EmrTaskView = {
@@ -109,6 +113,8 @@ export type EmrTaskView = {
   speed: { rows: SpeedRow[]; p50_ms: number | null; p90_ms: number | null; by_kind: Record<string, { n: number; p50_ms: number | null; p90_ms: number | null }>; errors: { failed: number; refused: number; unverified: number } };
   identities: EmrIdentityHold[]; unidentified: boolean;
   delegations: EmrDelegation[];
+  // Every preference applied in this task and every one withheld, each with its source and scope.
+  preferences: { applied: PrefUse[]; withheld: PrefUse[]; candidates: string[] };
   updated_at: string;
 };
 
@@ -140,6 +146,8 @@ export type EmrRuntimeOptions = {
   onSubject?: (owner: string, target: EmrTarget, by: "spoken" | "emergency" | "delegation") => void;
   // The A&E clinic a spoken emergency opens its arrival on.
   emergencyClinicId?: string;
+  // The clinicians' remembered preferences; without it no preference is kept or applied.
+  preferences?: PreferenceMemory;
 };
 
 const OPEN_ACTION: ReadonlySet<EmrActionState> = new Set(["proposed", "sent", "acknowledged"]);
@@ -157,7 +165,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       run_id: String(x["run_id"]), goal: "", state: "running", reason: null, actions: new Map(), order: [], lines: [], questions: [], notes: [], refusals: [],
       calls: 0, usd: 0, fallbacks: 0, created_at: e.wall_at, updated_at: e.wall_at,
       watch: null, changes: [], offered: [], pages: [], pause: null, digests: [], ears: [], version: null, obligations: [], speed: [],
-      identities: [], unidentified: !!x["unidentified"], label: String(x["label"] ?? ""), delegations: []
+      identities: [], unidentified: !!x["unidentified"], label: String(x["label"] ?? ""), delegations: [], prefs: { applied: [], withheld: [], candidates: [] }
     };
   }
   if (!t) return null;
@@ -190,9 +198,12 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       break;
     }
     case "intent.failed": { const l = t.lines.find((y) => y.id === x["line_id"]); if (l) l.decided = true; break; }
-    case "question.asked": t.questions.push({ question_id: String(x["question_id"]), text: String(x["text"]), line_id: String(x["line_id"]), answered_by: null, at: e.wall_at, choice: (x["choice"] as QuestionChoice | undefined) ?? null, rule: (x["rule"] as OrderRule | undefined) ?? null }); break;
+    case "question.asked": t.questions.push({ question_id: String(x["question_id"]), text: String(x["text"]), line_id: String(x["line_id"]), answered_by: null, at: e.wall_at, choice: (x["choice"] as QuestionChoice | undefined) ?? null, rule: (x["rule"] as OrderRule | undefined) ?? null, pref_id: (x["pref_id"] as string | undefined) ?? null }); break;
     case "speaker.attributed": { const l = t.lines.find((y) => y.id === x["line_id"]); if (l) l.speaker = x["speaker"] as SpeakerRecord; break; }
     case "action.authorised": if (act) { act.awaiting = x["awaiting"] === "confirm" ? "confirm" : null; if (x["as"] === "confirm") act.confirmed_by_line = String(x["line_id"]); else act.authorised_by_line = String(x["line_id"]); } break;
+    case "preference.applied": t.prefs.applied.push({ ...(x as PrefUse), at: e.wall_at }); break;
+    case "preference.withheld": t.prefs.withheld.push({ ...(x as PrefUse), at: e.wall_at }); break;
+    case "preference.candidate_noted": t.prefs.candidates.push(String(x["pref_id"])); break;
     case "line.kept": {
       const l = t.lines.find((y) => y.id === x["line_id"]);
       if (l) { l.text = String(x["text"]); l.kept = true; if (l.ambient && typeof x["raw_text"] === "string") l.ambient.raw_text = x["raw_text"]; }
@@ -293,7 +304,7 @@ export function viewOf(t: EmrTask): EmrTaskView {
       ...(a.authorised_by_line && a.authorised_by_line !== a.line_id ? { authorised_by_line: a.authorised_by_line } : {}),
       ...(a.screen ? { screen: { ...a.screen, encounter: { patient_id: a.screen.encounter.patient_id ?? t.patient_id, visit_id: a.screen.encounter.visit_id ?? t.visit_id, admission_id: a.screen.encounter.admission_id ?? (t.admission_id || null) }, command_id: a.action_id, owner_id: t.owner } } : {})
     })),
-    questions: t.questions.filter((q) => q.answered_by === null).map((q) => ({ question_id: q.question_id, text: q.text, ...(q.choice ? { answers: answersOf(q.choice) } : {}) })),
+    questions: t.questions.filter((q) => q.answered_by === null).map((q) => ({ question_id: q.question_id, text: q.text, ...(q.choice ? { answers: answersOf(q.choice) } : q.pref_id ? { answers: [...SCOPE_KINDS, "no"] } : {}) })),
     transcript: t.lines.map((l) => ({ id: l.id, line_id: l.id, text: l.kept ? l.text : "", at: l.at, source: l.source, decided: l.decided, class: primaryClass(l.classes) as SpeechClass | null, classes: l.classes, kept: l.kept, ...(l.ambient ? { ambient: l.kept ? l.ambient : { ...l.ambient, raw_text: "" } } : {}), ...(l.speaker ? { speaker: l.speaker } : {}) })),
     heard: { lines: t.lines.length, kept: t.lines.filter((l) => l.kept).length, dropped: t.lines.filter((l) => !l.kept && l.decided).length },
     ears: earsSummary(t.ears),
@@ -302,6 +313,7 @@ export function viewOf(t: EmrTask): EmrTaskView {
     refusals: t.refusals, watching: t.watch, changes: t.changes, pages: t.pages, pause: t.pause, digests: t.digests,
     calls: t.calls, usd: Math.round(t.usd * 1e6) / 1e6, version: t.version,
     obligations: t.obligations, speed: speedSummary(t), identities: t.identities, unidentified: t.unidentified, delegations: t.delegations,
+    preferences: { applied: t.prefs.applied, withheld: t.prefs.withheld, candidates: t.prefs.candidates },
     updated_at: t.updated_at
   };
 }
@@ -468,6 +480,8 @@ export class EmrRuntime {
   private readonly reviewTried = new Set<string>();
   // Tasks handed on elsewhere are followed only when made from shortly before this runtime started, so old leftovers are never taken up.
   private readonly startedAt = Date.now();
+  // The last ward each task's context named, for preferences scoped to a ward.
+  private readonly wards = new Map<string, string>();
 
   constructor(private readonly o: EmrRuntimeOptions) { this.lv = { ...LEVERS_OFF, ...(o.speed ?? {}) }; }
   get levers(): SpeedLevers { return { ...this.lv }; }
@@ -657,6 +671,7 @@ export class EmrRuntime {
     }
     if (CLOSED_TASK.has(l.task.state)) throw new Error(`the task is ${l.task.state}`);
     const live = l;
+    if (ctx.facts["ward"]) this.wards.set(live.task.task_id, ctx.facts["ward"]);
     const viaGate = !!s.ambient || s.via === "gate" || (s.via !== "intent" && isWide(this.kinds(s.owner)));
     // Ambient words reach the store only once an action or a question rests on them; until then they live in memory.
     const withhold = !!s.ambient && !this.o.keepHeard;
@@ -699,6 +714,13 @@ export class EmrRuntime {
       this.holdIdentity(live, lineId, named.name, named.phone);
       this.afterLine(live, lineId, true);
       this.settle(live, "identity_held");
+      return { task_id: live.task.task_id, line_id: lineId };
+    }
+    // "From now on ..." is read by rule as a candidate preference, with no model call; it fills nothing until its scope is chosen.
+    if (this.o.preferences && FROM_NOW_ON.test(text)) {
+      this.fromNowOn(live, lineId, text, ctx);
+      this.afterLine(live, lineId, true);
+      this.settle(live, "preference_candidate");
       return { task_id: live.task.task_id, line_id: lineId };
     }
     if (live.task.state !== "running") this.setState(live, "running", `heard_${lineId}`);
@@ -874,6 +896,7 @@ export class EmrRuntime {
     const t = l.task;
     const line = t.lines.find((x) => x.id === lineId);
     if (!line || line.decided || t.state !== "running") return false;
+    if (this.scopeByWord(l, lineId, line)) return true;
     const q = t.questions.filter((y) => y.answered_by === null || y.answered_by === lineId).at(-1);
     if (!q?.choice || Date.parse(line.at) - Date.parse(q.at) > (this.o.answerWindowMs ?? 120_000)) return false;
     const a = answerChoice(line.text, q.choice);
@@ -1129,10 +1152,12 @@ export class EmrRuntime {
   }
 
   // Builds one non-observation action from a clause: every value must have been said, ids come from the task, and anything missing becomes a question.
-  private applyWork(l: Live, lineId: string, c: AnyClause, kind: string): void {
+  private applyWork(l: Live, lineId: string, c: AnyClause, kind: string, carried: Record<string, unknown> = {}): void {
     const t = l.task;
     const line = t.lines.find((x) => x.id === lineId)?.text ?? "";
-    const said = (v: string | null | undefined) => (v && fromLine(v, line) ? v.trim() : null);
+    // A value carried over from the entry a correction replaces was said for that entry, so it counts as said.
+    const kept = new Set(Object.values(carried).filter((v): v is string => typeof v === "string"));
+    const said = (v: string | null | undefined) => (v && (fromLine(v, line) || kept.has(v)) ? v.trim() : null);
     const words = c.words.trim();
     // Work that needs the admission is held until it exists and then resumes itself.
     const needAdmission = () => { if (!t.admission_id) { this.holdObligation(l, lineId, kind, c, { after: "admission", due_at: null, reason: "needs_admission" }); return false; } return true; };
@@ -1142,6 +1167,8 @@ export class EmrRuntime {
     const ids = { ...(t.patient_id ? { patient_id: t.patient_id } : {}) };
     let raw: Record<string, unknown>;
     let own: Record<string, unknown> = {};
+    // The preference that filled a value here, journaled against the action once it is proposed.
+    const pref: { use: PrefUse | null } = { use: null };
     switch (kind as WorkKind) {
       case "draft_consult_note": if (!needVisit()) return; raw = { visit_id: t.visit_id, ...ids, text: said(c.text) ?? words }; break;
       case "request_admission": {
@@ -1170,8 +1197,11 @@ export class EmrRuntime {
       }
       case "add_care_plan_item": {
         if (!needAdmission()) return;
-        if (!c.cadence || !cadenceSaid(c.cadence, line)) return this.ask(l, lineId, `How often should "${(c.title ?? words).slice(0, 80)}" be done?`);
-        raw = { admission_id: t.admission_id, title: (said(c.title) ?? words).slice(0, 200), item_kind: c.item_kind ?? "nursing", cadence: c.cadence };
+        const itemKind = c.item_kind ?? "nursing";
+        // A cadence the clinician did not say may come from a remembered preference whose scope covers this patient, shown with its source.
+        const cadence = c.cadence && cadenceSaid(c.cadence, line) ? c.cadence : this.preferred(l, lineId, "care_plan_cadence", itemKind, pref);
+        if (!cadence) return this.ask(l, lineId, `How often should "${(c.title ?? words).slice(0, 80)}" be done?`);
+        raw = { admission_id: t.admission_id, title: (said(c.title) ?? words).slice(0, 200), item_kind: itemKind, cadence };
         break;
       }
       case "record_note": {
@@ -1183,7 +1213,8 @@ export class EmrRuntime {
           break;
         }
         if (!text && !c.text) return this.ask(l, lineId, "What should the note say?");
-        raw = { admission_id: t.admission_id, note_type: c.note_type ?? (this.kinds(t.owner).includes("record_triage_vitals") ? "nursing" : "progress"), text: text ?? words };
+        const noteType = c.note_type && wordSaid(c.note_type, line) ? c.note_type : this.preferred(l, lineId, "note_type", null, pref) ?? c.note_type ?? (this.kinds(t.owner).includes("record_triage_vitals") ? "nursing" : "progress");
+        raw = { admission_id: t.admission_id, note_type: noteType, text: text ?? words };
         break;
       }
       case "draft_handover": case "prepare_bill": case "send_pay_link": if (!needAdmission()) return; raw = { admission_id: t.admission_id }; break;
@@ -1250,7 +1281,12 @@ export class EmrRuntime {
     const schema = WORK_ARGS[kind as Exclude<WorkKind, typeof OBSERVATION_KIND>];
     const parsed = schema.safeParse(raw);
     if (!parsed.success) { this.ask(l, lineId, `I could not use that (${parsed.error.issues[0]?.message ?? "invalid"}). Please say it again.`); return; }
+    const before = t.order.length;
     this.propose(l, lineId, kind, parsed.data, null, own);
+    if (pref.use && t.order.length > before) {
+      this.append(l, "preference.applied", { ...pref.use, action_id: t.order.at(-1)! });
+      this.note(l, `${pref.use.text}: used ${pref.use.source}, scope ${pref.use.scope}.`);
+    }
   }
 
   // A correction of other work replaces it while it is still on hold; once written, only a new instruction adds to the record.
@@ -1259,7 +1295,106 @@ export class EmrRuntime {
     const over = Object.fromEntries(Object.entries(c).filter(([k, v]) => v !== null && v !== undefined && !["words", "class", "kind", "target", "confidence", "question", "asked_for"].includes(k)));
     this.append(l, "action.cancelled", { action_id: target.action_id, reason: `corrected_by_${lineId}` });
     const merged: AnyClause = { ...(c as AnyClause), ...Object.fromEntries(Object.entries(target.args).map(([k, v]) => [k === "reason" || k === "note" ? "text" : k, v])), ...over, class: "instruction", kind: target.kind, words: c.words };
-    this.applyWork(l, lineId, merged, target.kind);
+    const before = l.task.order.length;
+    this.applyWork(l, lineId, merged, target.kind, target.args);
+    const made = l.task.order.length > before ? l.task.actions.get(l.task.order.at(-1)!) ?? null : null;
+    if (made) this.correctionCandidate(l, lineId, target, made);
+  }
+
+  // The ward this line was said in, else the last ward the task's context named, else the ward this task admitted to or put a bed in.
+  private wardFor(l: Live, lineId: string): string | null {
+    const seen = l.ctxOf.get(lineId)?.facts["ward"] ?? this.wards.get(l.task.task_id) ?? null;
+    if (seen) return seen;
+    const t = l.task;
+    const placed = [...t.order].reverse().map((id) => t.actions.get(id)!).find((a) => (a.kind === "admit_patient" || a.kind === "assign_bed") && a.state === "completed");
+    const key = placed ? String(placed.args["ward"]) : null;
+    return key ? this.o.port.names?.().wards?.[key]?.[0] ?? null : null;
+  }
+
+  // Fills one unsaid value from the preference whose scope covers this patient; every one not used is shown with why, and nothing is filled without a scope.
+  private preferred(l: Live, lineId: string, field: PrefField, itemKind: string | null, out: { use: PrefUse | null }): string | null {
+    const mem = this.o.preferences;
+    if (!mem) return null;
+    const t = l.task;
+    const ward = this.wardFor(l, lineId);
+    const r = mem.choose({ owner: t.owner, patient_id: t.patient_id, ward, field, item_kind: itemKind });
+    const use = (p: NonNullable<typeof r.applied>, reason: string | null): PrefUse => ({
+      pref_id: p.pref_id, field: p.field, value: p.value, text: describePref(p), scope: describeScope(p.scope), source: describeSource(p.source, t.owner),
+      line_id: lineId, action_id: null, reason, at: this.wall().toISOString()
+    });
+    for (const w of r.withheld) {
+      if (t.prefs.withheld.some((x) => x.pref_id === w.pref.pref_id && x.line_id === lineId)) continue;
+      this.append(l, "preference.withheld", use(w.pref, w.reason));
+      this.note(l, `Not used here: ${describePref(w.pref)}, from ${describeSource(w.pref.source, t.owner)}, because ${w.reason}.`);
+    }
+    if (!r.applied) return null;
+    out.use = use(r.applied, null);
+    return r.applied.value;
+  }
+
+  // A correction that changed a value a preference may hold becomes a candidate only, with one question for its scope; the correction itself stays with this entry.
+  private correctionCandidate(l: Live, lineId: string, before: EmrAction, after: EmrAction): void {
+    const mem = this.o.preferences;
+    if (!mem) return;
+    const field: PrefField | null = after.kind === "add_care_plan_item" && after.args["cadence"] !== before.args["cadence"] ? "care_plan_cadence"
+      : after.kind === "record_note" && after.args["note_type"] !== before.args["note_type"] ? "note_type" : null;
+    if (!field) return;
+    const line = l.task.lines.find((x) => x.id === lineId);
+    const reading = { field, item_kind: field === "care_plan_cadence" ? String(after.args["item_kind"]) : null, value: String(after.args[field === "care_plan_cadence" ? "cadence" : "note_type"]) };
+    const p = mem.candidate({ owner: l.task.owner, reading, source: { kind: "correction", task_id: l.task.task_id, line_id: lineId, quote: line?.kept ? line.text : "" }, patient_id: l.task.patient_id, ward: this.wardFor(l, lineId) });
+    this.askScope(l, lineId, p.pref_id, `Corrected for this entry. Keep ${describePref(p)} beyond it? Say patient, me, ward or everyone; no keeps it to this entry.`);
+  }
+
+  // "From now on ..." read by rule; a rule it cannot read is said so, and nothing is kept.
+  private fromNowOn(l: Live, lineId: string, text: string, ctx: EmrContext): void {
+    const mem = this.o.preferences!;
+    this.append(l, "line.handled", { line_id: lineId, as: "preference" });
+    const reading = readRule(text);
+    if (!reading) { this.note(l, "I keep a care-plan cadence for one kind of item, or the type of note, as a preference; I could not read either in that, so nothing was kept."); return; }
+    const p = mem.candidate({ owner: l.task.owner, reading, source: { kind: "from_now_on", task_id: l.task.task_id, line_id: lineId, quote: text }, patient_id: l.task.patient_id, ward: ctx.facts["ward"] ?? this.wards.get(l.task.task_id) ?? null });
+    this.askScope(l, lineId, p.pref_id, `Keep ${describePref(p)} from now on for whom? Say patient, me, ward or everyone; no keeps nothing.`);
+  }
+
+  private askScope(l: Live, lineId: string, prefId: string, text: string): void {
+    this.append(l, "preference.candidate_noted", { pref_id: prefId, line_id: lineId });
+    this.append(l, "question.asked", { question_id: `q-${shortHash(l.task.task_id, l.task.questions.length + 1)}`, line_id: lineId, text: text.slice(0, 300), pref_id: prefId });
+  }
+
+  // One word settles the open scope question by rule; a scope the context cannot fill is asked again.
+  private scopeByWord(l: Live, lineId: string, line: EmrLine): boolean {
+    const mem = this.o.preferences;
+    const q = l.task.questions.filter((y) => y.answered_by === null || y.answered_by === lineId).at(-1);
+    if (!mem || !q?.pref_id || Date.parse(line.at) - Date.parse(q.at) > (this.o.answerWindowMs ?? 120_000)) return false;
+    const a = scopeAnswer(line.text);
+    if (!a) return false;
+    if (q.answered_by === null) this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
+    this.append(l, "line.ruled", { line_id: lineId, classes: ["instruction"], as: "preference_scope", question_id: q.question_id });
+    this.settleScope(l, q.pref_id, a, "word", lineId);
+    this.settle(l, "preference_scoped");
+    return true;
+  }
+
+  // The strip's scope buttons and the one-word answer both land here; the owner alone decides.
+  scopePreference(taskId: string, by: string, prefId: string, answer: (typeof SCOPE_KINDS)[number] | "no"): { ok: boolean; reason: string | null } {
+    const l = this.live.get(taskId);
+    if (!l) return { ok: false, reason: "unknown_task" };
+    if (l.task.owner !== by) throw new Error("the task belongs to another owner");
+    const q = l.task.questions.find((x) => x.pref_id === prefId && x.answered_by === null);
+    if (q) this.append(l, "question.answered", { question_id: q.question_id, line_id: `strip:${prefId}` });
+    return this.settleScope(l, prefId, answer, "strip", null);
+  }
+
+  private settleScope(l: Live, prefId: string, a: (typeof SCOPE_KINDS)[number] | "no", via: "word" | "strip", lineId: string | null): { ok: boolean; reason: string | null } {
+    try {
+      const p = this.o.preferences!.decide(prefId, l.task.owner, a, via, lineId);
+      this.note(l, p.state === "declined" ? `Not kept: ${describePref(p)} stays with the entry it came from.` : `Kept: ${describePref(p)}, scope ${describeScope(p.scope)}.`);
+      return { ok: true, reason: null };
+    } catch (e) {
+      if (!(e instanceof PreferenceError)) throw e;
+      this.note(l, e.code === "no_ward" ? "I do not know this patient's ward, so I cannot keep it for the ward. Say patient, me or everyone." : `Not kept: ${e.message}.`);
+      if (e.code === "no_ward" || e.code === "no_patient") this.askScope(l, lineId ?? `strip:${prefId}`, prefId, "Which scope then? Say patient, me or everyone; no keeps it to this entry.");
+      return { ok: false, reason: e.code };
+    }
   }
 
   // The ward key the clinician named, matched against the words the hospital gave for it.
