@@ -103,7 +103,9 @@ export const DoorProfile = z.strictObject({
     // The discharge paperwork the hospital fills from the record, and where each part of it sits in the answer.
     paperwork: ReadSpec.extend({
       digest: Dotted, diagnosis: Dotted, medicines: Dotted, medicine_name: Dotted, medicine_dispensed: Dotted,
-      exceptions: Dotted, exception_text: Dotted, tests: Dotted, test_resulted: Dotted, unsigned: Dotted.optional()
+      exceptions: Dotted, exception_text: Dotted, tests: Dotted, test_resulted: Dotted, unsigned: Dotted.optional(),
+      // Tests still without a result at discharge, which the hospital discloses on the paperwork, and the sentence it gives each.
+      pending: Dotted.optional(), pending_text: Dotted.optional()
     }).optional()
   }),
   // The tests and medicines an owner may order by voice: the words that name each, the hospital's own name or id, and whether a medicine is controlled.

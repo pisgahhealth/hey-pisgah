@@ -95,7 +95,7 @@ export interface EmrPort {
 }
 
 // Prescribed and dispensed stay apart; each exception is for the responsible doctor to confirm, and the digest binds the confirmation to this reading.
-export type PaperworkReadBack = { digest: string; diagnosis: string | null; dispensed: string[]; exceptions: string[]; tests: { resulted: number; total: number }; unsigned: number };
+export type PaperworkReadBack = { digest: string; diagnosis: string | null; dispensed: string[]; exceptions: string[]; tests: { resulted: number; total: number }; unsigned: number; pending?: string[] };
 
 // The hospital seals each read-back, so the countersign that follows proves which batch was shown and when.
 export type ReadBack = { items: { stateId: string; label: string; kind: string; controlled: boolean; sentAt: string | null }[]; itemsDigest: string | null; readBackAt: string; seal: string | null; awaitingSecond: { stateId: string; label: string }[]; changed: { stateId: string; label: string }[] };

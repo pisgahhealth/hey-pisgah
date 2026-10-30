@@ -167,7 +167,8 @@ export class PisgahPort implements EmrPort {
         .map((m) => `${str(pick(m, op.medicine_name))?.slice(0, 60) ?? "Medicine"} ${str(pick(m, op.medicine_dispensed))}`),
       exceptions: list(op.exceptions).map((e) => str(pick(e, op.exception_text))?.slice(0, 160) ?? "").filter(Boolean),
       tests: { resulted: tests.filter((x) => pick(x, op.test_resulted) === true).length, total: tests.length },
-      unsigned: Number.isFinite(unsigned) ? unsigned : 0
+      unsigned: Number.isFinite(unsigned) ? unsigned : 0,
+      pending: op.pending ? list(op.pending).map((x) => str(pick(x, op.pending_text ?? "text"))?.slice(0, 200) ?? "").filter(Boolean).slice(0, 20) : []
     };
   }
 

@@ -468,7 +468,9 @@ export function paperworkAsk(summary: string, rb: PaperworkReadBack): string {
   const meds = rb.dispensed.length ? `Medicines from the dispense record: ${rb.dispensed.join(", ")}.` : "No medicine was dispensed.";
   const ex = rb.exceptions.length ? ` For you to confirm against dispensing: ${rb.exceptions.join("; ")}.` : "";
   const tests = rb.tests.total ? ` Tests: ${rb.tests.resulted} of ${rb.tests.total} resulted; the rest are not billed.` : "";
-  return `${summary}. Diagnosis from the record: ${rb.diagnosis}. ${meds}${ex}${tests} Say confirm to discharge.`.slice(0, 1200);
+  // The hospital's own disclosure of each result still pending, so the confirm covers leaving with it.
+  const pending = rb.pending?.length ? ` Pending at discharge: ${rb.pending.join("; ")}.` : "";
+  return `${summary}. Diagnosis from the record: ${rb.diagnosis}. ${meds}${ex}${tests}${pending} Say confirm to discharge.`.slice(0, 1200);
 }
 
 export const PAY_LINK_VERIFIED_NOTE = "Pay link request verified: the bill shows it recorded. This does not show that an SMS arrived or that anyone paid; payment is simulated.";
