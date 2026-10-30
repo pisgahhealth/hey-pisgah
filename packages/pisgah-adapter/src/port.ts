@@ -499,6 +499,7 @@ export class PisgahPort implements EmrPort {
 }
 
 const opt = (v: unknown): string | null => (typeof v === "string" && v.length ? v : null);
+const flag = (v: unknown): boolean | null => (typeof v === "boolean" ? v : null);
 // One delegation from the door's answer, or null when it is not one.
 function delegationOf(x: unknown): DelegationRead | null {
   const id = opt(pick(x, "id"));
@@ -511,7 +512,9 @@ function delegationOf(x: unknown): DelegationRead | null {
     acknowledged_at: opt(pick(x, "acknowledgedAt")), completed_at: opt(pick(x, "completedAt")), completion_record_id: opt(pick(x, "completionRecordId")),
     due_at: opt(pick(x, "dueAt")), overdue: pick(x, "overdue") === true, escalated_at: opt(pick(x, "escalatedAt")),
     record: { status: status === "verified" || status === "verifier_error" ? status : "unsupported_or_incomplete", record_id: opt(pick(x, "record.recordId")), reason: opt(pick(x, "record.reason")) },
-    instruction: opt(pick(x, "instruction")), nudged: Array.isArray(pick(x, "nudged")) ? (pick(x, "nudged") as unknown[]).map(String) : []
+    instruction: opt(pick(x, "instruction")), nudged: Array.isArray(pick(x, "nudged")) ? (pick(x, "nudged") as unknown[]).map(String) : [],
+    subject_id: opt(pick(x, "subject.id")), subject_prepared: flag(pick(x, "subjectPrepared")), order_received: flag(pick(x, "orderReceived")), consult_finished: flag(pick(x, "consultFinished")), created_at: opt(pick(x, "createdAt")),
+    subject_ready: flag(pick(x, "subjectReady")), awaiting_payment: flag(pick(x, "awaitingPayment"))
   };
 }
 

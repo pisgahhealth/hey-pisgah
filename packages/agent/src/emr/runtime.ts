@@ -16,8 +16,8 @@ import { DOCUMENTATION_KINDS, ORDER_KINDS, recordOf, type SpeakerRecord, type Sp
 import { EMERGENCY_KIND, EMERGENCY_LINE, RULE_ONLY_KINDS, emergencyReason, identityFrom, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
 import { screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
 import {
-  ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_ARGS, DELEGATION_RULE_KINDS, ESCALATE_KIND, NUDGE_KIND, REGISTER_KIND, WARD_REVIEW_KIND,
-  acceptedTask, consentSaid, nameParts, onlyTeam, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
+  ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_ARGS, DELEGATION_RULE_KINDS, DISPENSE_KIND, ESCALATE_KIND, NUDGE_KIND, PREPARE_KIND, REGISTER_KIND, WARD_REVIEW_KIND,
+  acceptedTask, consentSaid, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
   type DelegationRead, type EmrDelegation
 } from "./delegate.js";
 
@@ -261,7 +261,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
     case "delegation.made": case "delegation.received": t.delegations.push(x["delegation"] as EmrDelegation); break;
     case "delegation.state": {
       const d = t.delegations.find((y) => y.key === x["key"]);
-      if (d) for (const k of ["delegation_id", "assigned_at", "acknowledged_at", "completed_at", "escalated_at", "record_id", "ward_review"] as const) if (x[k] !== undefined) (d as Record<string, unknown>)[k] = x[k];
+      if (d) for (const k of ["delegation_id", "assigned_at", "acknowledged_at", "completed_at", "escalated_at", "record_id", "ward_review", "asked", "asked_line", "waiting", "prepared_seen"] as const) if (x[k] !== undefined) (d as Record<string, unknown>)[k] = x[k];
       break;
     }
     case "delegation.details": {
@@ -466,6 +466,8 @@ export class EmrRuntime {
   private readonly doseEars = new Map<string, Promise<{ reading: EarReading | null; error: string | null }>>();
   // Review obligations already checked for a team to hand them to, so the sweep asks once per obligation.
   private readonly reviewTried = new Set<string>();
+  // Tasks handed on elsewhere are followed only when made from shortly before this runtime started, so old leftovers are never taken up.
+  private readonly startedAt = Date.now();
 
   constructor(private readonly o: EmrRuntimeOptions) { this.lv = { ...LEVERS_OFF, ...(o.speed ?? {}) }; }
   get levers(): SpeedLevers { return { ...this.lv }; }
@@ -2059,6 +2061,18 @@ export class EmrRuntime {
       this.settle(home, "accept_line");
       return { task_id: home.task.task_id, line_id: lineId };
     }
+    // "Prepare and dispense it" on a sent order: the words that ask are the pharmacist's own, and acting on a task takes it.
+    const asked = orderAsked(text);
+    const orders = open.filter((x) => x.d.task_kind === "dispense" && x.d.subject_id && (!target || !(target.admission_id || target.patient_id) || x.l.task.admission_id === target.admission_id || x.l.task.patient_id === target.patient_id));
+    if (asked && orders.length === 1) {
+      const { l, d } = orders[0]!;
+      const lineId = this.ruledLine(l, owner, text, spokenAt, source, "order");
+      if (!d.acknowledged_at && !this.attempts(l.task, ACK_KIND, d.delegation_id).live) this.ruleAct(l, lineId, ACK_KIND, { delegation_id: d.delegation_id, title: d.title, evidence: `transcript:${lineId}` });
+      this.append(l, "delegation.state", { key: d.key, asked, asked_line: lineId });
+      this.enqueue(l, async () => this.advanceOrder(l, d.key));
+      this.settle(l, "order_line");
+      return { task_id: l.task.task_id, line_id: lineId };
+    }
     const all = open.filter((x) => x.d.task_kind === "registration" && x.d.registration && !x.d.record_id);
     // With several arrivals waiting, the words go to the one the desk has open.
     const here = all.filter((x) => target && ((target.patient_id && x.l.task.patient_id === target.patient_id) || (target.admission_id && x.l.task.admission_id === target.admission_id)));
@@ -2099,7 +2113,7 @@ export class EmrRuntime {
     const l = this.taskFor(owner, ctx) ?? this.openTask(owner, ctx, { entry: "delegation" });
     const reg = d.kind === "registration" ? { ...registrationFrom(d.instruction), consent_line: null } : null;
     const lineId = `rec-${d.id}`;
-    this.append(l, "delegation.received", { delegation: { ...this.newDelegation(d.id, lineId, d.kind, d.title, null, d.due_at, "none", { registration: reg }), delegation_id: d.id, side: "assignee", action_id: null, assigned_at: at, acknowledged_at: d.acknowledged_at, escalated_at: d.escalated_at } });
+    this.append(l, "delegation.received", { delegation: { ...this.newDelegation(d.id, lineId, d.kind, d.title, null, d.due_at, "none", { registration: reg, subject_id: d.subject_id }), delegation_id: d.id, side: "assignee", action_id: null, assigned_at: at, acknowledged_at: d.acknowledged_at, escalated_at: d.escalated_at } });
     const needs = reg ? registrationNeeds(reg) : [];
     const id = this.ruleAct(l, lineId, NUDGE_KIND, { delegation_id: d.id, title: d.title, needs, nudge_key: `nudge:${needs.length ? [...needs].sort().join("+") : "new"}` });
     if (!id) this.note(l, `New task for you: ${d.title}. Say accepted ${d.title.toLowerCase()} to take it.`);
@@ -2126,16 +2140,35 @@ export class EmrRuntime {
           try { whole = await port.delegation(owner, d.id, prov); } catch { whole = null; }
           if (!this.stopped) this.receive(owner, whole ?? d, at);
         }
+        for (const l of mine().filter((x) => !CLOSED_TASK.has(x.task.state))) {
+          for (const d of l.task.delegations.filter((x) => x.side === "assignee" && x.task_kind === "dispense" && x.asked && !x.record_id)) await this.advanceOrder(l, d.key);
+        }
       }
       if (side !== "delegator" && side !== "both") continue;
+      // A task handed on for this owner that no open task follows, such as one made before a restart or by another serve, is followed from here.
+      let handed: DelegationRead[] = [];
+      try { handed = await port.delegations(owner, "delegator", prov); } catch { handed = []; }
+      const followed = new Set(mine().flatMap((l) => l.task.delegations.filter((d) => d.side === "delegator").map((d) => d.delegation_id)));
+      const since = this.startedAt - 2 * 60_000;
+      for (const r of handed.filter((x) => !followed.has(x.id) && x.state !== "completed" && x.state !== "cancelled" && !!x.created_at && Date.parse(x.created_at) >= since)) {
+        const ctx: EmrContext = { admission_id: r.admission_id ?? "", patient_id: r.patient_id, visit_id: r.visit_id, label: r.title, facts: {}, keywords: [] };
+        const l = this.taskFor(owner, ctx) ?? this.openTask(owner, ctx, { entry: "delegation" });
+        this.append(l, "delegation.made", { delegation: { ...this.newDelegation(r.id, `rec-${r.id}`, r.kind, r.title, null, r.due_at, "none", { subject_id: r.subject_id }), delegation_id: r.id, action_id: null, assigned_at: at, acknowledged_at: r.acknowledged_at } });
+        this.note(l, `Following a task handed on for you: ${r.title}. I will tell you when the record shows it done.`);
+      }
       for (const l of mine().filter((x) => !CLOSED_TASK.has(x.task.state))) {
         for (const d of l.task.delegations.filter((x) => x.side === "delegator" && x.delegation_id && !x.completed_at)) {
           let r: DelegationRead | null = null;
           try { r = await port.delegation(owner, d.delegation_id!, prov); } catch { continue; }
           if (!r || this.stopped) continue;
+          // A prepared order is a milestone the delegating clinician sees, with what it still waits on.
+          if (r.subject_prepared && !d.prepared_seen) {
+            this.append(l, "delegation.state", { key: d.key, prepared_seen: true });
+            this.note(l, `Prepared by the pharmacy: ${d.title}.${r.awaiting_payment ? " It waits for payment before it is dispensed." : ""} Not done yet; I am watching the record.`);
+          }
           if (r.acknowledged_at && !d.acknowledged_at) {
             this.append(l, "delegation.state", { key: d.key, acknowledged_at: r.acknowledged_at });
-            this.note(l, `Accepted by the ${String(d.team ?? "").replace(/_/g, " ")} team: ${d.title}. Not done yet; I am watching the record.`);
+            this.note(l, `Accepted by the ${d.team ? `${d.team.replace(/_/g, " ")} team` : "team"}: ${d.title}. Not done yet; I am watching the record.`);
           }
           const done = this.attempts(l.task, COMPLETE_KIND, d.delegation_id);
           const esc = this.attempts(l.task, ESCALATE_KIND, d.delegation_id);
@@ -2147,6 +2180,41 @@ export class EmrRuntime {
         }
       }
     }
+  }
+
+  // A sent order the pharmacist asked for moves one step per fresh read: the review once the consultation is finished, then the dispense when it was asked for.
+  private async advanceOrder(l: Live, key: string): Promise<void> {
+    const t = l.task;
+    const d = t.delegations.find((x) => x.key === key);
+    const port = this.o.port;
+    if (!d || !d.delegation_id || !d.subject_id || !d.asked || d.record_id || !port.delegation || this.stopped) return;
+    let r: DelegationRead | null = null;
+    try { r = await port.delegation(t.owner, d.delegation_id, { owner: t.owner, evidence: "watch:delegations", spoken_at: this.wall().toISOString() }); } catch { return; }
+    if (!r || r.record.status === "verified") return;
+    const line = d.asked_line ?? d.line_id;
+    const args = { delegation_id: d.delegation_id, prescription_id: d.subject_id, title: d.title, evidence: `transcript:${line}` };
+    if (!r.subject_prepared) {
+      if (r.consult_finished === false) {
+        if (d.waiting !== "consultation") { this.append(l, "delegation.state", { key, waiting: "consultation" }); this.note(l, `Held: ${d.title}. The pharmacy reviews it once the doctor finishes the consultation; I will do it then.`); this.settle(l, "order_waiting"); }
+        return;
+      }
+      const prep = this.attempts(t, PREPARE_KIND, d.delegation_id);
+      if (!prep.live && prep.tries < 2) this.ruleAct(l, line, PREPARE_KIND, args);
+      return;
+    }
+    if (d.asked !== "dispense") return;
+    // Dispensing waits for the line to be ready at the counter; a line waiting for payment is held, never tried.
+    if (r.subject_ready === false) {
+      const why = r.awaiting_payment ? "payment" : "counter";
+      if (d.waiting !== why) {
+        this.append(l, "delegation.state", { key, waiting: why });
+        this.note(l, `Held: ${d.title} is prepared and ${why === "payment" ? "waits for its payment" : "is not at the counter yet"}. I will dispense it when the record shows it ready.`);
+        this.settle(l, "order_waiting");
+      }
+      return;
+    }
+    const disp = this.attempts(t, DISPENSE_KIND, d.delegation_id);
+    if (!disp.live && disp.tries < 2) this.ruleAct(l, line, DISPENSE_KIND, args);
   }
 
   // What each verified delegation write means for the task, said once in the owner's strip.
@@ -2186,6 +2254,15 @@ export class EmrRuntime {
       case WARD_REVIEW_KIND:
         this.append(l, "delegation.state", { key: d.key, ward_review: "requested" });
         this.note(l, `Asked the ${team} clinic for a ward review now that the patient is on a bed (request ${recordId}).`);
+        break;
+      case PREPARE_KIND:
+        this.append(l, "delegation.state", { key: d.key, waiting: null });
+        this.note(l, `Prepared: ${d.title}. The pharmacist's review is recorded${d.asked === "dispense" ? "; dispensing next" : ""}.`);
+        if (d.asked === "dispense") this.enqueue(l, async () => this.advanceOrder(l, d.key));
+        break;
+      case DISPENSE_KIND:
+        this.append(l, "delegation.state", { key: d.key, record_id: recordId });
+        this.note(l, `Dispensed: ${d.title} (record ${recordId}). The doctor's agent is told when it reads the record.`);
         break;
       case REGISTER_KIND:
         this.append(l, "delegation.state", { key: d.key, record_id: recordId });

@@ -10,8 +10,10 @@ export const COMPLETE_KIND = "complete_task" as const;
 export const ESCALATE_KIND = "escalate_task" as const;
 export const WARD_REVIEW_KIND = "request_ward_review" as const;
 export const REGISTER_KIND = "complete_registration" as const;
+export const PREPARE_KIND = "prepare_order" as const;
+export const DISPENSE_KIND = "dispense_order" as const;
 // Every delegation kind is taken by rule from the record or a spoken acceptance, never from the speech gate.
-export const DELEGATION_RULE_KINDS: ReadonlySet<string> = new Set([DELEGATE_KIND, ACK_KIND, NUDGE_KIND, COMPLETE_KIND, ESCALATE_KIND, WARD_REVIEW_KIND, REGISTER_KIND]);
+export const DELEGATION_RULE_KINDS: ReadonlySet<string> = new Set([DELEGATE_KIND, ACK_KIND, NUDGE_KIND, COMPLETE_KIND, ESCALATE_KIND, WARD_REVIEW_KIND, REGISTER_KIND, PREPARE_KIND, DISPENSE_KIND]);
 
 export const TASK_KINDS = ["review", "dispense", "lab_order", "registration", "nursing", "accounts", "operational"] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
@@ -32,6 +34,8 @@ export const DELEGATION_ARGS: Record<string, z.ZodType<Record<string, unknown>>>
   [COMPLETE_KIND]: z.strictObject({ delegation_id: EmrId, title: Title, found_record_id: EmrId, evidence: Evidence }),
   [ESCALATE_KIND]: z.strictObject({ delegation_id: EmrId, title: Title }),
   [WARD_REVIEW_KIND]: z.strictObject({ delegation_id: EmrId, admission_id: EmrId, team: z.string().regex(/^[a-z_]{1,30}$/), reason: z.string().trim().min(1).max(1000) }),
+  [PREPARE_KIND]: z.strictObject({ delegation_id: EmrId, prescription_id: EmrId, title: Title, evidence: Evidence }),
+  [DISPENSE_KIND]: z.strictObject({ delegation_id: EmrId, prescription_id: EmrId, title: Title, evidence: Evidence }),
   [REGISTER_KIND]: z.strictObject({ delegation_id: EmrId, patient_id: EmrId, surname: z.string().min(1).max(200), other_names: z.string().min(1).max(200), phone: z.string().regex(/^0[789][01]\d{8}$/), evidence: Evidence })
 };
 
@@ -48,6 +52,11 @@ export type DelegationRead = {
   due_at: string | null; overdue: boolean; escalated_at: string | null;
   record: { status: "verified" | "unsupported_or_incomplete" | "verifier_error"; record_id: string | null; reason: string | null };
   instruction: string | null; nudged: string[];
+  // The record the task is about, and what a fresh read says of a prescription: past the pharmacist's review, its voice order received, the consultation finished.
+  subject_id: string | null; subject_prepared: boolean | null; order_received: boolean | null; consult_finished: boolean | null;
+  created_at?: string | null;
+  // A reviewed prescription is ready at the counter, or waits for its payment.
+  subject_ready?: boolean | null; awaiting_payment?: boolean | null;
 };
 
 // One delegation as a task holds it: which side this owner is on, and each state as the record showed it.
@@ -59,6 +68,8 @@ export type EmrDelegation = {
   registration: { name: string | null; phone: string | null; consent_line: string | null } | null;
   // The spoken identity this task completes, closed on the delegating side when the record names the patient.
   obligation_id: string | null;
+  // The record the task is about, what its holder asked the agent to do with it and on which line, and what it waits on.
+  subject_id?: string | null; asked?: "prepare" | "dispense" | null; asked_line?: string | null; waiting?: string | null; prepared_seen?: boolean;
 };
 
 export function delegationSummary(kind: string, a: Record<string, unknown>): string | null {
@@ -71,6 +82,8 @@ export function delegationSummary(kind: string, a: Record<string, unknown>): str
     case ESCALATE_KIND: return `Ring the bell, overdue: ${t}`;
     case WARD_REVIEW_KIND: return `Ask the ${String(a["team"]).replace(/_/g, " ")} clinic for a ward review`;
     case REGISTER_KIND: return "Complete the registration at the front desk";
+    case PREPARE_KIND: return `Prepare the order (pharmacist's review): ${t}`;
+    case DISPENSE_KIND: return `Dispense the order: ${t}`;
     default: return null;
   }
 }
@@ -110,6 +123,15 @@ export function consentSaid(line: string): boolean {
   const low = line.toLowerCase();
   if (/\b(?:no|not|never|doesn'?t|does not|won'?t|refuses?|refused|declined?|withdr[ae]w)\b[^.]{0,30}\bconsent/.test(low) || /\bconsent\w*\b[^.]{0,20}\b(?:refused|declined|withdrawn)\b/.test(low)) return false;
   return /\b(?:she|he|they|the patient|patient)\s+(?:has\s+)?(?:consents?|consented|agrees?|agreed)\b|\b(?:verbal\s+)?consent\s+(?:given|confirmed|obtained)\b|\bgave\s+(?:her|his|their)\s+consent\b/.test(low);
+}
+
+// What the pharmacist asks the agent to do with a sent order: prepare it (the review), or prepare and dispense it.
+export function orderAsked(line: string): "prepare" | "dispense" | null {
+  const low = line.toLowerCase();
+  if (/\b(?:don'?t|do not|not yet|hold off|wait)\b[^.]{0,20}\b(?:prepare|dispense|give)/.test(low)) return null;
+  if (/\b(?:dispense|dispensed|give it out|hand it over|issue it)\b/.test(low)) return "dispense";
+  if (/\b(?:prepare|approve|review it|check it)\b/.test(low)) return "prepare";
+  return null;
 }
 
 // The name and phone a registration task carries, from the instruction the delegating agent wrote.
