@@ -9,6 +9,7 @@ The routes, header names and target ids are not in this repository. They live in
 | `PisgahPort` | Reads the admission or the arriving patient, does each work kind the profile lists, proves each write by a fresh read |
 | Owners | One agent bearer per owner; each owner holds its own kinds, watches and offers |
 | Deny list | Paths the port never calls, checked before anything else; `deny_exact` refuses one path but not its longer siblings |
+| Confirm paths | Paths the port calls only with the owner's matched confirmation line; without one the call is refused and nothing is sent |
 | Allowlist | The only routes the port may call: the profile's reads, its writes and their proofs |
 | Refusals | Every refused call is counted and nothing is sent |
 | `serve.run.ts` | Starts the strip-facing serve over this port, on `HEY_PISGAH_EMR_PORT` (default 4100) |

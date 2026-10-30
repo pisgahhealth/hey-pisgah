@@ -16,7 +16,7 @@ export type DoorLog = {
   at: string; method: string; path: string; status: number | null; ms: number; replayed: boolean;
   headers: Record<string, string>; body: unknown; outcome: "response" | "refused" | "network_error"; reason?: string;
 };
-export type Refusal = { at: string; method: string; path: string; reason: "denied_path" | "not_allowlisted" | "no_bearer_for_owner" | "bad_header" | "kind_not_held" };
+export type Refusal = { at: string; method: string; path: string; reason: "denied_path" | "not_allowlisted" | "no_bearer_for_owner" | "bad_header" | "kind_not_held" | "needs_confirmation" };
 type DoorResult =
   | { kind: "refused"; reason: Refusal["reason"] }
   | { kind: "network_error"; reason: string }
@@ -143,6 +143,7 @@ export class PisgahPort implements EmrPort {
     if (!bearer) return this.refuse(method, clean, "no_bearer_for_owner");
     if (!EVIDENCE.test(prov.evidence) || Number.isNaN(Date.parse(prov.spoken_at)) || (init.idempotencyKey !== undefined && !IDEM.test(init.idempotencyKey))) return this.refuse(method, clean, "bad_header");
     if ([prov.voice?.authorisation, prov.voice?.confirmation].some((v) => v !== undefined && !VOICE.test(v))) return this.refuse(method, clean, "bad_header");
+    if (this.profile.confirm.includes(clean) && (method !== "POST" || !this.profile.headers.confirmation || !prov.voice?.confirmation)) return this.refuse(method, clean, "needs_confirmation");
     const h = this.profile.headers;
     const shown: Record<string, string> = {
       [h.on_behalf_of]: prov.owner, [h.origin]: this.profile.origin_value, [h.evidence]: prov.evidence, [h.spoken_at]: prov.spoken_at,

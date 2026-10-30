@@ -137,6 +137,20 @@ describe("profile-driven work over the door", () => {
     } finally { await d.close(); }
   });
 
+  it("refuses a confirm path without the owner's matched confirmation line, and sends it with one", async () => {
+    const d = await door();
+    try {
+      const base = profile(d.base);
+      const tok = `transcript:u-2~v1.${Date.now()}.${"a".repeat(43)}`;
+      const noHeader = new PisgahPort(DoorProfile.parse({ ...base, confirm: ["stay/out/pay-link"] }), { bearers: { [DOC]: "b" } });
+      expect(await noHeader.request("POST", "stay/out/pay-link", { ...prov(DOC), voice: { confirmation: tok } }, { body: {} })).toEqual({ kind: "refused", reason: "needs_confirmation" });
+      const port = new PisgahPort(DoorProfile.parse({ ...base, headers: { ...base.headers, confirmation: "X-Confirm" }, confirm: ["stay/out/pay-link"] }), { bearers: { [DOC]: "b" } });
+      expect(await port.request("POST", "stay/out/pay-link", prov(DOC), { body: {} })).toEqual({ kind: "refused", reason: "needs_confirmation" });
+      expect((await port.request("POST", "stay/out/pay-link", { ...prov(DOC), voice: { confirmation: tok } }, { body: { admissionId: ADM } })).kind).toBe("response");
+      expect(d.st.seen.filter((x) => x.path === "POST stay/out/pay-link")).toHaveLength(1);
+    } finally { await d.close(); }
+  });
+
   it("mints each owner with its own login and clinic, and a person without the agent flag", () => {
     const sb = SandboxBlock.parse({ env_file: "x", db_url_var: "DB", owner: "o", mint: { cwd: "/", command: "npx", args: ["tsx", "mint.ts", "--login", "dr.a", "--clinic", "GOPD", "--agent"], node_options: "", output: { bearer: "b", owner: "o", agent: "a" } }, sql: {} });
     expect(mintArgs(sb, null, true)).toEqual(["tsx", "mint.ts", "--login", "dr.a", "--clinic", "GOPD", "--agent"]);
