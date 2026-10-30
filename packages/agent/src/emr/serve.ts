@@ -10,7 +10,7 @@ import { ListenError, ListenSessions, type ListenOptions, type Transcriber } fro
 import { parseWav } from "@hey-pisgah/voice";
 import type { Embedder } from "./speaker.js";
 import { EmrId, EmrPortError, type EmrPort, type EmrTarget } from "./port.js";
-import { EMERGENCY_LINE, emergencyHeardLoosely, emergencyReason, spokenPatient, unidentifiedRef } from "./entry.js";
+import { EMERGENCY_LINE, afterWake, emergencyHeardLoosely, emergencyReason, spokenPatient, unidentifiedRef } from "./entry.js";
 import { shortHash } from "../ids.js";
 import { PreferenceError, PreferenceMemory, SCOPE_KINDS, describePref, describeScope, describeSource } from "./preferences.js";
 
@@ -77,9 +77,11 @@ const AUDIO_LIMIT = 8 * 1024 * 1024;
 
 // How long speech after an emergency phrase is held for the arrival before it is let go as not kept.
 export const PENDING_MAX_MS = 60_000;
+// Two hearings of the emergency phrase this close together are one phrase, so one arrival.
+export const ARRIVAL_SAME_PHRASE_MS = 10_000;
 type Track = { page: string; history: { target: EmrTarget | null; since: number }[] };
 type Pending = { task_id: string; reply: { task_id: string; line_id: string; action_id: string }; since: number; page: string; held: { bind: (t: EmrTarget) => Promise<void>; drop: (why: string) => void }[]; timer: NodeJS.Timeout };
-export type HeardStatus = { seq: number; at: string; status: "accepted" | "processing" | "failed" | "completed"; waiting?: "arrival" | "join"; error?: string; task_id?: string; line_id?: string };
+export type HeardStatus = { seq: number; at: string; status: "accepted" | "processing" | "failed" | "completed"; waiting?: "arrival" | "join"; error?: string; task_id?: string; line_id?: string; note?: string };
 const pageKey = (p: EmrTarget) => (p.admission_id || p.patient_id ? JSON.stringify(p) : "");
 
 class HttpError extends Error { constructor(readonly status: number, message: string) { super(message); } }
@@ -125,6 +127,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   const current = (owner: string): EmrTarget | null => tracked.get(owner)?.history.at(-1)?.target ?? null;
   // An emergency phrase opens a pending arrival; speech captured after it is held until the record is confirmed, then bound to it.
   const pending = new Map<string, Pending>();
+  const arrivals = new Map<string, { reply: Pending["reply"]; at: number }>();
   const statuses = new Map<string, Map<number, HeardStatus>>();
   const setStatus = (owner: string, session: string, seq: number, st: Omit<HeardStatus, "seq" | "at">) => {
     const key = `${owner}\u0000${session}`;
@@ -159,7 +162,9 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   rt.start();
   const transcribe = o.transcribe ?? voiceTranscriber;
   const origin = o.allowOrigin ?? "http://localhost:3311";
-  const listening = new ListenSessions(rt, { ...(o.listen ?? {}), transcribe, ...(o.embed ? { embed: o.embed } : {}) });
+  // Each patient's listening session reports its utterances' statuses under the strip's own session id.
+  const clientOf = new Map<string, string>();
+  const listening = new ListenSessions(rt, { ...(o.listen ?? {}), transcribe, ...(o.embed ? { embed: o.embed } : {}), onStatus: (owner, sid, seq, st) => setStatus(owner, clientOf.get(sid) ?? sid, seq, st) });
   const wakeLog = join(o.storeRoot, "..", "wake.jsonl");
   // The patient each listening session started with keeps the session's own id, so a session that never moves reads as before.
   const firstSubject = new Map<string, string>();
@@ -174,7 +179,12 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   const openArrival = async (owner: string, e: { text: string; spoken_at: string; source: "text" | "audio"; wake?: Record<string, unknown> }) => {
     const p = pending.get(owner);
     if (p) return p.reply;
+    // The device and the transcript can both hear one phrase, so a phrase within the window of the last one is that same arrival.
+    const said = Date.parse(e.spoken_at);
+    const last = arrivals.get(owner);
+    if (last && Math.abs(said - last.at) < ARRIVAL_SAME_PHRASE_MS) return last.reply;
     const r = await rt.emergency(owner, { text: e.text, spoken_at: e.spoken_at, source: e.source, ...(e.wake ? { wake: e.wake } : {}), args: { unidentified_ref: unidentifiedRef(new Date(e.spoken_at)), reason: emergencyReason(e.text), ...(o.emergencyClinicId ? { clinic_id: o.emergencyClinicId } : {}) } });
+    arrivals.set(owner, { reply: r, at: said });
     const v = rt.view(r.task_id);
     if (!v?.patient_id && !pending.has(owner)) {
       const timer = setTimeout(() => { void release(owner, null, "arrival_not_confirmed"); }, PENDING_MAX_MS);
@@ -184,13 +194,15 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     return r;
   };
   // One chunk on its way to the patient it belongs to; each patient gets its own listening session, so a line about one never joins audio heard about another.
-  const toSubject = async (owner: string, session: string, seq: number, target: EmrTarget, wav: Uint8Array, arrived: number, wait: boolean) => {
+  const toSubject = async (owner: string, session: string, seq: number, target: EmrTarget, wav: Uint8Array | null, arrived: number, wait: boolean) => {
     const subjectKey = JSON.stringify(target);
     const first = firstSubject.get(session) ?? subjectKey;
     firstSubject.set(session, first);
     const sessionId = first === subjectKey ? session : `${session.slice(0, 60)}.${shortHash(subjectKey)}`;
+    clientOf.set(sessionId, session);
+    if (clientOf.size > 500) clientOf.delete(clientOf.keys().next().value!);
     try {
-      const reply = await listening.chunk({ owner, target, session_id: sessionId, seq, wav, arrived_at: arrived }, wait);
+      const reply = wav ? await listening.chunk({ owner, target, session_id: sessionId, seq, wav, arrived_at: arrived }, wait) : await listening.end({ owner, target, session_id: sessionId, seq, arrived_at: arrived }, wait);
       return { ...reply, session_id: session, tracking: target };
     } catch (e) {
       if (e instanceof ListenError) throw new HttpError(e.status, e.message);
@@ -200,21 +212,31 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   // A chunk with no patient anywhere is heard only for the emergency phrase and a known patient's name; its words are kept nowhere.
   const listenUntracked = async (owner: string, sessionId: string, seq: number, wav: Uint8Array, arrived: number, hint?: "emergency" | "after_wake"): Promise<unknown> => {
     let text = "";
-    try { text = (await transcribe(wav, [], `${sessionId}-${seq}`.slice(0, 64))).text; } catch (e) { if (!(e instanceof VoiceError)) throw e; o.log?.(`listen with no patient: the ear refused the audio (${e.code})`); }
+    setStatus(owner, sessionId, seq, { status: "processing" });
+    try { text = afterWake((await transcribe(wav, [], `${sessionId}-${seq}`.slice(0, 64))).text); } catch (e) {
+      if (!(e instanceof VoiceError)) throw e;
+      o.log?.(`listen with no patient: the ear refused the audio (${e.code})`);
+      const error = `Not heard: ${e.message.slice(0, 200)}`;
+      setStatus(owner, sessionId, seq, { status: "failed", error });
+      return { session_id: sessionId, seq, accepted: true, utterances: [], partial: null, errors: [error] };
+    }
     const spokenAt = new Date(arrived).toISOString();
     // Just after the device heard the wake phrase, "emergency" alone at the start of the next words completes "hey Pisgah, emergency".
     const said = EMERGENCY_LINE.test(text) || (hint === "emergency" && emergencyHeardLoosely(text)) || (hint === "after_wake" && /^\W*emergency\b/i.test(text));
     o.log?.(`listen with no patient: ${hint ? `${hint === "emergency" ? "device heard emergency" : "just after the wake phrase"}, ` : ""}${text ? `${text.split(/\s+/).length} words` : "silence"}, phrase ${said ? "said" : "not said"}`);
     if (said && rt.kinds(owner).includes("open_unnamed_encounter")) {
       const r = await openArrival(owner, { text, spoken_at: spokenAt, source: "audio" });
+      setStatus(owner, sessionId, seq, { status: "completed", task_id: r.task_id, line_id: r.line_id });
       return { session_id: sessionId, seq, accepted: true, utterances: [{ id: r.line_id, line_id: r.line_id, task_id: r.task_id, text, class: "instruction", classes: ["instruction"] }], partial: null, entry: "emergency" };
     }
     // "Accepted <task>" heard with no patient open reaches the one task handed to this owner that it names.
     const handed = text ? rt.delegationLine(owner, text, spokenAt, "audio") : null;
+    if (handed) setStatus(owner, sessionId, seq, { status: "completed", task_id: handed.task_id, line_id: handed.line_id });
     if (handed) return { session_id: sessionId, seq, accepted: true, utterances: [{ id: handed.line_id, line_id: handed.line_id, task_id: handed.task_id, text, class: "instruction", classes: ["instruction"] }], partial: null, entry: "delegation" };
     const known = rt.openSubjects(owner).map((x) => ({ label: rt.task(x.task_id)?.label ?? "", target: x.target })).filter((k) => k.label);
     const moved = spokenPatient(text, known);
     if (moved) onSubject(owner, moved.target, "spoken", spokenAt);
+    setStatus(owner, sessionId, seq, { status: "completed", note: moved ? "moved to the patient named" : text ? "no patient open: not kept" : "nothing heard" });
     return { session_id: sessionId, seq, accepted: true, utterances: [], partial: null, no_patient: !moved, ...(moved ? { moved_to: moved.target } : {}) };
   };
 
@@ -239,7 +261,9 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const arrived = Date.now();
     const form = await new Response(new Uint8Array(await raw(req, AUDIO_LIMIT)), { headers: { "content-type": type } }).formData().catch(() => { throw new HttpError(400, "the multipart body could not be read"); });
     const audio = form.get("audio");
-    if (!audio || typeof audio === "string") throw new HttpError(400, "audio: a WAV file part is required");
+    // The strip's end-of-utterance marker carries no audio: speech stopped, so audio held at the cap is finished now.
+    const ended = field(form, "end") === "1";
+    if (!ended && (!audio || typeof audio === "string")) throw new HttpError(400, "audio: a WAV file part is required");
     const b = parse(ListenMeta, {
       owner: field(form, "owner"), session_id: field(form, "session_id"), seq: field(form, "seq"), ...(field(form, "hint") ? { hint: field(form, "hint") } : {}), ...(field(form, "captured_at") ? { captured_at: field(form, "captured_at") } : {}),
       ...(field(form, "admissionId") ? { admissionId: field(form, "admissionId") } : {}), ...(field(form, "patientId") ? { patientId: field(form, "patientId") } : {})
@@ -247,7 +271,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const page = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
     // The words belong to the moment they were captured, which the strip stamps; a missing or implausible stamp falls back to arrival.
     const at = b.captured_at !== undefined && b.captured_at <= arrived && b.captured_at >= arrived - 10 * 60_000 ? b.captured_at : arrived;
-    const wav = new Uint8Array(await audio.arrayBuffer());
+    const wav = audio && typeof audio !== "string" && !ended ? new Uint8Array(await audio.arrayBuffer()) : null;
     const wait = new URL(req.url ?? "/", "http://serve").searchParams.get("wait") === "1";
     const held = pending.get(b.owner);
     if (held && b.hint !== "emergency" && at >= held.since && pageKey(page) === held.page) {
@@ -259,7 +283,9 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       return [202, { session_id: b.session_id, seq: b.seq, accepted: true, utterances: [], partial: null, pending: true, task_id: held.task_id }];
     }
     const target = subjectFor(b.owner, page, at);
-    if (!target || b.hint === "emergency") return [202, await listenUntracked(b.owner, b.session_id, b.seq, wav, arrived, b.hint)];
+    if (!wav && !target) return [202, { session_id: b.session_id, seq: b.seq, accepted: true, utterances: [], partial: null }];
+    if (wav && (!target || b.hint === "emergency")) { setStatus(b.owner, b.session_id, b.seq, { status: "accepted" }); return [202, await listenUntracked(b.owner, b.session_id, b.seq, wav, at, b.hint)]; }
+    if (!target) throw new HttpError(400, "no patient for this marker");
     return [202, await toSubject(b.owner, b.session_id, b.seq, target, wav, arrived, wait)];
   };
 

@@ -17,6 +17,15 @@ export type EmergencyArgs = z.infer<typeof EmergencyArgs>;
 export const EMERGENCY_LINE = /^\s*(?:(?:ok(?:ay)?|hey|hi|hay|a)[,\s]+)?(?:pisgah|pizgah|pisga|pisgar|pisca)[,.!\s]+(?:this is an?\s+|we have an?\s+)?emergency\b/i;
 export const WAKE_LINE = /^\s*(?:(?:ok(?:ay)?|hey|hi|hay|a)[,\s]+)(?:pisgah|pizgah|pisga|pisgar|pisca)\b[,.!\s]*/i;
 
+// Audio carried across the wake starts with the phrase itself, so the phrase is dropped unless it is the emergency phrase, which is kept whole.
+export function afterWake(line: string): string {
+  if (EMERGENCY_LINE.test(line) || !CARRIED_WAKE.test(line)) return line;
+  const rest = line.replace(CARRIED_WAKE, "").trim();
+  return rest || line;
+}
+// The carried audio may begin partway through the phrase, so the greeting before the name is optional here.
+const CARRIED_WAKE = /^\s*(?:(?:ok(?:ay)?|hey|hi|hay|a)[,\s]+)?(?:pisgah|pizgah|pisga|pisgar|pisca)\b[,.!\s]*/i;
+
 // A transcript of audio the device already heard as "emergency": the word early, after something like the wake word or a bare greeting, as "Hypiska, hey, emergency".
 export function emergencyHeardLoosely(line: string): boolean {
   const m = /^\W*((?:\S+\W+){0,4}?)emergency\b/i.exec(line);

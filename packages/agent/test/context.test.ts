@@ -159,4 +159,21 @@ describe("the patient the clinician is with", () => {
     expect(s.runtime.taskIds().every((id) => s.runtime.view(id)!.identities.length === 0)).toBe(true);
     await s.close();
   });
+
+  it("opens one arrival for one phrase when the device and the transcript both hear it", async () => {
+    const { s, port } = await boot(["Hey Pisgah, emergency."]);
+    const spoken = Date.now() - 300;
+    const device = await post(`${s.url}/tasks/emergency`, { owner: OWNER, spokenAt: new Date(spoken).toISOString() });
+    await s.runtime.settled();
+    const f = new FormData();
+    f.append("audio", new Blob([chunk()], { type: "audio/wav" }), "c.wav");
+    f.append("owner", OWNER); f.append("session_id", "s-6"); f.append("seq", "0"); f.append("hint", "emergency"); f.append("captured_at", String(spoken - 1200));
+    const heard = (await (await fetch(`${s.url}/tasks/listen`, { method: "POST", body: f })).json()) as any;
+    expect(heard.entry).toBe("emergency");
+    expect(heard.utterances[0].task_id).toBe(device.body.task_id);
+    await s.runtime.settled();
+    expect(port.writes).toHaveLength(1);
+    await s.close();
+  });
 });
+
