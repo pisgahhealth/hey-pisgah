@@ -18,7 +18,7 @@ export type JourneyRunOptions = {
 };
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const OPEN = new Set(["proposed", "sent", "acknowledged"]);
+const OPEN = new Set(["proposed", "sent", "uncertain", "acknowledged"]);
 
 // Plays the journey script into serve step by step: talk lines go to each owner's task, person steps go to the person's own door, and each step waits for its outcome.
 export async function runJourney(o: JourneyRunOptions): Promise<JourneyTrace> {
