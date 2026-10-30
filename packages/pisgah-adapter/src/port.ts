@@ -94,6 +94,10 @@ export class PisgahPort implements EmrPort {
     if (side !== "delegator" && side !== "both") return {};
     return Object.fromEntries(Object.entries(this.profile.delegations?.teams ?? {}).map(([k, t]) => [k, { words: t.words, task_kind: t.task_kind, title: t.title, label: t.label, ...(t.escalate_after_minutes !== undefined ? { escalate_after_minutes: t.escalate_after_minutes } : {}) }]));
   }
+  delegationHandoffs(owner: string): Record<string, { team: string; subject_table: string }> {
+    const side = this.delegationSide(owner);
+    return side === "delegator" || side === "both" ? this.profile.delegations?.handoffs ?? {} : {};
+  }
   // The open tasks handed to the owner, or handed on by them, as the door lists them.
   async delegations(owner: string, as: "assignee" | "delegator", prov: Provenance): Promise<DelegationRead[]> {
     const spec = this.profile.delegations;

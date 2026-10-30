@@ -38,6 +38,9 @@ export const DELEGATION_ARGS: Record<string, z.ZodType<Record<string, unknown>>>
 // A team the owner's agent may hand work to: the words that name it, the kind of task, and the fixed title the record keeps, which never names a patient.
 export type DelegationTeam = { words: readonly string[]; task_kind: TaskKind; title: string; label: string; escalate_after_minutes?: number };
 
+// A kind whose verified write is handed straight on, such as a sent order to the team that performs it; the subject is the record the write made.
+export type DelegationHandoff = { team: string; subject_table: string };
+
 // One delegation as the EMR's read shows it to either side.
 export type DelegationRead = {
   id: string; kind: string; title: string; patient_id: string; admission_id: string | null; visit_id: string | null; state: string;

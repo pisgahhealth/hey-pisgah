@@ -57,7 +57,11 @@ const TeamSpec = z.strictObject({
   clinic_id: EmrId.optional(), ward_id: EmrId.optional(), unit_facility_id: EmrId.optional(), person_id: EmrId.optional(),
   escalate_after_minutes: z.number().int().min(0).max(10_080).optional()
 });
-export const DelegationsSpec = z.strictObject({ list: ReadSpec.extend({ list_path: Dotted }), one: ReadSpec, teams: z.record(z.string().regex(/^[a-z_]{1,30}$/), TeamSpec).default({}) });
+export const DelegationsSpec = z.strictObject({
+  list: ReadSpec.extend({ list_path: Dotted }), one: ReadSpec, teams: z.record(z.string().regex(/^[a-z_]{1,30}$/), TeamSpec).default({}),
+  // Kinds whose verified write is handed on to a team, with the table of the record the write made.
+  handoffs: z.record(z.string().min(1).max(40), z.strictObject({ team: z.string().regex(/^[a-z_]{1,30}$/), subject_table: z.string().regex(/^[a-z_]{1,40}$/) })).default({})
+});
 
 const WatchCond = z.strictObject({ fact: z.string().min(1).max(80), equals: z.string().min(1).max(80) });
 // How the workflow reads in this EMR (watched facts for steps and events, work kinds for document stages), the ward and requirement version it stands for, and the patient facts no door read shows.

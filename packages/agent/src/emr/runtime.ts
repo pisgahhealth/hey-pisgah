@@ -1614,6 +1614,7 @@ export class EmrRuntime {
     this.append(l, "action.completed", { action_id: actionId, proof });
     this.append(l, "speed.logged", { row: this.speedRow(t, a, verifyMs) });
     if (DELEGATION_RULE_KINDS.has(a.kind)) this.afterDelegation(l, a, w.record_id);
+    else this.handOff(l, a, w.record_id);
     // An unnamed arrival the agent opened becomes the task's patient and arrival, so later words reach it.
     if (a.kind === EMERGENCY_KIND && EmrId.safeParse(w.record_id).success) {
       const visit = w.event_ids.map((e) => /^visit:(.+)$/.exec(e)?.[1]).find((v) => v && EmrId.safeParse(v).success) ?? null;
@@ -1766,6 +1767,21 @@ export class EmrRuntime {
       title: spec.title, instruction: registrationInstruction(name, phone), ...(spec.escalate_after_minutes !== undefined ? { escalate_after_minutes: spec.escalate_after_minutes } : {}), evidence: `transcript:${lineId}`
     });
     if (id) this.append(l, "delegation.made", { delegation: this.newDelegation(id, lineId, "registration", spec.title, team, null, "none", { obligation_id: obligationId }) });
+  }
+
+  // A verified write the profile hands on, such as a sent voice order, becomes a task for the team that performs it, about the record the write made.
+  private handOff(l: Live, a: EmrAction, recordId: string): void {
+    const t = l.task;
+    const h = this.o.port.delegationHandoffs?.(t.owner)[a.kind];
+    if (!h || !t.patient_id || !EmrId.safeParse(recordId).success || !this.kinds(t.owner).includes(DELEGATE_KIND)) return;
+    const spec = (this.o.port.delegationTeams?.(t.owner) ?? {})[h.team];
+    if (!spec || t.delegations.some((d) => d.side === "delegator" && d.line_id === a.line_id && d.team === h.team)) return;
+    const id = this.ruleAct(l, a.line_id, DELEGATE_KIND, {
+      task_kind: spec.task_kind, team: h.team, patient_id: t.patient_id, ...(t.admission_id ? { admission_id: t.admission_id } : {}), ...(t.visit_id ? { visit_id: t.visit_id } : {}),
+      subject_table: h.subject_table, subject_id: recordId, title: spec.title, instruction: `${a.summary}`.slice(0, 2000),
+      ...(spec.escalate_after_minutes !== undefined ? { escalate_after_minutes: spec.escalate_after_minutes } : {}), evidence: `transcript:${a.line_id}`
+    });
+    if (id) this.append(l, "delegation.made", { delegation: this.newDelegation(id, a.line_id, spec.task_kind, spec.title, h.team, null, "none") });
   }
 
   private onBed(t: EmrTask): boolean {

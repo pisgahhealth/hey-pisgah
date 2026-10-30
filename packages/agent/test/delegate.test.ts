@@ -3,25 +3,29 @@ import { ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_RULE_KINDS, ESCALATE
 import type { EmrCommit, Provenance, WorkArgs } from "../src/emr/port.js";
 import { ADMIT, CLERK_KINDS, ClerkFake, DOC, PAT, clerkBoot, ins } from "./clerking-helpers.js";
 
-const SURG = "surg-1", DESK = "desk-1";
+const SURG = "surg-1", DESK = "desk-1", PHARM = "pharm-1";
 const UNNAMED = "dddddddd-1111-4222-8333-444444444444";
 const REVIEW_REQ = "eeeeeeee-1111-4222-8333-444444444444";
 const TEAMS: Record<string, DelegationTeam> = {
   surgery: { words: ["surgical", "surgery", "surgeon"], task_kind: "review", title: "Surgical review", label: "Surgery" },
-  front_desk: { words: ["front desk", "reception"], task_kind: "registration", title: "Register the emergency arrival", label: "Front desk" }
+  front_desk: { words: ["front desk", "reception"], task_kind: "registration", title: "Register the emergency arrival", label: "Front desk" },
+  pharmacy: { words: ["pharmacy"], task_kind: "dispense", title: "Dispense the voice order", label: "Pharmacy" }
 };
 const KINDS = [...DELEGATION_RULE_KINDS];
 let n = 0;
 const uuid = () => `${(++n).toString(16).padStart(8, "0")}-2222-4333-8444-555555555555`;
 
-type Row = DelegationRead & { delegator: string; assignee_owner: string };
+type Row = DelegationRead & { delegator: string; assignee_owner: string; subject_id: string | null };
 // The clerking hospital plus a delegation record each side reads, with the record's own checks for a finished review and a named patient.
 class DelegationFake extends ClerkFake {
   readonly rows = new Map<string, Row>();
   reviewDone = false;
   named = false;
   overdue = false;
+  dispensed = false;
+  handoffs: Record<string, { team: string; subject_table: string }> = {};
   refusals = 0;
+  delegationHandoffs(owner: string) { return owner === DOC ? this.handoffs : {}; }
   override async resolve(target: { admission_id?: string; patient_id?: string }) {
     if (target.patient_id === UNNAMED) return { admission_id: "", patient_id: UNNAMED, visit_id: null, label: "Unknown arrival 10:00", facts: {}, keywords: [] };
     return super.resolve(target);
@@ -31,11 +35,11 @@ class DelegationFake extends ClerkFake {
     return [NUDGE_KIND, ACK_KIND, REGISTER_KIND];
   }
   delegationSide(owner: string) { return owner === DOC ? ("delegator" as const) : ("assignee" as const); }
-  delegationOwners(): readonly string[] { return [DOC, SURG, DESK]; }
+  delegationOwners(): readonly string[] { return [DOC, SURG, DESK, PHARM]; }
   delegationTeams(owner: string): Record<string, DelegationTeam> { return owner === DOC ? TEAMS : {}; }
   private view(r: Row): DelegationRead {
-    const done = r.kind === "review" ? this.reviewDone : this.named;
-    const id = r.kind === "review" ? REVIEW_REQ : UNNAMED;
+    const done = r.kind === "review" ? this.reviewDone : r.kind === "dispense" ? this.dispensed : this.named;
+    const id = r.kind === "review" ? REVIEW_REQ : r.kind === "dispense" ? r.subject_id! : UNNAMED;
     return { ...r, overdue: this.overdue && !r.completed_at, record: done ? { status: "verified", record_id: id, reason: null } : { status: "unsupported_or_incomplete", record_id: null, reason: r.kind === "review" ? "review_open" : "still_unnamed" } };
   }
   async delegations(owner: string): Promise<DelegationRead[]> { return [...this.rows.values()].filter((r) => r.assignee_owner === owner && !r.completed_at).map((r) => ({ ...this.view(r), instruction: null })); }
@@ -43,7 +47,10 @@ class DelegationFake extends ClerkFake {
   override async commit(kind: string, args: WorkArgs, key: string, prov: Provenance): Promise<EmrCommit> {
     if (!DELEGATION_RULE_KINDS.has(kind)) {
       const c = await super.commit(kind, args, key, prov);
-      return kind === "open_unnamed_encounter" && c.ok ? { ...c, record_id: UNNAMED } : c;
+      if (kind === "open_unnamed_encounter" && c.ok) return { ...c, record_id: UNNAMED };
+      // A write the profile hands on names its record by id, as the EMR does.
+      if (this.handoffs[kind] && c.ok) { const w = this.writes.find((x) => x.key === key)!; if (!/^[0-9a-f]{8}-/.test(w.id)) w.id = uuid(); return { ...c, record_id: w.id }; }
+      return c;
     }
     if (this.writes.some((w) => w.key === key)) return { ok: true, record_id: this.writes.find((w) => w.key === key)!.id, record_version: 1, event_ids: [], replayed: true };
     let id = String(args["delegation_id"] ?? "");
@@ -54,7 +61,7 @@ class DelegationFake extends ClerkFake {
         id, kind: String(args["task_kind"]), title: String(args["title"]), patient_id: String(args["patient_id"]), admission_id: (args["admission_id"] as string) ?? null, visit_id: null, state: "assigned",
         assignee: null, rule: "on_duty", acknowledged_at: null, completed_at: null, completion_record_id: null, due_at: (args["due_at"] as string) ?? null, overdue: false, escalated_at: null,
         record: { status: "unsupported_or_incomplete", record_id: null, reason: null }, instruction: String(args["instruction"]), nudged: [],
-        delegator: prov.owner, assignee_owner: args["task_kind"] === "review" ? SURG : DESK
+        delegator: prov.owner, assignee_owner: args["task_kind"] === "review" ? SURG : args["task_kind"] === "dispense" ? PHARM : DESK, subject_id: (args["subject_id"] as string) ?? null
       });
     } else if (!row) { this.refusals += 1; return { ok: false, reason: "door_404", status: 404, retryable: false, counted: false }; }
     else if (kind === ACK_KIND) { row.acknowledged_at = new Date().toISOString(); row.state = "acknowledged"; }
@@ -202,4 +209,35 @@ describe("delegation by rule between agents", () => {
     expect(port.kindsWritten(DOC)).not.toContain(COMPLETE_KIND);
     await a.rt.stop();
   });
+
+  it("hands a verified order on to the pharmacy, where the pharmacist's acceptance is acknowledgement and only the record's dispense closes it", async () => {
+    // A care-plan item stands in for the sent voice order, whose kind and record arrive with the voice-order lane; the hand-off is the same.
+    const port = new DelegationFake();
+    port.admitted = true;
+    port.handoffs = { add_care_plan_item: { team: "pharmacy", subject_table: "prescriptions" } };
+    const a = boot(() => [ins("add_care_plan_item", { title: "IV paracetamol one gram", item_kind: "medication", cadence: "q6h" })], port);
+    const said = await a.rt.say({ owner: DOC, target: { admission_id: ADMIT }, text: "IV paracetamol one gram six hourly." });
+    await a.rt.settled();
+    const order = port.writes.find((w) => w.kind === "add_care_plan_item")!;
+    const handed = port.writes.find((w) => w.kind === DELEGATE_KIND)!;
+    expect(handed.args).toMatchObject({ task_kind: "dispense", team: "pharmacy", subject_table: "prescriptions", subject_id: order.id, evidence: `transcript:${said.line_id}` });
+    await a.rt.pollOnce();
+    await a.rt.settled();
+    expect(port.kindsWritten(PHARM)).toEqual([NUDGE_KIND]);
+    await a.rt.say({ owner: PHARM, target: { admission_id: ADMIT }, text: "Accepted the voice order." });
+    await a.rt.settled();
+    expect(port.kindsWritten(PHARM)).toEqual([NUDGE_KIND, ACK_KIND]);
+    await a.rt.pollOnce();
+    await a.rt.settled();
+    expect(port.kindsWritten(DOC)).not.toContain(COMPLETE_KIND);
+    port.dispensed = true;
+    await a.rt.pollOnce();
+    await a.rt.settled();
+    expect(a.rt.view(said.task_id)!.notes.at(-1)!.text).toBe(`Done: Dispense the voice order. The record shows it (record ${order.id}).`);
+    await a.rt.stop();
+  });
+
+  it.todo("the pharmacist's agent prepares and dispenses a sent voice order read from the pharmacy board, within the pharmacist's permissions, once the voice-order lane's board and order states are merged");
+  it.todo("the lab's agent acknowledges a sent laboratory order as received, once the voice-order lane's receive state is merged");
 });
+
