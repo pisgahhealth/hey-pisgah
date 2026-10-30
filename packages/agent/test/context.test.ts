@@ -18,6 +18,8 @@ class ContextEmr implements EmrPort {
   readonly writes: { kind: string; args: WorkArgs; key: string; prov: Provenance }[] = [];
   gate: Promise<void> | null = null;
   refuse = false;
+  // Saves the arrival and loses the answer this many times.
+  lose = 0;
   handed: DelegationRead[] = [];
   kindsFor(): readonly string[] { return [EMERGENCY_KIND, "record_triage_vitals"]; }
   refusedCount() { return 0; }
@@ -32,6 +34,7 @@ class ContextEmr implements EmrPort {
     if (this.gate) await this.gate;
     if (this.refuse) return { ok: false, reason: "door_409_conflict", status: 409, retryable: false, counted: false };
     if (!this.writes.some((w) => w.key === key)) this.writes.push({ kind, args, key, prov });
+    if (this.lose > 0) { this.lose -= 1; return { ok: false, reason: "timeout", status: null, retryable: true, counted: false }; }
     return { ok: true, record_id: ARRIVAL, record_version: 1, event_ids: [`patient:${ARRIVAL}`, `visit:${VISIT}`], replayed: false };
   }
   async prove(_k: string, _a: WorkArgs, w: { record_id: string; record_version: number; event_ids: string[] }): Promise<EmrProof> {
@@ -57,12 +60,12 @@ const listen = async (url: string, p: Part) => {
 };
 const tracking = async (url: string) => ((await (await fetch(`${url}/tasks/tracking?owner=${OWNER}`)).json()) as any).target;
 
-async function boot(heard: string[] = [], again?: { root: string; port: ContextEmr }) {
+async function boot(heard: string[] = [], again?: { root: string; port: ContextEmr }, extra: { reconcileMs?: number[]; pendingMaxMs?: number } = {}) {
   const root = again?.root ?? emrRoot();
   const port = again?.port ?? new ContextEmr();
   const client = mockClient(root, () => ({ decision: "aside", summary: "x" }), () => null);
   const s = await startEmrServe({
-    storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 }, ears: "off",
+    storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1, ...(extra.reconcileMs ? { reconcileMs: extra.reconcileMs } : {}) }, ears: "off", ...(extra.pendingMaxMs ? { pendingMaxMs: extra.pendingMaxMs } : {}),
     transcribe: async (_w, _k, sessionId) => ({ final: true, text: heard.shift() ?? "", audio_ms: 1000, session_id: sessionId, cost_usd: 0 })
   });
   return { s, port, root };
@@ -168,6 +171,23 @@ describe("the patient the clinician is with", () => {
     expect(st.utterances.find((u: any) => u.seq === 0)).toMatchObject({ status: "failed" });
     expect(await tracking(s.url)).toBeNull();
     expect(s.runtime.taskIds().every((id) => s.runtime.view(id)!.identities.length === 0)).toBe(true);
+    await s.close();
+  });
+
+  it("keeps the speech held for an arrival whose answer was lost twice until the arrival is known, then binds it there", async () => {
+    const { s, port } = await boot(["Her name is Grace, Grace Okafor, the number is oh-eight-oh-three, one two three, four five six seven"], undefined, { reconcileMs: [400], pendingMaxMs: 50 });
+    port.lose = 2;
+    const arrival = await post(`${s.url}/tasks/emergency`, { owner: OWNER, spokenAt: new Date(Date.now() - 500).toISOString() });
+    const heard = await listen(s.url, { session: "s-lost", seq: 0, capturedAt: Date.now() });
+    expect(heard.pending).toBe(true);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(s.runtime.view(arrival.body.task_id)!.actions[0]!.state).toBe("uncertain");
+    await until(() => s.runtime.view(arrival.body.task_id)!.identities.length === 1, 5000);
+    await s.runtime.settled();
+    expect(port.writes).toHaveLength(1);
+    expect(s.runtime.view(arrival.body.task_id)!.identities[0]).toMatchObject({ name: "Grace Okafor", encounter: { patient_id: ARRIVAL } });
+    const st = (await (await fetch(`${s.url}/tasks/listen?owner=${OWNER}&session_id=s-lost`)).json()) as any;
+    expect(st.utterances.find((u: any) => u.seq === 0)?.status).not.toBe("failed");
     await s.close();
   });
 
