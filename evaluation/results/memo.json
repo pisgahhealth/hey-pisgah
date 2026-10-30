@@ -1,5 +1,5 @@
 {
- "measured_at": "2026-10-30T06:43:12.247Z",
+ "measured_at": "2026-10-30T16:50:00.912Z",
  "measured": true,
  "source": "nightly_run",
  "set": "sandbox",
@@ -45,7 +45,7 @@
    "encounters_named": 5,
    "preview": "Night memo: 3 recorded facts, 5 unfinished items for you, 2 urgent.",
    "nothing_warrants_change": false,
-   "publish_ms": 214
+   "publish_ms": 534
   },
   {
    "recipient_role": "doctor",
@@ -62,7 +62,7 @@
    "encounters_named": 1,
    "preview": "Night memo: 3 recorded facts, 5 unfinished items for you, 2 urgent.",
    "nothing_warrants_change": false,
-   "publish_ms": 100
+   "publish_ms": 97
   },
   {
    "recipient_role": "nurse",
@@ -79,7 +79,7 @@
    "encounters_named": 0,
    "preview": "Night memo: 4 recorded facts, 0 unfinished items for you.",
    "nothing_warrants_change": false,
-   "publish_ms": 109
+   "publish_ms": 62
   }
  ],
  "verified": true,
@@ -130,11 +130,14 @@
    "urgent_alerts_sent": 0
   }
  ],
- "checks_failed_closed": 5,
- "checks_tried": 5,
+ "checks_failed_closed": 8,
+ "checks_tried": 8,
  "negative_cases": {
   "invented_figure": "unsupported_or_incomplete",
   "false_completion": "unsupported_or_incomplete",
+  "altered_description": "unsupported_or_incomplete",
+  "altered_destination": "unsupported_or_incomplete",
+  "altered_due_date": "unsupported_or_incomplete",
   "patient_name": "unsupported_or_incomplete",
   "changed_after_verification": "payload_changed_after_verification",
   "checker_error": "verifier_error"
@@ -153,19 +156,22 @@
    "changed": false,
    "from": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
    "to": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
-   "recomposed": false
+   "recomposed": false,
+   "reads": 3
   },
   {
    "changed": false,
    "from": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
    "to": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
-   "recomposed": false
+   "recomposed": false,
+   "reads": 3
   },
   {
    "changed": false,
    "from": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
    "to": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
-   "recomposed": false
+   "recomposed": false,
+   "reads": 1
   }
  ],
  "urgent_alerts": 2,
@@ -182,8 +188,195 @@
   "other"
  ],
  "model": "meta-models/Muse-Spark-Open-816B-A42B",
- "note": "run-night003 replayed (0 new model calls) with the publisher's one bounded repair wired into the CLI and re-delivered through the door: the nurse's memo had a suspected cause with a figure no cited fact gives (sc-nurse-2, invented_figure); the repair rebuilt it from the records without that cause, it was checked again and delivered. The owner doctor's memo and both urgent alerts replayed on their idempotency keys (no second bell row); the incoming doctor was refused as before.",
+ "note": "run-night003 replayed again by F5 (0 new model calls; calls and cost are the original run's ledger) through the door with the records read again before every delivery (reads per recipient in refreshed) and each actionable item's description, destination and due date bound to the task records; the three memos verified under the new bindings, the owner doctor's memo, both urgent alerts and the nurse's repaired memo replayed on their idempotency keys (no new bell or night_memos row, read back by SQL), the incoming doctor was refused as before; 8 of 8 planted faults refused, the three new ones being an altered description, an altered destination and an altered due date with the id and state kept.",
  "earlier_runs": [
+  {
+   "measured_at": "2026-10-30T06:43:12.247Z",
+   "measured": true,
+   "source": "nightly_run",
+   "set": "sandbox",
+   "run_id": "run-night003",
+   "day": "2026-10-30",
+   "sources_hash": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+   "departments": [
+    {
+     "department": "accounts_clerk",
+     "causes": 2,
+     "challenged": 1,
+     "changes": 2,
+     "nothing_warrants_change": false
+    },
+    {
+     "department": "doctor",
+     "causes": 2,
+     "challenged": 0,
+     "changes": 2,
+     "nothing_warrants_change": false
+    },
+    {
+     "department": "nurse",
+     "causes": 2,
+     "challenged": 0,
+     "changes": 2,
+     "nothing_warrants_change": false
+    }
+   ],
+   "memos": [
+    {
+     "recipient_role": "doctor",
+     "incoming": false,
+     "status": "delivered",
+     "verdict": "verified",
+     "failures": [],
+     "repairs": 0,
+     "facts": 3,
+     "causes": 2,
+     "changes": 2,
+     "unfinished": 5,
+     "urgent": 2,
+     "encounters_named": 5,
+     "preview": "Night memo: 3 recorded facts, 5 unfinished items for you, 2 urgent.",
+     "nothing_warrants_change": false,
+     "publish_ms": 214
+    },
+    {
+     "recipient_role": "doctor",
+     "incoming": true,
+     "status": "refused",
+     "verdict": "verified",
+     "failures": [],
+     "repairs": 0,
+     "facts": 3,
+     "causes": 2,
+     "changes": 2,
+     "unfinished": 5,
+     "urgent": 2,
+     "encounters_named": 1,
+     "preview": "Night memo: 3 recorded facts, 5 unfinished items for you, 2 urgent.",
+     "nothing_warrants_change": false,
+     "publish_ms": 100
+    },
+    {
+     "recipient_role": "nurse",
+     "incoming": true,
+     "status": "delivered",
+     "verdict": "verified",
+     "failures": [],
+     "repairs": 1,
+     "facts": 4,
+     "causes": 1,
+     "changes": 2,
+     "unfinished": 0,
+     "urgent": 0,
+     "encounters_named": 0,
+     "preview": "Night memo: 4 recorded facts, 0 unfinished items for you.",
+     "nothing_warrants_change": false,
+     "publish_ms": 109
+    }
+   ],
+   "verified": true,
+   "names_in_previews": 0,
+   "unauthorised_names": 0,
+   "deny_hits": 0,
+   "delivered": true,
+   "delivery": "every authorised recipient received the memo and every refusal was correct",
+   "sender": "Dr Edikan's agent, sending as the synthetic doctors' department lead (disclosed; a role played on the coordinator's instruction by the E6.m build lane)",
+   "recipients": 3,
+   "authorised_recipients": 2,
+   "authorised_delivered": 2,
+   "refusals": 1,
+   "correct_refusals": 1,
+   "incorrect_outcomes": 0,
+   "delivery_results": [
+    {
+     "recipient_role": "doctor",
+     "incoming": false,
+     "memo": "delivered",
+     "reason": null,
+     "expected": "deliver",
+     "correct": true,
+     "why": "the owner doctor's own agent requested and accepted all three stays the memo names",
+     "task_alerts_not_sent": 0,
+     "urgent_alerts_sent": 2
+    },
+    {
+     "recipient_role": "doctor",
+     "incoming": true,
+     "memo": "refused",
+     "reason": "404 not_found_opaque: no message",
+     "expected": "refuse",
+     "correct": true,
+     "why": "the record does not place the incoming doctor on the stay the roster declares; a roster declaration is not the record",
+     "task_alerts_not_sent": 2,
+     "urgent_alerts_sent": 0
+    },
+    {
+     "recipient_role": "nurse",
+     "incoming": true,
+     "memo": "delivered",
+     "reason": null,
+     "expected": "deliver",
+     "correct": true,
+     "why": "the memo names no encounter, so there is nothing to authorise",
+     "task_alerts_not_sent": 0,
+     "urgent_alerts_sent": 0
+    }
+   ],
+   "checks_failed_closed": 5,
+   "checks_tried": 5,
+   "negative_cases": {
+    "invented_figure": "unsupported_or_incomplete",
+    "false_completion": "unsupported_or_incomplete",
+    "patient_name": "unsupported_or_incomplete",
+    "changed_after_verification": "payload_changed_after_verification",
+    "checker_error": "verifier_error"
+   },
+   "negative_not_applicable": [],
+   "repairs": 1,
+   "repaired_out": [
+    {
+     "finding_id": "sc-nurse-2",
+     "code": "invented_figure"
+    }
+   ],
+   "withheld_reasons": [],
+   "refreshed": [
+    {
+     "changed": false,
+     "from": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+     "to": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+     "recomposed": false
+    },
+    {
+     "changed": false,
+     "from": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+     "to": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+     "recomposed": false
+    },
+    {
+     "changed": false,
+     "from": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+     "to": "01456046968a6465773e10ee288559affaecd4a41af34d9002c01c1f13bb568f",
+     "recomposed": false
+    }
+   ],
+   "urgent_alerts": 2,
+   "urgent_items": 4,
+   "urgent_items_authorised": 2,
+   "urgent_alerts_authorised": 2,
+   "tests": "packages/intelligence/test/nightly.test.ts",
+   "model_mode": "replay",
+   "calls": 8,
+   "cost_usd": 0.036935,
+   "effort": "medium",
+   "purposes": [
+    "draft_text",
+    "other"
+   ],
+   "model": "meta-models/Muse-Spark-Open-816B-A42B",
+   "note": "run-night003 replayed (0 new model calls) with the publisher's one bounded repair wired into the CLI and re-delivered through the door: the nurse's memo had a suspected cause with a figure no cited fact gives (sc-nurse-2, invented_figure); the repair rebuilt it from the records without that cause, it was checked again and delivered. The owner doctor's memo and both urgent alerts replayed on their idempotency keys (no second bell row); the incoming doctor was refused as before.",
+   "label": "run-night003 replay of 30 Oct 08:00 (F3b), before the per-delivery refresh and the item field bindings"
+  },
   {
    "measured_at": "2026-10-30T06:27:57.323Z",
    "measured": true,

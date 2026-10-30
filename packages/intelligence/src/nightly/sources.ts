@@ -7,9 +7,15 @@ export type DayCase = { case_id: string; ward_id: string; events: readonly DayEv
 export type OpenItem = {
   item_id: string; encounter: string; owner: string; department: string; kind: string; title: string;
   state: "open" | "held" | "overdue" | "failed" | "done"; due_at: string | null; refs: string[];
+  // The ward the work is for, when the record names one.
+  ward?: string | null;
 };
 // Who a memo goes to, and the encounters the record already authorises them for; being on the same shift is not authorisation.
-export type Recipient = { id: string; role: string; department: string; incoming: boolean; authorised: string[] };
+export type Recipient = { id: string; role: string; department: string; incoming: boolean; authorised: string[]; wards?: string[] };
+
+// Whether an open item is this recipient's to see: their own work, or an incoming colleague's department's work on a ward they cover.
+export const itemIsFor = (r: Recipient, i: Pick<OpenItem, "owner" | "department" | "ward">): boolean =>
+  i.owner === r.id || (r.incoming && i.department === r.department && (!r.wards || !i.ward || r.wards.includes(i.ward)));
 // labels are the patients' names as the record holds them, kept in memory only so the checks can refuse any name in a memo.
 export type NightSources = { day: string; cases: readonly DayCase[]; open: readonly OpenItem[]; recipients: readonly Recipient[]; labels: readonly string[] };
 

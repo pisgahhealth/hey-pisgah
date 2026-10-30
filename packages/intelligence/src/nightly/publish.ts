@@ -18,7 +18,7 @@ export type PublishResult = {
   // Statements the checks did not clear, kept for an authorised review view and marked unverified; they are never published.
   review: { memo_id: string; unverified: CheckFailure[] } | null; ms: number;
   // The sources read again right before publishing: whether they changed while the memo was written, and what was published against.
-  refreshed: { changed: boolean; from: string; to: string; recomposed: boolean } | null;
+  refreshed: { changed: boolean; from: string; to: string; recomposed: boolean; reads: number } | null;
   // The memo as last checked, after any repair or rebuild; what was sent when status is delivered.
   final: Memo;
 };
@@ -46,21 +46,19 @@ export function memoPublisher(o: { sources: NightSources; transport: MemoTranspo
         m = await o.repair(m, verdict.failures);
         verdict = verifyMemo(m, src, check, o.now);
       }
-      // Task wording can change and work can finish while the model writes, so the records are read again here and a verdict on older records is not used.
+      // Task wording can change and work can finish while the model writes or between two deliveries, so the records are read again before every delivery and a verdict on older records is never used.
       let refreshed: PublishResult["refreshed"] = null;
-      if (o.refresh && verdict.status === "verified") {
+      const reread = async (): Promise<void> => {
+        if (!o.refresh || verdict.status === "verifier_error") return;
         let fresh: NightSources | null = null;
-        try { fresh = await o.refresh(); } catch (e) { verdict = { status: "verifier_error", payload_hash: null, sources_hash: null, failures: [], error: `the records could not be read again: ${e instanceof Error ? e.message.slice(0, 200) : "refresh failed"}`, checked_at: (o.now ?? (() => new Date()))().toISOString() }; }
-        if (fresh) {
-          const to = sourcesHash(fresh);
-          refreshed = { changed: to !== verdict.sources_hash, from: verdict.sources_hash ?? "", to, recomposed: false };
-          if (refreshed.changed) {
-            src = fresh;
-            if (o.recompose) { m = o.recompose(fresh, m); refreshed.recomposed = true; }
-            verdict = verifyMemo(m, src, check, o.now);
-          }
-        }
-      }
+        try { fresh = await o.refresh(); } catch (e) { verdict = { status: "verifier_error", payload_hash: null, sources_hash: null, failures: [], error: `the records could not be read again: ${e instanceof Error ? e.message.slice(0, 200) : "refresh failed"}`, checked_at: (o.now ?? (() => new Date()))().toISOString() }; return; }
+        const from = sourcesHash(src), to = sourcesHash(fresh);
+        refreshed = { changed: (refreshed?.changed ?? false) || to !== from, from: refreshed?.from ?? from, to, recomposed: refreshed?.recomposed ?? false, reads: (refreshed?.reads ?? 0) + 1 };
+        if (to === from) return;
+        src = fresh;
+        if (o.recompose) { m = o.recompose(fresh, m); refreshed.recomposed = true; }
+        verdict = verifyMemo(m, src, check, o.now);
+      };
       const notSent: PublishResult["not_sent"] = [];
       const send = async (d: MemoDelivery) => {
         const r = await o.transport.deliver(d);
@@ -68,28 +66,36 @@ export function memoPublisher(o: { sources: NightSources; transport: MemoTranspo
         return r;
       };
       const done = (status: PublishResult["status"], delivered: PublishResult["delivered"], review: PublishResult["review"]): PublishResult => ({ recipient_id: memo.recipient_id, status, verdict, repairs, delivered, not_sent: notSent, review, ms: Date.now() - t0, refreshed, final: m });
+      const sent: PublishResult["delivered"] = [];
       if (verdict.status === "verified") {
-        // The verdict covers this payload only; a payload changed after the check is refused, never sent on an old verdict.
-        if (payloadHash(m) !== verdict.payload_hash) return done("refused", [], null);
-        // Each urgent item goes first as its own task alert on its own route, so it rings at once rather than inside the memo.
-        const sent: PublishResult["delivered"] = [];
-        for (const item of m.urgent) {
+        // Each urgent item goes first as its own task alert on its own route, so it rings at once rather than inside the memo; an item the fresh records closed is not sent.
+        for (const id of m.urgent.map((i) => i.item_id)) {
+          await reread();
+          if (verdict.status !== "verified") break;
+          const item = m.urgent.find((i) => i.item_id === id);
+          if (!item) continue;
           const body = taskAlert(m, [item]);
           const preview = urgentPreview(item);
           const u = await send({ recipient_id: m.recipient_id, kind: "urgent", preview, payload_hash: alertHash(body), body });
           if (u.ok) sent.push({ kind: "urgent", ref: u.ref, preview });
         }
+        if (verdict.status === "verified") await reread();
+      }
+      if (verdict.status === "verified") {
+        // The verdict covers this payload only; a payload changed after the check is refused, never sent on an old verdict.
+        if (payloadHash(m) !== verdict.payload_hash) return done("refused", sent, null);
         const r = await send({ recipient_id: m.recipient_id, kind: "memo", preview: m.preview, payload_hash: verdict.payload_hash, body: m });
         return done(r.ok ? "delivered" : r.refused ? "refused" : "transport_failed", r.ok ? [...sent, { kind: "memo", ref: r.ref, preview: m.preview }] : sent, null);
       }
       // The memo is withheld; open work the records back still reaches the recipient as a structured alert, checked on its own.
+      await reread();
       const unverified = verdict.status === "unsupported_or_incomplete" ? verdict.failures : [];
       const alert: Memo = { ...m, facts: [], suspected_causes: [], proposed_changes: [], nothing_warrants_change: false, preview: alertPreview(m.unfinished.length, m.urgent.length) };
       const itemsOk = verdict.status !== "verifier_error" && m.unfinished.length > 0 && verifyMemo(alert, src, check, o.now).status === "verified";
-      if (!itemsOk) return done("withheld", [], { memo_id: m.memo_id, unverified });
+      if (!itemsOk) return done("withheld", sent, { memo_id: m.memo_id, unverified });
       const body = taskAlert(m, m.unfinished);
       const r = await send({ recipient_id: m.recipient_id, kind: "task", preview: alert.preview, payload_hash: alertHash(body), body });
-      return done("withheld", r.ok ? [{ kind: "task", ref: r.ref, preview: alert.preview }] : [], { memo_id: m.memo_id, unverified });
+      return done("withheld", r.ok ? [...sent, { kind: "task", ref: r.ref, preview: alert.preview }] : sent, { memo_id: m.memo_id, unverified });
     }
   };
 }

@@ -690,7 +690,7 @@
       "acceptance": {
         "command": "npx tsx apps/cli/src/nightly.ts over the day's evidence and task stores, delivered through the door with a record expectation per recipient",
         "result_path": "evaluation/results/memo.json",
-        "predicate": "verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0 && authorised_recipients >= 1 && authorised_delivered == authorised_recipients && correct_refusals == refusals && incorrect_outcomes == 0 && urgent_alerts_authorised == urgent_items_authorised ; amber: verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0",
+        "predicate": "verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0 && authorised_recipients >= 1 && authorised_delivered == authorised_recipients && correct_refusals == refusals && incorrect_outcomes == 0 && urgent_alerts_authorised == urgent_items_authorised && negative_cases.altered_description == 'unsupported_or_incomplete' && negative_cases.altered_destination == 'unsupported_or_incomplete' && negative_cases.altered_due_date == 'unsupported_or_incomplete' ; amber: verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0 && negative_cases.altered_description == 'unsupported_or_incomplete' && negative_cases.altered_destination == 'unsupported_or_incomplete' && negative_cases.altered_due_date == 'unsupported_or_incomplete'",
         "measured_on": "dev"
       },
       "wording": {
@@ -1078,6 +1078,17 @@
         }
       },
       "reason": "R-26 and D17: G9 added Meta's realtime Voice Transcribe ear (HEY_PISGAH_ASR=meta-stream) and measured it on the sandbox beside G6's rows. The predicate and the pass, partial and fail wording are unchanged and still read the acceptance run's fields, so C-21 stays not measured. Its not-measured wording adds the realtime row with Parakeet as the second ear; speed.json also carries the realtime row with the Spark ear, the D17 whole-number release rows, and G9's order reruns timed to the lab board."
+    },
+    {
+      "date": "2026-10-30",
+      "by": "F5",
+      "claims": [
+        "C-28"
+      ],
+      "previous_predicate": {
+        "predicate": "verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0 && authorised_recipients >= 1 && authorised_delivered == authorised_recipients && correct_refusals == refusals && incorrect_outcomes == 0 && urgent_alerts_authorised == urgent_items_authorised ; amber: verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0"
+      },
+      "reason": "Review 3 item 7a: the verifier accepted an actionable item whose description, destination or due date was altered while its id and state matched. The checks now bind each item to the task records (altered_description, altered_destination, altered_due_date) and the publisher reads the records again before every delivery. Green and amber now also need the three planted faults that change only those fields to be refused; nothing was loosened and the wording is unchanged."
     }
   ]
 }

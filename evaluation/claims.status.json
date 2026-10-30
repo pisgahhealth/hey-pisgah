@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-30T14:17:51.901Z",
-  "commit": "8b21965",
+  "generated_at": "2026-10-30T16:51:34.497Z",
+  "commit": "8bb1a08",
   "claims": [
     {
       "claim_id": "C-01",
@@ -417,8 +417,8 @@
         "verified": true,
         "names_in_previews": 0,
         "unauthorised_names": 0,
-        "checks_failed_closed": 5,
-        "checks_tried": 5,
+        "checks_failed_closed": 8,
+        "checks_tried": 8,
         "deny_hits": 0,
         "authorised_recipients": 2,
         "authorised_delivered": 2,
@@ -426,9 +426,12 @@
         "refusals": 1,
         "incorrect_outcomes": 0,
         "urgent_alerts_authorised": 2,
-        "urgent_items_authorised": 2
+        "urgent_items_authorised": 2,
+        "negative_cases.altered_description": "unsupported_or_incomplete",
+        "negative_cases.altered_destination": "unsupported_or_incomplete",
+        "negative_cases.altered_due_date": "unsupported_or_incomplete"
       },
-      "measured_at": "2026-10-30T06:43:12.247Z"
+      "measured_at": "2026-10-30T16:50:00.912Z"
     }
   ]
 }

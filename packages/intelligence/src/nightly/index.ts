@@ -1,5 +1,5 @@
 // The nightly department investigators, the memo per clinician, and the one checked path that publishes it.
-export { departmentOf, sourcesHash, type DayCase, type DayEvent, type NightSources, type OpenItem, type Recipient } from "./sources.js";
+export { departmentOf, itemIsFor, sourcesHash, type DayCase, type DayEvent, type NightSources, type OpenItem, type Recipient } from "./sources.js";
 export { FACT_NAMES, computeFacts, type Fact, type FactName } from "./facts.js";
 export { composeMemo, isUrgent, payloadHash, previewOf, type Finding, type Investigation, type Memo, type MemoItem, type Proposed } from "./memo.js";
 export { checkMemo, verifyMemo, type CheckCode, type CheckFailure, type Verdict } from "./verify.js";
