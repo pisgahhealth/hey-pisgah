@@ -644,7 +644,7 @@
         "measured_on": "dev"
       },
       "wording": {
-        "pass": "Found a change that helps, at a stated cost: under the latest measured configuration ({discover_config}) {discover_config_dev_valid} of {discover_config_runs} blind runs proposed a dev-valid change (95% interval {discover_config_lower} to {discover_config_upper}); the adopted one gives {discover_share} of the planted change's gain and adds {discover_rework_events} document revisions; the invariance test holds the instructions and tool interface fixed across worlds, not the evidence or the workflow definition",
+        "pass": "Found a change that helps, at a stated cost: under the latest measured configuration ({discover_config}) {discover_config_dev_valid} of {discover_config_runs} blind runs proposed a dev-valid change (exact 95% interval {discover_config_lower} to {discover_config_upper}, Wilson {discover_config_wilson_lower} to {discover_config_wilson_upper}) and {discover_config_planted} of {discover_config_runs} proposed the planted form (Wilson {discover_config_planted_lower} to {discover_config_planted_upper}); at low effort under the same revision {discover_low_dev_valid} of {discover_low_runs} proposed a dev-valid change (Wilson {discover_low_wilson_lower} to {discover_low_wilson_upper}) and {discover_low_planted} of {discover_low_runs} the planted form (Wilson {discover_low_planted_lower} to {discover_low_planted_upper}); the adopted one gives {discover_share} of the planted change's gain and adds {discover_rework_events} document revisions; the invariance test holds the instructions and tool interface fixed across worlds, not the evidence or the workflow definition",
         "partial": "{discover_dev_valid_any} of {discover_history_runs} development runs proposed a dev-valid change, but none under the latest measured configuration ({discover_config})",
         "fail": "No blind run proposed a dev-valid change",
         "not_measured": "Not measured yet"
@@ -1033,6 +1033,22 @@
         }
       },
       "reason": "Intelligence commitment revision 15 sets the hospital's aim to a per-case rework budget (10 minutes on any one case) that the dev gate assesses and the adopting person approves, where revision 13 had left the gate to decide on a stated cost and earlier revisions said no extra rework. Revision 15 has no discovery runs yet, so the discovery wording names the latest measured configuration (revision 12); predicates and results are unchanged, and the revision 12 runs and the adopted proposal are not re-scored under the budget."
+    },
+    {
+      "date": "2026-10-30",
+      "by": "G7",
+      "claims": [
+        "C-26"
+      ],
+      "previous_wording": {
+        "C-26": {
+          "pass": "Found a change that helps, at a stated cost: under the latest measured configuration ({discover_config}) {discover_config_dev_valid} of {discover_config_runs} blind runs proposed a dev-valid change (95% interval {discover_config_lower} to {discover_config_upper}); the adopted one gives {discover_share} of the planted change's gain and adds {discover_rework_events} document revisions; the invariance test holds the instructions and tool interface fixed across worlds, not the evidence or the workflow definition",
+          "partial": "{discover_dev_valid_any} of {discover_history_runs} development runs proposed a dev-valid change, but none under the latest measured configuration ({discover_config})",
+          "fail": "No blind run proposed a dev-valid change",
+          "not_measured": "Not measured yet"
+        }
+      },
+      "reason": "Revision 12 now has two measured efforts on the committed world, 8 runs each: medium (rev12_runs) and low (rev12_low_runs, run by G7). The discovery summary reads both as separate configuration rows with Wilson intervals for dev-valid and for the planted form, and the wording quotes both. The predicate is unchanged and still reads the medium configuration (CLAIM_EFFORT in discover-claim.ts); no run is re-scored."
     },
     {
       "date": "2026-10-30",

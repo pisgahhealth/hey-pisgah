@@ -32,6 +32,19 @@ describe("the v2 recording script", () => {
   });
 });
 
+describe("the owner's v2 recordings", () => {
+  const set = JSON.parse(readFileSync(join(import.meta.dirname, "..", "research", "v2-real-set.json"), "utf8")) as { cuts: { id: string; part: string; set: string; status: string; sha256: string }[] };
+  it("has one cut, or a missing mark, for every part the script gives the owner", () => {
+    const want = V2_LINES.flatMap((l) => [...(l.who === "S" ? [`${l.id}:${l.replay_of ? "replay" : "line"}`] : []), ...(l.overlap?.who === "S" ? [`${l.id}:overlap_part`] : [])]).sort();
+    expect(set.cuts.map((c) => `${c.id}:${c.part}`).sort()).toEqual(want);
+    expect(set.cuts.filter((c) => c.status === "missing").map((c) => c.id)).toEqual(["O045", "O084"]);
+  });
+  it("keeps every cut's hash in the fixture, so a re-cut cannot slip in unseen", () => {
+    const rows = new Set(fx.rows.filter((r) => r.source === "owner_v2").map((r) => r.sha256));
+    for (const c of set.cuts.filter((x) => x.status !== "missing" && x.id !== "O083")) expect(rows.has(c.sha256)).toBe(true);
+  });
+});
+
 describe("frozen thresholds", () => {
   it("keeps every revision with its source, date, reason and body hash, and never rewrites one", () => {
     const f = readThresholds();
@@ -56,6 +69,7 @@ describe("the v2 harness on the data held now", () => {
   it("reproduces the published table from the kept readings", () => {
     expect(scoreV2(fx.rows.filter((r) => r.source === "synthetic"), rule)).toEqual(published.synthetic);
     expect(scoreV2(fx.rows.filter((r) => r.source === "real"), rule)).toEqual(published.real);
+    expect(scoreV2(fx.rows.filter((r) => r.source === "owner_v2"), rule)).toEqual(published.owner_v2.held_out);
   });
 
   it("gives the binomial upper bound for zero and small error counts", () => {

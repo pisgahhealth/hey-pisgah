@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { devDistribution } from "./dev-distribution.js";
-import { discoverSummary, exactInterval } from "./discover-claim.js";
+import { discoverSummary, exactInterval, wilsonInterval } from "./discover-claim.js";
 
 const repo = join(import.meta.dirname, "..", "..", "..");
 const commitments = JSON.parse(readFileSync(join(repo, "evaluation", "commitments", "intelligence.json"), "utf8")) as { revisions: { revision: number }[] };
@@ -16,18 +16,26 @@ describe("discovery counts", () => {
     expect(exactInterval(0, 3)).toMatchObject({ lower: 0 });
     expect(exactInterval(0, 3).upper).toBeCloseTo(0.7076, 3);
     expect(exactInterval(3, 3)).toMatchObject({ upper: 1 });
+    const w = wilsonInterval(6, 8);
+    expect(w.lower).toBeCloseTo(0.409, 3);
+    expect(w.upper).toBeCloseTo(0.929, 3);
+    expect(wilsonInterval(0, 8).lower).toBe(0);
   });
 
-  it("reconciles 10 of 33 with 10 of 31, reads the latest configuration's rate, and matches the committed file", () => {
+  it("reconciles 14 of 41 with 14 of 39, reads the latest configuration's rate, and matches the committed file", () => {
     const d = read("discovery.json");
     const s = discoverSummary(d, { invariancePass: true, adopted: "p-a563fe32", tradeOffs: [{ metric: "rework_events", sum_delta: 4 }, { metric: "rework_min", sum_delta: 4 }], currentRevision: commitments.revisions.at(-1)!.revision });
-    expect([s["discover_history_dev_valid"], s["discover_history_runs"]]).toEqual([10, 33]);
-    expect([s["discover_dev_valid_any"], s["discover_runs_listed"]]).toEqual([10, 31]);
-    expect([s["discover_dev_valid"], s["discover_runs"]]).toEqual([8, 17]);
+    expect([s["discover_history_dev_valid"], s["discover_history_runs"]]).toEqual([14, 41]);
+    expect([s["discover_dev_valid_any"], s["discover_runs_listed"]]).toEqual([14, 39]);
+    expect([s["discover_dev_valid"], s["discover_runs"]]).toEqual([12, 25]);
     expect([s["discover_config_revision"], s["discover_config_dev_valid"], s["discover_config_runs"], s["discover_config_lower"], s["discover_config_upper"]]).toEqual([12, 6, 8, 0.35, 0.97]);
+    expect(s["discover_effort_rows"]).toEqual([
+      { effort: "medium", runs: 8, dev_valid: 6, wilson_95: [0.41, 0.93], planted: 0, planted_wilson_95: [0, 0.32], read_by_predicate: true },
+      { effort: "low", runs: 8, dev_valid: 4, wilson_95: [0.22, 0.78], planted: 2, planted_wilson_95: [0.07, 0.59], read_by_predicate: false }
+    ]);
     const byRev = s["discover_history_by_revision"] as { runs: number; dev_valid: number }[];
-    expect(byRev.reduce((n, r) => n + r.runs, 0)).toBe(33);
-    expect(byRev.reduce((n, r) => n + r.dev_valid, 0)).toBe(10);
+    expect(byRev.reduce((n, r) => n + r.runs, 0)).toBe(41);
+    expect(byRev.reduce((n, r) => n + r.dev_valid, 0)).toBe(14);
     const f = (s["discover_findings"] as string[]).join(" ");
     expect(f).toContain("high effort was 0 of 3 dev-valid against medium 2 of 3");
     expect(f).toContain("the pair variant at revision 10 was 0 of 2");

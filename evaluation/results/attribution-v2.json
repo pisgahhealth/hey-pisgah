@@ -1,10 +1,10 @@
 {
  "thresholds": {
-  "revision": 2,
-  "hash": "9cb7016f9bcd113583d4bf4232f6df454ee36cd5fee24e605e7da21ba7ab7eaa",
-  "frozen_at": "2026-10-29T20:00:00Z"
+  "revision": 3,
+  "hash": "f1b3078b5c7ad0cb2d03dde56c7f98eb76bae84451d40d726899b19b31dbbfcb",
+  "frozen_at": "2026-10-30T08:00:00Z"
  },
- "built_at": "2026-10-30T07:28:43.786Z",
+ "built_at": "2026-10-30T09:15:37.742Z",
  "script": {
   "lines": 446,
   "non_owner_lines": 318,
@@ -23,9 +23,10 @@
  },
  "synthetic": {
   "rows": 153,
+  "unusable": [],
   "identity": {
    "right": {
-    "k": 113,
+    "k": 114,
     "n": 120
    },
    "per_person": {
@@ -34,7 +35,7 @@
      "n": 19
     },
     "C (colleague)": {
-     "k": 23,
+     "k": 24,
      "n": 26
     },
     "N (colleague)": {
@@ -61,14 +62,14 @@
   },
   "addressee": {
    "agent_or_not_right": {
-    "k": 49,
-    "n": 60
+    "k": 78,
+    "n": 93
    }
   },
   "intent": {
    "instruction_or_not_right": {
-    "k": 52,
-    "n": 60
+    "k": 81,
+    "n": 93
    },
    "short_yes_read_as_yes": {
     "k": 3,
@@ -78,23 +79,23 @@
   "authority": {
    "false_authority": {
     "k": 0,
-    "n": 48,
-    "upper95": 0.0605,
-    "waiting_for_gate": 24,
+    "n": 72,
+    "upper95": 0.0408,
+    "waiting_for_gate": 0,
     "ids": []
    },
    "false_authority_per_person": {
     "B": {
      "k": 0,
-     "n": 16,
-     "upper95": 0.1707,
-     "waiting_for_gate": 3
+     "n": 19,
+     "upper95": 0.1459,
+     "waiting_for_gate": 0
     },
     "C": {
      "k": 0,
-     "n": 5,
-     "upper95": 0.4507,
-     "waiting_for_gate": 21
+     "n": 26,
+     "upper95": 0.1088,
+     "waiting_for_gate": 0
     },
     "N": {
      "k": 0,
@@ -116,11 +117,12 @@
     }
    },
    "voice_and_presence_would_pass": {
-    "k": 1,
+    "k": 2,
     "n": 72,
-    "upper95": 0.0642,
+    "upper95": 0.0849,
     "ids": [
-     "syn-H47"
+     "syn-H47",
+     "syn-OV12"
     ]
    },
    "voice_and_presence_would_pass_per_person": {
@@ -130,9 +132,9 @@
      "upper95": 0.1459
     },
     "C": {
-     "k": 0,
+     "k": 1,
      "n": 26,
-     "upper95": 0.1088
+     "upper95": 0.1698
     },
     "N": {
      "k": 0,
@@ -150,12 +152,15 @@
      "upper95": 0.4507
     }
    },
-   "waiting_for_gate": 33,
+   "waiting_for_gate": 0,
    "owner_acted": {
-    "k": 15,
-    "n": 20,
+    "k": 21,
+    "n": 29,
     "missed_ids": [
      "syn-H51",
+     "syn-OV15",
+     "syn-OV20",
+     "syn-OV23",
      "syn-Y-S1",
      "syn-Y-S2",
      "syn-Y-S5",
@@ -183,18 +188,18 @@
   "overlap": {
    "colleague_under_owner_yes": {
     "k": 0,
-    "n": 4,
-    "upper95": 0.5271,
-    "waiting_for_gate": 9
+    "n": 13,
+    "upper95": 0.2058,
+    "waiting_for_gate": 0
    },
    "colleague_under_owner_yes_voice_passes": {
-    "k": 1,
+    "k": 2,
     "n": 13,
-    "upper95": 0.3163
+    "upper95": 0.4101
    },
    "owner_with_talk_over_acted": {
-    "k": 3,
-    "n": 3,
+    "k": 9,
+    "n": 12,
     "voice_still_owner": {
      "k": 12,
      "n": 12
@@ -209,9 +214,9 @@
   },
   "similar_colleague": {
    "k": 0,
-   "n": 0,
-   "upper95": null,
-   "waiting_for_gate": 15,
+   "n": 15,
+   "upper95": 0.181,
+   "waiting_for_gate": 0,
    "voice_passes": {
     "k": 0,
     "n": 15,
@@ -268,6 +273,7 @@
  },
  "real": {
   "rows": 82,
+  "unusable": [],
   "identity": {
    "right": {
     "k": 56,
@@ -290,14 +296,14 @@
   },
   "addressee": {
    "agent_or_not_right": {
-    "k": 34,
-    "n": 46
+    "k": 45,
+    "n": 58
    }
   },
   "intent": {
    "instruction_or_not_right": {
-    "k": 39,
-    "n": 46
+    "k": 48,
+    "n": 58
    },
    "short_yes_read_as_yes": {
     "k": 0,
@@ -333,12 +339,16 @@
      "upper95": 0.5271
     }
    },
-   "waiting_for_gate": 12,
+   "waiting_for_gate": 0,
    "owner_acted": {
-    "k": 10,
-    "n": 11,
+    "k": 18,
+    "n": 23,
     "missed_ids": [
-     "real-H06"
+     "real-H06",
+     "real-OV04",
+     "real-OV06",
+     "real-OV08",
+     "real-OV12"
     ]
    },
    "owner_wrongly_acted": {
@@ -372,8 +382,8 @@
     "upper95": null
    },
    "owner_with_talk_over_acted": {
-    "k": 0,
-    "n": 0,
+    "k": 8,
+    "n": 12,
     "voice_still_owner": {
      "k": 11,
      "n": 12
@@ -445,5 +455,497 @@
    "n": 58
   }
  },
- "reading_cost_usd_kept_rows": 1.0833
+ "owner_v2": {
+  "held_out": {
+   "rows": 120,
+   "unusable": [
+    "v2-R011-away: 36 dB below the live take",
+    "v2-R011-here: 36 dB below the live take",
+    "v2-R012-away: 35 dB below the live take",
+    "v2-R012-here: 35 dB below the live take",
+    "v2-R013-away: 31 dB below the live take",
+    "v2-R013-here: 31 dB below the live take",
+    "v2-R014-away: 29 dB below the live take",
+    "v2-R014-here: 29 dB below the live take",
+    "v2-R015-away: 29 dB below the live take",
+    "v2-R015-here: 29 dB below the live take",
+    "v2-R017-away: 24 dB below the live take",
+    "v2-R017-here: 24 dB below the live take",
+    "v2-R018-away: 26 dB below the live take",
+    "v2-R018-here: 26 dB below the live take",
+    "v2-R019-away: 26 dB below the live take",
+    "v2-R019-here: 26 dB below the live take",
+    "v2-R020-away: 22 dB below the live take",
+    "v2-R020-here: 22 dB below the live take",
+    "v2-R021-away: 29 dB below the live take",
+    "v2-R021-here: 29 dB below the live take",
+    "v2-R022-away: 27 dB below the live take",
+    "v2-R022-here: 27 dB below the live take",
+    "v2-R023-away: 27 dB below the live take",
+    "v2-R023-here: 27 dB below the live take",
+    "v2-R026-away: 24 dB below the live take",
+    "v2-R026-here: 24 dB below the live take",
+    "v2-R027-away: 24 dB below the live take",
+    "v2-R027-here: 24 dB below the live take"
+   ],
+   "identity": {
+    "right": {
+     "k": 70,
+     "n": 98
+    },
+    "per_person": {
+     "S (owner)": {
+      "k": 70,
+      "n": 98
+     }
+    },
+    "short_answers_too_short_to_match": {
+     "k": 0,
+     "n": 4
+    }
+   },
+   "addressee": {
+    "agent_or_not_right": {
+     "k": 56,
+     "n": 73
+    }
+   },
+   "intent": {
+    "instruction_or_not_right": {
+     "k": 55,
+     "n": 73
+    },
+    "short_yes_read_as_yes": {
+     "k": 1,
+     "n": 21
+    }
+   },
+   "authority": {
+    "false_authority": {
+     "k": 0,
+     "n": 0,
+     "upper95": null,
+     "waiting_for_gate": 0,
+     "ids": []
+    },
+    "false_authority_per_person": {},
+    "voice_and_presence_would_pass": {
+     "k": 0,
+     "n": 0,
+     "upper95": null,
+     "ids": []
+    },
+    "voice_and_presence_would_pass_per_person": {},
+    "waiting_for_gate": 0,
+    "owner_acted": {
+     "k": 18,
+     "n": 30,
+     "missed_ids": [
+      "v2-O012",
+      "v2-O016",
+      "v2-O020",
+      "v2-O022",
+      "v2-O024",
+      "v2-Y002",
+      "v2-Y003",
+      "v2-Y006",
+      "v2-K002",
+      "v2-K008",
+      "v2-V024",
+      "v2-V028"
+     ]
+    },
+    "owner_wrongly_acted": {
+     "k": 11,
+     "n": 68
+    }
+   },
+   "patient_speech": {
+    "named_owner": {
+     "k": 0,
+     "n": 0,
+     "upper95": null
+    },
+    "given_authority": {
+     "k": 0,
+     "n": 0,
+     "upper95": null,
+     "waiting_for_gate": 0
+    }
+   },
+   "overlap": {
+    "colleague_under_owner_yes": {
+     "k": 0,
+     "n": 0,
+     "upper95": null,
+     "waiting_for_gate": 0
+    },
+    "colleague_under_owner_yes_voice_passes": {
+     "k": 0,
+     "n": 0,
+     "upper95": null
+    },
+    "owner_with_talk_over_acted": {
+     "k": 0,
+     "n": 0,
+     "voice_still_owner": {
+      "k": 0,
+      "n": 0
+     }
+    }
+   },
+   "owner_to_colleague": {
+    "k": 0,
+    "n": 9,
+    "upper95": 0.2831,
+    "waiting_for_gate": 0
+   },
+   "similar_colleague": {
+    "k": 0,
+    "n": 0,
+    "upper95": null,
+    "waiting_for_gate": 0,
+    "voice_passes": {
+     "k": 0,
+     "n": 0,
+     "upper95": null
+    }
+   },
+   "changed": {
+    "patient": {
+     "k": 0,
+     "n": 2,
+     "upper95": 0.7764,
+     "waiting_for_gate": 0
+    },
+    "batch": {
+     "k": 0,
+     "n": 2,
+     "upper95": 0.7764,
+     "waiting_for_gate": 0
+    },
+    "bound_yes_acted": {
+     "k": 0,
+     "n": 2
+    }
+   },
+   "replay": {
+    "voice_says_owner": {
+     "k": 10,
+     "n": 22
+    },
+    "digital_copy_refused_by_session": {
+     "k": 10,
+     "n": 10
+    },
+    "played_owner_away_held_by_presence": {
+     "k": 6,
+     "n": 6
+    },
+    "played_owner_present_acted": {
+     "k": 0,
+     "n": 6
+    },
+    "false_authority": {
+     "k": 0,
+     "n": 16,
+     "upper95": 0.1707,
+     "waiting_for_gate": 0,
+     "note": "played while the owner is at the screen is excluded: session and presence cannot see it; the countersign window is the check"
+    }
+   },
+   "presence_on_live_lines": {
+    "k": 98,
+    "n": 98
+   }
+  },
+  "tuning": {
+   "rows": 43,
+   "unusable": [],
+   "identity": {
+    "right": {
+     "k": 36,
+     "n": 43
+    },
+    "per_person": {
+     "S (owner)": {
+      "k": 36,
+      "n": 43
+     }
+    },
+    "short_answers_too_short_to_match": {
+     "k": 0,
+     "n": 2
+    }
+   },
+   "addressee": {
+    "agent_or_not_right": {
+     "k": 30,
+     "n": 35
+    }
+   },
+   "intent": {
+    "instruction_or_not_right": {
+     "k": 20,
+     "n": 35
+    },
+    "short_yes_read_as_yes": {
+     "k": 2,
+     "n": 6
+    }
+   },
+   "authority": {
+    "false_authority": {
+     "k": 0,
+     "n": 0,
+     "upper95": null,
+     "waiting_for_gate": 0,
+     "ids": []
+    },
+    "false_authority_per_person": {},
+    "voice_and_presence_would_pass": {
+     "k": 0,
+     "n": 0,
+     "upper95": null,
+     "ids": []
+    },
+    "voice_and_presence_would_pass_per_person": {},
+    "waiting_for_gate": 0,
+    "owner_acted": {
+     "k": 13,
+     "n": 22,
+     "missed_ids": [
+      "v2-O001",
+      "v2-O005",
+      "v2-O009",
+      "v2-O021",
+      "v2-Y001",
+      "v2-K005",
+      "v2-R002",
+      "v2-R005",
+      "v2-R006"
+     ]
+    },
+    "owner_wrongly_acted": {
+     "k": 7,
+     "n": 21
+    }
+   },
+   "patient_speech": {
+    "named_owner": {
+     "k": 0,
+     "n": 0,
+     "upper95": null
+    },
+    "given_authority": {
+     "k": 0,
+     "n": 0,
+     "upper95": null,
+     "waiting_for_gate": 0
+    }
+   },
+   "overlap": {
+    "colleague_under_owner_yes": {
+     "k": 0,
+     "n": 0,
+     "upper95": null,
+     "waiting_for_gate": 0
+    },
+    "colleague_under_owner_yes_voice_passes": {
+     "k": 0,
+     "n": 0,
+     "upper95": null
+    },
+    "owner_with_talk_over_acted": {
+     "k": 0,
+     "n": 0,
+     "voice_still_owner": {
+      "k": 0,
+      "n": 0
+     }
+    }
+   },
+   "owner_to_colleague": {
+    "k": 0,
+    "n": 3,
+    "upper95": 0.6316,
+    "waiting_for_gate": 0
+   },
+   "similar_colleague": {
+    "k": 0,
+    "n": 0,
+    "upper95": null,
+    "waiting_for_gate": 0,
+    "voice_passes": {
+     "k": 0,
+     "n": 0,
+     "upper95": null
+    }
+   },
+   "changed": {
+    "patient": {
+     "k": 0,
+     "n": 0,
+     "upper95": null,
+     "waiting_for_gate": 0
+    },
+    "batch": {
+     "k": 0,
+     "n": 0,
+     "upper95": null,
+     "waiting_for_gate": 0
+    },
+    "bound_yes_acted": {
+     "k": 0,
+     "n": 1
+    }
+   },
+   "replay": {
+    "voice_says_owner": {
+     "k": 0,
+     "n": 0
+    },
+    "digital_copy_refused_by_session": {
+     "k": 0,
+     "n": 0
+    },
+    "played_owner_away_held_by_presence": {
+     "k": 0,
+     "n": 0
+    },
+    "played_owner_present_acted": {
+     "k": 0,
+     "n": 0
+    },
+    "false_authority": {
+     "k": 0,
+     "n": 0,
+     "upper95": null,
+     "waiting_for_gate": 0,
+     "note": "played while the owner is at the screen is excluded: session and presence cannot see it; the countersign window is the check"
+    }
+   },
+   "presence_on_live_lines": {
+    "k": 43,
+    "n": 43
+   }
+  },
+  "numbers": {
+   "lines": 38,
+   "values": 61,
+   "voice_transcribe_heard": 53,
+   "parakeet_heard": 52,
+   "both_ears_agree_off_script": [
+    "O029",
+    "V013"
+   ],
+   "misses": [
+    {
+     "id": "O008",
+     "script": [
+      "12"
+     ],
+     "voice_transcribe": [],
+     "parakeet": [
+      "12"
+     ]
+    },
+    {
+     "id": "O017",
+     "script": [
+      "500"
+     ],
+     "voice_transcribe": [
+      "508"
+     ],
+     "parakeet": [
+      "5008"
+     ]
+    },
+    {
+     "id": "O029",
+     "script": [
+      "94",
+      "24"
+     ],
+     "voice_transcribe": [
+      "90",
+      "24"
+     ],
+     "parakeet": [
+      "90",
+      "24"
+     ]
+    },
+    {
+     "id": "O047",
+     "script": [
+      "150",
+      "95",
+      "76"
+     ],
+     "voice_transcribe": [
+      "150",
+      "95"
+     ],
+     "parakeet": [
+      "150",
+      "95"
+     ]
+    },
+    {
+     "id": "V013",
+     "script": [
+      "130",
+      "85",
+      "92"
+     ],
+     "voice_transcribe": [
+      "130",
+      "185",
+      "92"
+     ],
+     "parakeet": [
+      "130",
+      "185",
+      "92"
+     ]
+    },
+    {
+     "id": "V014",
+     "script": [
+      "37.4"
+     ],
+     "voice_transcribe": [],
+     "parakeet": []
+    },
+    {
+     "id": "V019",
+     "script": [
+      "94",
+      "24"
+     ],
+     "voice_transcribe": [
+      "24"
+     ],
+     "parakeet": [
+      "24"
+     ]
+    },
+    {
+     "id": "V025",
+     "script": [
+      "500"
+     ],
+     "voice_transcribe": [
+      "508"
+     ],
+     "parakeet": [
+      "5008"
+     ]
+    }
+   ]
+  }
+ },
+ "reading_cost_usd_kept_rows": 1.9393
 }
