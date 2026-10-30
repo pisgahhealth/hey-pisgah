@@ -1,0 +1,358 @@
+{
+ "built_at": "2026-10-30T09:34:04.853Z",
+ "owner_min": 0.41,
+ "radio_snr_db": 12.5,
+ "denoiser": "gtcrn_simple.onnx (sherpa-onnx speech-enhancement-models release)",
+ "table": {
+  "baseline": {
+   "N (real other person)": {
+    "k": 0,
+    "n": 4,
+    "upper95": 0.5271
+   },
+   "owner R1.b quiet": {
+    "k": 41,
+    "n": 42
+   },
+   "owner quiet": {
+    "k": 30,
+    "n": 31
+   },
+   "owner radio": {
+    "k": 14,
+    "n": 30
+   },
+   "owner short or part": {
+    "k": 26,
+    "n": 37
+   },
+   "synthetic other voices": {
+    "k": 0,
+    "n": 29,
+    "upper95": 0.0981
+   },
+   "owner radio, two adjacent lines joined": {
+    "k": 13,
+    "n": 19
+   },
+   "highest_other_voice": 0.3999,
+   "owner_radio_median": 0.4052,
+   "ms_per_audio_second": 5.8
+  },
+  "noisy-enrol": {
+   "N (real other person)": {
+    "k": 0,
+    "n": 4,
+    "upper95": 0.5271
+   },
+   "owner R1.b quiet": {
+    "k": 34,
+    "n": 42
+   },
+   "owner quiet": {
+    "k": 24,
+    "n": 31
+   },
+   "owner radio": {
+    "k": 12,
+    "n": 30
+   },
+   "owner short or part": {
+    "k": 17,
+    "n": 37
+   },
+   "synthetic other voices": {
+    "k": 0,
+    "n": 29,
+    "upper95": 0.0981
+   },
+   "owner radio, two adjacent lines joined": {
+    "k": 11,
+    "n": 19
+   },
+   "highest_other_voice": 0.3095,
+   "owner_radio_median": 0.3583,
+   "ms_per_audio_second": 5.6
+  },
+  "vad": {
+   "N (real other person)": {
+    "k": 0,
+    "n": 4,
+    "upper95": 0.5271
+   },
+   "owner R1.b quiet": {
+    "k": 37,
+    "n": 42
+   },
+   "owner quiet": {
+    "k": 26,
+    "n": 31
+   },
+   "owner radio": {
+    "k": 14,
+    "n": 30
+   },
+   "owner short or part": {
+    "k": 17,
+    "n": 37
+   },
+   "synthetic other voices": {
+    "k": 0,
+    "n": 29,
+    "upper95": 0.0981
+   },
+   "owner radio, two adjacent lines joined": {
+    "k": 13,
+    "n": 19
+   },
+   "highest_other_voice": 0.3589,
+   "owner_radio_median": 0.4073,
+   "ms_per_audio_second": 3.9
+  },
+  "vad+noisy-enrol": {
+   "N (real other person)": {
+    "k": 0,
+    "n": 4,
+    "upper95": 0.5271
+   },
+   "owner R1.b quiet": {
+    "k": 36,
+    "n": 42
+   },
+   "owner quiet": {
+    "k": 24,
+    "n": 31
+   },
+   "owner radio": {
+    "k": 15,
+    "n": 30
+   },
+   "owner short or part": {
+    "k": 16,
+    "n": 37
+   },
+   "synthetic other voices": {
+    "k": 0,
+    "n": 29,
+    "upper95": 0.0981
+   },
+   "owner radio, two adjacent lines joined": {
+    "k": 14,
+    "n": 19
+   },
+   "highest_other_voice": 0.357,
+   "owner_radio_median": 0.4136,
+   "ms_per_audio_second": 3.7
+  },
+  "denoise": {
+   "N (real other person)": {
+    "k": 0,
+    "n": 4,
+    "upper95": 0.5271
+   },
+   "owner R1.b quiet": {
+    "k": 37,
+    "n": 42
+   },
+   "owner quiet": {
+    "k": 29,
+    "n": 31
+   },
+   "owner radio": {
+    "k": 20,
+    "n": 30
+   },
+   "owner short or part": {
+    "k": 25,
+    "n": 37
+   },
+   "synthetic other voices": {
+    "k": 0,
+    "n": 29,
+    "upper95": 0.0981
+   },
+   "owner radio, two adjacent lines joined": {
+    "k": 17,
+    "n": 19
+   },
+   "highest_other_voice": 0.3255,
+   "owner_radio_median": 0.4683,
+   "ms_per_audio_second": 53.3
+  },
+  "denoise+noisy-enrol": {
+   "N (real other person)": {
+    "k": 1,
+    "n": 4,
+    "upper95": 0.7514
+   },
+   "owner R1.b quiet": {
+    "k": 35,
+    "n": 42
+   },
+   "owner quiet": {
+    "k": 27,
+    "n": 31
+   },
+   "owner radio": {
+    "k": 21,
+    "n": 30
+   },
+   "owner short or part": {
+    "k": 16,
+    "n": 37
+   },
+   "synthetic other voices": {
+    "k": 0,
+    "n": 29,
+    "upper95": 0.0981
+   },
+   "owner radio, two adjacent lines joined": {
+    "k": 18,
+    "n": 19
+   },
+   "highest_other_voice": 0.4132,
+   "owner_radio_median": 0.4429,
+   "ms_per_audio_second": 47.8
+  },
+  "denoise+vad": {
+   "N (real other person)": {
+    "k": 0,
+    "n": 4,
+    "upper95": 0.5271
+   },
+   "owner R1.b quiet": {
+    "k": 33,
+    "n": 42
+   },
+   "owner quiet": {
+    "k": 29,
+    "n": 31
+   },
+   "owner radio": {
+    "k": 15,
+    "n": 30
+   },
+   "owner short or part": {
+    "k": 18,
+    "n": 37
+   },
+   "synthetic other voices": {
+    "k": 0,
+    "n": 29,
+    "upper95": 0.0981
+   },
+   "owner radio, two adjacent lines joined": {
+    "k": 15,
+    "n": 19
+   },
+   "highest_other_voice": 0.3285,
+   "owner_radio_median": 0.4424,
+   "ms_per_audio_second": 44.9
+  },
+  "denoise+vad+noisy-enrol": {
+   "N (real other person)": {
+    "k": 0,
+    "n": 4,
+    "upper95": 0.5271
+   },
+   "owner R1.b quiet": {
+    "k": 34,
+    "n": 42
+   },
+   "owner quiet": {
+    "k": 27,
+    "n": 31
+   },
+   "owner radio": {
+    "k": 17,
+    "n": 30
+   },
+   "owner short or part": {
+    "k": 18,
+    "n": 37
+   },
+   "synthetic other voices": {
+    "k": 0,
+    "n": 29,
+    "upper95": 0.0981
+   },
+   "owner radio, two adjacent lines joined": {
+    "k": 17,
+    "n": 19
+   },
+   "highest_other_voice": 0.3846,
+   "owner_radio_median": 0.4325,
+   "ms_per_audio_second": 62.1
+  },
+  "denoise when under 20 dB": {
+   "N (real other person)": {
+    "k": 0,
+    "n": 4,
+    "upper95": 0.5271
+   },
+   "owner R1.b quiet": {
+    "k": 37,
+    "n": 42
+   },
+   "owner quiet": {
+    "k": 30,
+    "n": 31
+   },
+   "owner radio": {
+    "k": 20,
+    "n": 30
+   },
+   "owner short or part": {
+    "k": 25,
+    "n": 37
+   },
+   "synthetic other voices": {
+    "k": 0,
+    "n": 29,
+    "upper95": 0.0981
+   },
+   "owner radio, two adjacent lines joined": {
+    "k": 17,
+    "n": 19
+   },
+   "highest_other_voice": 0.3999,
+   "owner_radio_median": 0.4683,
+   "ms_per_audio_second": 28.3
+  },
+  "best of plain and denoised": {
+   "N (real other person)": {
+    "k": 0,
+    "n": 4,
+    "upper95": 0.5271
+   },
+   "owner R1.b quiet": {
+    "k": 41,
+    "n": 42
+   },
+   "owner quiet": {
+    "k": 30,
+    "n": 31
+   },
+   "owner radio": {
+    "k": 22,
+    "n": 30
+   },
+   "owner short or part": {
+    "k": 28,
+    "n": 37
+   },
+   "synthetic other voices": {
+    "k": 0,
+    "n": 29,
+    "upper95": 0.0981
+   },
+   "owner radio, two adjacent lines joined": {
+    "k": 17,
+    "n": 19
+   },
+   "highest_other_voice": 0.3999,
+   "owner_radio_median": 0.4683,
+   "ms_per_audio_second": 59.1
+  }
+ }
+}

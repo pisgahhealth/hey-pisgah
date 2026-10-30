@@ -6,6 +6,7 @@ import { PRESENCE_RULE, denyHits } from "@hey-pisgah/agent";
 import { SEED, readThresholds, thresholdsAt } from "../research/thresholds.js";
 import { V2_LINES, V2_ROLE, v2Counts } from "../research/v2.lines.js";
 import { authorityOf, identityOf, scoreV2, upper95, type V2Row } from "../research/v2.score.js";
+import { scoreNoise } from "../research/v2.noise.score.js";
 
 const root = join(import.meta.dirname, "..", "..", "..");
 const fx = JSON.parse(readFileSync(join(import.meta.dirname, "..", "research", "fixtures", "v2.readings.json"), "utf8")) as { built_at: string; rows: V2Row[] };
@@ -105,5 +106,21 @@ describe("the v2 harness on the data held now", () => {
     expect(text).not.toMatch(/data:audio|UklGR/);
     for (const r of fx.rows) if (r.cos) for (const v of Object.values(r.cos)) expect(typeof v).toBe("number");
     expect(fx.rows.every((r) => !r.cos || Object.keys(r.cos).length <= 4)).toBe(true);
+  });
+});
+
+describe("noise robustness of the speaker match", () => {
+  const noise = JSON.parse(readFileSync(join(import.meta.dirname, "..", "research", "fixtures", "v2.noise.json"), "utf8"));
+  const table = JSON.parse(readFileSync(join(root, "evaluation", "results", "attribution-noise.json"), "utf8")).table;
+  it("measures the same held-out clips the v2 table scored, by hash", () => {
+    const byId = new Map(fx.rows.map((r) => [r.id, r.sha256]));
+    for (const [id, g] of Object.entries(noise.groups) as [string, { sha256: string }][]) if (!id.startsWith("syn-")) expect(byId.get(id)).toBe(g.sha256);
+  });
+  it("reproduces the published table from the kept cosines, with the 0.41 rule unmoved", () => {
+    expect(scoreNoise(noise, rule.owner_min)).toEqual(table);
+    expect(rule.owner_min).toBe(0.41);
+  });
+  it("keeps cosines only", () => {
+    for (const r of Object.values(noise.results) as { cos: Record<string, number | null> }[]) for (const v of Object.values(r.cos)) expect(v === null || typeof v === "number").toBe(true);
   });
 });
