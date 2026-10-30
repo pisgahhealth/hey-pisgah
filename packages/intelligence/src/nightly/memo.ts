@@ -1,6 +1,6 @@
 import { canonical, sha256 } from "@hey-pisgah/contracts";
 import type { Fact } from "./facts.js";
-import { sourcesHash, type NightSources, type OpenItem, type Recipient } from "./sources.js";
+import { itemIsFor, sourcesHash, type NightSources, type OpenItem, type Recipient } from "./sources.js";
 
 // A suspected cause or a proposed change as one investigator put it, with the facts it cites and what the critic round said.
 export type Finding = { finding_id: string; department: string; text: string; cites: string[]; critic: { by: string; verdict: "holds" | "challenged"; reason: string } | null };
@@ -28,7 +28,7 @@ export function composeMemo(s: NightSources, r: Recipient, facts: readonly Fact[
   const ids = new Set(mine.map((f) => f.fact_id));
   const relevant = inv.filter((i) => i.department === r.department);
   const cites = (f: Finding) => f.cites.every((c) => ids.has(c));
-  const items: MemoItem[] = s.open.filter((i) => i.state !== "done" && (i.owner === r.id || (r.incoming && i.department === r.department)))
+  const items: MemoItem[] = s.open.filter((i) => i.state !== "done" && itemIsFor(r, i))
     .map((i) => ({ item_id: i.item_id, kind: i.kind, title: i.title, state: isUrgent(i, now) && i.state !== "failed" ? "overdue" : i.state, due_at: i.due_at, refs: i.refs, encounter: r.authorised.includes(i.encounter) ? i.encounter : null, department: i.department }));
   const causes = relevant.flatMap((i) => i.causes).filter(cites).map((c) => ({ ...c, label: "suspected cause" as const }));
   const changes = relevant.flatMap((i) => i.changes).filter(cites).map((c) => ({ ...c, label: "proposed change" as const }));

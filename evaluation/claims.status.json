@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-30T20:30:26.435Z",
-  "commit": "274d992",
+  "generated_at": "2026-10-30T20:58:17.794Z",
+  "commit": "3eb0ecf",
   "claims": [
     {
       "claim_id": "C-01",
@@ -135,7 +135,7 @@
         "no_hypothesis_cited_as_evidence": true,
         "read.outcomes": 2,
         "result": "new_proposal",
-        "reversed_pairs_summary": "with the ward A outcome reversed so the adopted change hurt, 0 of 3 said the evidence is insufficient, 0 proposed a rollback, 2 declined the change (cited the reversed outcome, did not propose it again, but ended on the budget cap without a result) and 1 proposed it again; unreversed, 1 of 3 proposed it again and 2 reached no result",
+        "reversed_pairs_summary": "with the ward A outcome reversed so the adopted change hurt, 2 of 3 reversed runs ended in a declared result (2 proposed a rollback for a person to decide) and 1 did not (1 proposed the adopted change again); unreversed, 1 proposed the adopted change again, 1 ended without a result, 1 kept the version",
         "stop": "dev_valid_proposal (p-08e023d0)"
       },
       "measured_at": "2026-10-30T06:10:05.292Z"
@@ -393,13 +393,14 @@
         "adopted_by_person": true,
         "human_approval": false,
         "deployable": true,
-        "emr_offers_made": 0,
+        "emr_offers_made": 1,
         "fresh_applicable.executed_differently": true,
         "fresh_applicable.actions_open": 0,
         "fresh_applicable.state": "done",
         "withheld.version_withheld": true,
         "withheld.actions_open": 0,
         "withheld.state": "done",
+        "emr_loop_complete": true,
         "emr_offer_seen": true,
         "applicable_case": "c-110f6ad7",
         "draft_earlier_by_min": 146,
@@ -410,8 +411,9 @@
         "dev_moved": 5,
         "dev_shorter": 4,
         "dev_longer": 1,
+        "dev_slowest_min": 167,
         "withheld_case": "c-2a14921a",
-        "emr_offer_reason": "the fresh EMR journey could not run: the journey seed does not check the journey patient in again while an earlier run's stay (accepted, no bed) is still live, and the A&E nurse's cover can start only in her morning shift; both are M5.0's open seed items; on a live stay through the door the adopted version offered it 1 time at its trigger point and version 1 0",
+        "emr_offer_reason": "on a fresh ward A stay the adopted version offered the summary draft at the round entry (1 offer), the nurse approved it by voice and the reviewed draft was saved as a note on the stay and proved by a fresh read; on a ward B stay at the same trigger point it was withheld with the reason \"version 2 is adopted for ward A and this patient is on ward B, so version 1 is in force\"",
         "deployment_reason": "every changed step has a watched trigger point, a work kind and an owner"
       },
       "measured_at": "2026-10-30T06:10:21.797Z"
@@ -423,8 +425,8 @@
         "verified": true,
         "names_in_previews": 0,
         "unauthorised_names": 0,
-        "checks_failed_closed": 5,
-        "checks_tried": 5,
+        "checks_failed_closed": 8,
+        "checks_tried": 8,
         "deny_hits": 0,
         "authorised_recipients": 2,
         "authorised_delivered": 2,
@@ -432,9 +434,12 @@
         "refusals": 1,
         "incorrect_outcomes": 0,
         "urgent_alerts_authorised": 2,
-        "urgent_items_authorised": 2
+        "urgent_items_authorised": 2,
+        "negative_cases.altered_description": "unsupported_or_incomplete",
+        "negative_cases.altered_destination": "unsupported_or_incomplete",
+        "negative_cases.altered_due_date": "unsupported_or_incomplete"
       },
-      "measured_at": "2026-10-30T06:43:12.247Z"
+      "measured_at": "2026-10-30T16:50:00.912Z"
     }
   ]
 }

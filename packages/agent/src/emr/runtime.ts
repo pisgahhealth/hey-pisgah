@@ -8,7 +8,7 @@ import { primaryClass } from "./classes.js";
 import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
-import { BATCH_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
+import { BATCH_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
@@ -66,7 +66,7 @@ export type EarsRecord = { action_id: string; line_id: string; session_id: strin
 export type WatchChange = { fact: string; label: string; from: string | null; to: string | null; at: string };
 export type EmrPause = { line_id: string | null; reason: string; at: string; pending: string[]; facts: Record<string, string | null> };
 // The adopted version as this task reads it: the offers it may make, what it says instead, and offers the monitor blocked.
-export type EmrVersionView = { version: number; definition_hash: string; offers: string[]; lines: string[]; blocked: { offer: string; requirement_version: string; conflict: string }[] };
+export type EmrVersionView = { version: number; definition_hash: string; offers: string[]; lines: string[]; blocked: { offer: string; requirement_version: string; conflict: string }[]; withheld?: { offer: string; version: number; reason: string }[] };
 // Work held for a time or a record event; it fires once from the runtime's own timer and survives a restart because it lives in the task stream.
 export type EmrObligation = {
   obligation_id: string; line_id: string; kind: string; clause: Record<string, unknown>; title: string;
@@ -282,7 +282,8 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       break;
     }
     case "offer.made": t.offered.push(String(x["offer"])); break;
-    case "version.rules": t.version = { version: Number(x["version"]), definition_hash: String(x["definition_hash"]), offers: (x["offers"] as string[]) ?? [], lines: (x["lines"] as string[]) ?? [], blocked: [] }; break;
+    case "version.offer_withheld": t.offered.push(String(x["offer"])); t.version?.withheld?.push({ offer: String(x["offer"]), version: Number(x["version"]), reason: String(x["reason"]) }); break;
+    case "version.rules": t.version = { version: Number(x["version"]), definition_hash: String(x["definition_hash"]), offers: (x["offers"] as string[]) ?? [], lines: (x["lines"] as string[]) ?? [], blocked: [], withheld: [] }; break;
     case "version.check_failed": {
       t.offered.push(String(x["offer"]));
       t.version?.blocked.push({ offer: String(x["offer"]), requirement_version: String(x["requirement_version"]), conflict: String(x["conflict"]) });
@@ -1309,10 +1310,12 @@ export class EmrRuntime {
       }
       case "record_note": {
         if (!needAdmission()) return;
-        const draft = [...t.order].reverse().map((id) => t.actions.get(id)!).find((a) => a.kind === "draft_handover" && a.state === "completed" && a.draft);
+        // Saving a draft the agent made writes the newest completed draft not saved yet, under its own label.
+        const draft = [...t.order].reverse().map((id) => t.actions.get(id)!).find((a) => SAVED_DRAFTS[a.kind] && a.state === "completed" && a.draft);
+        const label = draft ? SAVED_DRAFTS[draft.kind]! : null;
         const text = said(c.text);
-        if (!text && draft && !t.order.some((id) => { const a = t.actions.get(id)!; return a.kind === "record_note" && a.args["label"] === "handover" && a.proposed_at >= draft.proposed_at && a.state !== "cancelled"; })) {
-          raw = { admission_id: t.admission_id, note_type: "nursing", text: draft.draft, label: "handover" };
+        if (!text && draft && label && !t.order.some((id) => { const a = t.actions.get(id)!; return a.kind === "record_note" && a.args["label"] === label && a.proposed_at >= draft.proposed_at && a.state !== "cancelled"; })) {
+          raw = { admission_id: t.admission_id, note_type: "nursing", text: draft.draft, label };
           break;
         }
         if (!text && !c.text) return this.ask(l, lineId, "What should the note say?");
@@ -1320,7 +1323,7 @@ export class EmrRuntime {
         raw = { admission_id: t.admission_id, note_type: noteType, text: text ?? words };
         break;
       }
-      case "draft_handover": case "prepare_bill": case "send_pay_link": if (!needAdmission()) return; raw = { admission_id: t.admission_id }; break;
+      case "draft_handover": case "draft_stay_summary": case "prepare_bill": case "send_pay_link": if (!needAdmission()) return; raw = { admission_id: t.admission_id }; break;
       case "record_diagnosis": {
         if (!needVisit() || !t.patient_id) return;
         // Only the owner's own matched voice states the diagnosis; Dr B's words and an unverified voice never record it.
@@ -2124,7 +2127,7 @@ export class EmrRuntime {
     const v = this.o.versions;
     if (!v) return;
     const t = l.task;
-    const rules = v.rulesFor(t.owner, kinds);
+    const rules = v.rulesFor(t.owner, kinds, facts);
     if (!rules) return;
     if (!t.version || t.version.version !== rules.version) {
       this.append(l, "version.rules", { version: rules.version, definition_hash: rules.definition_hash, parent_version: rules.parent_version, offers: rules.offers.map((o) => o.key), lines: rules.lines, readings: rules.readings });
@@ -2133,7 +2136,7 @@ export class EmrRuntime {
     for (const o of rules.offers) {
       if (t.offered.includes(o.key) || !o.when.every((w) => facts[w.fact] === w.equals)) continue;
       if (t.order.some((id) => t.actions.get(id)!.kind === o.kind && t.actions.get(id)!.state !== "cancelled")) continue;
-      const c = v.check(o);
+      const c = v.check(o, facts);
       if (!c.ok) {
         this.append(l, "version.check_failed", { offer: o.key, version: o.version, step_id: o.step_id, document_id: o.document_id, stage: o.stage, requirement_version: c.requirement_version, failures: c.failures, conflict: c.conflict });
         this.append(l, "version.revision_proposed", { version: o.version, requirement_version: c.requirement_version, ops: c.revision_ops, approval: "a person" });
@@ -2143,6 +2146,12 @@ export class EmrRuntime {
       this.append(l, "offer.made", { offer: o.key, version: o.version, step_id: o.step_id, requirement_version: c.requirement_version });
       this.ask(l, t.lines.at(-1)?.id ?? "watch", o.ask);
       this.settle(l, "offered");
+    }
+    // The newest adopted version's offer at its own trigger point, kept from this patient by its scope, is recorded once with the reason.
+    for (const w of rules.withheld ?? []) {
+      if (t.offered.includes(w.key) || !w.when.every((x) => facts[x.fact] === x.equals)) continue;
+      this.append(l, "version.offer_withheld", { offer: w.key, version: w.version, in_force: w.in_force, step_id: w.step_id, document_id: w.document_id, stage: w.stage, kind: w.kind, ward_id: rules.ward_id ?? null, reason: w.reason });
+      this.note(l, `Not offered: ${w.reason}.`);
     }
   }
 
@@ -2262,6 +2271,7 @@ export class EmrRuntime {
       this.sweepObligations();
     }
     if (a.kind === "draft_handover" && a.draft) this.ask(l, a.line_id, `Handover draft for your review: "${a.draft.slice(0, 900)}" Say save the handover to record it, or tell me what to change.`);
+    if (a.kind === "draft_stay_summary" && a.draft) this.ask(l, a.line_id, `Summary draft for your review: "${a.draft.slice(0, 900)}" Say save the summary to record it on the stay, or tell me what to change.`);
     if (a.kind === "prepare_bill" && a.report) this.note(l, a.report);
     // A pay link read back from the bill proves only that the request is recorded.
     if (a.kind === "send_pay_link") this.note(l, PAY_LINK_VERIFIED_NOTE);

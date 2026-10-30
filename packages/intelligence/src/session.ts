@@ -142,6 +142,8 @@ export const EndInput = z.strictObject({
   insufficient: InsufficientEvidence.optional()
 });
 
+export const RollbackInput = z.strictObject({ version: z.number().int().min(1), note: z.string().min(1).max(600), evidence_event_ids: z.array(z.string()).min(1).max(20) });
+
 export type StoredExperiment = {
   experiment_id: string;
   session_id: string;
@@ -261,11 +263,32 @@ export class Session {
     return { ok: true, ...c };
   }
   // The refusal a second cycle gets when it concludes before reading the outcomes, or declares no change while its outcomes contradict the version in force.
-  private secondCycleRefusal(result: "proposal" | "no_change_warranted" | "insufficient_evidence"): Result | null {
+  private secondCycleRefusal(result: "proposal" | "no_change_warranted" | "insufficient_evidence", cites: readonly string[] = []): Result | null {
     if (!this.hasNewEvidence()) return null;
     if (!this.outcomesRead) return refusal("read_outcomes_first", "In a second cycle, read the verified outcomes and observed journeys with compare_outcomes before a proposal or a result.");
-    if (result === "no_change_warranted" && this.comparison?.contradicts_adopted) return refusal("outcomes_contradict", "The verified outcomes under the adopted version are worse than the histories of their ward. Respond to them with a proposal, or end with insufficient_evidence and the measurement that would settle it.", { after: this.comparison.after });
+    if (result === "no_change_warranted" && this.comparison?.contradicts_adopted && !this.citesWorse(cites)) return refusal("outcomes_contradict", "The verified outcomes under the adopted version are worse than the histories of their ward. A result that keeps the version must cite an event of those outcomes; otherwise propose a revision, propose a rollback, or end with insufficient_evidence and the measurement that would settle it.", { after: this.comparison.after });
     return null;
+  }
+  // Whether the cited events include one of an outcome that did worse under a changed version.
+  private citesWorse(cites: readonly string[]): boolean {
+    const worse = new Set((this.comparison?.after ?? []).filter((r) => r.direction === "worse" && r.workflow_version !== null && r.workflow_version !== 1).map((r) => r.case_id));
+    return cites.some((id) => worse.has(this.pool.event(id)?.case_id ?? ""));
+  }
+
+  // A second cycle may end by proposing that a person suspend an adopted version, citing that version's outcomes; the person decides.
+  proposeRollback(raw: unknown): Result {
+    const parsed = RollbackInput.safeParse(raw);
+    if (!parsed.success) { this.counters.repairs += 1; return refusal("invalid_arguments", "The arguments do not match the schema.", { issues: zodIssues(parsed.error) }); }
+    const a = parsed.data;
+    if (!this.hasNewEvidence()) return refusal("not_available", "This tool is not available in this session.");
+    if (!this.outcomesRead) return refusal("read_outcomes_first", "In a second cycle, read the verified outcomes and observed journeys with compare_outcomes before a proposal or a result.");
+    if (a.evidence_event_ids.some((e) => !this.pool.event(e))) return UNKNOWN_ID;
+    const under = new Set((this.comparison?.after ?? []).filter((r) => r.workflow_version === a.version).map((r) => r.case_id));
+    if (a.version === 1 || !under.size) return refusal("unknown_version", "No verified outcome ran under that version, so there is nothing recorded to roll back.", { versions: [...new Set((this.comparison?.after ?? []).map((r) => r.workflow_version))] });
+    if (!a.evidence_event_ids.some((id) => under.has(this.pool.event(id)?.case_id ?? ""))) return refusal("evidence_rule", "A rollback cites at least one recorded event of an outcome under that version.");
+    this.log("session.result", { result: "rollback_proposed", version: a.version, note: a.note, evidence_event_ids: a.evidence_event_ids, approval: "a person" });
+    this.stopWith("declared_negative", "rollback_proposed");
+    return { ok: true, result: "rollback_proposed", version: a.version, approval: "a person" };
   }
 
   // A record_hypothesis schema error with the expected shape of each failing field, counted per run.
@@ -742,7 +765,7 @@ export class Session {
     if (a.evidence_event_ids.some((e) => !this.pool.event(e))) return UNKNOWN_ID;
     if (a.result === "insufficient_evidence" && (!this.o.insufficientEvidence || !a.insufficient)) return refusal("not_available", "This result is not available in this session.");
     if (this.o.arm !== "prior" && a.evidence_event_ids.length === 0) return refusal("evidence_rule", "A session result cites the recorded events inspected.");
-    const second = this.secondCycleRefusal(a.result);
+    const second = this.secondCycleRefusal(a.result, a.evidence_event_ids);
     if (second) return second;
     this.log("session.result", { result: a.result, note: a.note, evidence_event_ids: a.evidence_event_ids, ...(a.insufficient ? { insufficient: a.insufficient } : {}) });
     this.stopWith("declared_negative", a.result);

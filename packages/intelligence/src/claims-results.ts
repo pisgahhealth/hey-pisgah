@@ -60,7 +60,7 @@ export function cycle2Result(storeRoot: string, runId: string, o: { observed: re
   const readOf = (s: string) => bySource(s).filter((id) => read.has(id));
   const cited = (s: string) => new Set(citedEvents.filter((id) => pool.event(id) && pool.get(pool.event(id)!.case_id)!.source === s)).size;
   const valid = reports.some((r) => r["status"] === "dev_validated");
-  const result = valid ? (props.some((p) => p.parent_proposal_id) ? "revision" : "new_proposal") : declared?.["result"] === "no_change_warranted" ? "no_change_warranted" : declared?.["result"] === "insufficient_evidence" ? "insufficient_evidence" : "no_result";
+  const result = valid ? (props.some((p) => p.parent_proposal_id) ? "revision" : "new_proposal") : declared?.["result"] === "rollback_proposed" ? "rollback_proposed" : declared?.["result"] === "no_change_warranted" ? "no_change_warranted" : declared?.["result"] === "insufficient_evidence" ? "insufficient_evidence" : "no_result";
   const rows = readStream(storeRoot, `ledger/${runId}`).filter((e) => e.record_type === "model.call").map((e) => LedgerRow.parse(e.payload));
   return {
     measured_at: new Date().toISOString(), measured: true, source: "cycle2_run", set: "dev", run_id: runId,
@@ -71,13 +71,13 @@ export function cycle2Result(storeRoot: string, runId: string, o: { observed: re
     // Before and after adoption, computed by the same rule the second cycle's own read uses.
     outcome_comparison: (() => { const c = outcomeComparison(pool, loadV1()); return { before: c.before, after: c.after.map(({ case_id, ward_id, workflow_version, post_signoff_wait_min, before_median_wait_min, wait_delta_min, rework_events, before_median_rework, rework_delta, direction }) => ({ case_id, ward_id, workflow_version, post_signoff_wait_min, before_median_wait_min, wait_delta_min, rework_events, before_median_rework, rework_delta, direction })), observed: c.observed.length, contradicts_adopted: c.contradicts_adopted, supports_adopted: c.supports_adopted }; })(),
     compared_outcomes: log.some((x) => x.record_type === "outcomes.compared"),
-    // A response is insufficient_evidence declared, or a dev-valid proposal that cites an event of an outcome that did worse under the adopted version.
+    // A response is insufficient_evidence or a rollback declared, or a dev-valid proposal that cites an event of an outcome that did worse under the adopted version.
     responded_to_contradiction: (() => {
       const c = outcomeComparison(pool, loadV1());
       if (!c.contradicts_adopted) return null;
       const worse = new Set(c.after.filter((r) => r.direction === "worse" && r.workflow_version !== 1).map((r) => r.case_id));
       const cites = props.some((p) => p.evidence.event_ids.some((id) => worse.has(pool.event(id)?.case_id ?? "")));
-      return declared?.["result"] === "insufficient_evidence" || (valid && cites);
+      return declared?.["result"] === "insufficient_evidence" || declared?.["result"] === "rollback_proposed" || (valid && cites);
     })(),
     hypotheses: hyps.length, proposals: props.length, validations: reports.map((r) => r["status"]),
     result, declared: declared ? { result: declared["result"], note: declared["note"] } : null,
@@ -120,7 +120,9 @@ export function citedEventCount(storeRoot: string, runId: string): number {
   return new Set(readStream(storeRoot, STREAMS.hypotheses).filter((e) => e.record_type === "hypothesis.recorded" && (e.payload as Row)["session_id"] === runId).flatMap((e) => (e.payload as HypothesisRecord).evidence.map((x) => x.event_id))).size;
 }
 
-export type PairResponse = "insufficient_evidence" | "proposed_rollback" | "declined" | "re_proposed_adopted" | "no_change_warranted" | "other_proposal" | "no_response";
+export type PairResponse = "rollback_proposed" | "insufficient_evidence" | "proposed_revision" | "declined" | "re_proposed_adopted" | "no_change_warranted" | "other_proposal" | "no_response";
+// The answers that end a second cycle in a declared result on its outcomes: a rollback for a person to decide, a revision, or a result that keeps the version while citing the outcomes it weighed.
+export const DECLARED_RESPONSES: ReadonlySet<PairResponse> = new Set(["rollback_proposed", "proposed_revision", "no_change_warranted", "insufficient_evidence"]);
 // How one second cycle answered its outcomes: insufficient evidence declared, a proposal other than the adopted change citing the adopted version's outcomes, the change proposed again, or declined (no proposal of it, the outcomes cited in its hypotheses).
 export function cycleResponse(storeRoot: string, runId: string, o: { observed: readonly OutcomeCase[]; outcomes: readonly OutcomeCase[]; adoptedOps: readonly unknown[] }): Row {
   const r = cycle2Result(storeRoot, runId, o) as Row & { outcome_comparison: { after: { case_id: string; direction: string; workflow_version: number | null }[]; contradicts_adopted: boolean } };
@@ -136,8 +138,10 @@ export function cycleResponse(storeRoot: string, runId: string, o: { observed: r
   const repeats = (p: WorkflowChangeProposal) => o.adoptedOps.every((a) => p.ops.some((b) => key(b) === key(a)));
   const citing = hyps.flatMap((h) => h.evidence.filter((e) => onAdopted(e.event_id)).map((e) => ({ hypothesis_id: h.hypothesis_id, event_id: e.event_id, stance: e.stance, status: h.status })));
   const propCites = props.flatMap((p) => p.evidence.event_ids.filter(onAdopted));
-  const response: PairResponse = declared?.["result"] === "insufficient_evidence" ? "insufficient_evidence"
-    : props.some((p) => !repeats(p) && p.evidence.event_ids.some(onAdopted)) ? "proposed_rollback"
+  const declaredCites = ((declared?.["evidence_event_ids"] as string[] | undefined) ?? []).filter(onAdopted);
+  const response: PairResponse = declared?.["result"] === "rollback_proposed" ? "rollback_proposed"
+    : declared?.["result"] === "insufficient_evidence" ? "insufficient_evidence"
+    : props.some((p) => !repeats(p) && p.evidence.event_ids.some(onAdopted)) ? "proposed_revision"
     : props.some(repeats) ? "re_proposed_adopted"
     : declared?.["result"] === "no_change_warranted" ? "no_change_warranted"
     : props.length ? "other_proposal"
@@ -145,9 +149,12 @@ export function cycleResponse(storeRoot: string, runId: string, o: { observed: r
     : "no_response";
   return {
     run_id: runId, commitment: r["commitment"], response, outcomes_contradict_adopted: r.outcome_comparison.contradicts_adopted,
+    // A declared result answers the outcomes: a rollback or a revision citing them, or a kept version or insufficient evidence whose own citations include them.
+    declared_result: DECLARED_RESPONSES.has(response) && (response === "rollback_proposed" || response === "proposed_revision" || declaredCites.length > 0),
+    declared_cites_outcome_events: declaredCites.length,
     read: { outcomes: (r["read"] as Row)["outcomes"], observed: (r["read"] as Row)["observed"] }, compared_outcomes: r["compared_outcomes"],
     adopted_outcome_events_cited: { by_hypotheses: citing.length, contradicting: citing.filter((c) => c.stance === "contradicts").length, by_proposals: propCites.length },
     proposals: props.map((p) => ({ proposal_id: p.proposal_id, ops: p.ops, scope: p.scope, repeats_adopted: repeats(p) })), validations: r["validations"],
-    declared: declared ? { result: declared["result"], note: declared["note"] } : null, stop: r["stop"], calls: r["calls"], cost_usd: r["cost_usd"]
+    declared: declared ? { result: declared["result"], note: declared["note"], ...(declared["version"] !== undefined ? { version: declared["version"] } : {}) } : null, stop: r["stop"], calls: r["calls"], cost_usd: r["cost_usd"]
   };
 }

@@ -587,6 +587,49 @@
         "insufficient_evidence_default": false
       },
       "hash": "cbca7dda1117924ab44ed3ee0001d000d28e9c24b9687751273899657823082b"
+    },
+    {
+      "revision": 16,
+      "at": "2026-10-30T17:06:52.283Z",
+      "reason": "F5, review 3 item 6: a second cycle given reversed evidence ended on the budget cap without a result in 2 of 3 pairs (F3b). A second cycle now keeps a reserve of four calls at the dearest call so far and then enters a declare stage offering only result tools; propose_rollback (second cycle only) ends the session with a rollback for a person to decide, citing an outcome under that version; no_change_warranted against contradicting outcomes is accepted only when it cites an event of those outcomes. First-cycle tools, prompts and gates are unchanged; the investigator is told no answer.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "eb6d3547f6da68ad6d9c4b78173a6b7fa5834e39534c6b349084106bdb73ef07",
+            "tools": "77b35ddf563df881eb5f6f32b277b98fa7dafcf5f2b4ac369a7feefd409e95d9"
+          },
+          "a3": {
+            "prompt": "5907fc0cc4dd0a10994604c1ddc0f5933e73274aab0c31fa36beb479d47edd7a",
+            "tools": "ebd093c38f470db76c9ed635053427d01e13fc2efb2c8a4257472defbd173085"
+          },
+          "a4": {
+            "prompt": "61355f2d7151e98da1ce023ded200f7d3985256b46c2a7251a0c95acde341e6a",
+            "tools": "d521daaa52592aef67c9b70682b669f3a554da08e264fc093df87c873b0ec0d4"
+          },
+          "prior": {
+            "prompt": "e54f87b377c7e43abaec928ede393bd61db2d166f7d34ee4ee8734da8bca46d9",
+            "tools": "a69f44f1678b28a5d05fe8a6b7ce1d69df7da8c6025662abb41092d1d4399167"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "adaptive_controller": "cycle",
+          "adaptive_efforts": [
+            "medium",
+            "high"
+          ],
+          "adaptive_max_calls": 80,
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 30000,
+          "history_chars": 70000,
+          "turn_result_chars": 20000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "064894b2f6699914c49dee88f8b634991493da0003139f17d8184dd0ddb6bf76"
     }
   ]
 }

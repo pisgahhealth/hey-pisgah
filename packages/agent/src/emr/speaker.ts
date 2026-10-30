@@ -79,7 +79,7 @@ export type Authority = "owner" | "other_clinician" | "unverified" | "unattribut
 export const authorityOf = (r: SpeakerRecord | null): Authority => (r ? r.speaker : "unattributed");
 
 // Kinds that only document what was said; every other kind changes the patient's care and waits for the owner's own voice when attribution is on.
-export const DOCUMENTATION_KINDS: ReadonlySet<string> = new Set(["record_observation", "record_triage_vitals", "record_clerking", "record_allergy", "record_note", "draft_consult_note", "open_consult", "draft_handover", "prepare_bill", "open_unnamed_encounter"]);
+export const DOCUMENTATION_KINDS: ReadonlySet<string> = new Set(["record_observation", "record_triage_vitals", "record_clerking", "record_allergy", "record_note", "draft_consult_note", "open_consult", "draft_handover", "draft_stay_summary", "prepare_bill", "open_unnamed_encounter"]);
 // Kinds that need the owner's own matched voice: voice orders under the hospital's verbal-order policy, and the diagnosis.
 export const ORDER_KINDS: ReadonlySet<string> = new Set(["order_test", "prescribe", "countersign", "record_diagnosis"]);
 
