@@ -1,3 +1,4 @@
+import { sherpaEmbedder, voiceprintAt, withDoorAudio, type Embedder, type SpeakerInput, type Voiceprint } from "@hey-pisgah/agent";
 import { loadProfile } from "../src/profile.js";
 import type { DoorLog } from "../src/port.js";
 import { personCaller } from "../src/journey.sandbox.js";
@@ -21,3 +22,23 @@ export async function freshArrival(profile = loadProfile(), label = "E2 Child"):
   return { patient, visit, sb, person, log };
 }
 
+
+// The local speaker model for a sandbox run; with HEY_PISGAH_VOICEPRINT=door every print also carries the line's audio for the hospital.
+export function sandboxEmbedder(): Embedder | null {
+  const local = sherpaEmbedder({ modelPath: process.env["HEY_PISGAH_SPEAKER_MODEL"] ?? "", sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] });
+  return local && voiceprintAt(process.env["HEY_PISGAH_VOICEPRINT"]) === "door" ? withDoorAudio(local) : local;
+}
+
+// What the hospital's match is sent for one print: its audio when the print carries it, else the vector.
+export const voiceOf = (p: Voiceprint): SpeakerInput => (p.segments?.every((w) => w.audio) ? { pcm16k: p.segments.map((w) => w.audio!) } : p.audio ? { pcm16k: [p.audio] } : p.vector);
+
+// With the voiceprint at the hospital, one owner's audio may not outrun the clock, so a scripted run waits until each print could have been spoken live.
+const paced = { start: 0, spoken: 0 };
+export async function paceAudio(p: Voiceprint): Promise<void> {
+  const windows = p.segments?.every((w) => w.audio) ? p.segments.map((w) => w.audio!) : p.audio ? [p.audio] : [];
+  if (!windows.length) return;
+  if (!paced.start) paced.start = Date.now();
+  paced.spoken += windows.reduce((n, w) => n + w.byteLength, 0) / 32;
+  const wait = paced.spoken - (Date.now() - paced.start);
+  if (wait > 0) await new Promise((res) => setTimeout(res, wait));
+}

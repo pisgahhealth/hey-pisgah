@@ -61,7 +61,8 @@ describe("replay defence: session and presence, never the voice", () => {
     const r = rig();
     await r.send("live-1", clip(0.3), 1_000_000, { marker: AT_SCREEN });
     expect(r.orders()).toHaveLength(1);
-    expect(r.port.matched).toHaveLength(1);
+    // One line, matched on each of its three chunks.
+    expect(new Set(r.port.matched).size).toBe(1);
     expect(r.listen.replayRefusals()).toEqual({});
   });
 
@@ -111,7 +112,7 @@ describe("replay defence: session and presence, never the voice", () => {
     expect(req.rt.views(DOC)[0]!.transcript[0]!.speaker).toMatchObject({ speaker: "unverified", reason: "not_present:no_marker" });
     const obs = rig({ presence: "observed" });
     await obs.send("nomark-2", clip(0.3), 1_000_000);
-    expect(obs.port.matched).toHaveLength(1);
+    expect(new Set(obs.port.matched).size).toBe(1);
     expect(obs.orders()).toHaveLength(1);
   });
 
@@ -131,7 +132,7 @@ describe("replay defence: session and presence, never the voice", () => {
     const take = clip(0.3);
     await r.send("live-1", take, 1_000_000, { marker: AT_SCREEN });
     await r.send("replay-1", take, 1_000_010, { marker: AT_SCREEN, burst: true });
-    expect(r.port.matched).toHaveLength(2);
+    expect(new Set(r.port.matched).size).toBe(2);
     expect(r.orders()).toHaveLength(2);
   });
 });

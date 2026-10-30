@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { decodeWav } from "@hey-pisgah/voice";
+import { decodeWav, encodeWav } from "@hey-pisgah/voice";
 
 // The local speaker model R1 chose: TitaNet-small through sherpa-onnx, 192 numbers per segment, no audio kept.
 export const SPEAKER_MODEL = "nemo_en_titanet_small" as const;
@@ -18,8 +18,69 @@ export type SpeakerRecord = { speaker: SpeakerVerdict["speaker"]; label: string 
 export const recordOf = (v: SpeakerVerdict, embed_ms: number | null, match_ms: number | null): SpeakerRecord =>
   ({ speaker: v.speaker, label: v.speaker === "other_clinician" ? v.label : null, reason: v.speaker === "unverified" ? v.reason : null, embed_ms, match_ms });
 
-export type Voiceprint = { vector: number[]; ms: number; model: typeof SPEAKER_MODEL };
+// One window of a line's audio, matched on its own: its voiceprint and, when the hospital computes the voiceprint, its 16 kHz PCM held in memory only.
+export type VoiceWindow = { vector: number[]; ms: number; audio?: Uint8Array };
+// A line's voiceprint; `segments` lists every window when the line was matched in more than one, and the line counts as the owner's only when every window is.
+export type Voiceprint = { vector: number[]; ms: number; model: typeof SPEAKER_MODEL; audio?: Uint8Array; segments?: VoiceWindow[] };
 export type Embedder = (wav: Uint8Array) => Promise<Voiceprint | null>;
+// What the hospital's match is sent: the agent's voiceprint, or every window of the line's audio when the hospital computes the voiceprint itself.
+export type SpeakerInput = readonly number[] | { readonly pcm16k: readonly Uint8Array[] };
+
+// The longest window the hospital is sent for one voiceprint; a longer stretch is split, never cut short.
+export const DOOR_AUDIO_MAX_MS = 15_000;
+// The shortest window that carries enough voice to match; a shorter piece is matched with its neighbour.
+export const WINDOW_MIN_MS = 500;
+// The longest line that is matched at all; a longer one is unverified, said so, rather than matched in part.
+export const LINE_MATCH_MAX_MS = 60_000;
+
+// The windows a line is matched on: one per heard piece, a piece under half a second joined to its neighbour, a piece over the cap split evenly, so every sample is in exactly one window.
+export function matchWindows(parts: readonly Float32Array[], rate: number, capMs = DOOR_AUDIO_MAX_MS, minMs = WINDOW_MIN_MS): Float32Array[] {
+  const min = Math.round((rate * minMs) / 1000), cap = Math.floor((rate * capMs) / 1000);
+  const merged: Float32Array[] = [];
+  for (const p of parts.filter((x) => x.length > 0)) {
+    const last = merged.at(-1);
+    if (last && (p.length < min || last.length < min)) merged[merged.length - 1] = concatSamples(last, p);
+    else merged.push(p);
+  }
+  const out = merged.flatMap((w) => {
+    if (w.length <= cap) return [w];
+    const n = Math.ceil(w.length / cap), size = Math.ceil(w.length / n);
+    return Array.from({ length: n }, (_, i) => w.subarray(i * size, Math.min(w.length, (i + 1) * size)));
+  });
+  // The hospital takes at most eight windows, so the shortest neighbouring pair that still fits the cap is joined until there are eight.
+  while (out.length > WINDOWS_MAX) {
+    let best = -1;
+    for (let i = 0; i + 1 < out.length; i++) if (out[i]!.length + out[i + 1]!.length <= cap && (best < 0 || out[i]!.length + out[i + 1]!.length < out[best]!.length + out[best + 1]!.length)) best = i;
+    if (best < 0) break;
+    out.splice(best, 2, concatSamples(out[best]!, out[best + 1]!));
+  }
+  return out;
+}
+// The most windows one match request carries.
+export const WINDOWS_MAX = 8;
+const concatSamples = (a: Float32Array, b: Float32Array): Float32Array => { const o = new Float32Array(a.length + b.length); o.set(a); o.set(b, a.length); return o; };
+
+// The line's voiceprint from every window; null when the line is too long to match or any window cannot be read, so no word goes unattributed.
+export async function printLine(embed: Embedder, windows: readonly Float32Array[], rate: number): Promise<Voiceprint | null> {
+  if (!windows.length || windows.reduce((n, w) => n + w.length, 0) > (rate * LINE_MATCH_MAX_MS) / 1000) return null;
+  const prints = await Promise.all(windows.map((w) => embed(encodeWav(w, rate)).catch(() => null)));
+  if (prints.some((p) => !p)) return null;
+  const ps = prints as Voiceprint[];
+  if (ps.length === 1) return ps[0]!;
+  return { vector: ps[0]!.vector, ms: Math.round(ps.reduce((n, p) => n + p.ms, 0) * 10) / 10, model: SPEAKER_MODEL, segments: ps.map((p) => ({ vector: p.vector, ms: p.ms, ...(p.audio ? { audio: p.audio } : {}) })) };
+}
+
+// One verdict for a line from its windows' verdicts: the owner only when every window is the owner, one colleague only when every window is that colleague, else unverified.
+export function lineVerdict(vs: readonly SpeakerVerdict[]): SpeakerVerdict {
+  const first = vs[0];
+  if (!first) return { speaker: "unverified", reason: "no_voiceprint" };
+  if (vs.every((v) => v.speaker === "owner")) return first;
+  if (first.speaker === "other_clinician" && vs.every((v) => v.speaker === "other_clinician" && v.label === first.label)) return first;
+  return { speaker: "unverified", reason: vs.some((v) => v.speaker !== "unverified") ? "mixed_speakers" : (vs.find((v) => v.speaker === "unverified") as { reason: string }).reason };
+}
+// Where the voiceprint is computed: by the agent (the default, so every kept run replays) or by the hospital from the line's audio.
+export type VoiceprintAt = "agent" | "door";
+export const voiceprintAt = (v: string | undefined): VoiceprintAt => (v === "door" ? "door" : "agent");
 
 type SherpaStream = { acceptWaveform(o: { sampleRate: number; samples: Float32Array }): void; inputFinished(): void };
 type SherpaExtractor = { dim: number; createStream(): SherpaStream; isReady(s: SherpaStream): boolean; compute(s: SherpaStream): Float32Array };
@@ -46,6 +107,37 @@ export function to16k(x: Float32Array, rate: number): Float32Array {
   }
   return out;
 }
+
+// One window's audio as the hospital takes it: 16 kHz, mono, 16-bit little-endian PCM; null under half a second or over the 15 s cap, never cut short.
+export function pcm16kOf(wav: Uint8Array): Uint8Array | null {
+  const { samples, sampleRate } = decodeWav(wav);
+  const x = to16k(samples, sampleRate);
+  if (x.length < 8000 || x.length > (DOOR_AUDIO_MAX_MS / 1000) * 16_000) return null;
+  const n = x.length;
+  const out = new Uint8Array(n * 2);
+  const v = new DataView(out.buffer);
+  for (let i = 0; i < n; i++) {
+    const s = Math.max(-1, Math.min(1, x[i] ?? 0));
+    v.setInt16(i * 2, Math.round(s < 0 ? s * 0x8000 : s * 0x7fff), true);
+  }
+  return out;
+}
+
+// Adds each window's audio to its voiceprint, so the hospital matches the audio and the agent's own vector is never sent; a recording over the cap is matched in windows.
+export function withDoorAudio(inner: Embedder): Embedder {
+  const one: Embedder = async (wav) => {
+    const print = await inner(wav);
+    const audio = print ? pcm16kOf(wav) : null;
+    return print && audio ? { ...print, audio } : null;
+  };
+  return async (wav) => {
+    const { samples, sampleRate } = decodeWav(wav);
+    return samples.length <= (sampleRate * DOOR_AUDIO_MAX_MS) / 1000 ? one(wav) : printLine(one, matchWindows([samples], sampleRate), sampleRate);
+  };
+}
+
+// A whole recording's voiceprint, in windows when it runs past the cap.
+export const printWav = (embed: Embedder, wav: Uint8Array): Promise<Voiceprint | null> => { const { samples, sampleRate } = decodeWav(wav); return printLine(embed, matchWindows([samples], sampleRate), sampleRate); };
 
 // Loads sherpa-onnx-node in this process from the given folder or the normal module path; null when it is not installed or the model is missing.
 export function sherpaEmbedder(o: { modelPath: string; sherpaDir?: string | undefined; threads?: number }): Embedder | null {
@@ -99,15 +191,17 @@ export type PresenceRule = { -readonly [K in keyof typeof PRESENCE_RULE]: number
 
 // What the strip says with each chunk about the person at the screen: page visible, microphone track live, and the age of the last trusted input event.
 export type LivenessMarker = { visible: boolean; mic_live: boolean; input_age_ms: number | null };
-// Required: a chunk without a marker is not present; observed: a missing marker leaves attribution as it was, and a marker that says absent still withholds the match.
-export type PresenceMode = "required" | "observed";
+// Required: a chunk without a marker is not present; observed: a missing marker leaves attribution as it was, and a marker that says absent still withholds the match; heartbeat: audio from a strip session with no fresh signed beat is refused (D30).
+export type PresenceMode = "required" | "observed" | "heartbeat";
+// The strip session's heartbeat presence, given by the agent service in heartbeat mode.
+export type HeartbeatOf = (owner: string, sessionId: string) => ChunkPresence;
 export type ChunkPresence = { live: true } | { live: false; reason: string } | { live: null };
-export type GuardChunk = { owner: string; session_id: string; seq: number; wav: Uint8Array; audio_ms: number; speech: boolean; arrived_at: number; captured_at?: number | undefined; marker?: LivenessMarker | null | undefined };
-export type GuardVerdict = { refused: "replayed_chunk" | "faster_than_live" | "capture_out_of_order" | "capture_in_future"; presence: null } | { refused: null; presence: ChunkPresence };
+export type GuardChunk = { owner: string; session_id: string; seq: number | string; wav: Uint8Array; audio_ms: number; speech: boolean; arrived_at: number; captured_at?: number | undefined; marker?: LivenessMarker | null | undefined };
+export type GuardVerdict = { refused: "replayed_chunk" | "faster_than_live" | "capture_out_of_order" | "capture_in_future" | "no_presence"; presence: null } | { refused: null; presence: ChunkPresence };
 
 export function presenceOf(c: Pick<GuardChunk, "marker" | "captured_at" | "audio_ms" | "arrived_at">, mode: PresenceMode, rule: PresenceRule = PRESENCE_RULE): ChunkPresence {
   const m = c.marker;
-  if (!m) return mode === "required" ? { live: false, reason: "no_marker" } : { live: null };
+  if (!m) return mode === "observed" ? { live: null } : { live: false, reason: "no_marker" };
   if (!m.visible) return { live: false, reason: "page_hidden" };
   if (!m.mic_live) return { live: false, reason: "mic_not_live" };
   if (m.input_age_ms === null || m.input_age_ms > rule.presence_window_ms) return { live: false, reason: "no_recent_input" };
@@ -115,19 +209,22 @@ export function presenceOf(c: Pick<GuardChunk, "marker" | "captured_at" | "audio
   return { live: true };
 }
 
-// Refuses chunks a live microphone could not have sent, and remembers each accepted chunk's presence for the line it becomes; hashes only, no audio.
+// Refuses audio a live microphone could not have sent, from either the chunk path or the frames path, and remembers each accepted piece's presence for the line it becomes; hashes only, no audio.
 export class ReplayGuard {
   private readonly seen = new Map<string, Map<string, string>>();
   private readonly recent = new Map<string, { at: number; ms: number }[]>();
   private readonly lastCapture = new Map<string, { at: number; ms: number }>();
   private readonly presence = new Map<string, ChunkPresence>();
+  private readonly bySession = new Map<string, ChunkPresence>();
   readonly refusals: Record<string, number> = {};
-  // With refusals off (scripted feeds and kept-run replays), presence is still judged from any marker the chunk carries.
-  constructor(private readonly mode: PresenceMode = "observed", private readonly rule: PresenceRule = PRESENCE_RULE, private readonly refuseCopies = true) {}
+  // With refusals off (scripted feeds and kept-run replays), presence is still judged from any marker the chunk carries; heartbeat mode refuses whatever the copy setting.
+  constructor(private readonly mode: PresenceMode = "observed", private readonly rule: PresenceRule = PRESENCE_RULE, private readonly refuseCopies = true, private readonly heartbeat?: HeartbeatOf) {}
 
+  // The one check both listening paths call; `wav` is the piece's speech bytes, hashed as given.
   check(c: GuardChunk): GuardVerdict {
     const refuse = (why: Exclude<GuardVerdict["refused"], null>): GuardVerdict => { this.refusals[why] = (this.refusals[why] ?? 0) + 1; return { refused: why, presence: null }; };
     const key = `${c.session_id}#${c.seq}`;
+    if (this.mode === "heartbeat" && this.beatOf(c.owner, c.session_id).live !== true) return refuse("no_presence");
     if (!this.refuseCopies) return this.judge(c, key);
     const seen = this.seen.get(c.owner) ?? new Map<string, string>();
     const hash = createHash("sha256").update(c.wav).digest("hex");
@@ -155,18 +252,30 @@ export class ReplayGuard {
     return this.judge(c, key);
   }
 
+  // A session past the owner-voice window is still heard and matched, since refusing it would stop the owner's voice from ever being matched again; only the beat itself is required.
+  private beatOf(owner: string, sessionId: string): ChunkPresence {
+    const p = this.heartbeat ? this.heartbeat(owner, sessionId) : { live: false as const, reason: "no_heartbeat" };
+    return p.live === false && p.reason === "no_recent_owner_voice" ? { live: true } : p;
+  }
+
   private judge(c: GuardChunk, key: string): GuardVerdict {
-    const p = presenceOf(c, this.mode, this.rule);
+    const p = this.mode === "heartbeat" ? this.beatOf(c.owner, c.session_id) : presenceOf(c, this.mode, this.rule);
     this.presence.set(key, p);
+    this.bySession.set(c.session_id, p);
     if (this.presence.size > 20 * this.rule.seen_per_owner) this.presence.delete(this.presence.keys().next().value!);
+    if (this.bySession.size > this.rule.seen_per_owner) this.bySession.delete(this.bySession.keys().next().value!);
     return { refused: null, presence: p };
   }
 
-  // A line is present only when every chunk in it was; one absent chunk withholds the voice match for the whole line.
-  lineOf(sessionId: string, seqs: readonly number[]): ChunkPresence {
+  // A line is present only when every piece in it was; one absent piece withholds the voice match for the whole line; a line from the frames path, whose pieces are not its line numbers, takes its session's latest; in heartbeat mode the beat must still be fresh when the line is finished.
+  lineOf(sessionId: string, seqs: readonly number[], owner?: string): ChunkPresence {
+    if (this.mode === "heartbeat") return owner ? this.beatOf(owner, sessionId) : { live: false, reason: "no_heartbeat" };
+    const absent: ChunkPresence = this.mode === "required" ? { live: false, reason: "no_marker" } : { live: null };
+    const each = seqs.map((s) => this.presence.get(`${sessionId}#${s}`));
+    if (each.every((p) => p === undefined)) return this.bySession.get(sessionId) ?? absent;
     let out: ChunkPresence = { live: null };
-    for (const s of seqs) {
-      const p = this.presence.get(`${sessionId}#${s}`) ?? (this.mode === "required" ? { live: false, reason: "no_marker" } : { live: null });
+    for (const q of each) {
+      const p = q ?? absent;
       if (p.live === false) return p;
       if (p.live) out = p;
     }

@@ -12,7 +12,7 @@ import { BATCH_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_A
 import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
-import { DOCUMENTATION_KINDS, ORDER_KINDS, recordOf, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
+import { DOCUMENTATION_KINDS, ORDER_KINDS, lineVerdict, recordOf, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
 import { EMERGENCY_KIND, EMERGENCY_LINE, RULE_ONLY_KINDS, emergencyReason, identityFrom, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
 import { screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
 import {
@@ -164,6 +164,8 @@ export type EmrRuntimeOptions = {
   log?: (line: string) => void;
   // Called when the agent moves to the patient the clinician is with: a spoken name or an arrival it opened.
   onSubject?: (owner: string, target: EmrTarget, by: "spoken" | "emergency" | "delegation", at?: string) => void;
+  // Called when a heard line matched the owner's own voice, with the listening session it came from, for the presence heartbeat.
+  onOwnerVoice?: (owner: string, sessionId: string | null) => void;
   // Called when an arrival the agent was asked to open ends refused or failed, so speech held for it can be released.
   onArrivalFailed?: (owner: string, taskId: string, reason: string) => void;
   // The A&E clinic a spoken emergency opens its arrival on.
@@ -784,7 +786,7 @@ export class EmrRuntime {
       const p = this.o.secondEar(s.clip, { run_id: t0.run_id, task_id: t0.task_id, line_id: lineId }).then((reading) => ({ reading, error: null }), (e: unknown) => ({ reading: null, error: e instanceof ModelError ? e.code : "ear_failed" }));
       this.doseEars.set(lineId, this.track(p));
     }
-    this.matchVoice(s.owner, lineId, s.source ?? "text", s.voiceprint, prov, s.unverified_reason);
+    this.matchVoice(s.owner, lineId, s.source ?? "text", s.voiceprint, prov, s.unverified_reason, s.audio?.session_id);
     // A spoken pause or return is handled by rule; while called away nothing heard is decided, so no model is called.
     if (SPOKEN_PAUSE.test(text) && !CLOSED_TASK.has(live.task.state) && live.task.state !== "paused") { this.pauseSpoken(live, lineId, ctx); this.afterLine(live, lineId, true); return { task_id: live.task.task_id, line_id: lineId }; }
     if (live.task.state === "paused" && live.task.reason === "called_away") {
@@ -823,11 +825,22 @@ export class EmrRuntime {
   }
 
   // The hospital matches the segment's voiceprint while the gate reads the words, so attribution adds no wait of its own.
-  private matchVoice(owner: string, lineId: string, source: "text" | "audio", vp: Voiceprint | null | undefined, prov: Provenance, unverifiedReason?: string): void {
+  private matchVoice(owner: string, lineId: string, source: "text" | "audio", vp: Voiceprint | null | undefined, prov: Provenance, unverifiedReason?: string, sessionId?: string): void {
     if (vp && this.o.port.speaker) {
       const t0 = Date.now();
       const fail = (reason: string) => ({ v: { speaker: "unverified", reason } as SpeakerVerdict, embed_ms: vp.ms, match_ms: Date.now() - t0 });
-      this.speakers.set(lineId, this.o.port.speaker(owner, vp.vector, prov).then((v) => ({ v, embed_ms: vp.ms, match_ms: Date.now() - t0 })).catch(() => fail("match_failed")));
+      const speaker = this.o.port.speaker.bind(this.o.port);
+      const windows = vp.segments && vp.segments.length > 1 ? vp.segments : [{ vector: vp.vector, ms: vp.ms, ...(vp.audio ? { audio: vp.audio } : {}) }];
+      // Audio goes to the hospital in one request with every window; without audio each window's vector is matched on its own; the line is the owner's only when every window is.
+      const audio = windows.every((w) => w.audio) ? windows.map((w) => w.audio!) : null;
+      const verdict = audio ? speaker(owner, { pcm16k: audio }, prov) : Promise.all(windows.map((w) => speaker(owner, w.vector, prov))).then(lineVerdict);
+      // The audio is let go once it is sent.
+      delete vp.audio;
+      for (const w of vp.segments ?? []) delete w.audio;
+      this.speakers.set(lineId, verdict.then((v) => {
+        if (v.speaker === "owner") this.o.onOwnerVoice?.(owner, sessionId ?? null);
+        return { v, embed_ms: vp.ms, match_ms: Date.now() - t0 };
+      }).catch(() => fail("match_failed")));
     } else if (source === "audio" && this.o.port.speaker) {
       this.speakers.set(lineId, Promise.resolve({ v: { speaker: "unverified", reason: unverifiedReason ?? "no_voiceprint" } as SpeakerVerdict, embed_ms: null, match_ms: null }));
     }

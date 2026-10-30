@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { languageBiasFrom, nodeSocket, recordingSocket, replaySocket } from "@hey-pisgah/voice";
-import { KEPT_LEVERS, asrSwitch, earSwitch, keepingContext, leversFrom, localDirs, recordingTranscriber, sherpaEmbedder, startEmrServe, voiceTranscriber } from "@hey-pisgah/agent";
+import { KEPT_LEVERS, asrSwitch, earSwitch, keepingContext, leversFrom, localDirs, recordingTranscriber, sherpaEmbedder, startEmrServe, voiceTranscriber, voiceprintAt, withDoorAudio } from "@hey-pisgah/agent";
 import { loadProfile, staffHintsOf } from "./profile.js";
 import { PisgahPort } from "./port.js";
 import { adoptedForEmr } from "./versions.js";
@@ -35,8 +35,11 @@ async function main(): Promise<void> {
   const rec = process.env["HEY_PISGAH_RECORDINGS"];
   // The local speaker model, loaded in this process when HEY_PISGAH_SPEAKER_MODEL names its file; without it attribution stays off.
   const modelPath = process.env["HEY_PISGAH_SPEAKER_MODEL"];
-  const embed = modelPath ? sherpaEmbedder({ modelPath, sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] }) : null;
-  if (modelPath && !embed) process.stderr.write("speaker model did not load; attribution is off\n");
+  const local = modelPath ? sherpaEmbedder({ modelPath, sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] }) : null;
+  if (modelPath && !local) process.stderr.write("speaker model did not load; attribution is off\n");
+  // HEY_PISGAH_VOICEPRINT=door sends the hospital each line's audio so it computes the voiceprint itself; off by default, so kept runs replay.
+  const at = voiceprintAt(process.env["HEY_PISGAH_VOICEPRINT"]);
+  const embed = local && at === "door" ? withDoorAudio(local) : local;
   const asr = asrSwitch(process.env["HEY_PISGAH_ASR"]);
   // With HEY_PISGAH_VERSION_LOG naming a person's version log and a profile versions block, the adopted version's offers run on every encounter it applies to.
   const versionLog = process.env["HEY_PISGAH_VERSION_LOG"];
@@ -57,15 +60,15 @@ async function main(): Promise<void> {
     // Staff names go in the hints: with names in them Voice Transcribe heard 26 of 26 names said, against 4 of 26 with the vitals words alone (G9).
     staffHints: staffHintsOf(profile), local: { ...localDirs(process.env["HEY_PISGAH_ASR_DIR"] ?? join(process.cwd(), ".hey-pisgah", "asr")), sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] },
     ...(embed ? { embed } : {}),
-    // The replay defence is on for the live serve; presence becomes required once the strip sends its liveness marker.
-    listen: { replay: process.env["HEY_PISGAH_REPLAY_GUARD"] === "off" ? "off" : "refuse", presence: process.env["HEY_PISGAH_PRESENCE"] === "required" ? "required" : "observed" },
+    // The replay defence is on for the live serve; HEY_PISGAH_PRESENCE=heartbeat refuses audio from a strip session without a fresh signed beat (D30).
+    listen: { replay: process.env["HEY_PISGAH_REPLAY_GUARD"] === "off" ? "off" : "refuse", presence: process.env["HEY_PISGAH_PRESENCE"] === "required" ? "required" : process.env["HEY_PISGAH_PRESENCE"] === "heartbeat" ? "heartbeat" : "observed" },
     listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4100),
     // The wake-phrase spotter's files for the strip, and the A&E clinic an emergency opened by voice lands on.
     ...(process.env["HEY_PISGAH_KWS_DIR"] ? { kwsDir: process.env["HEY_PISGAH_KWS_DIR"] } : {}),
     ...(process.env["HEY_PISGAH_EMERGENCY_CLINIC"] ? { emergencyClinicId: process.env["HEY_PISGAH_EMERGENCY_CLINIC"] } : {}), runtime: { holdMs: Number(process.env["HEY_PISGAH_HOLD_MS"] ?? 4000), speed: leversFrom(process.env["HEY_PISGAH_SPEED"] ?? KEPT_LEVERS), keepHeard: process.env["HEY_PISGAH_KEEP_HEARD"] === "1", ...(profile.owners.length ? { watchMs: Number(process.env["HEY_PISGAH_WATCH_MS"] ?? 5000) } : {}), ...(adopted ? { versions: adopted.wiring } : {}) },
     log: (l) => process.stderr.write(`${l}\n`)
   });
-  process.stdout.write(`emr serve on ${s.urls.join(" ")} (mode ${s.client.mode}, ${Object.keys(bearers).length} owner${Object.keys(bearers).length > 1 ? "s" : ""}, speaker model ${embed ? "on" : "off"}, ears ${earSwitch(process.env["HEY_PISGAH_EAR"])}/${asr}${adopted ? `, workflow version ${adopted.def.version} adopted` : ""})\n`);
+  process.stdout.write(`emr serve on ${s.urls.join(" ")} (mode ${s.client.mode}, ${Object.keys(bearers).length} owner${Object.keys(bearers).length > 1 ? "s" : ""}, speaker model ${embed ? `on, voiceprint at ${at}` : "off"}, ears ${earSwitch(process.env["HEY_PISGAH_EAR"])}/${asr}${adopted ? `, workflow version ${adopted.def.version} adopted` : ""})\n`);
   const stop = () => { void s.close().then(() => process.exit(0)); };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
