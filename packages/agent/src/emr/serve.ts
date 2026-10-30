@@ -521,6 +521,8 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       freshSession(b.owner, b.session_id, page, at);
       const target = subjectFor(b.owner, page, at);
       if (!target) return [409, { fallback: "chunks", reason: "no_patient", stream: b.stream, part: b.part }];
+      // The stream key answers to the strip's session, so a per-session check made by stream key finds the strip's own record.
+      clientOf.set(key, b.session_id);
       const nf: Frames = { owner: b.owner, client: b.session_id, key, k: 0, target, sid: "", sids: [], next: 0, rate: b.rate, bytes: 0, idle: null, busy: Promise.resolve(), opened_at: at };
       nf.sid = frameSid(nf, 0);
       nf.sids.push(nf.sid);
