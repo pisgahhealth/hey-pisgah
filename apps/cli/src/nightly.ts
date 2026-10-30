@@ -76,6 +76,10 @@ if (process.argv[1]?.endsWith("nightly.ts")) {
     results.push({ memo, result: await publisher.publish(memo) });
   }
   client.close();
+  // Cost and calls from the ledger, so a repaired call is counted with the attempt it replaced.
+  const ledger = listStreams(need("store"), "ledger").flatMap((sid) => readStream(need("store"), sid)).filter((e) => e.record_type === "model.call" && (e.payload as Row)["run_id"] === runId).map((e) => e.payload as { cost_usd: number });
+  inv.calls = ledger.length || inv.calls;
+  inv.cost_usd = ledger.length ? Math.round(ledger.reduce((n, r) => n + r.cost_usd, 0) * 1e6) / 1e6 : inv.cost_usd;
   const closed = await negatives(sources, results.find((x) => x.memo.unfinished.length && x.memo.facts.length)!.memo);
   const priv = { sources_hash: nightly.sourcesHash(sources), facts, investigations: inv.investigations, deny_hits: hits, results, held_deliveries: transport.sent, calls: inv.calls, cost_usd: inv.cost_usd, ms: Date.now() - t0 };
   mkdirSync(dirname(need("out-private")), { recursive: true });

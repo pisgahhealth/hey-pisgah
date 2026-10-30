@@ -99,7 +99,7 @@
  },
  "tests": "packages/intelligence/test/nightly.test.ts",
  "calls": 9,
- "cost_usd": 0.03561,
+ "cost_usd": 0.053,
  "effort": "medium",
  "purposes": [
   "draft_text",
@@ -133,5 +133,6 @@
    "kind": "memo",
    "preview": "Night memo: 4 recorded facts, 0 unfinished items for you."
   }
- ]
+ ],
+ "cost_note": "from the ledger of the live run, repairs included"
 }
