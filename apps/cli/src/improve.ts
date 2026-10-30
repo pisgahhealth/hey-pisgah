@@ -1,0 +1,148 @@
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { HospitalPort, VersionDesk, loadCases, project, readVersion, caseFacts, type Counterparts } from "@hey-pisgah/agent";
+import { findCase } from "@hey-pisgah/cases";
+import { definitionHash, type WorkflowDefinition as WD } from "@hey-pisgah/contracts";
+import { loadManifests, runAcceptance, runCase } from "@hey-pisgah/evaluator";
+import { loadV1, worldRules } from "@hey-pisgah/hospital";
+import { readStream } from "@hey-pisgah/store";
+import { Registry, type Facts } from "@hey-pisgah/workflow";
+
+type Row = Record<string, unknown>;
+const argv = process.argv.slice(2);
+const flag = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
+const need = (k: string) => { const v = flag(k); if (!v) throw new Error(`--${k} is required`); return v; };
+const lines = (f: string) => readFileSync(f, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as { record_type: string; payload: Row; seq: number });
+
+// child: the parent proposal with the scope the adopting person set, linked to its parent and re-validated by the evaluator before adoption.
+export function narrowedChild(parent: Row, wards: string[], note: string): Row {
+  const { proposal_id: pid, hash: _h, status: _s, ...rest } = parent;
+  const why = ` Scope set at adoption: ${note}`;
+  const rationale = `${String(rest["rationale"] ?? "").slice(0, 600 - why.length)}${why}`;
+  return { ...rest, parent_proposal_id: pid, scope: { wards, condition: null }, rationale };
+}
+
+// The first start of a step in a run's events, in case minutes.
+const firstAt = (events: readonly Row[], kind: string, step: string): number | null => {
+  const e = events.find((x) => x["kind"] === kind && (x["payload"] as Row | undefined)?.["step_id"] === step);
+  return e ? Number(e["occurred_at"]) : null;
+};
+
+// What the agent did in one live task under the version its case resolved to, read from the task stream and the case's own port.
+function liveTask(store: string, desk: VersionDesk, taskId: string): Row {
+  const recs = readStream(store, `tasks/${taskId}`);
+  const p = project(recs);
+  const world = loadCases().get(p.case_id)!;
+  const port = HospitalPort.open(store, world, desk.registry, worldRules());
+  try {
+    const run = port.run();
+    const file = findCase(p.case_id)!.file;
+    const man = loadManifests("demo").get(p.case_id)!;
+    const ac = runAcceptance({ run, manifest: man, requirement_version: String(file.initial_state.requirement_version), definition: port.caseDef, schedule: world.schedule, version: { status: "adopted", version_hash: definitionHash(port.caseDef), in_scope: true, fallback_hash: null, adopted_at_min: 0 } });
+    const acts = p.order.map((id) => p.actions.get(id)!);
+    const intentAt = (id: string) => recs.find((e) => e.record_type === "action.intent" && (e.payload as Row)["action_id"] === id)?.recorded_at ?? null;
+    const prepared = acts.filter((a) => a.action_kind === "prepare_document").map((a) => ({ document_id: a.args["document_id"], stage: a.args["stage"], at: intentAt(a.action_id), state: a.state, proved: a.state === "completed" }));
+    const ledger = readStream(store, `ledger/${p.run_id}`).filter((e) => e.record_type === "model.call").map((e) => e.payload as { cost_usd: number; effort: string; model: string; latency_ms: number });
+    const ev = run.events as unknown as Row[];
+    return {
+      task_id: taskId, case_id: p.case_id, ward_id: world.schedule.facts["ward_id"], workflow_version: p.workflow_version, definition_hash: port.def.definition_hash,
+      state: p.state, reason: p.reason, actions: acts.length, actions_proved: acts.filter((a) => a.state === "completed").length,
+      // A refused action is a guard that held, counted beside the others; an action still open or failed has no proof.
+      actions_refused: acts.filter((a) => a.state === "refused").length, actions_open: acts.filter((a) => a.state !== "completed" && a.state !== "refused").length,
+      completed_with_proof: acts.filter((a) => a.state === "completed" && !!a.proof).length,
+      acceptance: { pass: ac.checks.filter((c) => c.pass).length, of: ac.checks.length, failed: ac.checks.filter((c) => !c.pass).map((c) => c.ac) },
+      round_entry_at: firstAt(ev, "step.completed", "st01"), signoff_at: firstAt(ev, "step.completed", "st05"),
+      summary_draft_at: prepared.find((x) => x.document_id === "discharge_summary" && x.stage === "draft")?.at ?? null, prepared,
+      post_signoff_wait_min: run.metrics.post_signoff_wait_min, rework_events: run.metrics.rework_events, rework_min: run.metrics.rework_min,
+      effect_set_hash: p.closed?.["effect_set_hash"] ?? null, check_failed: recs.filter((e) => e.record_type === "version.check_failed").length,
+      calls: ledger.length, cost_usd: Math.round(ledger.reduce((n, l) => n + l.cost_usd, 0) * 1e6) / 1e6, efforts: [...new Set(ledger.map((l) => l.effort))], models: [...new Set(ledger.map((l) => l.model))]
+    };
+  } finally { port.close(); }
+}
+
+// The same case under each version with the definition executor and no model, so the version alone explains the difference.
+function counterfactual(caseId: string, defs: Record<string, WD>): Row {
+  const s = loadCases().get(caseId)!.schedule;
+  return Object.fromEntries(Object.entries(defs).map(([k, d]) => {
+    const r = runCase(d, s);
+    if (r.outcome !== "ok") return [k, { outcome: r.outcome }];
+    const ev = r.events as unknown as Row[];
+    return [k, { summary_draft_start: firstAt(ev, "step.started", "st06"), signoff: firstAt(ev, "step.completed", "st05"), post_signoff_wait_min: r.metrics.post_signoff_wait_min, rework_events: r.metrics.rework_events, rework_min: r.metrics.rework_min }];
+  }));
+}
+
+if (argv[0] === "child") {
+  const parentId = need("parent");
+  const sub = lines(need("parent-file")).find((e) => e.record_type === "proposal.submitted" && e.payload["proposal_id"] === parentId);
+  if (!sub) throw new Error(`no submitted proposal ${parentId}`);
+  writeFileSync(need("out"), `${JSON.stringify(narrowedChild(sub.payload, need("wards").split(","), need("note")), null, 1)}\n`);
+} else if (argv[0] === "outcomes") {
+  // The verified engine events of the two live runs, in the outcome shape the second cycle reads.
+  const store = need("store");
+  const desk = new VersionDesk(store, Registry.load([loadV1()]));
+  try {
+    const cases = need("tasks").split(",").map((taskId) => {
+      const p = project(readStream(store, `tasks/${taskId}`));
+      const world = loadCases().get(p.case_id)!;
+      const port = HospitalPort.open(store, world, desk.registry, worldRules());
+      try {
+        const run = port.run();
+        const f = world.schedule.facts;
+        return { case_id: p.case_id, ward_id: String(f["ward_id"]), payer_type: String(f["payer_type"]), requirement_version: world.requirements.at(-1)!.set.requirement_version, facts: f, events: run.events };
+      } finally { port.close(); }
+    });
+    writeFileSync(need("out"), `${JSON.stringify({ source: "e6 live runs under the adopted Ward A version and its withheld Ward B case", cases }, null, 1)}\n`);
+  } finally { desk.close(); }
+} else if (argv[0] === "report") {
+  const store = need("store");
+  const desk = new VersionDesk(store, Registry.load([loadV1()]));
+  try {
+    const log = desk.records();
+    const created = log.find((r) => r.record_type === "version.created")!.payload as Row;
+    const adopted = log.find((r) => r.record_type === "version.adopted")!.payload as Row;
+    const v = Number(adopted["version"]);
+    const def = desk.registry.get(v);
+    const v1 = desk.registry.get(1);
+    const app = liveTask(store, desk, need("applicable"));
+    const wh = liveTask(store, desk, need("withheld"));
+    const facts = (id: string) => loadCases().get(id)!.schedule.facts as Facts;
+    const cf = { [String(app["case_id"])]: counterfactual(String(app["case_id"]), { v1, adopted: def }), [String(wh["case_id"])]: counterfactual(String(wh["case_id"]), { v1, adopted: def }) };
+    const appCf = cf[String(app["case_id"])] as Record<string, Row>;
+    const approver = adopted["approver"] as Row;
+    // The EMR reading of the adopted version per M4.c's counterparts; only statuses and step ids are published, never the EMR's own fact names.
+    const prof = flag("profile");
+    const emr = prof && existsSync(prof) ? (() => {
+      const spec = (JSON.parse(readFileSync(prof, "utf8")) as { versions: { ward_id: string; requirement_version: string; facts: Record<string, string> } & Counterparts }).versions;
+      const r = readVersion(def, v1, spec, caseFacts(spec));
+      return { ward_id: spec.ward_id, resolved_version: desk.registry.current(caseFacts(spec)).version, offers: r.offers.length, lines: r.lines, changed: r.readings.filter((x) => x.changed).map((x) => ({ step_id: x.step_id, document_id: x.document_id, stage: x.stage, status: x.status, reason: x.status === "offer" ? "offer" : x.reason })) };
+    })() : null;
+    const out = {
+      measured_at: new Date().toISOString(), measured: true, source: "simulator_demo_cases", set: "demo",
+      proposal: { adopted: (created["meta"] as Row)["proposal_id"], parent: flag("parent") ?? null, ops: created["ops"], scope: created["scope"], trade_offs: flag("trade-offs") ? JSON.parse(flag("trade-offs")!) : null },
+      version: v, definition_hash: def.definition_hash, fallback_version: def.fallback_version,
+      adopted_by_person: approver["role"] === "ward_manager", approver: approver["display_name"], approver_id: approver["staff_id"],
+      human_approval: false, human_approval_note: "Adopted by the disclosed synthetic ward manager on the coordinator's instruction; green needs Samuel's own approval at review.",
+      fresh_applicable: {
+        ...app, resolved_version: desk.registry.current(facts(String(app["case_id"]))).version,
+        executed_differently: app["workflow_version"] === v && app["summary_draft_at"] !== null && app["signoff_at"] !== null && Number(app["summary_draft_at"]) < Number(app["signoff_at"]),
+        v1_counterfactual: appCf["v1"], adopted_counterfactual: appCf["adopted"]
+      },
+      withheld: {
+        ...wh, resolved_version: desk.registry.current(facts(String(wh["case_id"]))).version,
+        version_withheld: wh["workflow_version"] !== v && desk.registry.current(facts(String(wh["case_id"]))).version !== v,
+        why: `the adopted scope is wards ${JSON.stringify((created["scope"] as Row)["wards"])} and this case is in ward ${String(wh["ward_id"])}`,
+        drafted_before_signoff: wh["summary_draft_at"] !== null && wh["signoff_at"] !== null && Number(wh["summary_draft_at"]) < Number(wh["signoff_at"]),
+        counterfactual: cf[String(wh["case_id"])]
+      },
+      emr_offers: emr,
+      applicable_case: app["case_id"], withheld_case: wh["case_id"],
+      draft_earlier_by_min: app["summary_draft_at"] !== null && appCf["v1"]?.["summary_draft_start"] != null ? Number(appCf["v1"]!["summary_draft_start"]) - Number(app["summary_draft_at"]) : null,
+      wait_v1_min: appCf["v1"]?.["post_signoff_wait_min"] ?? null, wait_adopted_min: app["post_signoff_wait_min"], rework_added: app["rework_events"],
+      cost_usd: Math.round((Number(app["cost_usd"]) + Number(wh["cost_usd"])) * 1e6) / 1e6
+    };
+    writeFileSync(need("out"), `${JSON.stringify(out, null, 1)}\n`);
+    console.log(JSON.stringify({ applicable: out.fresh_applicable.executed_differently, withheld: out.withheld.version_withheld, cost: out.cost_usd }));
+  } finally { desk.close(); }
+} else {
+  console.log("improve child --parent-file f --parent id --wards A --note text --out f | improve report --store dir --applicable task --withheld task [--profile f] --out f");
+  process.exit(2);
+}
