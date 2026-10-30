@@ -1,14 +1,16 @@
 import { canonical, sha256 } from "@hey-pisgah/contracts";
 import {
   EMERGENCY_KIND, EmrId, EmrPortError, OBSERVATION_KIND, ObservationArgs, READ_ONLY_KINDS,
-  type EmrCommit, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type EmrWriteKind, type InboxPage, type Provenance,
-  type SayableNames, type WatchOffer, type WatchRead, type WorkArgs
+  type DelegationRead, type DelegationTeam, type EmrCommit, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type EmrWriteKind, type InboxPage, type Orderables, type Provenance,
+  type ReadBack, type SayableNames, type SpeakerVerdict, type WatchOffer, type WatchRead, type WorkArgs
 } from "@hey-pisgah/agent";
 import { fillPath, fillTemplate, pathPattern, pick, type DoorProfile } from "./profile.js";
 
 const EVIDENCE = /^[A-Za-z0-9_.:#/-]{1,200}$/;
 const QUERY_VALUE = /^[A-Za-z0-9_.:|-]{1,80}$/;
 const IDEM = /^[A-Za-z0-9_.:-]{1,255}$/;
+// A voice authority header is the matched line's evidence and the hospital's token for it.
+const VOICE = /^transcript:[A-Za-z0-9_.:#/-]{1,180}~v1\.\d{13}\.[A-Za-z0-9_-]{43}$/;
 
 export type DoorLog = {
   at: string; method: string; path: string; status: number | null; ms: number; replayed: boolean;
@@ -48,16 +50,24 @@ export class PisgahPort implements EmrPort {
   // Ids the door gave back, so a patient's later words reach the admission and arrival the agent saw.
   private readonly learned = { admission_by_patient: new Map<string, string>(), visit_by_patient: new Map<string, string>(), patient_by_admission: new Map<string, string>(), label: new Map<string, string>() };
 
+  // Present only when the profile names the hospital's speaker match and read-back, so an older profile keeps attribution off.
+  readonly speaker?: (owner: string, voiceprint: readonly number[], prov: Provenance) => Promise<SpeakerVerdict>;
+  readonly readBack?: (owner: string, visitId: string, prov: Provenance) => Promise<ReadBack>;
+
   constructor(readonly profile: DoorProfile, private readonly o: PisgahPortOptions) {
     const ops = profile.ops;
+    if (ops.speaker) this.speaker = (owner, voiceprint, prov) => this.matchSpeaker(owner, voiceprint, prov);
+    if (ops.read_back) this.readBack = (owner, visitId, prov) => this.readBackFor(owner, visitId, prov);
     const reads = [
       ...(ops.patient_context ? [ops.patient_context.path] : []), ...profile.owners.flatMap((o) => (o.context ? [o.context.path] : [])), ...Object.values(profile.watches).map((w) => w.path),
       ...(profile.inbox ? [profile.inbox.path, ...(profile.inbox.detail ? [profile.inbox.detail.path] : [])] : []),
+      ...(profile.delegations ? [profile.delegations.list.path, profile.delegations.one.path] : []),
       ...Object.values(profile.work).flatMap((w) => ("reads" in w ? Object.values(w.reads).map((r) => r.path) : [...(w.proof ? [w.proof.path] : []), ...(w.before ?? []).map((b) => b.path)]))
     ];
     const writes = Object.values(profile.work).flatMap((w) => ("method" in w ? [w.path] : []));
     this.allow = [
       ops.read_admission, ops.write_observation, ...(ops.census ? [ops.census] : []),
+      ...(ops.speaker ? [{ method: "POST", path: ops.speaker.path }] : []), ...(ops.read_back ? [{ method: "GET", path: ops.read_back.path }] : []),
       ...reads.map((path) => ({ method: "GET", path })), ...writes.map((path) => ({ method: "POST", path }))
     ].map((x) => ({ method: x.method, re: pathPattern(x.path) }));
     for (const a of this.allow) for (const d of [...profile.deny, ...profile.deny_exact]) if (a.re.test(d)) throw new Error("the profile allows a denied path");
@@ -74,13 +84,74 @@ export class PisgahPort implements EmrPort {
   screenPage(owner: string, kind: EmrWriteKind): string | undefined { return this.profile.owners.find((x) => x.id === owner)?.screens[kind]; }
   pageHref(page: string): string | undefined { return (this.profile.pages as Record<string, string>)[page]; }
   names(): SayableNames {
+    const o = this.profile.orders;
     return {
       page_targets: Object.fromEntries(Object.entries(this.profile.page_targets).map(([k, v]) => [k, v.words])),
       clinics: Object.fromEntries(Object.entries(this.profile.clinics).map(([k, v]) => [k, v.words])),
-      wards: Object.fromEntries(Object.entries(this.profile.wards).map(([k, v]) => [k, v.words]))
+      wards: Object.fromEntries(Object.entries(this.profile.wards).map(([k, v]) => [k, v.words])),
+      ...(o ? { tests: Object.fromEntries(Object.entries(o.tests).map(([k, v]) => [k, v.words])), drugs: Object.fromEntries(Object.entries(o.drugs).map(([k, v]) => [k, v.words])) } : {})
     };
   }
   resultFacts(owner: string): readonly string[] { return this.profile.result_facts[owner] ?? []; }
+  orderables(): Orderables {
+    const o = this.profile.orders;
+    return { tests: Object.fromEntries(Object.entries(o?.tests ?? {}).map(([k, v]) => [k, v.words])), drugs: Object.fromEntries(Object.entries(o?.drugs ?? {}).map(([k, v]) => [k, { words: v.words, controlled: v.controlled }])) };
+  }
+
+  // The hospital matches the voiceprint against its enrolled voices and answers only the verdict; a failure reads as unverified, never as the owner.
+  private async matchSpeaker(owner: string, voiceprint: readonly number[], prov: Provenance): Promise<SpeakerVerdict> {
+    const op = this.profile.ops.speaker!;
+    const r = await this.request("POST", op.path, prov, { body: { embedding: voiceprint, model: "nemo_en_titanet_small" } });
+    if (r.kind !== "response" || r.status !== 200) return { speaker: "unverified", reason: r.kind === "response" ? `door_${r.status}` : r.reason };
+    const j = r.json as Record<string, unknown> | null;
+    const sp = j?.["speaker"];
+    if (sp === "owner" && typeof j?.["token"] === "string" && /^v1\.\d{13}\.[A-Za-z0-9_-]{43}$/.test(j["token"])) return { speaker: "owner", token: j["token"] };
+    if (sp === "other_clinician") { const c = (j?.["clinician"] ?? {}) as Record<string, unknown>; return { speaker: "other_clinician", label: String(c["label"] ?? "Another clinician").slice(0, 60), role: String(c["role"] ?? "") }; }
+    return { speaker: "unverified", reason: typeof j?.["reason"] === "string" ? String(j["reason"]).slice(0, 40) : "no_match" };
+  }
+
+  private async readBackFor(owner: string, visitId: string, prov: Provenance): Promise<ReadBack> {
+    const j = (await this.read(this.profile.ops.read_back!, { visit_id: visitId }, { ...prov, owner })) as Record<string, unknown> | null;
+    const list = (v: unknown) => (Array.isArray(v) ? v : []) as Record<string, unknown>[];
+    return {
+      items: list(j?.["items"]).map((i) => ({ stateId: String(i["stateId"]), label: String(i["label"] ?? "Order").slice(0, 120), kind: String(i["kind"] ?? ""), controlled: i["controlled"] === true, sentAt: typeof i["sentAt"] === "string" ? i["sentAt"] : null })).filter((i) => EmrId.safeParse(i.stateId).success),
+      itemsDigest: typeof j?.["itemsDigest"] === "string" && /^[0-9a-f]{64}$/.test(j["itemsDigest"]) ? j["itemsDigest"] : null,
+      readBackAt: typeof j?.["readBackAt"] === "string" ? j["readBackAt"] : this.now().toISOString(),
+      seal: typeof j?.["readBackSeal"] === "string" && /^[A-Za-z0-9_-]{43}$/.test(j["readBackSeal"]) ? j["readBackSeal"] : null,
+      awaitingSecond: list(j?.["awaitingSecond"]).map((i) => ({ stateId: String(i["stateId"]), label: String(i["label"] ?? "Order").slice(0, 120) })),
+      changed: list(j?.["changed"]).map((i) => ({ stateId: String(i["stateId"]), label: String(i["label"] ?? "Order").slice(0, 120) }))
+    };
+  }
+
+  delegationSide(owner: string): "none" | "assignee" | "delegator" | "both" {
+    return this.profile.delegations ? this.profile.owners.find((x) => x.id === owner)?.delegation ?? "none" : "none";
+  }
+  // Only owners this serve holds a bearer for are polled, so an owner left out of a run is never a refused read.
+  delegationOwners(): readonly string[] { return this.profile.owners.filter((x) => this.delegationSide(x.id) !== "none" && this.o.bearers[x.id]).map((x) => x.id); }
+  // The teams are the hospital's, the same for every owner who may hand work on.
+  delegationTeams(owner: string): Record<string, DelegationTeam> {
+    const side = this.delegationSide(owner);
+    if (side !== "delegator" && side !== "both") return {};
+    return Object.fromEntries(Object.entries(this.profile.delegations?.teams ?? {}).map(([k, t]) => [k, { words: t.words, task_kind: t.task_kind, title: t.title, label: t.label, ...(t.escalate_after_minutes !== undefined ? { escalate_after_minutes: t.escalate_after_minutes } : {}) }]));
+  }
+  delegationHandoffs(owner: string): Record<string, { team: string; subject_table: string }> {
+    const side = this.delegationSide(owner);
+    return side === "delegator" || side === "both" ? this.profile.delegations?.handoffs ?? {} : {};
+  }
+  // The open tasks handed to the owner, or handed on by them, as the door lists them.
+  async delegations(owner: string, as: "assignee" | "delegator", prov: Provenance): Promise<DelegationRead[]> {
+    const spec = this.profile.delegations;
+    if (!spec || this.delegationSide(owner) === "none" || !this.o.bearers[owner]) return [];
+    const json = await this.read(spec.list, { as }, prov);
+    const list = pick(json, spec.list.list_path);
+    return (Array.isArray(list) ? list : []).map(delegationOf).filter((d): d is DelegationRead => d !== null);
+  }
+  // One task with what the record says about it, read fresh.
+  async delegation(owner: string, id: string, prov: Provenance): Promise<DelegationRead | null> {
+    const spec = this.profile.delegations;
+    if (!spec || this.delegationSide(owner) === "none" || !EmrId.safeParse(id).success) return null;
+    return delegationOf(await this.read(spec.one, { delegation_id: id }, prov));
+  }
 
   refusedCount(): number { return this.refusals.length; }
   private now(): Date { return this.o.now?.() ?? new Date(); }
@@ -102,15 +173,17 @@ export class PisgahPort implements EmrPort {
     const bearer = this.o.bearers[prov.owner];
     if (!bearer) return this.refuse(method, clean, "no_bearer_for_owner");
     if (!EVIDENCE.test(prov.evidence) || Number.isNaN(Date.parse(prov.spoken_at)) || (init.idempotencyKey !== undefined && !IDEM.test(init.idempotencyKey))) return this.refuse(method, clean, "bad_header");
+    if ([prov.voice?.authorisation, prov.voice?.confirmation].some((v) => v !== undefined && !VOICE.test(v))) return this.refuse(method, clean, "bad_header");
     const h = this.profile.headers;
     const shown: Record<string, string> = {
       [h.on_behalf_of]: prov.owner, [h.origin]: this.profile.origin_value, [h.evidence]: prov.evidence, [h.spoken_at]: prov.spoken_at,
+      ...(h.authorisation && prov.voice?.authorisation ? { [h.authorisation]: prov.voice.authorisation } : {}), ...(h.confirmation && prov.voice?.confirmation ? { [h.confirmation]: prov.voice.confirmation } : {}),
       ...(init.idempotencyKey ? { [h.idempotency]: init.idempotencyKey } : {}), ...(init.body !== undefined ? { "content-type": "application/json" } : {}), accept: "application/json"
     };
     const t0 = performance.now();
     const at = this.now().toISOString();
     const log = (status: number | null, replayed: boolean, outcome: DoorLog["outcome"], reason?: string) =>
-      this.o.onRequest?.({ at, method, path: clean, status, ms: Math.round(performance.now() - t0), replayed, headers: { authorization: "Bearer <redacted>", ...shown }, body: init.body ?? null, outcome, ...(reason ? { reason } : {}) });
+      this.o.onRequest?.({ at, method, path: clean, status, ms: Math.round(performance.now() - t0), replayed, headers: { authorization: "Bearer <redacted>", ...redactVoice(shown, h) }, body: clean === this.profile.ops.speaker?.path ? { embedding: "<voiceprint withheld>" } : init.body ?? null, outcome, ...(reason ? { reason } : {}) });
     let res: Response;
     try {
       res = await (this.o.fetch ?? fetch)(`${this.profile.base_url.replace(/\/+$/, "")}/${clean}${qs}`, {
@@ -282,6 +355,18 @@ export class PisgahPort implements EmrPort {
       v["clinical_notes"] = Object.entries(note).map(([k, t]) => `${k.charAt(0).toUpperCase()}${k.slice(1).replace(/_/g, " ")}: ${t}`).join("\n");
     }
     if (kind === "schedule_review") v["review_title"] = `Review: ${String(a["title"])}`.slice(0, 200);
+    if (kind === "order_test") { const tst = this.profile.orders?.tests[String(a["test"])]; if (tst) v["test_name"] = tst.name; }
+    if (kind === "prescribe") { const d = this.profile.orders?.drugs[String(a["drug"])]; if (d) { v["drug_catalog_id"] = d.id; v["duration"] = a["duration_days"]; } }
+    if (kind === "countersign") v["first_item_id"] = (a["item_ids"] as string[] | undefined)?.[0];
+    if (kind === "delegate_task" || kind === "request_ward_review") {
+      // A team is named by its key; who takes it in the EMR comes from the profile, never from the words.
+      const team = this.profile.delegations?.teams[String(a["team"])];
+      if (team) {
+        v["assignee"] = team.person_id ? { facilityUserId: team.person_id } : Object.fromEntries(Object.entries({ role: team.role, clinicId: team.clinic_id, wardId: team.ward_id, unitFacilityId: team.unit_facility_id }).filter(([, x]) => x !== undefined));
+        if (team.clinic_id) v["clinic_id"] = team.clinic_id;
+      }
+      if (a["subject_table"] && a["subject_id"]) v["subject"] = { table: a["subject_table"], id: a["subject_id"] };
+    }
     return v;
   }
 
@@ -413,6 +498,23 @@ export class PisgahPort implements EmrPort {
   }
 }
 
+const opt = (v: unknown): string | null => (typeof v === "string" && v.length ? v : null);
+// One delegation from the door's answer, or null when it is not one.
+function delegationOf(x: unknown): DelegationRead | null {
+  const id = opt(pick(x, "id"));
+  const patient = opt(pick(x, "patientId"));
+  if (!id || !EmrId.safeParse(id).success || !patient) return null;
+  const status = opt(pick(x, "record.status"));
+  return {
+    id, kind: String(pick(x, "kind") ?? ""), title: String(pick(x, "title") ?? ""), patient_id: patient, admission_id: opt(pick(x, "admissionId")), visit_id: opt(pick(x, "visitId")),
+    state: String(pick(x, "state") ?? ""), assignee: opt(pick(x, "assignee.facilityUserId")), rule: String(pick(x, "assignee.rule") ?? ""),
+    acknowledged_at: opt(pick(x, "acknowledgedAt")), completed_at: opt(pick(x, "completedAt")), completion_record_id: opt(pick(x, "completionRecordId")),
+    due_at: opt(pick(x, "dueAt")), overdue: pick(x, "overdue") === true, escalated_at: opt(pick(x, "escalatedAt")),
+    record: { status: status === "verified" || status === "verifier_error" ? status : "unsupported_or_incomplete", record_id: opt(pick(x, "record.recordId")), reason: opt(pick(x, "record.reason")) },
+    instruction: opt(pick(x, "instruction")), nudged: Array.isArray(pick(x, "nudged")) ? (pick(x, "nudged") as unknown[]).map(String) : []
+  };
+}
+
 // One proof check: "$name" equal, "@nonnull", "@startswith:$name" on the first 40 characters, or "@contains:$name".
 function checkOne(seen: unknown, want: string, vars: Vars): boolean {
   const val = (x: string) => (x.startsWith("$") ? vars[x.slice(1)] : x);
@@ -440,3 +542,10 @@ export function render(tpl: string, got: Record<string, unknown>): string {
   }).replace(/\s+/g, " ").trim();
 }
 type P = Record<string, unknown>;
+
+// The voice headers are kept out of the request log, since each carries a token for one line.
+function redactVoice(shown: Record<string, string>, h: DoorProfile["headers"]): Record<string, string> {
+  const out = { ...shown };
+  for (const k of [h.authorisation, h.confirmation]) if (k && out[k]) out[k] = `${out[k]!.split("~")[0]}~<token>`;
+  return out;
+}

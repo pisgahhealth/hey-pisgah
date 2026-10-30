@@ -130,10 +130,13 @@ describe("Samuel's real recordings", () => {
   it("scores numbers and words from the kept transcripts, and tells a lost number from a misheard one", () => {
     const scripted = real.clips.filter((c) => c.line);
     const vt = (id: string) => (kept.clips.find((c) => c.id === id)!.transcript as unknown as { raw: string }).raw;
-    expect(numberAccuracy(scripted.map((c) => ({ id: c.id, values: c.values, heard: vt(c.id) })))).toEqual(out.asr.numbers_voice_transcribe);
+    // The normaliser now keeps all 30 values; R1.b's own score from before the fix stays published beside it.
+    const { note: _note, ...fixed } = out.asr.numbers_voice_transcribe_fixed;
+    expect(numberAccuracy(scripted.map((c) => ({ id: c.id, values: c.values, heard: vt(c.id) })))).toEqual(fixed);
+    expect(out.asr.numbers_voice_transcribe).toMatchObject({ values: 30, right_after_normaliser: 25, lost_by_normaliser: 5 });
     expect(wordError(scripted.map((c) => ({ id: c.id, ref: c.said, hyp: vt(c.id) })))).toEqual(out.asr.voice_transcribe.all);
     expect(numberAccuracy([{ id: "x", values: ["130"], heard: "record 130 over 85" }]).right_after_normaliser).toBe(1);
-    expect(numberAccuracy([{ id: "x", values: ["130"], heard: "record one thirty over eighty five" }]).lost_by_normaliser).toBe(1);
+    expect(numberAccuracy([{ id: "x", values: ["130"], heard: "record one thirty over eighty five" }]).right_after_normaliser).toBe(1);
     expect(numberAccuracy([{ id: "x", values: ["130"], heard: "record one three over eighty five" }]).heard).toBe(0);
   });
 

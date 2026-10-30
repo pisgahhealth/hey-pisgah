@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { EmrId } from "@hey-pisgah/agent";
+import { EmrId, TASK_KINDS } from "@hey-pisgah/agent";
 
 // The door's route table, header names and target ids live in a private profile file, so this public package names none of them.
 export const DEFAULT_PROFILE_PATH = join(homedir(), ".hey-pisgah-door.json");
@@ -45,9 +45,23 @@ export const OwnerSpec = z.strictObject({
   context: ReadSpec.extend({ label: Dotted, facts: z.record(z.string(), Dotted).default({}) }).optional(),
   offers: z.array(z.strictObject({ fact: z.string().min(1), equals: z.string().min(1), kind: z.string().min(1), ask: z.string().min(1).max(300) })).default([]),
   // The page this owner sees a kind of work on, when it is not the kind's usual page.
-  screens: z.record(z.string(), z.enum(["triage", "doctor_workspace", "admissions", "reception_identity"])).default({})
+  screens: z.record(z.string(), z.enum(["triage", "doctor_workspace", "admissions", "reception_identity"])).default({}),
+  // Which side of a delegation this owner's agent follows: tasks handed to it, tasks it handed on, or both.
+  delegation: z.enum(["none", "assignee", "delegator", "both"]).default("none")
 });
 export type OwnerSpec = z.infer<typeof OwnerSpec>;
+
+// A team an owner's agent may hand work to: the words that name it, the kind of task, the fixed title, and who takes it in the EMR.
+const TeamSpec = z.strictObject({
+  words: Words, task_kind: z.enum(TASK_KINDS), title: z.string().min(1).max(120), label: z.string().min(1).max(80), role: z.string().regex(/^[a-z_]{1,30}$/),
+  clinic_id: EmrId.optional(), ward_id: EmrId.optional(), unit_facility_id: EmrId.optional(), person_id: EmrId.optional(),
+  escalate_after_minutes: z.number().int().min(0).max(10_080).optional()
+});
+export const DelegationsSpec = z.strictObject({
+  list: ReadSpec.extend({ list_path: Dotted }), one: ReadSpec, teams: z.record(z.string().regex(/^[a-z_]{1,30}$/), TeamSpec).default({}),
+  // Kinds whose verified write is handed on to a team, with the table of the record the write made.
+  handoffs: z.record(z.string().min(1).max(40), z.strictObject({ team: z.string().regex(/^[a-z_]{1,30}$/), subject_table: z.string().regex(/^[a-z_]{1,40}$/) })).default({})
+});
 
 const WatchCond = z.strictObject({ fact: z.string().min(1).max(80), equals: z.string().min(1).max(80) });
 // How the workflow reads in this EMR (watched facts for steps and events, work kinds for document stages), the ward and requirement version it stands for, and the patient facts no door read shows.
@@ -65,7 +79,7 @@ export type VersionsSpec = z.infer<typeof VersionsSpec>;
 export const DoorProfile = z.strictObject({
   base_url: z.url(),
   timeout_ms: z.number().int().min(1000).max(900_000).default(300_000),
-  headers: z.strictObject({ on_behalf_of: HeaderName, origin: HeaderName, evidence: HeaderName, spoken_at: HeaderName, idempotency: HeaderName, replayed: HeaderName }),
+  headers: z.strictObject({ on_behalf_of: HeaderName, origin: HeaderName, evidence: HeaderName, spoken_at: HeaderName, idempotency: HeaderName, replayed: HeaderName, authorisation: HeaderName.optional(), confirmation: HeaderName.optional() }),
   origin_value: z.string().regex(/^[a-z][a-z_]{0,39}$/),
   // Paths the port never calls, whatever asks; checked before the allowlist.
   deny: z.array(z.string().regex(/^[a-z0-9_-]+(\/[a-z0-9_-]+)*$/)).min(1),
@@ -77,8 +91,16 @@ export const DoorProfile = z.strictObject({
     // The current inpatients the owner may see, so a caller can pick a live admission rather than a stored id.
     census: z.strictObject({ method: z.literal("GET"), path: PathTpl, list_path: Dotted, admission_path: Dotted, label_path: Dotted }).optional(),
     // The context for a patient who is not admitted yet: one list read, matched on the patient.
-    patient_context: ReadSpec.extend({ list_path: Dotted, match: Dotted, label: Dotted, visit: Dotted, facts: z.record(z.string(), Dotted).default({}) }).optional()
+    patient_context: ReadSpec.extend({ list_path: Dotted, match: Dotted, label: Dotted, visit: Dotted, facts: z.record(z.string(), Dotted).default({}) }).optional(),
+    // Where the hospital matches a segment's voiceprint, and where it reads back the batch awaiting countersign.
+    speaker: z.strictObject({ path: PathTpl }).optional(),
+    read_back: ReadSpec.optional()
   }),
+  // The tests and medicines an owner may order by voice: the words that name each, the hospital's own name or id, and whether a medicine is controlled.
+  orders: z.strictObject({
+    tests: z.record(z.string().regex(/^[a-z0-9_]{1,40}$/), z.strictObject({ words: Words, name: z.string().min(1).max(200) })).default({}),
+    drugs: z.record(z.string().regex(/^[a-z0-9_]{1,40}$/), z.strictObject({ words: Words, id: EmrId, controlled: z.boolean().default(false) })).default({})
+  }).optional(),
   // The other kinds of work, each a write with its proof or a read-only report.
   work: z.record(z.string(), z.union([WriteOp, ReadOnlyOp])).default({}),
   owners: z.array(OwnerSpec).default([]),
@@ -97,6 +119,8 @@ export const DoorProfile = z.strictObject({
   // Only the sandbox integration test reads this block.
   sandbox: z.record(z.string(), z.json()).optional(),
   versions: VersionsSpec.optional(),
+  // The delegation reads and the teams owners may hand work to.
+  delegations: DelegationsSpec.optional(),
   // Where each page the strip can operate lives in the EMR.
   pages: z.partialRecord(z.enum(["triage", "doctor_workspace", "admissions", "reception_identity"]), z.string().regex(/^\/[a-z0-9/_-]*$/)).default({})
 });

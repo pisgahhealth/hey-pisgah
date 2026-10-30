@@ -98,7 +98,9 @@ describe("two readings must agree on a number before a write", () => {
   });
 
   it("compares numbers, not words, and a second reading that hears nothing is a disagreement", () => {
-    expect(compareReadings({ bp: "128/76" }, "Put her blood pressure in as one twenty eight over seventy six").agree).toBe(false);
+    // The ward form "one twenty eight" now reads as 128, so it agrees, and a different number said that way still disagrees.
+    expect(compareReadings({ bp: "128/76" }, "Put her blood pressure in as one twenty eight over seventy six").agree).toBe(true);
+    expect(compareReadings({ bp: "128/76" }, "Put her blood pressure in as one twenty six over seventy six").agree).toBe(false);
     expect(compareReadings({ bp: "128/76" }, "Put her BP in as 128 over 76.").agree).toBe(true);
     expect(compareReadings({ pulse: 104 }, "Sorry, that pulse was wrong. It's 104, not 96.").agree).toBe(true);
     expect(compareReadings({ temp_c: "37.6" }, "No audio was provided.")).toEqual({ agree: false, measures: [{ measure: "temp_c", first: "37.6", second: null, agree: false }] });

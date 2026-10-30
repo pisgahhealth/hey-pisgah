@@ -7,6 +7,8 @@ import { VITALS_KEYWORDS, VoiceError, buildKeywords, cleanTranscript, transcribe
 import { sparkEar, type SecondEar } from "./ears.js";
 import { EmrRuntime, type EmrRuntimeOptions } from "./runtime.js";
 import { ListenError, ListenSessions, type ListenOptions, type Transcriber } from "./listen.js";
+import { parseWav } from "@hey-pisgah/voice";
+import type { Embedder } from "./speaker.js";
 import { EmrId, EmrPortError, type EmrPort, type EmrTarget } from "./port.js";
 import { EMERGENCY_LINE, emergencyHeardLoosely, emergencyReason, spokenPatient, unidentifiedRef } from "./entry.js";
 import { shortHash } from "../ids.js";
@@ -32,6 +34,8 @@ export type EmrServeOptions = {
   // Continuous listening settings for POST /tasks/listen.
   listen?: Omit<ListenOptions, "transcribe">;
   runtime?: Omit<EmrRuntimeOptions, "storeRoot" | "client" | "port">;
+  // The local speaker model for attribution and for enrolment voiceprints; no audio is kept by either.
+  embed?: Embedder;
   log?: (line: string) => void;
   // The on-device keyword spotter's files, served to the strip under /kws/.
   kwsDir?: string;
@@ -106,7 +110,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   rt.start();
   const transcribe = o.transcribe ?? voiceTranscriber;
   const origin = o.allowOrigin ?? "http://localhost:3311";
-  const listening = new ListenSessions(rt, { ...(o.listen ?? {}), transcribe });
+  const listening = new ListenSessions(rt, { ...(o.listen ?? {}), transcribe, ...(o.embed ? { embed: o.embed } : {}) });
   const wakeLog = join(o.storeRoot, "..", "wake.jsonl");
   // The patient each listening session started with keeps the session's own id, so a session that never moves reads as before.
   const firstSubject = new Map<string, string>();
@@ -134,10 +138,27 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       const r = await rt.emergency(owner, { text, spoken_at: spokenAt, args: { unidentified_ref: unidentifiedRef(new Date(arrived)), reason: emergencyReason(text), ...(o.emergencyClinicId ? { clinic_id: o.emergencyClinicId } : {}) } });
       return { session_id: sessionId, seq, accepted: true, utterances: [{ id: r.line_id, line_id: r.line_id, task_id: r.task_id, text, class: "instruction", classes: ["instruction"] }], partial: null, entry: "emergency" };
     }
+    // "Accepted <task>" heard with no patient open reaches the one task handed to this owner that it names.
+    const handed = text ? rt.delegationLine(owner, text, spokenAt, "audio") : null;
+    if (handed) return { session_id: sessionId, seq, accepted: true, utterances: [{ id: handed.line_id, line_id: handed.line_id, task_id: handed.task_id, text, class: "instruction", classes: ["instruction"] }], partial: null, entry: "delegation" };
     const known = rt.openSubjects(owner).map((x) => ({ label: rt.task(x.task_id)?.label ?? "", target: x.target })).filter((k) => k.label);
     const moved = spokenPatient(text, known);
     if (moved) onSubject(owner, moved.target);
     return { session_id: sessionId, seq, accepted: true, utterances: [], partial: null, no_patient: !moved, ...(moved ? { moved_to: moved.target } : {}) };
+  };
+
+  // One enrolment passage from the clinician's own settings page: the voiceprint goes back to their browser and the audio is dropped here.
+  const embedPassage = async (req: IncomingMessage): Promise<[number, unknown]> => {
+    if (!o.embed) throw new HttpError(503, "the speaker model is not loaded on this agent service");
+    const type = req.headers["content-type"] ?? "";
+    if (!type.startsWith("audio/wav") && !type.startsWith("audio/x-wav")) throw new HttpError(415, "send the passage as audio/wav");
+    const wav = new Uint8Array(await raw(req, AUDIO_LIMIT));
+    const info = parseWav(wav);
+    if (!info.ok) throw new HttpError(400, `audio: ${info.reason}`);
+    if (info.durationMs < 3000) throw new HttpError(422, "The passage is too short; read the whole passage.");
+    const print = await o.embed(wav);
+    if (!print) throw new HttpError(422, "The recording could not be read; please record it again.");
+    return [200, { embedding: print.vector, model: print.model, ms: print.ms }];
   };
 
   // One chunk of continuous listening; the answer says whether it finished an utterance and which line it became.
@@ -199,7 +220,8 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     if (!heard.text) return [200, { task_id: null, line_id: null, transcript: "", audio_ms: heard.audio_ms, cost_usd: heard.cost_usd }];
     const spoken = new Date(arrived - heard.audio_ms).toISOString();
     const v = vitalsVocabulary(cleanTranscript(heard.text));
-    const r = await rt.say({ owner: b.owner, target: { admission_id: ctx.admission_id }, text: v.text, source: "audio", spoken_at: spoken, audio: { audio_ms: heard.audio_ms, cost_usd: heard.cost_usd, session_id: heard.session_id }, clip: wav, rewrites: v.rewrites });
+    const voiceprint = o.embed ? await o.embed(wav).catch(() => null) : undefined;
+    const r = await rt.say({ owner: b.owner, target: { admission_id: ctx.admission_id }, text: v.text, source: "audio", spoken_at: spoken, audio: { audio_ms: heard.audio_ms, cost_usd: heard.cost_usd, session_id: heard.session_id }, clip: wav, rewrites: v.rewrites, ...(voiceprint !== undefined ? { voiceprint } : {}) });
     return [202, { ...r, transcript: v.text, audio_ms: heard.audio_ms, cost_usd: heard.cost_usd, keywords_dropped: keywordsDropped }];
   };
 
@@ -207,7 +229,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const url = new URL(req.url ?? "/", "http://serve");
     const parts = url.pathname.split("/").filter(Boolean);
     const m = req.method ?? "GET";
-    if (m === "GET" && url.pathname === "/health") return [200, { ok: true, mode: client.mode, tasks: rt.taskIds().length, refused: rt.port.refusedCount(), kws: !!o.kwsDir }];
+    if (m === "GET" && url.pathname === "/health") return [200, { ok: true, mode: client.mode, tasks: rt.taskIds().length, refused: rt.port.refusedCount(), kws: !!o.kwsDir, speaker_model: !!o.embed }];
     if (m === "POST" && url.pathname === "/wake") {
       const b = parse(Wake, await json(req));
       mkdirSync(dirname(wakeLog), { recursive: true });
@@ -215,6 +237,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       return [200, { logged: true }];
     }
     if (m === "GET" && url.pathname === "/wake") return [200, wakeSummary(wakeLog, url.searchParams.get("owner"))];
+    if (m === "POST" && url.pathname === "/voice/embed") return embedPassage(req);
     if (parts[0] === "preferences") {
       if (!prefs) throw new HttpError(404, "preference memory is off");
       // What one clinician may see: their own preferences and shared ward or hospital rules, each with its source and scope.
@@ -242,6 +265,9 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       const page = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
       // A typed line with no patient open goes to the patient the agent is with, and opens an arrival on the emergency phrase.
       const target = hasTarget(b) ? page : subjectFor(b.owner, page);
+      // A spoken acceptance of a task handed to this owner needs no patient open: the task names its own.
+      const handed = target ? null : rt.delegationLine(b.owner, b.text, b.spokenAt ?? new Date().toISOString(), "text");
+      if (handed) return [202, handed];
       if (!target) {
         if (!EMERGENCY_LINE.test(b.text)) throw new HttpError(400, "No patient is open yet; say hey Pisgah, emergency, or open a patient");
         const at = b.spokenAt ?? new Date().toISOString();
@@ -302,6 +328,11 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   const handler = (req: IncomingMessage, res: ServerResponse) => {
     // One fixed origin on every answer, so a browser on any other page is refused by its own CORS check.
     const cors: Record<string, string> = { "access-control-allow-origin": origin, "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "Content-Type", "access-control-max-age": "600" };
+    // CORS only hides answers, so a request from another page, or a host name that is not this loopback service, is refused before it runs.
+    const from = req.headers.origin;
+    if (from !== undefined && from !== origin) { send(res, 403, { error: "this origin may not call the agent service" }, cors); return; }
+    if (!loopbackHost(req.headers.host)) { send(res, 421, { error: "this host name does not serve the agent" }, cors); return; }
+    if (req.method === "POST" && JSON_ROUTES.test(new URL(req.url ?? "/", "http://serve").pathname) && !(req.headers["content-type"] ?? "").startsWith("application/json")) { send(res, 415, { error: "send application/json" }, cors); return; }
     if (req.method === "OPTIONS") { res.writeHead(204, cors); res.end(); return; }
     const kws = /^\/kws\/([^/?]+)/.exec(req.url ?? "");
     if (req.method === "GET" && kws) {
@@ -338,6 +369,14 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       if (!o.client) client.close();
     }
   };
+}
+
+// The routes that take a JSON body; requiring the JSON type makes a browser preflight them.
+const JSON_ROUTES = /^\/tasks\/(?:say|watch|[^/]+\/(?:say|resume|interrupt))$/;
+// Only a loopback host name reaches the service, which stops a rebinding page from talking to it under its own name.
+export function loopbackHost(host: string | undefined): boolean {
+  if (!host) return true;
+  return /^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?$/i.test(host);
 }
 
 // p50 and p90 of the wake latencies the strip measured, overall and per keyword.

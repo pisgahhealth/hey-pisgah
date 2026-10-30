@@ -5,15 +5,21 @@ import type { Envelope } from "@hey-pisgah/contracts";
 import { shortHash } from "../ids.js";
 import { DEFAULT_INTENT_ROUTE, FALLBACK_INTENT_ROUTE, decideIntent, tempText, type Decide, type IntentRoute } from "./intent.js";
 import { primaryClass } from "./classes.js";
-import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type ClerkClause, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type SpeechClass } from "./gate.js";
+import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type Provenance, type WorkArgs } from "./port.js";
-import { READ_ONLY_KINDS, WORK_ARGS, afterSaid, cadenceSaid, dateSaid, minutesSaid, summariseWork, wordSaid, type WorkKind } from "./work.js";
-import { measuresIn, type Measure, type Rewrite } from "@hey-pisgah/voice";
+import { READ_ONLY_KINDS, WORK_ARGS, afterSaid, cadenceSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
+import { cleanTranscript, measuresIn, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareReadings, disagreementQuestion, normValue, quotedQuestion, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
+import { DOCUMENTATION_KINDS, ORDER_KINDS, recordOf, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
 import { EMERGENCY_KIND, EMERGENCY_LINE, RULE_ONLY_KINDS, emergencyReason, identityFrom, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
 import { screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
+import {
+  ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_ARGS, DELEGATION_RULE_KINDS, ESCALATE_KIND, NUDGE_KIND, REGISTER_KIND, WARD_REVIEW_KIND,
+  acceptedTask, consentSaid, nameParts, onlyTeam, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
+  type DelegationRead, type EmrDelegation
+} from "./delegate.js";
 import { FROM_NOW_ON, PreferenceError, SCOPE_KINDS, describePref, describeScope, describeSource, readRule, scopeAnswer, type PrefField, type PreferenceMemory } from "./preferences.js";
 
 export type EmrActionState = "proposed" | "sent" | "acknowledged" | "completed" | "refused" | "cancelled" | "failed";
@@ -28,17 +34,21 @@ export type EmrAction = {
   unverified: boolean;
   // Vitals heard from audio wait for the second ear to agree before the write.
   ears: boolean;
+  // A voice order waits for the owner's own matched voice, or for the spoken confirmation a controlled drug needs; the lines that gave them.
+  awaiting: "owner_voice" | "confirm" | null; authorised_by_line: string | null; confirmed_by_line: string | null;
   // The page that shows this work, bound to the action's encounter and command id.
   screen: ScreenPlan | null;
 };
 // Where an ambient line came from: its listening session, the chunks that made it, and when the speech ended.
 export type AmbientMeta = { session_id: string; seqs: number[]; raw_text: string; ended_at: string; final_at: string; trailing_silence_ms: number; finished_by: string };
 // kept is false while an ambient line's words live only in memory; they are stored only once an action or a question rests on them.
-export type EmrLine = { id: string; text: string; at: string; source: "text" | "audio"; decided: boolean; ambient: AmbientMeta | null; classes: SpeechClass[]; kept: boolean; words: number };
+export type EmrLine = { id: string; text: string; at: string; source: "text" | "audio"; decided: boolean; ambient: AmbientMeta | null; classes: SpeechClass[]; kept: boolean; words: number; speaker: SpeakerRecord | null };
 export type EmrRefusal = { line_id: string; kind: string | null; asked_for: string; at: string };
 // A question may carry a choice: the values a one-word answer can pick, and the action it completes.
 export type QuestionChoice = Choice & { kind: string; base: Record<string, unknown>; corrects_action_id: string | null };
-export type EmrQuestion = { question_id: string; text: string; line_id: string; answered_by: string | null; at: string; choice: QuestionChoice | null; pref_id: string | null };
+// A question about a voice order is settled by the owner's own matched "yes" or "confirm", never by a model.
+export type OrderRule = { kind: "countersign"; args: WorkArgs } | { kind: "confirm" | "authorise"; action_id: string };
+export type EmrQuestion = { question_id: string; text: string; line_id: string; answered_by: string | null; at: string; choice: QuestionChoice | null; rule: OrderRule | null; pref_id: string | null };
 // One use of a remembered preference in this task, or one it did not use and why, each with its source for the strip.
 export type PrefUse = { pref_id: string; field: string; value: string; text: string; scope: string; source: string; line_id: string; action_id: string | null; reason: string | null; at: string };
 // One comparison of the two readings before a vitals write.
@@ -55,7 +65,7 @@ export type EmrObligation = {
   held_at: string; fired_at: string | null; fired_by: string | null; action_id: string | null; anchor_action_id: string | null; reason: string;
 };
 // One verified action timed from the end of the words that asked for it; parts are the milestones on the way.
-export type SpeedRow = { action_id: string; kind: string; line_id: string; from: string; verified_at: string; ms: number; parts: Record<string, number | null>; gate?: string | null; levers?: number[] };
+export type SpeedRow = { action_id: string; kind: string; line_id: string; from: string; verified_at: string; ms: number; parts: Record<string, number | null>; gate?: string | null; levers?: number[]; from_record?: true };
 export type EmrTask = {
   task_id: string; owner: string; admission_id: string; patient_id: string | null; visit_id: string | null; run_id: string; goal: string;
   state: TaskState; reason: string | null; actions: Map<string, EmrAction>; order: string[];
@@ -68,6 +78,8 @@ export type EmrTask = {
   obligations: EmrObligation[]; speed: SpeedRow[];
   // Spoken identities held for the front desk, and whether the patient is still unnamed.
   identities: EmrIdentityHold[]; unidentified: boolean; label: string;
+  // Work this owner's agent handed on or was handed, each state as the record showed it.
+  delegations: EmrDelegation[];
   prefs: { applied: PrefUse[]; withheld: PrefUse[]; candidates: string[] };
 };
 // The strip's view of one task.
@@ -77,12 +89,12 @@ export type EmrTaskView = {
     action_id: string; kind: string; state: EmrActionState; summary: string; reason: string | null; corrects_action_id: string | null;
     line_id: string; args: Record<string, unknown>; proposed_at: string; written_at: string | null;
     proof?: { record_id: string; record_version: number; event_ids: string[] };
-    report?: string; draft?: string; unverified?: true;
+    report?: string; draft?: string; unverified?: true; awaiting?: "owner_voice" | "confirm"; authorised_by_line?: string;
     // The page the strip opens and fills for this action; command_id and owner_id bind it through navigation.
     screen?: ScreenPlan & { command_id: string; owner_id: string };
   }[];
   questions: { question_id: string; text: string; answers?: string[] }[];
-  transcript: { id: string; line_id: string; text: string; at: string; source: "text" | "audio"; decided: boolean; class: SpeechClass | null; classes: SpeechClass[]; kept: boolean; ambient?: AmbientMeta }[];
+  transcript: { id: string; line_id: string; text: string; at: string; source: "text" | "audio"; decided: boolean; class: SpeechClass | null; classes: SpeechClass[]; kept: boolean; ambient?: AmbientMeta; speaker?: SpeakerRecord }[];
   // How many lines were heard and how many were kept as evidence; the rest were dropped after their class was decided.
   heard: { lines: number; kept: number; dropped: number };
   // How often the two readings agreed before a vitals write, for the task and per listening session.
@@ -100,6 +112,7 @@ export type EmrTaskView = {
   obligations: EmrObligation[];
   speed: { rows: SpeedRow[]; p50_ms: number | null; p90_ms: number | null; by_kind: Record<string, { n: number; p50_ms: number | null; p90_ms: number | null }>; errors: { failed: number; refused: number; unverified: number } };
   identities: EmrIdentityHold[]; unidentified: boolean;
+  delegations: EmrDelegation[];
   // Every preference applied in this task and every one withheld, each with its source and scope.
   preferences: { applied: PrefUse[]; withheld: PrefUse[]; candidates: string[] };
   updated_at: string;
@@ -130,7 +143,7 @@ export type EmrRuntimeOptions = {
   wallNow?: () => Date;
   log?: (line: string) => void;
   // Called when the agent moves to the patient the clinician is with: a spoken name or an arrival it opened.
-  onSubject?: (owner: string, target: EmrTarget, by: "spoken" | "emergency") => void;
+  onSubject?: (owner: string, target: EmrTarget, by: "spoken" | "emergency" | "delegation") => void;
   // The A&E clinic a spoken emergency opens its arrival on.
   emergencyClinicId?: string;
   // The clinicians' remembered preferences; without it no preference is kept or applied.
@@ -152,7 +165,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       run_id: String(x["run_id"]), goal: "", state: "running", reason: null, actions: new Map(), order: [], lines: [], questions: [], notes: [], refusals: [],
       calls: 0, usd: 0, fallbacks: 0, created_at: e.wall_at, updated_at: e.wall_at,
       watch: null, changes: [], offered: [], pages: [], pause: null, digests: [], ears: [], version: null, obligations: [], speed: [],
-      identities: [], unidentified: !!x["unidentified"], label: String(x["label"] ?? ""), prefs: { applied: [], withheld: [], candidates: [] }
+      identities: [], unidentified: !!x["unidentified"], label: String(x["label"] ?? ""), delegations: [], prefs: { applied: [], withheld: [], candidates: [] }
     };
   }
   if (!t) return null;
@@ -162,7 +175,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
     case "utterance.heard": {
       const ambient = (x["ambient"] as AmbientMeta | undefined) ?? null;
       const text = String(x["text"]);
-      t.lines.push({ id: String(x["line_id"]), text, at: String(x["spoken_at"]), source: x["source"] === "audio" ? "audio" : "text", decided: false, ambient, classes: [], kept: !x["withheld"], words: Number(x["words"] ?? text.split(/\s+/).filter(Boolean).length) });
+      t.lines.push({ id: String(x["line_id"]), text, at: String(x["spoken_at"]), source: x["source"] === "audio" ? "audio" : "text", decided: false, ambient, classes: [], kept: !x["withheld"], words: Number(x["words"] ?? text.split(/\s+/).filter(Boolean).length), speaker: null });
       if (!t.goal && !x["withheld"]) t.goal = text.slice(0, 200);
       // A typed or pushed line answers the open question; an ambient line answers only when the gate hears it as meant for the agent.
       if (!ambient && x["via"] !== "gate") for (const q of t.questions) if (q.answered_by === null) q.answered_by = String(x["line_id"]);
@@ -185,7 +198,9 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       break;
     }
     case "intent.failed": { const l = t.lines.find((y) => y.id === x["line_id"]); if (l) l.decided = true; break; }
-    case "question.asked": t.questions.push({ question_id: String(x["question_id"]), text: String(x["text"]), line_id: String(x["line_id"]), answered_by: null, at: e.wall_at, choice: (x["choice"] as QuestionChoice | undefined) ?? null, pref_id: (x["pref_id"] as string | undefined) ?? null }); break;
+    case "question.asked": t.questions.push({ question_id: String(x["question_id"]), text: String(x["text"]), line_id: String(x["line_id"]), answered_by: null, at: e.wall_at, choice: (x["choice"] as QuestionChoice | undefined) ?? null, rule: (x["rule"] as OrderRule | undefined) ?? null, pref_id: (x["pref_id"] as string | undefined) ?? null }); break;
+    case "speaker.attributed": { const l = t.lines.find((y) => y.id === x["line_id"]); if (l) l.speaker = x["speaker"] as SpeakerRecord; break; }
+    case "action.authorised": if (act) { act.awaiting = x["awaiting"] === "confirm" ? "confirm" : null; if (x["as"] === "confirm") act.confirmed_by_line = String(x["line_id"]); else act.authorised_by_line = String(x["line_id"]); } break;
     case "preference.applied": t.prefs.applied.push({ ...(x as PrefUse), at: e.wall_at }); break;
     case "preference.withheld": t.prefs.withheld.push({ ...(x as PrefUse), at: e.wall_at }); break;
     case "preference.candidate_noted": t.prefs.candidates.push(String(x["pref_id"])); break;
@@ -209,6 +224,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
         action_id: String(x["action_id"]), kind: String(x["kind"] ?? OBSERVATION_KIND), args: x["args"] as WorkArgs, summary: String(x["summary"]), line_id: String(x["line_id"]),
         corrects_action_id: (x["corrects_action_id"] as string | null) ?? null, state: "proposed", intent_key: null, written: null, proof: null, reason: null,
         proposed_at: e.wall_at, written_at: null, completed_at: null, report: null, draft: null, unverified: false, ears: !!x["ears"],
+        awaiting: (x["awaiting"] as EmrAction["awaiting"] | undefined) ?? null, authorised_by_line: (x["authorised_by_line"] as string | null | undefined) ?? null, confirmed_by_line: null,
         screen: (x["screen"] as ScreenPlan | undefined) ?? null
       });
       t.order.push(String(x["action_id"]));
@@ -253,6 +269,18 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
     case "obligation.done": { const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]); if (o) { o.state = "done"; o.action_id = (x["action_id"] as string | null) ?? null; } break; }
     case "obligation.cancelled": { const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]); if (o) o.state = "cancelled"; break; }
     case "speed.logged": t.speed.push(x["row"] as SpeedRow); break;
+    case "delegation.made": case "delegation.received": t.delegations.push(x["delegation"] as EmrDelegation); break;
+    case "delegation.state": {
+      const d = t.delegations.find((y) => y.key === x["key"]);
+      if (d) for (const k of ["delegation_id", "assigned_at", "acknowledged_at", "completed_at", "escalated_at", "record_id", "ward_review"] as const) if (x[k] !== undefined) (d as Record<string, unknown>)[k] = x[k];
+      break;
+    }
+    case "delegation.details": {
+      const d = t.delegations.find((y) => y.key === x["key"]);
+      if (d?.registration) { if (x["phone"]) d.registration.phone = String(x["phone"]); if (x["consent_line"]) d.registration.consent_line = String(x["consent_line"]); }
+      break;
+    }
+    case "identity.closed": { const o = t.identities.find((y) => y.obligation_id === x["obligation_id"]); if (o) o.state = "done"; break; }
     default: break;
   }
   return t;
@@ -272,18 +300,19 @@ export function viewOf(t: EmrTask): EmrTaskView {
       action_id: a.action_id, kind: a.kind, state: a.state, summary: a.summary, reason: a.reason, corrects_action_id: a.corrects_action_id,
       line_id: a.line_id, args: Object.fromEntries(Object.entries(a.args).filter(([k]) => k !== "admission_id")), proposed_at: a.proposed_at, written_at: a.written_at,
       ...(a.proof ? { proof: { record_id: a.proof.record_id, record_version: a.proof.record_version, event_ids: a.proof.event_ids } } : {}),
-      ...(a.report ? { report: a.report } : {}), ...(a.draft ? { draft: a.draft } : {}), ...(a.unverified ? { unverified: true as const } : {}),
+      ...(a.report ? { report: a.report } : {}), ...(a.draft ? { draft: a.draft } : {}), ...(a.unverified ? { unverified: true as const } : {}), ...(a.awaiting ? { awaiting: a.awaiting } : {}),
+      ...(a.authorised_by_line && a.authorised_by_line !== a.line_id ? { authorised_by_line: a.authorised_by_line } : {}),
       ...(a.screen ? { screen: { ...a.screen, encounter: { patient_id: a.screen.encounter.patient_id ?? t.patient_id, visit_id: a.screen.encounter.visit_id ?? t.visit_id, admission_id: a.screen.encounter.admission_id ?? (t.admission_id || null) }, command_id: a.action_id, owner_id: t.owner } } : {})
     })),
     questions: t.questions.filter((q) => q.answered_by === null).map((q) => ({ question_id: q.question_id, text: q.text, ...(q.choice ? { answers: answersOf(q.choice) } : q.pref_id ? { answers: [...SCOPE_KINDS, "no"] } : {}) })),
-    transcript: t.lines.map((l) => ({ id: l.id, line_id: l.id, text: l.kept ? l.text : "", at: l.at, source: l.source, decided: l.decided, class: primaryClass(l.classes) as SpeechClass | null, classes: l.classes, kept: l.kept, ...(l.ambient ? { ambient: l.kept ? l.ambient : { ...l.ambient, raw_text: "" } } : {}) })),
+    transcript: t.lines.map((l) => ({ id: l.id, line_id: l.id, text: l.kept ? l.text : "", at: l.at, source: l.source, decided: l.decided, class: primaryClass(l.classes) as SpeechClass | null, classes: l.classes, kept: l.kept, ...(l.ambient ? { ambient: l.kept ? l.ambient : { ...l.ambient, raw_text: "" } } : {}), ...(l.speaker ? { speaker: l.speaker } : {}) })),
     heard: { lines: t.lines.length, kept: t.lines.filter((l) => l.kept).length, dropped: t.lines.filter((l) => !l.kept && l.decided).length },
     ears: earsSummary(t.ears),
     notes: t.notes,
     asked: t.questions.map((q) => ({ question_id: q.question_id, text: q.text, line_id: q.line_id, answered_by: q.answered_by, at: q.at })),
     refusals: t.refusals, watching: t.watch, changes: t.changes, pages: t.pages, pause: t.pause, digests: t.digests,
     calls: t.calls, usd: Math.round(t.usd * 1e6) / 1e6, version: t.version,
-    obligations: t.obligations, speed: speedSummary(t), identities: t.identities, unidentified: t.unidentified,
+    obligations: t.obligations, speed: speedSummary(t), identities: t.identities, unidentified: t.unidentified, delegations: t.delegations,
     preferences: { applied: t.prefs.applied, withheld: t.prefs.withheld, candidates: t.prefs.candidates },
     updated_at: t.updated_at
   };
@@ -383,6 +412,10 @@ export const emrIntentKey = (taskId: string, actionId: string, args: unknown) =>
 
 // A spoken pause and a spoken return; both are handled by rule, with no model call.
 export const SPOKEN_PAUSE = /^(?:(?:ok(?:ay)?|right|sorry|wait)[,.!]?\s+)?(?:stop|hold on|hang on|pause)\b(?:[\s,.!-]+(?:i'?ll|i will|we'?ll|let me)\s+come back to (?:this|that|it|her|him)(?:\s+later)?)?[\s.!]*$|\bi'?ll come back to (?:this|that|it)\b/i;
+// "Sign everything" asks for the read-back of the owner's voice orders awaiting countersign; the yes that follows signs that batch.
+export const SIGN_EVERYTHING = /^(?:(?:ok(?:ay)?|right|now|and)\s+)?(?:please\s+)?(?:countersign|sign)\s+(?:everything|it all|them all|all of (?:it|them)|all (?:the )?(?:voice )?orders|the orders)(?:\s+please)?$/;
+export const OWNER_YES = /^(?:yes|yeah|yes please|yes sign(?: them| it| everything)?|sign(?: them| it)?|go ahead|send it|do it|confirm(?:ed)?|i confirm|yes confirm)$/;
+export const OWNER_NO = /^(?:no|nope|don'?t|do not|cancel(?: it| that)?|leave it)$/;
 export const SPOKEN_RESUME = /\bwhere were we\b|\b(?:let'?s|we can) (?:carry on|continue|pick (?:this|it|that) (?:back )?up)\b|^(?:ok(?:ay)?,?\s+)?i'?m back\b/i;
 
 // One open task: its decision queue, its write chain, the gate calls started before their turn, and the context each gated line was said in.
@@ -394,7 +427,7 @@ type Live = {
 // When a line reached each step, in memory only, for the speed rows.
 type LineTimes = { asr_at?: number; delivered?: number; gate_start?: number; gate_end?: number; ear_done?: number };
 type EarlyEar = { p: Promise<{ reading: EarReading | null; error: string | null }>; uses: number };
-type AnyClause = Omit<GateClause, "class"> & { class: SpeechClass } & Partial<Omit<ClerkClause, keyof GateClause>>;
+type AnyClause = Omit<GateClause, "class"> & { class: SpeechClass } & Partial<Omit<OrderClause, keyof GateClause>>;
 const RELATIVE_WORDS = /\b(mother|mum|mom|father|dad|husband|wife|son|daughter|sister|brother|relative|family|aunt|uncle|guardian|grandmother|grandfather)\b/i;
 export type SayInput = {
   // gate sends a typed line through the speech gate, as owners who hold more than observations always do.
@@ -410,6 +443,8 @@ export type SayInput = {
   rewrites?: readonly Rewrite[];
   // When the words came back from speech recognition, for the speed rows; never stored.
   heard_at?: number;
+  // The segment's voiceprint from the local speaker model, matched by the hospital while the gate reads the words.
+  voiceprint?: Voiceprint | null;
 };
 type EarsOutcome = { check: EarsCheck; reading: EarReading | null; error: string | null };
 
@@ -435,6 +470,14 @@ export class EmrRuntime {
   private readonly side = new Set<Promise<unknown>>();
   private readonly gateStage = new Map<string, string>();
   private readonly holdEnds = new Map<string, string>();
+  // Each line's speaker match while it is in flight, and the owner's match tokens, in memory only and never journaled.
+  private readonly speakers = new Map<string, Promise<{ v: SpeakerVerdict; embed_ms: number | null; match_ms: number | null }>>();
+  private readonly tokens = new Map<string, string>();
+  // The second reading of a spoken dose, per prescription action, compared before the write.
+  private readonly doseChecks = new Map<string, Promise<{ agree: boolean; heard: string | null; error: string | null; reading: EarReading | null }>>();
+  private readonly doseEars = new Map<string, Promise<{ reading: EarReading | null; error: string | null }>>();
+  // Review obligations already checked for a team to hand them to, so the sweep asks once per obligation.
+  private readonly reviewTried = new Set<string>();
   // The last ward each task's context named, for preferences scoped to a ward.
   private readonly wards = new Map<string, string>();
 
@@ -499,7 +542,7 @@ export class EmrRuntime {
         this.settle(l, "restarted_before_decision");
       }
     }
-    if (this.o.watchMs && this.o.watchMs > 0 && (this.o.port.watch || this.o.port.inbox) && !this.poller) {
+    if (this.o.watchMs && this.o.watchMs > 0 && (this.o.port.watch || this.o.port.inbox || this.o.port.delegations) && !this.poller) {
       this.poller = setInterval(() => { void this.pollOnce(); }, this.o.watchMs);
     }
     this.sweepObligations();
@@ -594,6 +637,8 @@ export class EmrRuntime {
     if (this.stopped) throw new Error("runtime stopped");
     const text = s.text.trim().slice(0, 1000);
     if (!text) throw new Error("empty utterance");
+    // A spoken acceptance or the front desk's registration details reach the task handed to this owner, by rule and before any read.
+    if (!taskId) { const d = this.delegationLine(s.owner, text, s.spoken_at ?? this.wall().toISOString(), s.source ?? "text", s.target); if (d) return d; }
     const lineId = this.nextLineId(s.owner, text);
     const spokenAt = s.spoken_at ?? this.wall().toISOString();
     const prov: Provenance = { owner: s.owner, evidence: `transcript:${lineId}`, spoken_at: spokenAt };
@@ -638,6 +683,21 @@ export class EmrRuntime {
     if (s.heard_at !== undefined) tm.asr_at = s.heard_at;
     // Lever 4: the second reading starts now, beside the gate, when the line names a measure and a number.
     if (!spec && s.clip && this.o.secondEar && this.lv.earWithGate && willWriteNumber(text)) this.earEarly(live, lineId, s.clip);
+    // A line that says a dose has its second reading started now too, beside the gate, for the prescription it may become.
+    if (s.clip && this.o.secondEar && this.lv.earWithGate && saysDose(text) && this.kinds(s.owner).includes("prescribe")) {
+      const t0 = live.task;
+      const p = this.o.secondEar(s.clip, { run_id: t0.run_id, task_id: t0.task_id, line_id: lineId }).then((reading) => ({ reading, error: null }), (e: unknown) => ({ reading: null, error: e instanceof ModelError ? e.code : "ear_failed" }));
+      this.doseEars.set(lineId, this.track(p));
+    }
+    // The hospital matches the segment's voiceprint while the gate reads the words, so attribution adds no wait of its own.
+    const vp = s.voiceprint;
+    if (vp && this.o.port.speaker) {
+      const t0 = Date.now();
+      const fail = (reason: string) => ({ v: { speaker: "unverified", reason } as SpeakerVerdict, embed_ms: vp.ms, match_ms: Date.now() - t0 });
+      this.speakers.set(lineId, this.o.port.speaker(s.owner, vp.vector, prov).then((v) => ({ v, embed_ms: vp.ms, match_ms: Date.now() - t0 })).catch(() => fail("match_failed")));
+    } else if (s.source === "audio" && this.o.port.speaker) {
+      this.speakers.set(lineId, Promise.resolve({ v: { speaker: "unverified", reason: "no_voiceprint" } as SpeakerVerdict, embed_ms: null, match_ms: null }));
+    }
     // A spoken pause or return is handled by rule; while called away nothing heard is decided, so no model is called.
     if (SPOKEN_PAUSE.test(text) && !CLOSED_TASK.has(live.task.state) && live.task.state !== "paused") { this.pauseSpoken(live, lineId, ctx); this.afterLine(live, lineId, true); return { task_id: live.task.task_id, line_id: lineId }; }
     if (live.task.state === "paused" && live.task.reason === "called_away") {
@@ -665,6 +725,7 @@ export class EmrRuntime {
     if (viaGate) live.ctxOf.set(lineId, ctx);
     this.enqueue(live, async () => {
       try {
+        if (this.orderRuleApplies(live, lineId) && (await this.orderRule(live, lineId, prov))) return;
         if (!this.answerByRule(live, lineId)) await (viaGate ? this.gate(live, lineId, ctx, prov) : this.decide(live, lineId, ctx, prov));
       } finally { live.ctxOf.delete(lineId); this.afterLine(live, lineId, false); }
     });
@@ -676,6 +737,12 @@ export class EmrRuntime {
   private afterLine(l: Live, lineId: string, keep: boolean): void {
     this.clips.delete(lineId);
     this.dropEarly(l, lineId);
+    // A dose reading no prescription used is let go, and its cost is still put on the task.
+    const dose = this.doseEars.get(lineId);
+    if (dose) {
+      this.doseEars.delete(lineId);
+      void this.track(dose.then((r) => { if (r.reading && !this.stopped) try { this.append(l, "ears.unused", { line_id: lineId, cost_usd: r.reading.cost_usd, calls: r.reading.calls ?? 1, provider: r.reading.provider, model: r.reading.model }); } catch { /* closed */ } }));
+    }
     const pre = l.pre.get(lineId);
     if (pre) { l.pre.delete(lineId); this.chargeUnused(l, lineId, pre); }
     const t = l.task;
@@ -794,7 +861,7 @@ export class EmrRuntime {
 
   // The gate input for a line as the task stands now; a call started before its turn leaves undecided lines out of the recent words.
   private gateInput(t: EmrTask, line: { id: string; text: string }, ctx: EmrContext, early: boolean): GateInput {
-    const kinds = this.kinds(t.owner).filter((k) => !RULE_ONLY_KINDS.has(k));
+    const kinds = this.kinds(t.owner).filter((k) => !RULE_ONLY_KINDS.has(k) && !DELEGATION_RULE_KINDS.has(k));
     const openQ = t.questions.filter((q) => q.answered_by === null).at(-1) ?? null;
     const wide = isWide(kinds);
     const names = wide ? this.o.port.names?.() : undefined;
@@ -947,6 +1014,7 @@ export class EmrRuntime {
       line_id: lineId, decision: r.value, provider: r.provider, model: r.model, response_id: r.response_id, ledger: r.ledger, cost_usd: r.cost_usd,
       calls: 1 + r.repairs, repairs: r.repairs, fallback_reason: r.fallback_reason
     });
+    if (this.speakers.has(lineId)) await this.attribute(l, lineId);
     if (l.task.state !== "running") return;
     this.applyDecision(l, lineId, r.value, prov);
   }
@@ -974,16 +1042,20 @@ export class EmrRuntime {
     // A call started before this line's turn is used when it answered; one that failed is made again now, in order.
     const pre = l.pre.get(lineId);
     l.pre.delete(lineId);
+    // Only a line with a voiceprint waits on its match, so lines without one are decided exactly as before.
+    const who = this.speakers.has(lineId) ? this.attribute(l, lineId) : null;
     let r: GateResult;
     l.calling = lineId;
     try {
       r = pre ? await pre.catch(() => this.callGate(l, line, ctx, false)) : await this.callGate(l, line, ctx, false);
     } catch (e) {
+      if (who) await who;
       const code = e instanceof ModelError ? e.code : "error";
       this.append(l, "intent.failed", { line_id: lineId, reason: `model_${code}` });
       if (l.task.state === "running") this.setState(l, "needs_input", `model_${code}`);
       return;
     } finally { l.calling = null; }
+    if (who) await who;
     // A clause is applied only when its words come from this line; the model sometimes classes the recent words it was shown again.
     const all = r.value.clauses as AnyClause[];
     const clauses = all.filter((c) => fromLine(c.words, line.text));
@@ -1020,7 +1092,7 @@ export class EmrRuntime {
     if (c.class === "finding") {
       if (!kinds.includes(CLERKING_KIND)) return;
       if (!t.visit_id) { this.note(l, "Heard a finding, but no arrival is in context, so the note was not written."); return; }
-      this.proposeClerking(l, lineId, c.section ?? "history", (c.text && fromLine(c.text, lineText) ? c.text : c.words).trim());
+      this.proposeClerking(l, lineId, c.section ?? "history", this.saidBy(t, lineId, (c.text && fromLine(c.text, lineText) ? c.text : c.words).trim()));
       return;
     }
     if (c.class === "unclear") {
@@ -1182,6 +1254,24 @@ export class EmrRuntime {
         const ward = this.wardSaid(c.ward, line) ?? (admitted ? String(admitted.args["ward"]) : null);
         if (!ward) return this.ask(l, lineId, `Which ward should the bed be in? I know ${Object.values(this.o.port.names?.().wards ?? {}).map((w) => w[0]).join(", ") || "none"}.`);
         raw = { admission_id: t.admission_id, ward };
+        break;
+      }
+      case "order_test": {
+        if (!needVisit() || !t.patient_id) return;
+        const tests = this.o.port.orderables?.().tests ?? {};
+        const key = this.orderableSaid(tests, c.test, line);
+        if (!key) return this.ask(l, lineId, `Which test should I send? I can send ${Object.values(tests).map((w) => w[0]).join(", ") || "none"}.`);
+        raw = { visit_id: t.visit_id, patient_id: t.patient_id, test: key, ...(c.order_priority && wordSaid(c.order_priority, line) ? { priority: c.order_priority } : /\bstat\b/i.test(line) ? { priority: "stat" } : /\burgent(ly)?\b/i.test(line) ? { priority: "urgent" } : {}) };
+        break;
+      }
+      case "prescribe": {
+        if (!needVisit() || !t.patient_id) return;
+        const drugs = this.o.port.orderables?.().drugs ?? {};
+        const key = this.orderableSaid(Object.fromEntries(Object.entries(drugs).map(([k, d]) => [k, d.words])), c.drug, line);
+        if (!key) return this.ask(l, lineId, `Which medicine should I prescribe? I can prescribe ${Object.values(drugs).map((d) => d.words[0]).join(", ") || "none"}.`);
+        const rx = prescriptionSaid(line, c);
+        if (rx.quantity === null) return this.ask(l, lineId, `How many should the pharmacy give for ${drugs[key]!.words[0]}? Say the number.`);
+        raw = { visit_id: t.visit_id, patient_id: t.patient_id, drug: key, quantity: rx.quantity, ...(rx.dose ? { dose: rx.dose } : {}), ...(rx.frequency ? { frequency: rx.frequency } : {}), ...(rx.duration_days ? { duration_days: rx.duration_days } : {}), ...(rx.route ? { route: rx.route } : {}) };
         break;
       }
       default: return this.ask(l, lineId, "I cannot do that kind of work here.");
@@ -1365,6 +1455,7 @@ export class EmrRuntime {
     const when = [w.due_at ? `at ${w.due_at.slice(11, 16)} UTC` : null, w.after === "admission" ? "once the patient is admitted" : w.after === "result" ? "when the result is back" : null].filter(Boolean).join(", ");
     this.note(l, `Held ${when}: ${kind === "schedule_review" ? `review, ${title}` : summariseWork(kind, clause)}. I will do it then without being asked again.`);
     this.anchorReviews(l);
+    if (kind === "schedule_review") this.delegateReview(l, lineId, `${title} ${String(c.words ?? "")}`, w.due_at);
   }
 
   // Puts each held review on the ward board as a STAT item at its due time, once there is an admission to hang it on.
@@ -1388,6 +1479,15 @@ export class EmrRuntime {
       const t = l.task;
       if (CLOSED_TASK.has(t.state) || t.state === "paused") continue;
       if (t.admission_id && t.obligations.some((o) => o.kind === "schedule_review" && o.state === "held" && !o.anchor_action_id)) this.enqueue(l, async () => this.anchorReviews(l));
+      if (t.delegations.some((d) => d.ward_review === "held" && d.delegation_id) && this.onBed(t)) this.enqueue(l, async () => this.requestReviews(l));
+      if (t.admission_id && t.patient_id && t.obligations.some((o) => o.kind === "schedule_review" && o.state !== "cancelled" && !this.reviewTried.has(o.obligation_id) && !t.delegations.some((d) => d.line_id === o.line_id))) {
+        this.enqueue(l, async () => {
+          for (const o of t.obligations.filter((x) => x.kind === "schedule_review" && x.state !== "cancelled" && !this.reviewTried.has(x.obligation_id) && !t.delegations.some((d) => d.line_id === x.line_id))) {
+            this.reviewTried.add(o.obligation_id);
+            this.delegateReview(l, o.line_id, `${o.title} ${String(o.clause["words"] ?? "")}`, o.due_at);
+          }
+        });
+      }
       const results = this.o.port.resultFacts?.(t.owner) ?? [];
       for (const o of t.obligations) {
         if (o.state !== "held" || this.firing.has(o.obligation_id)) continue;
@@ -1423,23 +1523,153 @@ export class EmrRuntime {
     this.settle(l, "obligation_fired");
   }
 
-  private propose(l: Live, lineId: string, kind: string, args: WorkArgs, correctsId: string | null, own: Record<string, unknown> = {}): void {
+  private propose(l: Live, lineId: string, kind: string, rawArgs: WorkArgs, correctsId: string | null, own: Record<string, unknown> = {}): void {
     const t = l.task;
+    const who = this.speakerOf(t, lineId);
+    const summary = kind === OBSERVATION_KIND ? summarise(rawArgs as ObservationArgs, correctsId) : summariseWork(kind, rawArgs);
+    // Only the owner's own matched voice changes the patient's care; documentation from another voice is kept and marked with who said it.
+    const needsOwner = kind !== "countersign" && (ORDER_KINDS.has(kind) || (who !== null && !DOCUMENTATION_KINDS.has(kind)));
+    if (needsOwner && who?.speaker === "other_clinician") {
+      this.append(l, "speaker.refused", { line_id: lineId, kind, speaker: who.label });
+      this.note(l, `${who.label} said: ${summary}. Not done: ${who.label}'s orders need ${who.label}'s own session; a voice never changes whose agent this is.`);
+      return this.settle(l, "other_clinician");
+    }
+    const args = DOCUMENTATION_KINDS.has(kind) && who && who.speaker !== "owner" ? this.attributed(kind, rawArgs, who) : rawArgs;
+    let awaiting: EmrAction["awaiting"] = needsOwner && who?.speaker !== "owner" ? "owner_voice" : null;
+    const controlled = kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(args["drug"])]?.controlled;
+    if (!awaiting && controlled) awaiting = "confirm";
+    const authorisedBy = kind === "countersign" || (ORDER_KINDS.has(kind) && who?.speaker === "owner") ? lineId : null;
     const actionId = `a-${shortHash(t.task_id, lineId, t.order.length + 1)}`;
     const ears = this.startCheck(l, actionId, lineId, own);
-    const anchor = this.anchorOf(t, lineId);
+    if (kind === "prescribe" && typeof args["dose"] === "string") this.startDoseCheck(l, actionId, lineId, args["dose"]);
+    const anchor = awaiting ? null : this.anchorOf(t, lineId);
     const screen = this.screenOf(t, kind, args);
-    this.append(l, "action.proposed", { action_id: actionId, kind, args, summary: kind === OBSERVATION_KIND ? summarise(args as ObservationArgs, correctsId) : summariseWork(kind, args), line_id: lineId, corrects_action_id: correctsId, hold_ms: this.o.holdMs ?? 0, ...this.holdUntil(anchor), ...(ears ? { ears: true } : {}), ...(screen ? { screen } : {}) });
+    this.append(l, "action.proposed", { action_id: actionId, kind, args, summary, line_id: lineId, corrects_action_id: correctsId, hold_ms: this.o.holdMs ?? 0, ...this.holdUntil(anchor), ...(ears ? { ears: true } : {}), ...(awaiting ? { awaiting } : {}), ...(authorisedBy ? { authorised_by_line: authorisedBy } : {}), ...(screen ? { screen } : {}) });
+    if (awaiting === "owner_voice") this.ask(l, lineId, `Held: ${summary}. ${who ? "I could not match the voice to you" : "I heard no voice to match"}, so it waits until you say yes yourself.`, null, { kind: "authorise", action_id: actionId });
+    if (awaiting === "confirm") this.ask(l, lineId, `${summary}. This is a controlled drug: say confirm to send it.`, null, { kind: "confirm", action_id: actionId });
     this.settle(l, "proposed");
     this.noteHold(actionId, anchor);
-    if (t.state === "running") this.hold(l, actionId, anchor);
+    if (t.state === "running" && !awaiting) this.hold(l, actionId, anchor);
+  }
+
+  // The line's matched speaker, once the hospital answered; null when the line had no voice to match.
+  private speakerOf(t: EmrTask, lineId: string): SpeakerRecord | null { return t.lines.find((x) => x.id === lineId)?.speaker ?? null; }
+
+  // Journals who spoke the line once the match is back; the owner's token stays in memory for the order the line authorises.
+  private async attribute(l: Live, lineId: string): Promise<SpeakerRecord | null> {
+    const p = this.speakers.get(lineId);
+    if (!p) return this.speakerOf(l.task, lineId);
+    this.speakers.delete(lineId);
+    const r = await p;
+    if (r.v.speaker === "owner") this.tokens.set(lineId, r.v.token);
+    const rec = recordOf(r.v, r.embed_ms, r.match_ms);
+    this.append(l, "speaker.attributed", { line_id: lineId, speaker: rec });
+    return rec;
+  }
+
+  // Words another clinician said carry their name, and words nobody could be matched to say so.
+  private saidBy(t: EmrTask, lineId: string, text: string): string {
+    const who = this.speakerOf(t, lineId);
+    if (!who || who.speaker === "owner") return text;
+    return who.speaker === "other_clinician" ? `${who.label} said: ${text}` : `Speaker not verified: ${text}`;
+  }
+
+  private attributed(kind: string, a: WorkArgs, who: SpeakerRecord): WorkArgs {
+    const tag = who.speaker === "other_clinician" ? `${who.label} said` : "Speaker not verified";
+    if (kind === OBSERVATION_KIND) return { ...a, remark: [tag, a["remark"]].filter(Boolean).join(". ").slice(0, 300) };
+    if (kind === "record_triage_vitals") return { ...a, note: [tag, a["note"]].filter(Boolean).join(". ").slice(0, 500) };
+    if ((kind === "record_note" || kind === "draft_consult_note") && typeof a["text"] === "string" && !a["text"].startsWith(tag)) return { ...a, text: `${tag}: ${a["text"]}` };
+    return a;
+  }
+
+  // The test or medicine key the line names: the gate's key when its words were said, else the one key whose words were said.
+  private orderableSaid(m: Record<string, readonly string[]>, named: string | null | undefined, line: string): string | null {
+    if (named && m[named]?.some((w) => wordSaid(w, line))) return named;
+    const hit = Object.entries(m).filter(([, ws]) => ws.some((w) => wordSaid(w, line)));
+    return hit.length === 1 ? hit[0]![0] : null;
+  }
+
+  // What a short line says to the voice-order rules: sign everything, or a yes or no to the latest open order question.
+  private orderWords(t: EmrTask, lineId: string): { sign: boolean; yes: boolean; no: boolean; q: EmrQuestion | null } | null {
+    const line = t.lines.find((x) => x.id === lineId);
+    if (!line || line.decided || t.state !== "running") return null;
+    const text = line.text.toLowerCase().replace(/[^a-z' ]+/g, " ").replace(/\s+/g, " ").trim();
+    const sign = SIGN_EVERYTHING.test(text);
+    const open = t.questions.filter((y) => y.answered_by === null && y.rule).at(-1) ?? null;
+    const q = open && Date.parse(line.at) - Date.parse(open.at) <= (this.o.answerWindowMs ?? 600_000) ? open : null;
+    const yes = text.split(" ").length <= 5 && OWNER_YES.test(text);
+    const no = text.split(" ").length <= 4 && OWNER_NO.test(text);
+    return sign || (q && (yes || no)) ? { sign, yes, no, q } : null;
+  }
+  private orderRuleApplies(l: Live, lineId: string): boolean { return this.orderWords(l.task, lineId) !== null; }
+
+  // Short owner answers about voice orders, and "sign everything", settled by rule with no model call once the voice is matched.
+  private async orderRule(l: Live, lineId: string, prov: Provenance): Promise<boolean> {
+    const t = l.task;
+    const w = this.orderWords(t, lineId);
+    if (!w) return false;
+    const { sign, no, q } = w;
+    const who = await this.attribute(l, lineId);
+    this.append(l, "line.ruled", { line_id: lineId, classes: ["instruction"], as: sign ? "sign_everything" : "order_answer", ...(q ? { question_id: q.question_id } : {}) });
+    if (who?.speaker !== "owner") {
+      this.append(l, "speaker.refused", { line_id: lineId, kind: sign ? "countersign" : q?.rule?.kind ?? null, speaker: who?.label ?? who?.speaker ?? "no_voice" });
+      this.note(l, `${who?.speaker === "other_clinician" ? `${who.label} said that` : "I could not match that voice to you"}, so nothing was signed or sent. Say it yourself.`);
+      this.settle(l, "needs_owner_voice");
+      return true;
+    }
+    if (sign) { await this.readBackBatch(l, lineId, prov); return true; }
+    this.append(l, "question.answered", { question_id: q!.question_id, line_id: lineId });
+    const rule = q!.rule!;
+    if (no) {
+      if (rule.kind !== "countersign") { const a = t.actions.get(rule.action_id); if (a?.state === "proposed") this.append(l, "action.cancelled", { action_id: a.action_id, reason: `declined_by_${lineId}` }); }
+      this.note(l, rule.kind === "countersign" ? "Not signed, as you said." : "Not sent, as you said.");
+      this.settle(l, "declined");
+      return true;
+    }
+    if (rule.kind === "countersign") {
+      const parsed = WORK_ARGS.countersign.safeParse(rule.args);
+      if (!parsed.success) { this.note(l, "That read-back could not be signed; say sign everything again."); this.settle(l, "read_back_invalid"); return true; }
+      this.propose(l, lineId, "countersign", parsed.data, null);
+      return true;
+    }
+    const a = t.actions.get(rule.action_id);
+    if (!a || a.state !== "proposed" || !a.awaiting) { this.note(l, "There was nothing waiting for your word."); this.settle(l, "nothing_waiting"); return true; }
+    const controlled = a.kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(a.args["drug"])]?.controlled;
+    if (a.awaiting === "owner_voice") {
+      this.append(l, "action.authorised", { action_id: a.action_id, line_id: lineId, as: "authorise", awaiting: controlled ? "confirm" : null });
+      if (controlled) { this.ask(l, lineId, `${a.summary}. This is a controlled drug: say confirm to send it.`, null, { kind: "confirm", action_id: a.action_id }); this.settle(l, "asked"); return true; }
+    } else {
+      this.append(l, "action.authorised", { action_id: a.action_id, line_id: lineId, as: "confirm", awaiting: null });
+    }
+    this.settle(l, "authorised");
+    this.hold(l, a.action_id);
+    return true;
+  }
+
+  // Reads back the identified batch of voice orders awaiting the owner's countersign, shown on screen before anything is signed.
+  private async readBackBatch(l: Live, lineId: string, prov: Provenance): Promise<void> {
+    const t = l.task;
+    if (!t.visit_id || !this.o.port.readBack || !this.kinds(t.owner).includes("countersign")) { this.note(l, "There are no voice orders here for you to countersign."); return this.settle(l, "nothing_to_sign"); }
+    let rb;
+    try { rb = await this.o.port.readBack(t.owner, t.visit_id, prov); } catch (e) {
+      this.note(l, `I could not read back the orders to countersign (${e instanceof Error ? e.message.slice(0, 80) : "read failed"}). Say sign everything again.`);
+      return this.settle(l, "read_back_failed");
+    }
+    this.append(l, "countersign.read_back", { line_id: lineId, item_ids: rb.items.map((i) => i.stateId), items_digest: rb.itemsDigest, read_back_at: rb.readBackAt, awaiting_second: rb.awaitingSecond.map((i) => i.stateId), changed: rb.changed.map((i) => i.stateId) });
+    if (rb.awaitingSecond.length) this.note(l, `Waiting for a second clinician's countersign: ${rb.awaitingSecond.map((i) => i.label).join(", ")}.`);
+    if (rb.changed.length) this.note(l, `Changed since you gave them, so not in this batch: ${rb.changed.map((i) => i.label).join(", ")}.`);
+    if (!rb.items.length || !rb.itemsDigest || !rb.seal) { this.note(l, "Nothing is waiting for your countersign on this patient."); return this.settle(l, "nothing_to_sign"); }
+    const labels = rb.items.map((i) => `${i.label}${i.controlled ? " (controlled)" : ""}${i.sentAt ? ` sent ${i.sentAt.slice(11, 16)}` : ""}`);
+    this.ask(l, lineId, `Countersign ${rb.items.length} voice order${rb.items.length === 1 ? "" : "s"}: ${labels.map((x, i) => `${i + 1}. ${x}`).join("; ")}. Say yes to sign exactly these.`, null,
+      { kind: "countersign", args: { visit_id: t.visit_id, item_ids: rb.items.map((i) => i.stateId), items_digest: rb.itemsDigest, read_back_at: rb.readBackAt, read_back_seal: rb.seal, labels: rb.items.map((i) => i.label.slice(0, 120)) } });
+    this.settle(l, "read_back");
   }
 
   private note(l: Live, text: string): void {
     this.append(l, "task.note", { note_id: `n-${shortHash(l.task.task_id, l.task.notes.length + 1)}`, text });
   }
-  private ask(l: Live, lineId: string, text: string, choice: QuestionChoice | null = null): void {
-    this.append(l, "question.asked", { question_id: `q-${shortHash(l.task.task_id, l.task.questions.length + 1)}`, line_id: lineId, text: text.slice(0, 300), ...(choice ? { choice } : {}) });
+  private ask(l: Live, lineId: string, text: string, choice: QuestionChoice | null = null, rule: OrderRule | null = null): void {
+    this.append(l, "question.asked", { question_id: `q-${shortHash(l.task.task_id, l.task.questions.length + 1)}`, line_id: lineId, text: text.slice(0, rule ? 900 : 300), ...(choice ? { choice } : {}), ...(rule ? { rule } : {}) });
   }
 
   private applyDecision(l: Live, lineId: string, d: Decide, _prov: Provenance): void {
@@ -1493,8 +1723,10 @@ export class EmrRuntime {
   }
 
   // Proposes one observation; when the line came with audio, the second ear reads the values said in it while the action waits on its hold.
-  private proposeObservation(l: Live, lineId: string, args: ObservationArgs, correctsId: string | null, own: Record<string, unknown>): void {
+  private proposeObservation(l: Live, lineId: string, observed: ObservationArgs, correctsId: string | null, own: Record<string, unknown>): void {
     const t = l.task;
+    const who = this.speakerOf(t, lineId);
+    const args = who && who.speaker !== "owner" ? (this.attributed(OBSERVATION_KIND, observed, who) as ObservationArgs) : observed;
     const actionId = `a-${shortHash(t.task_id, lineId, t.order.length + 1)}`;
     const ears = this.startCheck(l, actionId, lineId, own);
     const anchor = this.anchorOf(t, lineId);
@@ -1531,6 +1763,34 @@ export class EmrRuntime {
       .finally(() => { tm.ear_done = Date.now(); });
     this.checks.set(actionId, p);
     return true;
+  }
+
+  // The second ear reads a spoken dose too, so a unit it hears differently holds the prescription instead of writing it.
+  private startDoseCheck(l: Live, actionId: string, lineId: string, dose: string): void {
+    const clip = this.clips.get(lineId);
+    const early = this.doseEars.get(lineId);
+    this.doseEars.delete(lineId);
+    if (!early && (!clip || !this.o.secondEar)) return;
+    const t = l.task;
+    const read = () => this.o.secondEar!(clip!.wav, { run_id: t.run_id, task_id: t.task_id, line_id: lineId }).then((reading) => ({ reading, error: null }), (e: unknown) => ({ reading: null as EarReading | null, error: e instanceof ModelError ? e.code : "ear_failed" }));
+    // A second reading that failed or heard no dose at all is read once more, as the vitals path does; one that heard a different dose is never read again.
+    const ear = (early ?? read()).then((r) => (clip && this.o.secondEar && (!r.reading || !dosesIn(cleanTranscript(r.reading.text)).length) ? read() : r));
+    this.doseChecks.set(actionId, ear.then(({ reading, error }) => reading
+      ? { agree: doseAgrees(dose, cleanTranscript(reading.text)), heard: reading.text.slice(0, 200), error: null, reading }
+      : { agree: false, heard: null, error: error ?? "ear_failed", reading: null }));
+  }
+  private async doseAgreed(l: Live, a: EmrAction): Promise<boolean> {
+    const p = this.doseChecks.get(a.action_id);
+    if (!p) return true;
+    const r = await p;
+    this.doseChecks.delete(a.action_id);
+    this.append(l, "ears.dose_compared", { action_id: a.action_id, line_id: a.line_id, agree: r.agree, error: r.error, provider: r.reading?.provider ?? null, model: r.reading?.model ?? null, cost_usd: r.reading?.cost_usd ?? 0, calls: r.reading ? r.reading.calls ?? 1 : 0 });
+    if (r.agree) return a.state === "proposed" && l.task.state === "running";
+    if (a.state !== "proposed") return false;
+    this.append(l, "action.cancelled", { action_id: a.action_id, reason: "dose_readings_differ" });
+    this.ask(l, a.line_id, `The dose for ${String(a.args["drug"]).replace(/_/g, " ")} was not heard the same way twice${r.heard ? ` (the second reading heard "${r.heard.slice(0, 80)}")` : ""}. Nothing was sent; please say the order again with its dose.`);
+    this.settle(l, "asked");
+    return false;
   }
 
   // Waits for the second reading before the write; when the readings differ the action is stopped and a one-word question shows both.
@@ -1604,6 +1864,7 @@ export class EmrRuntime {
           }
         }
       }
+      await this.pollDelegations(at);
     } finally {
       this.polling = false;
     }
@@ -1657,7 +1918,15 @@ export class EmrRuntime {
 
   private provFor(t: EmrTask, a: EmrAction): Provenance {
     const line = t.lines.find((x) => x.id === a.line_id);
-    return { owner: t.owner, evidence: `transcript:${a.line_id}`, spoken_at: line?.at ?? t.created_at };
+    // Work the record started, with no spoken line behind it, names the record it came from.
+    const evidence = a.line_id.startsWith("rec-") ? `record:${a.line_id.slice(4)}` : `transcript:${a.line_id}`;
+    const base: Provenance = { owner: t.owner, evidence, spoken_at: line?.at ?? t.created_at };
+    if (!a.kind || !ORDER_KINDS.has(a.kind)) return base;
+    // An order carries the owner's matched lines as "evidence~token"; a token lost on restart leaves the header out, and the hospital refuses the write.
+    const voiced = (lineId: string | null) => { const tok = lineId ? this.tokens.get(lineId) : undefined; return lineId && tok ? `transcript:${lineId}~${tok}` : undefined; };
+    const authorisation = voiced(a.authorised_by_line);
+    const confirmation = a.kind === "countersign" ? authorisation : voiced(a.confirmed_by_line);
+    return { ...base, voice: { ...(authorisation ? { authorisation } : {}), ...(confirmation ? { confirmation } : {}) } };
   }
 
   // Journal, write, reconcile once by replaying the same key, then prove by a fresh read; the task state is checked right before the write.
@@ -1666,8 +1935,9 @@ export class EmrRuntime {
     const a = t.actions.get(actionId);
     if (!a) return;
     if (a.state === "proposed") {
-      if (t.state !== "running") return;
+      if (t.state !== "running" || a.awaiting) return;
       if (!(await this.earsAgree(l, a))) return;
+      if (!(await this.doseAgreed(l, a))) return;
       // A note section is sent with every section already written, so the draft always holds the whole note as it stands.
       const args = a.kind === CLERKING_KIND ? { ...a.args, note: this.noteSoFar(t, a) } : a.args;
       this.append(l, "action.intent", { action_id: actionId, intent_key: emrIntentKey(t.task_id, actionId, args), args });
@@ -1682,6 +1952,7 @@ export class EmrRuntime {
       }
       if (!c.ok) {
         this.append(l, c.retryable ? "action.failed" : "action.refused", { action_id: actionId, reason: c.reason, status: c.status, counted: c.counted });
+        if (a.kind === "countersign" && !c.retryable) this.note(l, "Nothing was signed: the orders changed after they were read back, or one is not yours to sign now. Say sign everything to read them back again.");
         return this.settle(l, c.retryable ? "write_failed" : "write_refused");
       }
       this.append(l, "action.written", { action_id: actionId, written: { record_id: c.record_id, record_version: c.record_version, event_ids: c.event_ids, replayed: c.replayed } });
@@ -1711,6 +1982,8 @@ export class EmrRuntime {
     }
     this.append(l, "action.completed", { action_id: actionId, proof });
     this.append(l, "speed.logged", { row: this.speedRow(t, a, verifyMs) });
+    if (DELEGATION_RULE_KINDS.has(a.kind)) this.afterDelegation(l, a, w.record_id);
+    else this.handOff(l, a, w.record_id);
     // An unnamed arrival the agent opened becomes the task's patient and arrival, so later words reach it.
     if (a.kind === EMERGENCY_KIND && EmrId.safeParse(w.record_id).success) {
       const visit = w.event_ids.map((e) => /^visit:(.+)$/.exec(e)?.[1]).find((v) => v && EmrId.safeParse(v).success) ?? null;
@@ -1747,6 +2020,7 @@ export class EmrRuntime {
     const line = t.lines.find((x) => x.id === lineId);
     if (line && !line.kept) this.append(l, "line.kept", { line_id: lineId, text: line.text, raw_text: line.ambient?.raw_text ?? null });
     this.note(l, `Held for the front desk to register: ${name}${phone ? `, phone ${phone}` : ", no phone yet"}.`);
+    this.delegateRegistration(l, lineId, ob.obligation_id, name, phone);
   }
 
   // "hey Pisgah, emergency" with no patient open: one task and one unnamed arrival through the door, the spoken line its evidence, with no model call.
@@ -1788,20 +2062,272 @@ export class EmrRuntime {
   private speedRow(t: EmrTask, a: EmrAction, verifyMs: number): SpeedRow {
     const line = t.lines.find((x) => x.id === a.line_id);
     const fired = t.obligations.find((o) => o.action_id === a.action_id || (o.line_id === a.line_id && o.kind === a.kind && o.fired_at && o.fired_at <= a.proposed_at));
-    const from = fired?.fired_at ?? line?.ambient?.ended_at ?? line?.at ?? a.proposed_at;
+    // Work the record started is timed from when the agent saw the record change, so another person's time is never counted as the agent's.
+    const byRecord = a.line_id.startsWith("rec-") || a.kind === COMPLETE_KIND || a.kind === ESCALATE_KIND || a.kind === WARD_REVIEW_KIND;
+    const from = byRecord ? a.proposed_at : fired?.fired_at ?? line?.ambient?.ended_at ?? line?.at ?? a.proposed_at;
     const verified = this.wall().toISOString();
     const d = (x: string | null | undefined) => (x ? Date.parse(x) - Date.parse(from) : null);
-    const n = (x: number | undefined) => (x === undefined || fired ? null : x - Date.parse(from));
+    const n = (x: number | undefined) => (x === undefined || fired || byRecord ? null : x - Date.parse(from));
     const tm = this.times.get(a.line_id) ?? {};
     const gate = this.gateStage.get(a.line_id) ?? null;
     return {
       action_id: a.action_id, kind: a.kind, line_id: a.line_id, from, verified_at: verified, ms: Date.parse(verified) - Date.parse(from),
       parts: {
-        heard: fired ? null : d(line?.ambient?.final_at), asr: n(tm.asr_at), delivered: n(tm.delivered), gate_start: n(tm.gate_start), gate_end: n(tm.gate_end), ear_done: n(tm.ear_done),
+        heard: fired || byRecord ? null : d(line?.ambient?.final_at), asr: n(tm.asr_at), delivered: n(tm.delivered), gate_start: n(tm.gate_start), gate_end: n(tm.gate_end), ear_done: n(tm.ear_done),
         proposed: d(a.proposed_at), hold_until: this.holdEnds.has(a.action_id) ? d(this.holdEnds.get(a.action_id)) : null, written: d(a.written_at), verified: d(verified), verify_ms: verifyMs, hold_ms: this.o.holdMs ?? 0
       },
-      gate: fired ? null : gate, levers: leverList(this.lv)
+      gate: fired || byRecord ? null : gate, levers: leverList(this.lv), ...(byRecord ? { from_record: true } : {})
     };
+  }
+
+  // A rule-taken delegation action: the task runs again and the action waits its hold like any other, unless the clinician paused the task.
+  private ruleAct(l: Live, lineId: string, kind: string, args: Record<string, unknown>): string | null {
+    const parsed = DELEGATION_ARGS[kind]?.safeParse(args);
+    if (!parsed?.success) { this.log(`delegation ${kind}: ${parsed?.error.issues[0]?.message ?? "no schema"}`); return null; }
+    if (CLOSED_TASK.has(l.task.state) || l.task.state === "paused" || !this.kinds(l.task.owner).includes(kind)) return null;
+    this.setState(l, "running", `rule_${kind}`);
+    const before = l.task.order.length;
+    this.propose(l, lineId, kind, parsed.data, null);
+    return l.task.order.length > before ? l.task.order.at(-1)! : null;
+  }
+
+  // Attempts of one delegation action kind for one delegation that did not end refused, failed or cancelled; the repair cap counts every attempt.
+  private attempts(t: EmrTask, kind: string, delegationId: string | null): { live: boolean; tries: number } {
+    const xs = t.order.map((id) => t.actions.get(id)!).filter((a) => a.kind === kind && (delegationId === null || a.args["delegation_id"] === delegationId));
+    return { live: xs.some((a) => a.state !== "refused" && a.state !== "failed" && a.state !== "cancelled"), tries: xs.length };
+  }
+
+  private newDelegation(key: string, lineId: string, kind: string, title: string, team: string | null, dueAt: string | null, wardReview: EmrDelegation["ward_review"], extra: Partial<EmrDelegation> = {}): EmrDelegation {
+    return {
+      key, delegation_id: null, side: "delegator", task_kind: kind, title, team, action_id: key, line_id: lineId, at: this.wall().toISOString(),
+      assigned_at: null, acknowledged_at: null, completed_at: null, escalated_at: null, record_id: null, ward_review: wardReview, due_at: dueAt, registration: null, obligation_id: null, ...extra
+    };
+  }
+
+  // A review held for a time whose words name one of the owner's teams becomes a task for that team's on-duty doctor, once there is an admission to review.
+  private delegateReview(l: Live, lineId: string, words: string, dueAt: string | null): void {
+    const t = l.task;
+    if (!this.kinds(t.owner).includes(DELEGATE_KIND) || !t.patient_id || !t.admission_id) return;
+    if (t.delegations.some((d) => d.line_id === lineId)) return;
+    const teams = this.o.port.delegationTeams?.(t.owner) ?? {};
+    const team = teamSaid(words, teams, "review");
+    if (!team) return;
+    const spec = teams[team]!;
+    const minutes = dueAt ? Math.max(0, Math.round((Date.parse(dueAt) - this.wall().getTime()) / 60_000)) : null;
+    const escalate = spec.escalate_after_minutes ?? minutes;
+    const id = this.ruleAct(l, lineId, DELEGATE_KIND, {
+      task_kind: "review", team, patient_id: t.patient_id, admission_id: t.admission_id, ...(t.visit_id ? { visit_id: t.visit_id } : {}),
+      subject_table: "admissions", subject_id: t.admission_id, title: spec.title, instruction: words.trim().slice(0, 2000),
+      ...(dueAt ? { due_at: dueAt } : {}), ...(escalate !== null && escalate !== undefined ? { escalate_after_minutes: escalate } : {}), evidence: `transcript:${lineId}`
+    });
+    if (id) this.append(l, "delegation.made", { delegation: this.newDelegation(id, lineId, "review", spec.title, team, dueAt, "held") });
+  }
+
+  // A spoken identity becomes a task for the front desk, which alone may name the record; the identity closes here when the record shows the name.
+  private delegateRegistration(l: Live, lineId: string, obligationId: string, name: string, phone: string | null): void {
+    const t = l.task;
+    if (!this.kinds(t.owner).includes(DELEGATE_KIND) || !t.patient_id) return;
+    const teams = this.o.port.delegationTeams?.(t.owner) ?? {};
+    const team = onlyTeam(teams, "registration");
+    if (!team) return;
+    const spec = teams[team]!;
+    const id = this.ruleAct(l, lineId, DELEGATE_KIND, {
+      task_kind: "registration", team, patient_id: t.patient_id, ...(t.visit_id ? { visit_id: t.visit_id } : {}), subject_table: "patients", subject_id: t.patient_id,
+      title: spec.title, instruction: registrationInstruction(name, phone), ...(spec.escalate_after_minutes !== undefined ? { escalate_after_minutes: spec.escalate_after_minutes } : {}), evidence: `transcript:${lineId}`
+    });
+    if (id) this.append(l, "delegation.made", { delegation: this.newDelegation(id, lineId, "registration", spec.title, team, null, "none", { obligation_id: obligationId }) });
+  }
+
+  // A verified write the profile hands on, such as a sent voice order, becomes a task for the team that performs it, about the record the write made.
+  private handOff(l: Live, a: EmrAction, recordId: string): void {
+    const t = l.task;
+    const h = this.o.port.delegationHandoffs?.(t.owner)[a.kind];
+    if (!h || !t.patient_id || !EmrId.safeParse(recordId).success || !this.kinds(t.owner).includes(DELEGATE_KIND)) return;
+    const spec = (this.o.port.delegationTeams?.(t.owner) ?? {})[h.team];
+    if (!spec || t.delegations.some((d) => d.side === "delegator" && d.line_id === a.line_id && d.team === h.team)) return;
+    const id = this.ruleAct(l, a.line_id, DELEGATE_KIND, {
+      task_kind: spec.task_kind, team: h.team, patient_id: t.patient_id, ...(t.admission_id ? { admission_id: t.admission_id } : {}), ...(t.visit_id ? { visit_id: t.visit_id } : {}),
+      subject_table: h.subject_table, subject_id: recordId, title: spec.title, instruction: `${a.summary}`.slice(0, 2000),
+      ...(spec.escalate_after_minutes !== undefined ? { escalate_after_minutes: spec.escalate_after_minutes } : {}), evidence: `transcript:${a.line_id}`
+    });
+    if (id) this.append(l, "delegation.made", { delegation: this.newDelegation(id, a.line_id, spec.task_kind, spec.title, h.team, null, "none") });
+  }
+
+  private onBed(t: EmrTask): boolean {
+    return t.order.some((id) => { const a = t.actions.get(id)!; return a.kind === "assign_bed" && a.state === "completed"; });
+  }
+
+  // The ward review request goes to the team's clinic once the patient is on a bed, which the EMR needs before it takes one.
+  private requestReviews(l: Live): void {
+    const t = l.task;
+    if (!t.admission_id || !this.onBed(t)) return;
+    for (const d of t.delegations.filter((x) => x.ward_review === "held" && x.delegation_id && x.team)) {
+      const tried = this.attempts(t, WARD_REVIEW_KIND, d.delegation_id);
+      if (tried.live || tried.tries >= 2) continue;
+      this.ruleAct(l, d.line_id, WARD_REVIEW_KIND, { delegation_id: d.delegation_id, admission_id: t.admission_id, team: d.team, reason: `${d.title}, asked for by voice` });
+    }
+  }
+
+  // The words that a rule takes are kept as evidence on the task they belong to.
+  private ruledLine(l: Live, owner: string, text: string, spokenAt: string, source: "text" | "audio", as: string): string {
+    const lineId = this.nextLineId(owner, text);
+    this.append(l, "utterance.heard", { line_id: lineId, text, source, spoken_at: spokenAt });
+    this.append(l, "line.ruled", { line_id: lineId, classes: ["instruction"], as });
+    return lineId;
+  }
+
+  // A spoken "accepted <task>" acknowledges the one open task it names, and the desk's phone or consent words fill a registration; anything else is not a delegation line.
+  delegationLine(owner: string, text: string, spokenAt: string, source: "text" | "audio", target?: EmrTarget): { task_id: string; line_id: string } | null {
+    const open = [...this.live.values()].filter((l) => l.task.owner === owner && !CLOSED_TASK.has(l.task.state))
+      .flatMap((l) => l.task.delegations.filter((d) => d.side === "assignee" && d.delegation_id && !d.completed_at).map((d) => ({ l, d, title: d.title })));
+    if (!open.length) return null;
+    const waiting = open.filter((x) => !x.d.acknowledged_at);
+    // With the patient open, an acceptance is read against that patient's tasks first, so the same task for two patients is not ambiguous.
+    const atHand = waiting.filter((x) => target && ((target.admission_id && x.l.task.admission_id === target.admission_id) || (target.patient_id && x.l.task.patient_id === target.patient_id)));
+    const acc = acceptedTask(text, atHand.length ? atHand : waiting);
+    if (acc) {
+      const home = "hit" in acc ? acc.hit.l : open.at(-1)!.l;
+      const lineId = this.ruledLine(home, owner, text, spokenAt, source, "accept");
+      if ("hit" in acc) this.ruleAct(home, lineId, ACK_KIND, { delegation_id: acc.hit.d.delegation_id, title: acc.hit.d.title, evidence: `transcript:${lineId}` });
+      else if ("ambiguous" in acc) this.ask(home, lineId, `Which task do you accept? ${acc.ambiguous.map((x) => x.title).join("; ")}. Say accepted and its name.`);
+      else this.note(home, `No task waiting for you matches that. Waiting: ${waiting.map((x) => x.title).join("; ") || "none"}.`);
+      this.settle(home, "accept_line");
+      return { task_id: home.task.task_id, line_id: lineId };
+    }
+    const all = open.filter((x) => x.d.task_kind === "registration" && x.d.registration && !x.d.record_id);
+    // With several arrivals waiting, the words go to the one the desk has open.
+    const here = all.filter((x) => target && ((target.patient_id && x.l.task.patient_id === target.patient_id) || (target.admission_id && x.l.task.admission_id === target.admission_id)));
+    const reg = here.length ? here : all;
+    const phone = phoneSaid(text);
+    const consent = consentSaid(text);
+    if (!reg.length || (!phone && !consent)) return null;
+    if (reg.length > 1) {
+      const l = reg.at(-1)!.l;
+      const lineId = this.ruledLine(l, owner, text, spokenAt, source, "registration");
+      this.ask(l, lineId, `${reg.length} registrations are waiting. Open the patient you are registering, then say it again.`);
+      this.settle(l, "registration_ambiguous");
+      return { task_id: l.task.task_id, line_id: lineId };
+    }
+    const { l, d } = reg[0]!;
+    const lineId = this.ruledLine(l, owner, text, spokenAt, source, "registration");
+    this.append(l, "delegation.details", { key: d.key, ...(phone ? { phone } : {}), ...(consent ? { consent_line: lineId } : {}) });
+    this.registerWhenReady(l, d, lineId);
+    this.settle(l, "registration_details");
+    return { task_id: l.task.task_id, line_id: lineId };
+  }
+
+  // The desk's agent completes the record only with the name, a phone and the patient's consent said at the desk; otherwise it says what is missing.
+  private registerWhenReady(l: Live, d: EmrDelegation, lineId: string): void {
+    const r = d.registration!;
+    const parts = r.name ? nameParts(r.name) : null;
+    const needs = registrationNeeds(r);
+    if (!parts) { this.note(l, "The name on this registration is not a full name, so I have not registered it; say the patient's full name."); return; }
+    if (needs.length) { this.note(l, `Still needed before I register: ${needs.map((n) => (n === "phone" ? "a phone number" : "the patient's consent, said by you")).join(" and ")}.`); return; }
+    const tried = this.attempts(l.task, REGISTER_KIND, d.delegation_id);
+    if (tried.live || tried.tries >= 2 || !l.task.patient_id) return;
+    this.ruleAct(l, lineId, REGISTER_KIND, { delegation_id: d.delegation_id, patient_id: l.task.patient_id, ...parts, phone: r.phone, evidence: `transcript:${r.consent_line}` });
+  }
+
+  // A task handed to this owner opens the owner's task for that patient with no read, and the agent tells its human on the bell at once.
+  private receive(owner: string, d: DelegationRead, at: string): void {
+    const ctx: EmrContext = { admission_id: d.admission_id ?? "", patient_id: d.patient_id, visit_id: d.visit_id, label: d.title, facts: {}, keywords: [] };
+    const l = this.taskFor(owner, ctx) ?? this.openTask(owner, ctx, { entry: "delegation" });
+    const reg = d.kind === "registration" ? { ...registrationFrom(d.instruction), consent_line: null } : null;
+    const lineId = `rec-${d.id}`;
+    this.append(l, "delegation.received", { delegation: { ...this.newDelegation(d.id, lineId, d.kind, d.title, null, d.due_at, "none", { registration: reg }), delegation_id: d.id, side: "assignee", action_id: null, assigned_at: at, acknowledged_at: d.acknowledged_at, escalated_at: d.escalated_at } });
+    const needs = reg ? registrationNeeds(reg) : [];
+    const id = this.ruleAct(l, lineId, NUDGE_KIND, { delegation_id: d.id, title: d.title, needs, nudge_key: `nudge:${needs.length ? [...needs].sort().join("+") : "new"}` });
+    if (!id) this.note(l, `New task for you: ${d.title}. Say accepted ${d.title.toLowerCase()} to take it.`);
+    this.o.onSubject?.(owner, d.admission_id ? { admission_id: d.admission_id } : { patient_id: d.patient_id }, "delegation");
+  }
+
+  // Each poll: new tasks handed to an owner are received; tasks an owner handed on are read again, closed when the record shows them done and escalated once when overdue.
+  private async pollDelegations(at: string): Promise<void> {
+    const port = this.o.port;
+    if (!port.delegations || !port.delegation) return;
+    const owners = new Set([...(port.delegationOwners?.() ?? []), ...[...this.live.values()].map((l) => l.task.owner)]);
+    for (const owner of owners) {
+      if (this.stopped) return;
+      const side = port.delegationSide?.(owner) ?? "none";
+      const prov: Provenance = { owner, evidence: "watch:delegations", spoken_at: at };
+      const mine = () => [...this.live.values()].filter((l) => l.task.owner === owner);
+      if (side === "assignee" || side === "both") {
+        let rows: DelegationRead[] = [];
+        try { rows = await port.delegations(owner, "assignee", prov); } catch (e) { this.log(`delegations ${owner}: ${e instanceof Error ? e.message : String(e)}`); }
+        const known = new Set(mine().flatMap((l) => l.task.delegations.filter((d) => d.side === "assignee").map((d) => d.delegation_id)));
+        // The list carries no instruction, so each new task is read whole before it is received.
+        for (const d of rows.filter((r) => !known.has(r.id) && r.state !== "completed" && r.state !== "cancelled")) {
+          let whole: DelegationRead | null = null;
+          try { whole = await port.delegation(owner, d.id, prov); } catch { whole = null; }
+          if (!this.stopped) this.receive(owner, whole ?? d, at);
+        }
+      }
+      if (side !== "delegator" && side !== "both") continue;
+      for (const l of mine().filter((x) => !CLOSED_TASK.has(x.task.state))) {
+        for (const d of l.task.delegations.filter((x) => x.side === "delegator" && x.delegation_id && !x.completed_at)) {
+          let r: DelegationRead | null = null;
+          try { r = await port.delegation(owner, d.delegation_id!, prov); } catch { continue; }
+          if (!r || this.stopped) continue;
+          if (r.acknowledged_at && !d.acknowledged_at) {
+            this.append(l, "delegation.state", { key: d.key, acknowledged_at: r.acknowledged_at });
+            this.note(l, `Accepted by the ${String(d.team ?? "").replace(/_/g, " ")} team: ${d.title}. Not done yet; I am watching the record.`);
+          }
+          const done = this.attempts(l.task, COMPLETE_KIND, d.delegation_id);
+          const esc = this.attempts(l.task, ESCALATE_KIND, d.delegation_id);
+          if (r.record.status === "verified" && r.record.record_id) {
+            if (!done.live && done.tries < 2) this.ruleAct(l, d.line_id, COMPLETE_KIND, { delegation_id: d.delegation_id, title: d.title, found_record_id: r.record.record_id, evidence: `transcript:${d.line_id}` });
+          } else if (r.overdue && !r.escalated_at && !d.escalated_at && !esc.live && esc.tries < 2) {
+            this.ruleAct(l, d.line_id, ESCALATE_KIND, { delegation_id: d.delegation_id, title: d.title });
+          }
+        }
+      }
+    }
+  }
+
+  // What each verified delegation write means for the task, said once in the owner's strip.
+  private afterDelegation(l: Live, a: EmrAction, recordId: string): void {
+    const t = l.task;
+    const did = String(a.args["delegation_id"] ?? "");
+    const d = a.kind === DELEGATE_KIND ? t.delegations.find((x) => x.key === a.action_id) : t.delegations.find((x) => x.delegation_id === did);
+    const now = this.wall().toISOString();
+    const team = String(d?.team ?? a.args["team"] ?? "").replace(/_/g, " ");
+    if (!d) return;
+    switch (a.kind) {
+      case DELEGATE_KIND:
+        this.append(l, "delegation.state", { key: d.key, delegation_id: recordId, assigned_at: now });
+        this.note(l, `Handed to the ${team} team: ${d.title}. I will follow it in the record and tell you when it is done.`);
+        break;
+      case ACK_KIND:
+        this.append(l, "delegation.state", { key: d.key, acknowledged_at: now });
+        this.note(l, `Accepted: ${d.title}. Accepting is not doing it; the team that asked is told when the record shows it done.`);
+        break;
+      case NUDGE_KIND: {
+        const needs = (a.args["needs"] as string[] | undefined) ?? [];
+        const ask = needs.length ? ` Needed: ${needs.map((n) => (n === "phone" ? "a phone number" : "the patient's consent")).join(" and ")}.` : "";
+        this.note(l, `New task for you: ${d.title}${d.due_at ? `, due ${d.due_at.slice(11, 16)} UTC` : ""}.${ask} Say accepted ${d.title.toLowerCase()} to take it.`);
+        break;
+      }
+      case COMPLETE_KIND: {
+        const found = String(a.args["found_record_id"]);
+        this.append(l, "delegation.state", { key: d.key, completed_at: now, record_id: found });
+        this.note(l, `Done: ${d.title}. The record shows it (record ${found}).`);
+        if (d.obligation_id) this.append(l, "identity.closed", { obligation_id: d.obligation_id, record_id: found });
+        break;
+      }
+      case ESCALATE_KIND:
+        this.append(l, "delegation.state", { key: d.key, escalated_at: now });
+        this.note(l, `Overdue: ${d.title}. The bell rang for the team and for you.`);
+        break;
+      case WARD_REVIEW_KIND:
+        this.append(l, "delegation.state", { key: d.key, ward_review: "requested" });
+        this.note(l, `Asked the ${team} clinic for a ward review now that the patient is on a bed (request ${recordId}).`);
+        break;
+      case REGISTER_KIND:
+        this.append(l, "delegation.state", { key: d.key, record_id: recordId });
+        this.note(l, `Registered at the desk: record ${recordId} now carries the name and phone.`);
+        break;
+      default: break;
+    }
   }
 
   // Running while any action is open, waiting while a question is open, otherwise done; paused and closed tasks stay as they are.
