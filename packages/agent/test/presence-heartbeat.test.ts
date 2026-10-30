@@ -27,10 +27,12 @@ const refusal = async (p: Promise<unknown>) => { try { await p; return "accepted
 describe("one live check for chunks and frames, and the hands-free heartbeat (D30)", () => {
   it("accepts a beat only with its session's key, a forward sequence and a near clock", () => {
     const r = rig();
-    const { key } = r.beats.open(DOC, "s1");
+    const { key } = r.beats.open(DOC, "s1")!;
     expect(r.beat("s1", key, 0)).toEqual({ ok: true, present: true });
     expect(r.beat("s1", key, 0)).toEqual({ ok: false, reason: "stale_seq" });
-    expect(r.beat("s1", r.beats.open(DOC, "other").key, 1)).toEqual({ ok: false, reason: "bad_mac" });
+    expect(r.beat("s1", r.beats.open(DOC, "other")!.key, 1)).toEqual({ ok: false, reason: "bad_mac" });
+    // A session still beating keeps its key: another opener cannot take it over.
+    expect(r.beats.open(DOC, "s1")).toBeNull();
     expect(r.beat("s1", key, 2, { at: r.clock.now - 60_000 })).toEqual({ ok: false, reason: "clock_skew" });
     expect(r.beat("nobody", key, 0)).toEqual({ ok: false, reason: "unknown_session" });
     expect(r.beat("s1", key, 3, { visible: false })).toEqual({ ok: true, present: false, reason: "page_hidden" });
@@ -38,7 +40,7 @@ describe("one live check for chunks and frames, and the hands-free heartbeat (D3
 
   it("counts a session only while it beats and the owner's own voice was matched in it within N minutes", () => {
     const r = rig();
-    const { key } = r.beats.open(DOC, "s1");
+    const { key } = r.beats.open(DOC, "s1")!;
     r.beat("s1", key, 0);
     r.clock.now += HEARTBEAT_RULE.fresh_ms + 1;
     expect(r.beats.present(DOC, "s1")).toEqual({ live: false, reason: "no_heartbeat" });
@@ -46,6 +48,11 @@ describe("one live check for chunks and frames, and the hands-free heartbeat (D3
     expect(r.beats.present(DOC, "s1")).toEqual({ live: true });
     r.clock.now += HEARTBEAT_RULE.owner_voice_ms;
     r.beat("s1", key, 2);
+    expect(r.beats.present(DOC, "s1")).toEqual({ live: false, reason: "no_recent_owner_voice" });
+    // Reopening after the beat lapses does not reset the owner-voice clock.
+    r.clock.now += HEARTBEAT_RULE.fresh_ms + 1;
+    const again = r.beats.open(DOC, "s1")!;
+    r.beat("s1", again.key, 0);
     expect(r.beats.present(DOC, "s1")).toEqual({ live: false, reason: "no_recent_owner_voice" });
     r.beats.ownerVoice(DOC, "s1");
     expect(r.beats.present(DOC, "s1")).toEqual({ live: true });
@@ -74,7 +81,7 @@ describe("one live check for chunks and frames, and the hands-free heartbeat (D3
     const r = rig({ presence: "heartbeat" });
     expect(await refusal(r.chunk("s1", 0, tone(1000, 200)))).toBe("no_presence");
     expect(r.frame("s1", tone(1000, 210))).toBe("no_presence");
-    const { key } = r.beats.open(DOC, "s1");
+    const { key } = r.beats.open(DOC, "s1")!;
     r.beat("s1", key, 0);
     expect(await refusal(r.chunk("s1", 1, tone(1000, 220)))).toBe("accepted");
     expect(r.frame("s1", tone(1000, 230))).toBe("accepted");
@@ -115,3 +122,32 @@ describe("the agent service's heartbeat routes and health", () => {
     }
   });
 });
+
+describe("the push-to-talk route runs the same live check", () => {
+  it("refuses the same recording sent twice, and a recording in heartbeat mode with no beat", async () => {
+    const { ModelClient } = await import("@hey-pisgah/model");
+    const { startEmrServe } = await import("../src/emr/serve.js");
+    const { ADM, FakeEmr, OWNER, emrRoot } = await import("./emr-helpers.js");
+    const boot = async (presence?: "heartbeat") => {
+      const root = emrRoot();
+      const client = new ModelClient({ storeRoot: root, mode: "mock", mock: () => ({ content: [{ type: "text", text: "{}" }] } as never) });
+      return startEmrServe({ storeRoot: root, port: new FakeEmr(), client, listenPort: 0, preferences: false, ears: "off", runtime: { holdMs: 0 }, listen: { replay: "refuse", ...(presence ? { presence } : {}) },
+        transcribe: async (_w, _k, sid) => ({ final: true, text: "", audio_ms: 1000, session_id: sid, cost_usd: 0 }) });
+    };
+    const send = (url: string, wav: Uint8Array) => { const f = new FormData(); f.append("audio", new Blob([new Uint8Array(wav)], { type: "audio/wav" }), "say.wav"); f.append("owner", OWNER); f.append("admissionId", ADM); return fetch(`${url}/tasks/say-audio`, { method: "POST", body: f, headers: { origin: "http://localhost:3311" } }); };
+    const wav = encodeWav(tone(1000, 250), RATE);
+    const s = await boot();
+    const h = await boot("heartbeat");
+    try {
+      expect((await send(s.url, wav)).status).toBe(200);
+      const copy = await send(s.url, wav);
+      expect([copy.status, ((await copy.json()) as { error: string }).error]).toEqual([409, "replayed audio refused: replayed_chunk"]);
+      const absent = await send(h.url, encodeWav(tone(1000, 260), RATE));
+      expect([absent.status, ((await absent.json()) as { error: string }).error]).toEqual([409, "replayed audio refused: no_presence"]);
+    } finally {
+      await s.close();
+      await h.close();
+    }
+  });
+});
+

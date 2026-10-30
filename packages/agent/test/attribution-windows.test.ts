@@ -53,6 +53,10 @@ describe("attribution covers every word that is acted on", () => {
     expect(sizes(matchWindows([tone(20_000, 1)], RATE))).toEqual([10, 10]);
     expect(sizes(matchWindows([tone(14_800, 1), tone(300, 1)], RATE))).toEqual([7.55, 7.55]);
     expect(matchWindows([tone(31_000, 1)], RATE).every((w) => w.length <= (RATE * DOOR_AUDIO_MAX_MS) / 1000)).toBe(true);
+    // Ten 6 s pieces become at most eight windows, every sample kept.
+    const ten = matchWindows(Array.from({ length: 10 }, () => tone(6000, 1)), RATE);
+    expect(ten.length).toBeLessThanOrEqual(8);
+    expect(ten.reduce((n, w) => n + w.length, 0)).toBe(10 * 6 * RATE);
   });
 
   it("gives a line the owner only when every window is the owner", () => {

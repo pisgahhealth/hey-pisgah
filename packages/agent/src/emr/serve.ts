@@ -10,7 +10,7 @@ import { StreamListener, StreamRefused } from "./stream-listen.js";
 import { META_STREAM_MODEL, MetaStreamFailed, MetaStreamListener, probeRealtime } from "./meta-stream.js";
 import { EmrRuntime, type EmrRuntimeOptions } from "./runtime.js";
 import { ListenError, ListenSessions, parallelReadings, type ListenOptions, type ListenUtterance, type Transcriber } from "./listen.js";
-import { parseWav } from "@hey-pisgah/voice";
+import { decodeWav, parseWav } from "@hey-pisgah/voice";
 import { printWav, type Embedder, type LivenessMarker } from "./speaker.js";
 import { Heartbeats } from "./presence.js";
 import { EmrId, EmrPortError, type EmrPort, type EmrTarget } from "./port.js";
@@ -333,11 +333,15 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     }
   };
   // A chunk with no patient anywhere is heard only for the emergency phrase and a known patient's name; its words are kept nowhere.
+  const admitWav = (owner: string, sessionId: string, seq: string, wav: Uint8Array, arrived: number) => { const { samples, sampleRate } = decodeWav(wav); return listening.admit({ owner, session_id: sessionId, seq, samples, rate: sampleRate, arrived_at: arrived }); };
   const listenUntracked = async (owner: string, sessionId: string, seq: number, wav: Uint8Array, arrived: number, hint?: "emergency" | "after_wake"): Promise<unknown> => {
     let text = "";
     setStatus(owner, sessionId, seq, { status: "processing" });
+    // The same live check as a patient's chunks, so audio with no patient is no way round copies, the owner's clock or presence.
+    const live = admitWav(owner, sessionId, `u${seq}`, wav, arrived);
+    if (live.refused) throw new HttpError(409, `replayed audio refused: ${live.refused}`);
     // The voiceprint is worked out beside the words, so a spoken acceptance is attributed like any other line.
-    const print = o.embed ? printWav(o.embed, wav).catch(() => null) : null;
+    const print = o.embed && live.presence.live !== false ? printWav(o.embed, wav).catch(() => null) : null;
     try { text = afterWake((await transcribe(wav, [], `${sessionId}-${seq}`.slice(0, 64))).text); } catch (e) {
       if (!(e instanceof VoiceError)) throw e;
       o.log?.(`listen with no patient: the ear refused the audio (${e.code})`);
@@ -633,6 +637,10 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const target = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
     const ctx = await rt.port.resolve(target, { owner: b.owner, evidence: "transcript:audio-context", spoken_at: new Date(arrived).toISOString() });
     const wav = new Uint8Array(await audio.arrayBuffer());
+    // The same live check as listening, under its own session per owner, so this route is no way round copies, the owner's clock or presence.
+    if (!parseWav(wav).ok) throw new HttpError(400, "audio: not a WAV file");
+    const live = admitWav(b.owner, `say-audio.${b.owner}`.slice(0, 80), `a${arrived}`, wav, arrived);
+    if (live.refused) throw new HttpError(409, `replayed audio refused: ${live.refused}`);
     const keywords = buildKeywords({ vitals: VITALS_KEYWORDS, wards: [], documents: ctx.keywords, staff: o.staffHints ?? [], beds: [] });
     let heard: FinalTranscript;
     let keywordsDropped = false;
@@ -648,7 +656,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     if (!heard.text) return [200, { task_id: null, line_id: null, transcript: "", audio_ms: heard.audio_ms, cost_usd: heard.cost_usd }];
     const spoken = new Date(arrived - heard.audio_ms).toISOString();
     const v = vitalsVocabulary(cleanTranscript(heard.text));
-    const voiceprint = o.embed ? await printWav(o.embed, wav).catch(() => null) : undefined;
+    const voiceprint = o.embed ? (live.presence.live === false ? null : await printWav(o.embed, wav).catch(() => null)) : undefined;
     const r = await rt.say({ owner: b.owner, target: { admission_id: ctx.admission_id }, text: v.text, source: "audio", spoken_at: spoken, audio: { audio_ms: heard.audio_ms, cost_usd: heard.cost_usd, session_id: heard.session_id }, clip: wav, rewrites: v.rewrites, ...(voiceprint !== undefined ? { voiceprint } : {}) });
     return [202, { ...r, transcript: v.text, audio_ms: heard.audio_ms, cost_usd: heard.cost_usd, keywords_dropped: keywordsDropped }];
   };
@@ -735,7 +743,8 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     // D30 presence: a strip session takes a key, then beats with it while its tab is visible and its microphone is live.
     if (parts.length === 3 && parts[1] === "presence" && parts[2] === "open" && m === "POST") {
       const b = parse(PresenceOpen, await json(req));
-      return [200, { session_id: b.session_id, ...heartbeats.open(b.owner, b.session_id) }];
+      const opened = heartbeats.open(b.owner, b.session_id);
+      return opened ? [200, { session_id: b.session_id, ...opened }] : [409, { session_id: b.session_id, error: "still_beating" }];
     }
     if (parts.length === 3 && parts[1] === "presence" && parts[2] === "beat" && m === "POST") {
       const b = parse(PresenceBeat, await json(req));

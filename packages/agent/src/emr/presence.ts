@@ -26,12 +26,14 @@ export class Heartbeats {
   private readonly held = new Map<string, Held>();
   constructor(private readonly rule: HeartbeatRule = HEARTBEAT_RULE, private readonly now: () => number = Date.now) {}
 
-  // A new key for one strip session; opening again replaces the key, so a beat signed with the old one stops counting.
-  open(owner: string, sessionId: string): { key: string; beat_ms: number; fresh_ms: number; owner_voice_ms: number } {
-    const key = randomBytes(32).toString("base64url");
+  // A new key for one strip session; a session still beating keeps its key, so nobody else can take it over; a lapsed one is replaced and keeps its owner-voice clock.
+  open(owner: string, sessionId: string): { key: string; beat_ms: number; fresh_ms: number; owner_voice_ms: number } | null {
     const id = `${owner}\u0000${sessionId}`;
+    const was = this.held.get(id);
+    if (was?.last && this.now() - was.last.at <= this.rule.fresh_ms) return null;
+    const key = randomBytes(32).toString("base64url");
     this.held.delete(id);
-    this.held.set(id, { key, opened: this.now(), seq: -1, last: null, ownerVoice: null });
+    this.held.set(id, { key, opened: was?.opened ?? this.now(), seq: -1, last: null, ownerVoice: was?.ownerVoice ?? null });
     if (this.held.size > this.rule.sessions) this.held.delete(this.held.keys().next().value!);
     return { key, beat_ms: this.rule.beat_ms, fresh_ms: this.rule.fresh_ms, owner_voice_ms: this.rule.owner_voice_ms };
   }

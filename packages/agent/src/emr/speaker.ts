@@ -42,12 +42,22 @@ export function matchWindows(parts: readonly Float32Array[], rate: number, capMs
     if (last && (p.length < min || last.length < min)) merged[merged.length - 1] = concatSamples(last, p);
     else merged.push(p);
   }
-  return merged.flatMap((w) => {
+  const out = merged.flatMap((w) => {
     if (w.length <= cap) return [w];
     const n = Math.ceil(w.length / cap), size = Math.ceil(w.length / n);
     return Array.from({ length: n }, (_, i) => w.subarray(i * size, Math.min(w.length, (i + 1) * size)));
   });
+  // The hospital takes at most eight windows, so the shortest neighbouring pair that still fits the cap is joined until there are eight.
+  while (out.length > WINDOWS_MAX) {
+    let best = -1;
+    for (let i = 0; i + 1 < out.length; i++) if (out[i]!.length + out[i + 1]!.length <= cap && (best < 0 || out[i]!.length + out[i + 1]!.length < out[best]!.length + out[best + 1]!.length)) best = i;
+    if (best < 0) break;
+    out.splice(best, 2, concatSamples(out[best]!, out[best + 1]!));
+  }
+  return out;
 }
+// The most windows one match request carries.
+export const WINDOWS_MAX = 8;
 const concatSamples = (a: Float32Array, b: Float32Array): Float32Array => { const o = new Float32Array(a.length + b.length); o.set(a); o.set(b, a.length); return o; };
 
 // The line's voiceprint from every window; null when the line is too long to match or any window cannot be read, so no word goes unattributed.
