@@ -491,7 +491,8 @@ export function paperworkAsk(summary: string, rb: PaperworkReadBack): string {
 
 export const PAY_LINK_VERIFIED_NOTE = "Pay link request verified: the bill shows it recorded. This does not show that an SMS arrived or that anyone paid; payment is simulated.";
 
-export const OWNER_YES = /^(?:yes|yeah|yes please|yes sign(?: them| it| everything)?|sign(?: them| it)?|go ahead|send it|do it|confirm(?:ed)?|i confirm|yes confirm)$/;
+// "Yes, confirm the morphine" names what is confirmed; up to two words after the, that or this, so a new sentence after confirm is never a yes.
+export const OWNER_YES = /^(?:yes|yeah|yes please|yes sign(?: them| it| everything)?|sign(?: them| it)?|go ahead|send it|do it|(?:(?:yes|yeah|okay|ok) )?(?:i )?confirm(?:ed)?(?: (?:the|that|this|it)(?: [a-z']+){0,2})?)$/;
 export const OWNER_NO = /^(?:no|nope|don'?t|do not|cancel(?: it| that)?|leave it)$/;
 // The owner's natural yes to a countersign batch read back on screen, within the answer window; never a controlled-drug, diagnosis or discharge confirm, and never a held order from an unmatched voice.
 export const READ_BACK_YES = /^(?:(?:ok(?:ay)?|yeah|yes)\s+)?(?:go on|go ahead|sign (?:them|it|those)(?: all)?)$/;

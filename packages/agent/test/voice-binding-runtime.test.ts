@@ -59,6 +59,9 @@ describe("the owner's natural yes to a countersign read-back (G4's finding, the 
     for (const t of ["mm", "mmm", "mhm", "mm hmm", "uh huh"]) expect(READ_BACK_MM.test(t), t).toBe(true);
     for (const t of ["m", "hmm", "mm no"]) expect(READ_BACK_MM.test(t), t).toBe(false);
     expect(OWNER_YES.test("go on")).toBe(false);
+    // The acceptance rehearsal's "Yes, confirm the morphine": naming what is confirmed is still the strict word (30 Oct).
+    for (const t of ["yes confirm the morphine", "confirm that one", "i confirm", "okay confirm it"]) expect(OWNER_YES.test(t), t).toBe(true);
+    for (const t of ["confirm that she has no allergies", "can you confirm her weight", "yes confirm the dose with pharmacy please"]) expect(OWNER_YES.test(t), t).toBe(false);
   });
 
   for (const said of ["Go on.", "Yeah, go on.", "Okay, sign them.", "Mm."]) {
