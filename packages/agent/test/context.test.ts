@@ -268,4 +268,20 @@ describe("the patient the clinician is with", () => {
     expect(await tracking(s.url)).toEqual({ patient_id: ARRIVAL });
     await s.close();
   });
+
+  it("opens a second arrival from the phrase as the local ear writes it while a patient is open, and not from a bare hey emergency", async () => {
+    const { s } = await boot(["", "Hey, emergency.", "Heape is the emergency"]);
+    await listen(s.url, { session: "s-wake", seq: 0, patientId: PAGE_A });
+    await s.runtime.settled();
+    const before = s.runtime.views(OWNER).filter((v) => v.actions.some((a) => a.kind === EMERGENCY_KIND)).length;
+    await new Promise((r) => setTimeout(r, 1100));
+    await listen(s.url, { session: "s-wake", seq: 1, patientId: PAGE_A });
+    await s.runtime.settled();
+    expect(s.runtime.views(OWNER).filter((v) => v.actions.some((a) => a.kind === EMERGENCY_KIND)).length).toBe(before);
+    await new Promise((r) => setTimeout(r, 1100));
+    await listen(s.url, { session: "s-wake", seq: 2, patientId: PAGE_A });
+    await s.runtime.settled();
+    await until(() => s.runtime.views(OWNER).filter((v) => v.actions.some((a) => a.kind === EMERGENCY_KIND)).length === before + 1);
+    await s.close();
+  });
 });

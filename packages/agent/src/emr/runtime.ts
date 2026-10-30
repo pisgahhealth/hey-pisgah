@@ -13,7 +13,7 @@ import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite }
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
 import { DOCUMENTATION_KINDS, ORDER_KINDS, lineVerdict, recordOf, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
-import { EMERGENCY_KIND, EMERGENCY_LINE, RULE_ONLY_KINDS, emergencyReason, identityFrom, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
+import { EMERGENCY_KIND, EMERGENCY_LINE, RULE_ONLY_KINDS, emergencyHeardLoosely, emergencyReason, identityFrom, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
 import { screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
 import {
   ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_ARGS, DELEGATION_RULE_KINDS, DISPENSE_KIND, ESCALATE_KIND, NUDGE_KIND, PREPARE_KIND, REGISTER_KIND, WARD_REVIEW_KIND,
@@ -752,7 +752,8 @@ export class EmrRuntime {
       ctx = await this.o.port.resolve(this.subjectOf(l.task), prov);
     } else {
       // "hey Pisgah, emergency" heard in a transcript opens an arrival, unless the device already did within the last ten seconds.
-      if (EMERGENCY_LINE.test(text) && this.kinds(s.owner).includes(EMERGENCY_KIND)) {
+      // Heard audio may carry the phrase the way the local ear writes it ("Heape is the emergency"); typed lines keep the strict phrase.
+      if ((EMERGENCY_LINE.test(text) || (s.source === "audio" && emergencyHeardLoosely(text) && !/^\W*(?:hey|hi|hay|okay|ok)\W*emergency/i.test(text))) && this.kinds(s.owner).includes(EMERGENCY_KIND)) {
         const recent = [...this.live.values()].some((x) => x.task.owner === s.owner && x.task.unidentified && Date.now() - Date.parse(x.task.created_at) < 10_000);
         if (!recent) {
           const r = await this.emergency(s.owner, { text, spoken_at: s.ambient?.ended_at ?? spokenAt, source: s.source ?? "text", args: { unidentified_ref: unidentifiedRef(new Date(spokenAt)), reason: emergencyReason(text), ...(this.o.emergencyClinicId ? { clinic_id: this.o.emergencyClinicId } : {}) } });
