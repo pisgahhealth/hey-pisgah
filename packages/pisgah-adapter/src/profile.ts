@@ -119,6 +119,10 @@ export const DoorProfile = z.strictObject({
   watches: z.record(z.string(), ReadSpec.extend({ facts: z.record(z.string(), Fact) })).default({}),
   inbox: ReadSpec.extend({ list_path: Dotted, id: Dotted, subject: Dotted, at: Dotted, detail: ReadSpec.extend({ patient: Dotted }).optional() }).optional(),
   page_targets: z.record(z.string(), z.strictObject({ words: Words, vars: z.record(z.string(), z.string()) })).default({}),
+  // The hospital's own name for each value of a variable, such as the consent purposes the agent heard; a value with no name here is not sent.
+  // The clinicians whose verbal orders each receiving owner may take: the words that name them and the hospital's id; the hospital still checks every one.
+  verbal_issuers: z.record(z.string().regex(/^[a-z0-9_]{1,40}$/), z.strictObject({ words: Words, id: EmrId, label: z.string().min(1).max(60), receivers: z.array(z.string()).min(1) })).default({}),
+  value_maps: z.record(z.string().regex(/^[a-z_]{1,40}$/), z.record(z.string(), z.string().min(1).max(80))).default({}),
   clinics: z.record(z.string(), z.strictObject({ words: Words, id: EmrId })).default({}),
   // Wards the owner may name for an admission or a bed, with the ward's class.
   wards: z.record(z.string(), z.strictObject({ words: Words, id: EmrId, class: z.string().regex(/^[a-z_]{1,30}$/) })).default({}),

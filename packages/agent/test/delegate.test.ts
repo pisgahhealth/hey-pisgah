@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_RULE_KINDS, DISPENSE_KIND, ESCALATE_KIND, NUDGE_KIND, PREPARE_KIND, REGISTER_KIND, WARD_REVIEW_KIND, acceptedTask, orderAsked, consentSaid, phoneSaid, registrationFrom, registrationInstruction, teamSaid, type DelegationRead, type DelegationTeam } from "../src/emr/delegate.js";
+import { ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_ARGS, DELEGATION_RULE_KINDS, DISPENSE_KIND, ESCALATE_KIND, NUDGE_KIND, PREPARE_KIND, REGISTER_KIND, WARD_REVIEW_KIND, acceptedTask, orderAsked, consentSaid, consentScope, phoneSaid, registrationFrom, registrationInstruction, teamSaid, type DelegationRead, type DelegationTeam } from "../src/emr/delegate.js";
 import type { EmrCommit, Provenance, WorkArgs } from "../src/emr/port.js";
 import type { SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
 import { ADMIT, CLERK_KINDS, ClerkFake, DOC, PAT, clerkBoot, ins } from "./clerking-helpers.js";
@@ -115,6 +115,13 @@ describe("delegation by rule between agents", () => {
     expect(consentSaid("She does not consent yet.")).toBe(false);
     expect(consentSaid("Consent refused.")).toBe(false);
     expect(consentSaid("She is in pain.")).toBe(false);
+    // Only the purposes said are read, and a purpose refused in its own clause is never read as said.
+    expect(consentScope("She consents to registration.")).toEqual({ said: ["registration"], refused: [] });
+    expect(consentScope("She agrees to registration but not the recording.")).toEqual({ said: ["registration"], refused: ["scribe"] });
+    expect(consentScope("She consents to registration and not to recording")).toEqual({ said: ["registration"], refused: ["scribe"] });
+    expect(consentScope("She consents to registration, her tests and her prescriptions, and sharing her results with the doctor.")).toEqual({ said: ["registration", "tests", "results_sharing", "pharmacy"], refused: [] });
+    expect(consentScope("She agrees to registration and text messages, no NIN.")).toEqual({ said: ["registration", "messages"], refused: ["identity_check"] });
+    expect(consentScope("She consents.")).toEqual({ said: [], refused: [] });
     expect(registrationFrom(registrationInstruction("Grace Okafor", null))).toEqual({ name: "Grace Okafor", phone: null });
     expect(teamSaid("surgical review of the abdomen", TEAMS, "review")).toBe("surgery");
     expect(teamSaid("review her abdomen", TEAMS, "review")).toBeNull();
@@ -203,7 +210,10 @@ describe("delegation by rule between agents", () => {
     const consent = await a.rt.say({ owner: DESK, target: { patient_id: UNNAMED }, text: "She consents to registration." });
     await a.rt.settled();
     const reg = port.writes.find((w) => w.kind === REGISTER_KIND)!;
-    expect(reg.args).toMatchObject({ patient_id: UNNAMED, surname: "Okafor", other_names: "Grace", phone: "08031234567", evidence: `transcript:${consent.line_id}` });
+    expect(reg.args).toMatchObject({ patient_id: UNNAMED, surname: "Okafor", other_names: "Grace", phone: "08031234567", evidence: `transcript:${consent.line_id}`, consent_purposes: ["registration"] });
+    expect(Date.parse(String(reg.args["consent_spoken_at"]))).not.toBeNaN();
+    // A typed line from her own session carries no voice token; the hospital attributes it to her session.
+    expect(reg.prov.voice).toBeUndefined();
 
     await a.rt.pollOnce();
     await a.rt.settled();
@@ -349,6 +359,97 @@ describe("delegation by rule between agents", () => {
     await a.rt.say(spoken(DESK, "Yes.", DESK_V, { patient_id: UNNAMED }));
     await a.rt.settled();
     expect(port.kindsWritten(DESK).filter((k) => k === REGISTER_KIND)).toHaveLength(1);
+    await a.rt.stop();
+  });
+
+  it("records only the purposes the desk said, refuses a purpose said against, and never registers on a consent that leaves out registration", async () => {
+    const port = new DelegationFake();
+    const a = boot(() => [], port);
+    const er = await a.rt.emergency(DOC, { text: "hey Pisgah, emergency", spoken_at: new Date().toISOString(), args: { unidentified_ref: "Unknown arrival 10:00", reason: "Emergency arrival" } });
+    await a.rt.settled();
+    await a.rt.say({ owner: DOC, target: { patient_id: UNNAMED }, text: "Her name is Grace Okafor." }, er.task_id);
+    await a.rt.settled();
+    await a.rt.pollOnce();
+    await a.rt.settled();
+    await a.rt.say({ owner: DESK, target: { patient_id: UNNAMED }, text: "Her phone is 0803 123 4567." });
+    await a.rt.settled();
+    // A bare consent at the desk covers registration alone, never the rest of the notice.
+    expect(DELEGATION_ARGS[REGISTER_KIND]!.safeParse({ delegation_id: UNNAMED, patient_id: UNNAMED, surname: "Okafor", other_names: "Grace", phone: "08031234567", evidence: "transcript:x", consent_purposes: [], consent_spoken_at: new Date().toISOString() }).success).toBe(false);
+    await a.rt.say({ owner: DESK, target: { patient_id: UNNAMED }, text: "She consents to the tests and her prescriptions." });
+    await a.rt.settled();
+    expect(port.kindsWritten(DESK)).not.toContain(REGISTER_KIND);
+    expect(a.rt.views(DESK)[0]!.notes.at(-1)!.text).toMatch(/does not cover registration/);
+    await a.rt.say({ owner: DESK, target: { patient_id: UNNAMED }, text: "She agrees to registration as well, but not the recording." });
+    await a.rt.settled();
+    const reg = port.writes.find((w) => w.kind === REGISTER_KIND)!;
+    expect(reg.args["consent_purposes"]).toEqual(["registration", "tests", "pharmacy"]);
+    await a.rt.settled();
+    expect(a.rt.views(DESK)[0]!.notes.at(-1)!.text).toMatch(/Consent recorded for registration, tests, pharmacy only, taken on your session, since your voice is not enrolled; scribe, results sharing, messages, identity check not consented\./);
+    await a.rt.stop();
+  });
+
+  it("takes an unenrolled receptionist's spoken consent on her session, sends an enrolled one's matched line, and a natural yes never releases a held registration", async () => {
+    class DeskVoices extends DelegationFake {
+      private t = 0;
+      enrolled = false;
+      readonly speaker = async (owner: string, v: readonly number[]): Promise<SpeakerVerdict> => {
+        this.t += 1;
+        if (owner === DESK && v[0] === 8) return this.enrolled ? { speaker: "owner", token: `v2.${String(1_761_700_000_000 + this.t)}.${"A".repeat(22)}.${"B".repeat(43)}` } : { speaker: "unverified", reason: "owner_not_enrolled" };
+        return v[0] === 2 ? { speaker: "other_clinician", label: "Dr B", role: "doctor" } : { speaker: "unverified", reason: "no_match" };
+      };
+    }
+    for (const enrolled of [false, true]) {
+      const port = new DeskVoices();
+      port.enrolled = enrolled;
+      const a = boot(() => [], port);
+      const er = await a.rt.emergency(DOC, { text: "hey Pisgah, emergency", spoken_at: new Date().toISOString(), args: { unidentified_ref: "Unknown arrival 10:00", reason: "Emergency arrival" } });
+      await a.rt.settled();
+      await a.rt.say({ owner: DOC, target: { patient_id: UNNAMED }, text: "Her name is Grace Okafor." }, er.task_id);
+      await a.rt.settled();
+      await a.rt.pollOnce();
+      await a.rt.settled();
+      await a.rt.say(spoken(DESK, "Her phone is 0803 123 4567.", DESK_V, { patient_id: UNNAMED }));
+      await a.rt.settled();
+      const said = await a.rt.say(spoken(DESK, "She consents to registration and the recording.", DESK_V, { patient_id: UNNAMED }));
+      await a.rt.settled();
+      const reg = port.writes.filter((w) => w.kind === REGISTER_KIND);
+      expect(reg).toHaveLength(1);
+      expect(reg[0]!.args["consent_purposes"]).toEqual(["registration", "scribe"]);
+      if (enrolled) expect(reg[0]!.prov.voice?.authorisation).toMatch(new RegExp(`^transcript:${said.line_id}~v2\\.`));
+      else expect(reg[0]!.prov.voice).toBeUndefined();
+      await a.rt.stop();
+    }
+    // A stranger's consent line holds the registration, and "yeah, go on" is not the strict yes it waits for.
+    const port = new DeskVoices();
+    const a = boot(() => [], port);
+    const er = await a.rt.emergency(DOC, { text: "hey Pisgah, emergency", spoken_at: new Date().toISOString(), args: { unidentified_ref: "Unknown arrival 10:00", reason: "Emergency arrival" } });
+    await a.rt.settled();
+    await a.rt.say({ owner: DOC, target: { patient_id: UNNAMED }, text: "Her name is Grace Okafor." }, er.task_id);
+    await a.rt.settled();
+    await a.rt.pollOnce();
+    await a.rt.settled();
+    await a.rt.say(spoken(DESK, "Her phone is 0803 123 4567.", DESK_V, { patient_id: UNNAMED }));
+    await a.rt.settled();
+    await a.rt.say(spoken(DESK, "She consents to registration.", STRANGER_V, { patient_id: UNNAMED }));
+    await a.rt.settled();
+    await a.rt.say(spoken(DESK, "Yeah, go on.", DESK_V, { patient_id: UNNAMED }));
+    await a.rt.settled();
+    expect(port.kindsWritten(DESK)).not.toContain(REGISTER_KIND);
+    await a.rt.stop();
+  });
+
+  it("reads a bare consent at the desk as consent to registration alone", async () => {
+    const port = new DelegationFake();
+    const a = boot(() => [], port);
+    const er = await a.rt.emergency(DOC, { text: "hey Pisgah, emergency", spoken_at: new Date().toISOString(), args: { unidentified_ref: "Unknown arrival 10:00", reason: "Emergency arrival" } });
+    await a.rt.settled();
+    await a.rt.say({ owner: DOC, target: { patient_id: UNNAMED }, text: "Her name is Grace Okafor." }, er.task_id);
+    await a.rt.settled();
+    await a.rt.pollOnce();
+    await a.rt.settled();
+    await a.rt.say({ owner: DESK, target: { patient_id: UNNAMED }, text: "Her phone is 0803 123 4567, verbal consent given." });
+    await a.rt.settled();
+    expect(port.writes.find((w) => w.kind === REGISTER_KIND)!.args["consent_purposes"]).toEqual(["registration"]);
     await a.rt.stop();
   });
 });

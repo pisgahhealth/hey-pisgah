@@ -81,6 +81,8 @@ export interface EmrPort {
   readBack?(owner: string, visitId: string, prov: Provenance): Promise<ReadBack>;
   // The tests and medicines the owner may order by voice, by the words that name them.
   orderables?(): Orderables;
+  // The clinicians whose verbal orders this owner may take, by the words that name them.
+  verbalIssuers?(owner: string): Record<string, { words: readonly string[]; label: string }>;
   // The discharge paperwork filled from the record, read back before the owner confirms.
   readPaperwork?(owner: string, admissionId: string, prov: Provenance): Promise<PaperworkReadBack>;
   // Which side of a delegation this owner's agent follows, the teams it may hand work to, and the reads of a delegation.
