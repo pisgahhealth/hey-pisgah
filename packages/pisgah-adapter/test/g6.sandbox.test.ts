@@ -19,10 +19,27 @@ const RUN = process.env["SANDBOX"] === "1" && process.env["G6"] === "1";
 const PATH = process.env["G6_PATH"] === "orders" ? "orders" : "vitals";
 const EAR = earSwitch(process.env["HEY_PISGAH_EAR"]);
 const ASR = asrSwitch(process.env["HEY_PISGAH_ASR"]);
-// The streaming ear hears frames in real time; G6_TRANSPORT=chunks sends it the strip's chunks instead.
-const TRANSPORT = ASR === "stream" && process.env["G6_TRANSPORT"] !== "chunks" ? "frames" : "chunks";
+// Both streaming ears hear frames in real time; G6_TRANSPORT=chunks sends the strip's chunks instead.
+const TRANSPORT = ASR !== "rest" && process.env["G6_TRANSPORT"] !== "chunks" ? "frames" : "chunks";
+// Each run's arrival carries this label, and G6_RUN picks the wording so no two runs send the same owner line within the hospital's ten-minute window.
+const LABEL = process.env["G6_LABEL"] ?? "E2 Child";
+const RUN_NO = Number(process.env["G6_RUN"] ?? 0);
+// D17's release is off in this harness unless HEY_PISGAH_RELEASE_WHOLE=1, so each row says which it measured.
+const RELEASE = process.env["HEY_PISGAH_RELEASE_WHOLE"] === "1";
 const RATE = 24_000;
-const ORDER_LINES = [{ text: "Send a full blood count, stat.", test: "full blood count" }, { text: "Send a malaria parasite test.", test: "malaria" }, { text: "Send a urinalysis.", test: "urinalysis" }];
+const ORDER_WORDS = [
+  ["Send a full blood count, stat.", "Send a malaria parasite test.", "Send a urinalysis."],
+  ["Please send a full blood count now.", "Add a malaria parasite test as well.", "And a urinalysis, please."],
+  ["Let's get a full blood count, urgently.", "Check for malaria parasites too.", "I'd like a urinalysis on him."],
+  ["Full blood count for him straight away.", "A malaria parasite test, please.", "Urinalysis as well."],
+  ["I want a full blood count done now.", "Run a malaria parasite test for him.", "Send off a urinalysis too."],
+  ["Get me a full blood count quickly.", "Let's add a malaria parasite test.", "He needs a urinalysis."],
+  ["Order a full blood count for him now.", "Malaria parasite test, please.", "Do a urinalysis for him."],
+  ["A full blood count, right away please.", "Test him for malaria parasites.", "Let's send a urinalysis."],
+  ["Full blood count, please, now.", "Send for a malaria parasite test.", "Urinalysis for him, please."],
+  ["We need a full blood count now.", "And a malaria parasite test.", "A urinalysis, please, today."]
+];
+const ORDER_LINES = ORDER_WORDS[RUN_NO % ORDER_WORDS.length]!.map((text, i) => ({ text, test: ["full blood count", "malaria", "urinalysis"][i]! }));
 const PARTS = ["heard", "asr", "delivered", "gate_start", "gate_end", "ear_done", "proposed", "hold_until", "written", "verified", "verify_ms"] as const;
 
 const speak = (text: string, file: string, voice?: string): Uint8Array => {
@@ -91,7 +108,7 @@ async function serve(root: string, port: PisgahPort, withSpeaker: boolean) {
   const s = await startEmrServe({
     storeRoot: root, port, client, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4121), ears: EAR, asr: ASR,
     local: { ...localDirs(process.env["HEY_PISGAH_ASR_DIR"] ?? join(process.cwd(), ".hey-pisgah", "asr")), sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] },
-    ...(embed ? { embed } : {}), runtime: { holdMs: 4000, proofRetryMs: 1500, speed: levers, keepHeard: true }
+    ...(embed ? { embed } : {}), ...(RELEASE ? { releaseWhole: true } : {}), runtime: { holdMs: 4000, proofRetryMs: 1500, speed: levers, keepHeard: true }
   });
   rt = s.runtime;
   return { s, client, levers };
@@ -118,10 +135,10 @@ describe.skipIf(!RUN)("G6 local ears on the sandbox EMR", () => {
   it.skipIf(PATH !== "vitals")("times the eight vitals lines with the chosen ears, every value read back from the record", async () => {
     const spacing = Number(process.env["HEY_PISGAH_E2_SPACING_MS"] ?? 2500);
     const profile = loadProfile();
-    const { patient, sb } = await freshArrival(profile);
+    const { patient, sb } = await freshArrival(profile, LABEL);
     const { mine, port, root } = setup(profile, sb);
     const { s, client, levers } = await serve(root, port, false);
-    const out: Record<string, unknown> = { path: "vitals", harness: 2, ear: EAR, asr: ASR, transport: TRANSPORT, levers: leverList(levers), spacing_ms: spacing, hold_ms: 4000, started_at: new Date().toISOString(), load_start: loadavg(), synthetic: true };
+    const out: Record<string, unknown> = { path: "vitals", harness: 2, label: LABEL, ear: EAR, asr: ASR, release_whole: RELEASE, transport: TRANSPORT, levers: leverList(levers), spacing_ms: spacing, hold_ms: 4000, started_at: new Date().toISOString(), load_start: loadavg(), synthetic: true };
     try {
       const r = await fetch(`${s.url}/tasks/say`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ owner: mine.owner, patientId: patient, text: "Admit him as an emergency to the children's ward for abdominal pain." }) });
       expect(r.status).toBe(202);
@@ -158,7 +175,7 @@ describe.skipIf(!RUN)("G6 local ears on the sandbox EMR", () => {
       const health = (await (await fetch(`${s.url}/health`)).json()) as Record<string, unknown>;
       Object.assign(out, {
         n: rows.length, p50_ms: percentile(ms, 50), p90_ms: percentile(ms, 90), max_ms: ms.length ? Math.max(...ms) : null, wall_ms: Date.now() - t0, lines_not_written: missing,
-        parts_p50: Object.fromEntries(PARTS.map((k) => [k, med(k)])), errors: v.speed.errors,
+        parts_p50: Object.fromEntries(PARTS.map((k) => [k, med(k)])), errors: v.speed.errors, speed_corrections: v.speed.corrections, released_rows: rows.filter((x) => x.released).length,
         values: { acted: valueRows.length, wrong: valueRows.filter((x) => !x.right).length, rows: valueRows, db_checked: dbChecked.length, db_found: dbChecked.filter(Boolean).length },
         heard: v.transcript.slice(1).map((x) => ({ text: x.text, classes: x.classes, finished_by: x.ambient?.finished_by ?? null })),
         ears: v.ears, questions: v.asked.slice(-8).map((q) => q.text), actions: acts.map((x) => ({ state: x.state, args: x.args, reason: x.reason })), usd: v.usd, calls: v.calls,
@@ -178,7 +195,7 @@ describe.skipIf(!RUN)("G6 local ears on the sandbox EMR", () => {
     const profile = loadProfile();
     const sb = SandboxBlock.parse(profile.sandbox);
     const person = personCaller(profile, sb, new Map(), []);
-    const em = await person("unnamed_arrival", { ref: `G6-${Date.now().toString(36)}` });
+    const em = await person("unnamed_arrival", { ref: `${LABEL.replace(/\s+/g, "-")}-${Date.now().toString(36)}` });
     expect(em.ok, JSON.stringify(em)).toBe(true);
     const emVisit = String((em.json as { visitId: string }).visitId), emPatient = String((em.json as { id: string }).id);
     const { mine, port, root } = setup(profile, sb);
@@ -199,7 +216,7 @@ describe.skipIf(!RUN)("G6 local ears on the sandbox EMR", () => {
     const poller = poll();
     await sleep(1500);
     const before = new Set(seen.keys());
-    const out: Record<string, unknown> = { path: "orders", harness: 2, ear: EAR, asr: ASR, transport: TRANSPORT, levers: leverList(levers), hold_ms: 4000, voice: "Rishi", started_at: new Date().toISOString(), load_start: loadavg(), synthetic: true };
+    const out: Record<string, unknown> = { path: "orders", harness: 2, label: LABEL, run_no: RUN_NO, order_lines: ORDER_LINES.map((l) => l.text), ear: EAR, asr: ASR, release_whole: RELEASE, transport: TRANSPORT, levers: leverList(levers), hold_ms: 4000, voice: "Rishi", started_at: new Date().toISOString(), load_start: loadavg(), synthetic: true };
     try {
       const gap = Number(process.env["G6_ORDER_GAP_MS"] ?? 10_000);
       const session = `g6o-${emVisit.slice(0, 8)}`;

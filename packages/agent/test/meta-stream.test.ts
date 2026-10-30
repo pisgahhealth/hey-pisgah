@@ -70,7 +70,7 @@ function turn(id: number, startMs: number, endMs: number, words: string, final =
   ];
 }
 
-async function boot(scripts: Parameters<typeof fakeMeta>[0], o: { gate?: (said: string) => ReturnType<typeof obs>; socket?: (f: SocketFactory) => SocketFactory; numberMs?: number } = {}) {
+async function boot(scripts: Parameters<typeof fakeMeta>[0], o: { gate?: (said: string) => ReturnType<typeof obs>; socket?: (f: SocketFactory) => SocketFactory; numberMs?: number; release?: boolean; holdMs?: number; heard?: string } = {}) {
   const root = emrRoot();
   const port = new FakeEmr();
   let rt: EmrRuntime | null = null;
@@ -78,9 +78,9 @@ async function boot(scripts: Parameters<typeof fakeMeta>[0], o: { gate?: (said: 
   const meta = fakeMeta(scripts);
   const gate = o.gate ?? ((said: string) => (said.includes("37.6") ? obs(said, { temp_c: "37.6" }) : said.includes("116") ? obs(said, { pulse: 116 }) : [{ class: "aside" as const }]));
   const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater(gate, seen), taskStateOf: (id) => rt?.stateOf(id) ?? null });
-  const ear: SecondEar = async () => reading("temperature 37.6 pulse 116");
+  const ear: SecondEar = async () => reading(o.heard ?? "temperature 37.6 pulse 116");
   const s = await startEmrServe({
-    storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 }, preferences: false, ears: ear, asr: "meta-stream",
+    storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: o.holdMs ?? 0, proofRetryMs: 1 }, preferences: false, ears: ear, asr: "meta-stream", ...(o.release ? { releaseWhole: true } : {}),
     realtimeSocket: o.socket ? o.socket(meta.factory) : meta.factory, realtimeKey: () => "k-test",
     transcribe: async () => { throw new Error("the chunk ear is not used on the frames route"); },
     listen: { numberJoinWaitMs: o.numberMs ?? 5000, strongJoinWaitMs: 5000 }
@@ -182,6 +182,19 @@ describe("the Meta realtime first ear", () => {
     expect(r.body["error"]).toMatch(/realtime ear refused the stream/);
     await s.runtime.settled();
     expect(port.writes).toEqual([]);
+    await s.close();
+  });
+
+  it("with D17 on, a continuation that arrives before the released pulse is written replaces it, so the record holds one entry", async () => {
+    const gate = (said: string) => { const m = /pulse (\d+)/.exec(said); return m ? obs(said, { pulse: Number(m[1]) }) : [{ class: "aside" as const }]; };
+    const { s, port, stream } = await boot([[], [...turn(0, 400, 1900, "Chart his pulse eighty"), ...turn(1, 2700, 3100, "two")]], { gate, release: true, holdMs: 4000, heard: "pulse 80 pulse 82" });
+    // The whole body arrives at once here, so the next turn is heard before the first write; the sandbox run covers the write-then-amend order.
+    expect((await stream(pcm([["quiet", 400], ["tone", 1500], ["quiet", 800], ["tone", 400], ["quiet", 1500]]))).status).toBe(202);
+    await s.runtime.settled();
+    const v = s.runtime.views(OWNER)[0]!;
+    expect(v.transcript.map((l) => [l.text, l.ambient?.finished_by])).toEqual([["Chart his pulse 80", "released_whole"], ["Chart his pulse 82", "released_whole"]]);
+    expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, pulse: 82 }]);
+    expect(v.actions.map((a) => a.state)).toEqual(["cancelled", "completed"]);
     await s.close();
   });
 
@@ -297,4 +310,47 @@ describe("the realtime session rules", () => {
     await m.open({ owner: OWNER, target: { admission_id: ADM }, session_id: "fast", rate: RATE });
     expect(() => m.feed("fast", quiet(5000))).toThrow(/faster_than_live/);
   });
+});
+
+describe.skipIf(process.env["META_LIVE"] !== "1")("the real realtime endpoint", () => {
+  it("hears a synthetic vitals line sent at the pace it is spoken, through the frames route to the record", async () => {
+    const { execFileSync } = await import("node:child_process");
+    const { readFileSync } = await import("node:fs");
+    const { decodeWav } = await import("@hey-pisgah/voice");
+    const dir = mkdtempSync(join(tmpdir(), "hp-rt-live-"));
+    execFileSync("say", ["-o", join(dir, "l.wav"), "--file-format=WAVE", `--data-format=LEI16@${RATE}`, "Chart his pulse one hundred and sixteen. [[slnc 900]]"]);
+    const x = decodeWav(new Uint8Array(readFileSync(join(dir, "l.wav")))).samples;
+    const root = emrRoot();
+    const port = new FakeEmr();
+    let rt: EmrRuntime | null = null;
+    const seen: string[] = [];
+    const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater((said) => (said.includes("116") ? obs(said, { pulse: 116 }) : [{ class: "aside" }]), seen), taskStateOf: (id) => rt?.stateOf(id) ?? null });
+    const s = await startEmrServe({ storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 }, preferences: false, ears: async () => reading("pulse 116"), asr: "meta-stream" });
+    rt = s.runtime;
+    const frame = (RATE * 20) / 1000;
+    const all = new Float32Array(x.length + RATE * 2);
+    all.set(x, RATE / 2);
+    let i = 0;
+    const t0 = Date.now();
+    const body = new ReadableStream<Uint8Array>({
+      async pull(c) {
+        if (i >= all.length) { c.close(); return; }
+        const due = t0 + (i / RATE) * 1000;
+        if (due > Date.now()) await new Promise((r) => setTimeout(r, due - Date.now()));
+        const part = all.subarray(i, i + frame);
+        i += frame;
+        const b = Buffer.alloc(part.length * 2);
+        part.forEach((v, k) => b.writeInt16LE(Math.round(v * 32767), k * 2));
+        c.enqueue(new Uint8Array(b));
+      }
+    });
+    const r = await fetch(`${s.url}/tasks/listen/stream?owner=${OWNER}&admissionId=${ADM}&session_id=live1&rate=${RATE}`, { method: "POST", headers: { "content-type": "audio/pcm", origin: STRIP }, body, duplex: "half" } as RequestInit);
+    expect(r.status).toBe(202);
+    await s.runtime.settled();
+    expect(seen.join(" ")).toMatch(/116/);
+    expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, pulse: 116 }]);
+    const rows = readdirSync(join(root, "ledger")).filter((f) => f.endsWith(".jsonl")).flatMap((f) => readStream(root, `ledger/${f.replace(/\.jsonl$/, "")}`)).filter((e) => e.record_type === "reading.call").map((e) => e.payload as Record<string, any>);
+    expect(rows.some((x) => x["model"] === "meta:muse-voice-transcribe-1.0:realtime" && x["purpose"] === "interpret_speech" && x["cost_usd"] > 0)).toBe(true);
+    await s.close();
+  }, 60_000);
 });
