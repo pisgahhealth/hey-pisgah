@@ -5,10 +5,12 @@ import { bindingHolds, type V2Addressee, type V2Context, type V2Kind } from "./v
 
 // One scored clip: the truth labels, the cosines to each enrolled template (no embedding), the replay defence's verdict and the words and gate reading.
 export type V2Row = {
-  id: string; source: "synthetic" | "real"; set: "tuning" | "held_out"; person: string; role: "owner" | "colleague" | "unenrolled";
+  id: string; source: "synthetic" | "real" | "owner_v2"; set: "tuning" | "held_out"; person: string; role: "owner" | "colleague" | "unenrolled";
   addressee: V2Addressee; kind: V2Kind; category: string; overlap_with: string | null; context: V2Context;
   replay: null | "digital_copy" | "played_owner_away" | "played_owner_present";
   sha256: string; audio_ms: number; cos: Record<string, number> | null; presence: string; reading: Pick<ClipReading, "transcript" | "gate">;
+  // A clip judged unusable (too quiet, another voice over it) is kept with its reason and left out of every count.
+  usable?: boolean; note?: string;
 };
 export type Identity = "owner" | "colleague" | "unverified";
 
@@ -60,7 +62,7 @@ const by = <T>(xs: readonly V2Row[], f: (r: V2Row) => string, g: (ys: V2Row[]) =
 
 // The table for one source: identity, addressee and intent scored apart, then authority with its bounds, counted per person so correlated trials show.
 export function scoreV2(all: readonly V2Row[], rule: SpeakerRule, set: V2Row["set"] = "held_out") {
-  const rows = all.filter((r) => r.set === set);
+  const rows = all.filter((r) => r.set === set && r.usable !== false);
   const live = rows.filter((r) => r.replay === null);
   const idRight = (r: V2Row) => identityOf(r, rule) === truthIdentity(r);
   const nonOwner = live.filter((r) => r.role !== "owner");
@@ -75,7 +77,7 @@ export function scoreV2(all: readonly V2Row[], rule: SpeakerRule, set: V2Row["se
   const rp = (kind: V2Row["replay"]) => replays.filter((r) => r.replay === kind);
   const changed = (cat: string) => live.filter((r) => r.category === cat);
   return {
-    rows: rows.length,
+    rows: rows.length, unusable: all.filter((r) => r.set === set && r.usable === false).map((r) => `${r.id}: ${r.note ?? ""}`),
     identity: {
       right: ratio(live.filter(idRight).length, live.length),
       per_person: by(live, (r) => `${r.person} (${r.role})`, (xs) => ratio(xs.filter(idRight).length, xs.length)),
