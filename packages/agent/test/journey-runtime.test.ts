@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ModelClient } from "@hey-pisgah/model";
-import { EmrRuntime, SPOKEN_PAUSE, SPOKEN_RESUME } from "../src/emr/runtime.js";
+import { EmrRuntime, PAY_LINK_VERIFIED_NOTE, SPOKEN_PAUSE, SPOKEN_RESUME } from "../src/emr/runtime.js";
 import { gatePrompt, gateTool } from "../src/emr/gate.js";
 import { cadenceSaid, dateSaid } from "../src/emr/work.js";
 import { startEmrServe } from "../src/emr/serve.js";
@@ -152,6 +152,8 @@ describe("journey kinds in the runtime", () => {
     v = rt.view(t.task_id)!;
     expect(v.actions.map((a) => [a.kind, a.state])).toEqual([["prepare_bill", "completed"], ["send_pay_link", "completed"]]);
     expect(v.notes.some((n) => n.text.startsWith("Bill: 10,000"))).toBe(true);
+    // A pay link proved by the bill's read-back says what that proof does not show.
+    expect(v.notes.some((n) => n.text === PAY_LINK_VERIFIED_NOTE)).toBe(true);
     await until(() => rt.view(t.task_id)!.watching?.["pay_link"] === "sent", 2000);
     expect(rt.views(DOC)).toHaveLength(0);
     expect(rt.views(ACC)).toHaveLength(1);

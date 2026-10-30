@@ -151,6 +151,20 @@ describe("profile-driven work over the door", () => {
     } finally { await d.close(); }
   });
 
+  it("proves a pay link only by a read-back written just now, never by an older one", async () => {
+    const d = await door();
+    try {
+      const base = profile(d.base);
+      const work = { ...base.work, send_pay_link: { method: "POST" as const, path: "stay/out/pay-link", body: { admissionId: "$admission_id" }, ack: { store: "pay_link" }, proof: { path: "stay/{admission_id}/bill", checks: { linkAt: "@recent:120" } } } };
+      const port = new PisgahPort(DoorProfile.parse({ ...base, work }), { bearers: { [DOC]: "b" } });
+      const written = { record_id: ADM, record_version: 1, event_ids: ["pay_link:x"] };
+      d.st.linkAt = new Date(Date.now() - 10 * 60_000).toISOString();
+      expect(await port.prove("send_pay_link", { admission_id: ADM }, written, prov(DOC))).toBeNull();
+      d.st.linkAt = new Date().toISOString();
+      expect(await port.prove("send_pay_link", { admission_id: ADM }, written, prov(DOC))).not.toBeNull();
+    } finally { await d.close(); }
+  });
+
   it("mints each owner with its own login and clinic, and a person without the agent flag", () => {
     const sb = SandboxBlock.parse({ env_file: "x", db_url_var: "DB", owner: "o", mint: { cwd: "/", command: "npx", args: ["tsx", "mint.ts", "--login", "dr.a", "--clinic", "GOPD", "--agent"], node_options: "", output: { bearer: "b", owner: "o", agent: "a" } }, sql: {} });
     expect(mintArgs(sb, null, true)).toEqual(["tsx", "mint.ts", "--login", "dr.a", "--clinic", "GOPD", "--agent"]);

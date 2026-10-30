@@ -382,6 +382,8 @@ export const emrIntentKey = (taskId: string, actionId: string, args: unknown) =>
 export const SPOKEN_PAUSE = /^(?:(?:ok(?:ay)?|right|sorry|wait)[,.!]?\s+)?(?:stop|hold on|hang on|pause)\b(?:[\s,.!-]+(?:i'?ll|i will|we'?ll|let me)\s+come back to (?:this|that|it|her|him)(?:\s+later)?)?[\s.!]*$|\bi'?ll come back to (?:this|that|it)\b/i;
 // "Sign everything" asks for the read-back of the owner's voice orders awaiting countersign; the yes that follows signs that batch.
 export const SIGN_EVERYTHING = /^(?:(?:ok(?:ay)?|right|now|and)\s+)?(?:please\s+)?(?:countersign|sign)\s+(?:everything|it all|them all|all of (?:it|them)|all (?:the )?(?:voice )?orders|the orders)(?:\s+please)?$/;
+export const PAY_LINK_VERIFIED_NOTE = "Pay link request verified: the bill shows it recorded. This does not show that an SMS arrived or that anyone paid; payment is simulated.";
+
 export const OWNER_YES = /^(?:yes|yeah|yes please|yes sign(?: them| it| everything)?|sign(?: them| it)?|go ahead|send it|do it|confirm(?:ed)?|i confirm|yes confirm)$/;
 export const OWNER_NO = /^(?:no|nope|don'?t|do not|cancel(?: it| that)?|leave it)$/;
 export const SPOKEN_RESUME = /\bwhere were we\b|\b(?:let'?s|we can) (?:carry on|continue|pick (?:this|it|that) (?:back )?up)\b|^(?:ok(?:ay)?,?\s+)?i'?m back\b/i;
@@ -1824,6 +1826,8 @@ export class EmrRuntime {
     }
     if (a.kind === "draft_handover" && a.draft) this.ask(l, a.line_id, `Handover draft for your review: "${a.draft.slice(0, 900)}" Say save the handover to record it, or tell me what to change.`);
     if (a.kind === "prepare_bill" && a.report) this.note(l, a.report);
+    // A pay link read back from the bill proves only that the request is recorded.
+    if (a.kind === "send_pay_link") this.note(l, PAY_LINK_VERIFIED_NOTE);
     this.settle(l, "proved");
   }
 

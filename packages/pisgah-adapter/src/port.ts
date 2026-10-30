@@ -459,10 +459,15 @@ export class PisgahPort implements EmrPort {
   }
 }
 
-// One proof check: "$name" equal, "@nonnull", "@startswith:$name" on the first 40 characters, or "@contains:$name".
-function checkOne(seen: unknown, want: string, vars: Vars): boolean {
+// One proof check: "$name" equal, "@nonnull", "@recent:<seconds>" for a time written just now, "@startswith:$name" on the first 40 characters, or "@contains:$name".
+function checkOne(seen: unknown, want: string, vars: Vars, now = Date.now()): boolean {
   const val = (x: string) => (x.startsWith("$") ? vars[x.slice(1)] : x);
   if (want === "@nonnull") return seen !== null && seen !== undefined && seen !== "";
+  if (want.startsWith("@recent:")) {
+    const within = Number(want.slice(8)) * 1000;
+    const at = typeof seen === "string" ? Date.parse(seen) : NaN;
+    return Number.isFinite(within) && Number.isFinite(at) && at <= now + 5_000 && now - at <= within;
+  }
   if (want.startsWith("@startswith:")) { const w = str(val(want.slice(12))); return !!w && typeof seen === "string" && norm(seen).startsWith(norm(w).slice(0, 40)); }
   if (want.startsWith("@contains:")) { const w = str(val(want.slice(10))); return !!w && typeof seen === "string" && norm(seen).includes(norm(w).slice(0, 40)); }
   return same(seen, val(want));
