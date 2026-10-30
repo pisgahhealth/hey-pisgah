@@ -145,7 +145,9 @@ export type EmrRuntimeOptions = {
   wallNow?: () => Date;
   log?: (line: string) => void;
   // Called when the agent moves to the patient the clinician is with: a spoken name or an arrival it opened.
-  onSubject?: (owner: string, target: EmrTarget, by: "spoken" | "emergency" | "delegation") => void;
+  onSubject?: (owner: string, target: EmrTarget, by: "spoken" | "emergency" | "delegation", at?: string) => void;
+  // Called when an arrival the agent was asked to open ends refused or failed, so speech held for it can be released.
+  onArrivalFailed?: (owner: string, taskId: string, reason: string) => void;
   // The A&E clinic a spoken emergency opens its arrival on.
   emergencyClinicId?: string;
   // The clinicians' remembered preferences; without it no preference is kept or applied.
@@ -681,7 +683,7 @@ export class EmrRuntime {
         .map((t) => ({ label: t.label, target: t.admission_id ? { admission_id: t.admission_id } : { patient_id: t.patient_id! } }));
       const moved = spokenPatient(text, known);
       const target = moved && JSON.stringify(moved.target) !== JSON.stringify(s.target) ? moved.target : s.target;
-      if (target !== s.target) this.o.onSubject?.(s.owner, target, "spoken");
+      if (target !== s.target) this.o.onSubject?.(s.owner, target, "spoken", spokenAt);
       ctx = target === s.target && s.context && s.context.admission_id === s.target.admission_id ? s.context : await this.o.port.resolve(target, prov);
       l = this.taskFor(s.owner, ctx) ?? this.openTask(s.owner, ctx);
     }
@@ -2025,6 +2027,7 @@ export class EmrRuntime {
       }
       if (!c.ok) {
         this.append(l, c.retryable ? "action.failed" : "action.refused", { action_id: actionId, reason: c.reason, status: c.status, counted: c.counted });
+        if (a.kind === EMERGENCY_KIND) this.o.onArrivalFailed?.(t.owner, t.task_id, c.reason);
         if (a.kind === "countersign" && !c.retryable) this.note(l, "Nothing was signed: the orders changed after they were read back, or one is not yours to sign now. Say sign everything to read them back again.");
         return this.settle(l, c.retryable ? "write_failed" : "write_refused");
       }
@@ -2051,6 +2054,7 @@ export class EmrRuntime {
     }
     if (!proof || proof.record_id !== w.record_id) {
       this.append(l, "action.failed", { action_id: actionId, reason: proof ? "proof_for_another_record" : "unproved" });
+      if (a.kind === EMERGENCY_KIND) this.o.onArrivalFailed?.(t.owner, t.task_id, proof ? "proof_for_another_record" : "unproved");
       return this.settle(l, "unproved");
     }
     this.append(l, "action.completed", { action_id: actionId, proof });
@@ -2061,7 +2065,7 @@ export class EmrRuntime {
     if (a.kind === EMERGENCY_KIND && EmrId.safeParse(w.record_id).success) {
       const visit = w.event_ids.map((e) => /^visit:(.+)$/.exec(e)?.[1]).find((v) => v && EmrId.safeParse(v).success) ?? null;
       this.append(l, "task.subject", { patient_id: w.record_id, visit_id: visit, unidentified: true, by: actionId });
-      this.o.onSubject?.(t.owner, { patient_id: w.record_id }, "emergency");
+      this.o.onSubject?.(t.owner, { patient_id: w.record_id }, "emergency", t.lines.find((x) => x.id === a.line_id)?.at);
     }
     // An admission the agent requested or made becomes the task's subject, so later words reach the same task and held work can resume.
     if ((a.kind === "request_admission" || a.kind === "admit_patient") && !t.admission_id && EmrId.safeParse(w.record_id).success) {

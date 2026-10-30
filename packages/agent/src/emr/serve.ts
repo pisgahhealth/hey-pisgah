@@ -54,9 +54,12 @@ const Say = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), patien
 const FollowUp = z.strictObject({ text: z.string().min(1).max(1000), task_id: z.string().optional(), owner: Owner.optional(), spokenAt: z.iso.datetime({ offset: true }).optional(), via: Via });
 const Open = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional() }).refine(hasTarget, "admissionId or patientId is required");
 // Listening needs no patient: the agent tracks the patient the clinician is with, or waits for the emergency phrase or a name.
+const SessionId = z.string().min(1).max(80).regex(/^[A-Za-z0-9_.:-]+$/);
 const ListenMeta = z.strictObject({
   owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional(),
-  session_id: z.string().min(1).max(80).regex(/^[A-Za-z0-9_.:-]+$/), seq: z.coerce.number().int().min(0).max(1_000_000),
+  session_id: SessionId, seq: z.coerce.number().int().min(0).max(1_000_000),
+  // When the strip captured the words (epoch ms), so they are bound to the patient in front of the clinician then.
+  captured_at: z.coerce.number().int().positive().optional(),
   // Set when the device spotted "emergency" with no wake before it, so this audio is checked by transcript for the phrase.
   hint: z.enum(["emergency", "after_wake"]).optional()
 });
@@ -71,6 +74,13 @@ const Scope = z.strictObject({ owner: Owner, scope: z.enum([...SCOPE_KINDS, "no"
 const External = z.strictObject({ owner: Owner, text: z.string().min(3).max(600), scope: z.enum(["me", "ward", "everyone"]), ward: z.string().min(1).max(120).optional() });
 const JSON_LIMIT = 64 * 1024;
 const AUDIO_LIMIT = 8 * 1024 * 1024;
+
+// How long speech after an emergency phrase is held for the arrival before it is let go as not kept.
+export const PENDING_MAX_MS = 60_000;
+type Track = { page: string; history: { target: EmrTarget | null; since: number }[] };
+type Pending = { task_id: string; reply: { task_id: string; line_id: string; action_id: string }; since: number; page: string; held: { bind: (t: EmrTarget) => Promise<void>; drop: (why: string) => void }[]; timer: NodeJS.Timeout };
+export type HeardStatus = { seq: number; at: string; status: "accepted" | "processing" | "failed" | "completed"; waiting?: "arrival" | "join"; error?: string; task_id?: string; line_id?: string };
+const pageKey = (p: EmrTarget) => (p.admission_id || p.patient_id ? JSON.stringify(p) : "");
 
 class HttpError extends Error { constructor(readonly status: number, message: string) { super(message); } }
 
@@ -101,11 +111,50 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   let runtime: EmrRuntime | null = null;
   const client = o.client ?? new ModelClient({ storeRoot: o.storeRoot, ...(o.mode ? { mode: o.mode } : {}), ...(o.recordingsDir ? { recordingsDir: o.recordingsDir } : {}), ...(o.recordModel === false ? { record: false } : {}), taskStateOf: (id) => runtime?.stateOf(id) ?? null });
   const secondEar = o.ears === "off" ? undefined : typeof o.ears === "function" ? o.ears : o.ears === "spark" ? sparkEar(client) : o.runtime?.secondEar;
-  // The patient each owner's agent is with: the page's patient when it changes, a spoken name, or an arrival it opened, the latest winning.
-  const tracked = new Map<string, { target: EmrTarget | null; page: string }>();
-  const onSubject = (owner: string, target: EmrTarget) => { tracked.set(owner, { target, page: tracked.get(owner)?.page ?? "" }); };
+  // The patient each owner's agent is with over time: the page's patient when it changes, a spoken name, or an arrival it opened, ordered by when it was asked for.
+  const tracked = new Map<string, Track>();
+  const trackOf = (owner: string): Track => { let t = tracked.get(owner); if (!t) { t = { page: "", history: [] }; tracked.set(owner, t); } return t; };
+  const moveTo = (owner: string, target: EmrTarget | null, since: number) => {
+    const h = trackOf(owner).history;
+    const at = h.findIndex((x) => x.since > since);
+    h.splice(at < 0 ? h.length : at, 0, { target, since });
+    if (h.length > 50) h.shift();
+  };
+  // The patient in effect when the words were captured, so a late upload never takes a patient chosen after it was said.
+  const subjectAt = (owner: string, at: number): EmrTarget | null => [...(tracked.get(owner)?.history ?? [])].reverse().find((x) => x.since <= at)?.target ?? null;
+  const current = (owner: string): EmrTarget | null => tracked.get(owner)?.history.at(-1)?.target ?? null;
+  // An emergency phrase opens a pending arrival; speech captured after it is held until the record is confirmed, then bound to it.
+  const pending = new Map<string, Pending>();
+  const statuses = new Map<string, Map<number, HeardStatus>>();
+  const setStatus = (owner: string, session: string, seq: number, st: Omit<HeardStatus, "seq" | "at">) => {
+    const key = `${owner}\u0000${session}`;
+    let m = statuses.get(key);
+    if (!m) { m = new Map(); statuses.set(key, m); if (statuses.size > 200) statuses.delete(statuses.keys().next().value!); }
+    m.set(seq, { seq, at: new Date().toISOString(), ...st });
+    if (m.size > 100) m.delete(m.keys().next().value!);
+  };
+  const release = async (owner: string, target: EmrTarget | null, reason: string | null) => {
+    const p = pending.get(owner);
+    if (!p) return;
+    clearTimeout(p.timer);
+    // Lines that arrive while the held ones are bound join the same queue, so the order spoken is kept.
+    while (p.held.length) {
+      const h = p.held.shift()!;
+      if (target) await h.bind(target).catch((e: unknown) => { o.log?.(`held line not bound: ${e instanceof Error ? e.message : String(e)}`); h.drop("not_bound"); });
+      else h.drop(reason ?? "arrival_not_opened");
+    }
+    pending.delete(owner);
+  };
+  const onSubject = (owner: string, target: EmrTarget, by: "spoken" | "emergency" | "delegation", at?: string) => {
+    // A task handed to this owner is background work: it never changes the patient the clinician is with.
+    if (by === "delegation") return;
+    const since = at && Number.isFinite(Date.parse(at)) ? Date.parse(at) : Date.now();
+    moveTo(owner, target, since);
+    if (by === "emergency") void release(owner, target, null);
+  };
+  const onArrivalFailed = (owner: string, taskId: string, reason: string) => { if (pending.get(owner)?.task_id === taskId) void release(owner, null, reason); };
   const prefs = o.preferences === false ? null : o.runtime?.preferences ?? new PreferenceMemory(o.storeRoot);
-  const rt = new EmrRuntime({ ...(o.runtime ?? {}), storeRoot: o.storeRoot, client, port: o.port, ...(secondEar ? { secondEar } : {}), ...(o.log ? { log: o.log } : {}), onSubject, ...(o.emergencyClinicId ? { emergencyClinicId: o.emergencyClinicId } : {}), ...(prefs ? { preferences: prefs } : {}) });
+  const rt = new EmrRuntime({ ...(o.runtime ?? {}), storeRoot: o.storeRoot, client, port: o.port, ...(secondEar ? { secondEar } : {}), ...(o.log ? { log: o.log } : {}), onSubject, onArrivalFailed, ...(o.emergencyClinicId ? { emergencyClinicId: o.emergencyClinicId } : {}), ...(prefs ? { preferences: prefs } : {}) });
   runtime = rt;
   rt.start();
   const transcribe = o.transcribe ?? voiceTranscriber;
@@ -114,17 +163,39 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   const wakeLog = join(o.storeRoot, "..", "wake.jsonl");
   // The patient each listening session started with keeps the session's own id, so a session that never moves reads as before.
   const firstSubject = new Map<string, string>();
-  const seenSessions = new Set<string>();
-  const subjectFor = (owner: string, page: EmrTarget, session?: string): EmrTarget | null => {
-    const key = JSON.stringify(page);
-    // A new listening session starts from the page in front of the clinician, not a patient from an earlier session.
-    const fresh = session !== undefined && !firstSubject.has(session) && !seenSessions.has(session);
-    if (session !== undefined) seenSessions.add(session);
-    const t = fresh ? { target: null, page: "" } : tracked.get(owner) ?? { target: null, page: "" };
-    // Opening another patient's page moves the agent to that patient; leaving a page keeps the patient it was with.
-    if (key !== t.page) { t.page = key; if (page.admission_id || page.patient_id) t.target = page; }
-    tracked.set(owner, t);
-    return t.target;
+  // A page with a patient moves the agent to it from the moment the words were captured; leaving a page keeps the patient it was with.
+  const subjectFor = (owner: string, page: EmrTarget, at: number): EmrTarget | null => {
+    const key = pageKey(page);
+    const t = trackOf(owner);
+    if (key !== t.page) { t.page = key; if (key) moveTo(owner, page, at); }
+    return subjectAt(owner, at);
+  };
+  // "hey Pisgah, emergency" opens one arrival; while it is pending a second phrase answers with the same arrival.
+  const openArrival = async (owner: string, e: { text: string; spoken_at: string; source: "text" | "audio"; wake?: Record<string, unknown> }) => {
+    const p = pending.get(owner);
+    if (p) return p.reply;
+    const r = await rt.emergency(owner, { text: e.text, spoken_at: e.spoken_at, source: e.source, ...(e.wake ? { wake: e.wake } : {}), args: { unidentified_ref: unidentifiedRef(new Date(e.spoken_at)), reason: emergencyReason(e.text), ...(o.emergencyClinicId ? { clinic_id: o.emergencyClinicId } : {}) } });
+    const v = rt.view(r.task_id);
+    if (!v?.patient_id && !pending.has(owner)) {
+      const timer = setTimeout(() => { void release(owner, null, "arrival_not_confirmed"); }, PENDING_MAX_MS);
+      timer.unref?.();
+      pending.set(owner, { task_id: r.task_id, reply: r, since: Date.parse(e.spoken_at), page: trackOf(owner).page, held: [], timer });
+    }
+    return r;
+  };
+  // One chunk on its way to the patient it belongs to; each patient gets its own listening session, so a line about one never joins audio heard about another.
+  const toSubject = async (owner: string, session: string, seq: number, target: EmrTarget, wav: Uint8Array, arrived: number, wait: boolean) => {
+    const subjectKey = JSON.stringify(target);
+    const first = firstSubject.get(session) ?? subjectKey;
+    firstSubject.set(session, first);
+    const sessionId = first === subjectKey ? session : `${session.slice(0, 60)}.${shortHash(subjectKey)}`;
+    try {
+      const reply = await listening.chunk({ owner, target, session_id: sessionId, seq, wav, arrived_at: arrived }, wait);
+      return { ...reply, session_id: session, tracking: target };
+    } catch (e) {
+      if (e instanceof ListenError) throw new HttpError(e.status, e.message);
+      throw e;
+    }
   };
   // A chunk with no patient anywhere is heard only for the emergency phrase and a known patient's name; its words are kept nowhere.
   const listenUntracked = async (owner: string, sessionId: string, seq: number, wav: Uint8Array, arrived: number, hint?: "emergency" | "after_wake"): Promise<unknown> => {
@@ -135,7 +206,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const said = EMERGENCY_LINE.test(text) || (hint === "emergency" && emergencyHeardLoosely(text)) || (hint === "after_wake" && /^\W*emergency\b/i.test(text));
     o.log?.(`listen with no patient: ${hint ? `${hint === "emergency" ? "device heard emergency" : "just after the wake phrase"}, ` : ""}${text ? `${text.split(/\s+/).length} words` : "silence"}, phrase ${said ? "said" : "not said"}`);
     if (said && rt.kinds(owner).includes("open_unnamed_encounter")) {
-      const r = await rt.emergency(owner, { text, spoken_at: spokenAt, args: { unidentified_ref: unidentifiedRef(new Date(arrived)), reason: emergencyReason(text), ...(o.emergencyClinicId ? { clinic_id: o.emergencyClinicId } : {}) } });
+      const r = await openArrival(owner, { text, spoken_at: spokenAt, source: "audio" });
       return { session_id: sessionId, seq, accepted: true, utterances: [{ id: r.line_id, line_id: r.line_id, task_id: r.task_id, text, class: "instruction", classes: ["instruction"] }], partial: null, entry: "emergency" };
     }
     // "Accepted <task>" heard with no patient open reaches the one task handed to this owner that it names.
@@ -143,7 +214,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     if (handed) return { session_id: sessionId, seq, accepted: true, utterances: [{ id: handed.line_id, line_id: handed.line_id, task_id: handed.task_id, text, class: "instruction", classes: ["instruction"] }], partial: null, entry: "delegation" };
     const known = rt.openSubjects(owner).map((x) => ({ label: rt.task(x.task_id)?.label ?? "", target: x.target })).filter((k) => k.label);
     const moved = spokenPatient(text, known);
-    if (moved) onSubject(owner, moved.target);
+    if (moved) onSubject(owner, moved.target, "spoken", spokenAt);
     return { session_id: sessionId, seq, accepted: true, utterances: [], partial: null, no_patient: !moved, ...(moved ? { moved_to: moved.target } : {}) };
   };
 
@@ -170,26 +241,26 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const audio = form.get("audio");
     if (!audio || typeof audio === "string") throw new HttpError(400, "audio: a WAV file part is required");
     const b = parse(ListenMeta, {
-      owner: field(form, "owner"), session_id: field(form, "session_id"), seq: field(form, "seq"), ...(field(form, "hint") ? { hint: field(form, "hint") } : {}),
+      owner: field(form, "owner"), session_id: field(form, "session_id"), seq: field(form, "seq"), ...(field(form, "hint") ? { hint: field(form, "hint") } : {}), ...(field(form, "captured_at") ? { captured_at: field(form, "captured_at") } : {}),
       ...(field(form, "admissionId") ? { admissionId: field(form, "admissionId") } : {}), ...(field(form, "patientId") ? { patientId: field(form, "patientId") } : {})
     });
     const page = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
-    const target = subjectFor(b.owner, page, b.session_id);
+    // The words belong to the moment they were captured, which the strip stamps; a missing or implausible stamp falls back to arrival.
+    const at = b.captured_at !== undefined && b.captured_at <= arrived && b.captured_at >= arrived - 10 * 60_000 ? b.captured_at : arrived;
     const wav = new Uint8Array(await audio.arrayBuffer());
-    if (!target || b.hint === "emergency") return [202, await listenUntracked(b.owner, b.session_id, b.seq, wav, arrived, b.hint)];
-    // Each patient gets its own listening session, so a line about one patient never joins audio heard about another.
-    const subjectKey = JSON.stringify(target);
-    const first = firstSubject.get(b.session_id) ?? subjectKey;
-    firstSubject.set(b.session_id, first);
-    const sessionId = first === subjectKey ? b.session_id : `${b.session_id.slice(0, 60)}.${shortHash(subjectKey)}`;
-    try {
-      const wait = new URL(req.url ?? "/", "http://serve").searchParams.get("wait") === "1";
-      const reply = await listening.chunk({ owner: b.owner, target, session_id: sessionId, seq: b.seq, wav, arrived_at: arrived }, wait);
-      return [202, { ...reply, session_id: b.session_id, tracking: target }];
-    } catch (e) {
-      if (e instanceof ListenError) throw new HttpError(e.status, e.message);
-      throw e;
+    const wait = new URL(req.url ?? "/", "http://serve").searchParams.get("wait") === "1";
+    const held = pending.get(b.owner);
+    if (held && b.hint !== "emergency" && at >= held.since && pageKey(page) === held.page) {
+      setStatus(b.owner, b.session_id, b.seq, { status: "accepted", waiting: "arrival" });
+      held.held.push({
+        bind: async (target) => { setStatus(b.owner, b.session_id, b.seq, { status: "processing" }); await toSubject(b.owner, b.session_id, b.seq, target, wav, arrived, false); },
+        drop: (why) => setStatus(b.owner, b.session_id, b.seq, { status: "failed", error: `Not kept: the arrival was not opened (${why}).` })
+      });
+      return [202, { session_id: b.session_id, seq: b.seq, accepted: true, utterances: [], partial: null, pending: true, task_id: held.task_id }];
     }
+    const target = subjectFor(b.owner, page, at);
+    if (!target || b.hint === "emergency") return [202, await listenUntracked(b.owner, b.session_id, b.seq, wav, arrived, b.hint)];
+    return [202, await toSubject(b.owner, b.session_id, b.seq, target, wav, arrived, wait)];
   };
 
   const sayAudio = async (req: IncomingMessage): Promise<[number, unknown]> => {
@@ -264,15 +335,19 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       const b = parse(Say, await json(req));
       const page = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
       // A typed line with no patient open goes to the patient the agent is with, and opens an arrival on the emergency phrase.
-      const target = hasTarget(b) ? page : subjectFor(b.owner, page);
-      // A spoken acceptance of a task handed to this owner needs no patient open: the task names its own.
-      const handed = target ? null : rt.delegationLine(b.owner, b.text, b.spokenAt ?? new Date().toISOString(), "text");
-      if (handed) return [202, handed];
-      if (!target) {
-        if (!EMERGENCY_LINE.test(b.text)) throw new HttpError(400, "No patient is open yet; say hey Pisgah, emergency, or open a patient");
-        const at = b.spokenAt ?? new Date().toISOString();
-        return [202, await rt.emergency(b.owner, { text: b.text, spoken_at: at, source: "text", args: { unidentified_ref: unidentifiedRef(new Date(at)), reason: emergencyReason(b.text), ...(o.emergencyClinicId ? { clinic_id: o.emergencyClinicId } : {}) } })];
+      const target = hasTarget(b) ? page : current(b.owner);
+      const at = b.spokenAt ?? new Date().toISOString();
+      if (!target && EMERGENCY_LINE.test(b.text)) return [202, await openArrival(b.owner, { text: b.text, spoken_at: at, source: "text" })];
+      // A typed line while an arrival is pending is held and bound to it once the record is confirmed.
+      const held = target ? null : pending.get(b.owner);
+      if (held) {
+        held.held.push({ bind: async (t) => { await rt.say({ owner: b.owner, target: t, text: b.text, spoken_at: at, ...(b.via ? { via: b.via } : {}) }); }, drop: (why) => o.log?.(`typed line not kept: the arrival was not opened (${why})`) });
+        return [202, { pending: true, task_id: held.task_id }];
       }
+      // A spoken acceptance of a task handed to this owner needs no patient open: the task names its own.
+      const handed = target ? null : rt.delegationLine(b.owner, b.text, at, "text");
+      if (handed) return [202, handed];
+      if (!target) throw new HttpError(400, "No patient is open yet; say hey Pisgah, emergency, or open a patient");
       return [202, await rt.say({ owner: b.owner, target, text: b.text, ...(b.spokenAt ? { spoken_at: b.spokenAt } : {}), ...(b.via ? { via: b.via } : {}) })];
     }
     // Opening a patient's page starts the owner's task with no words, so the agent watches that record for them.
@@ -284,12 +359,17 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     // "hey Pisgah, emergency" spotted on the device: an unnamed arrival with no patient open, its line the evidence.
     if (parts.length === 2 && parts[1] === "emergency" && m === "POST") {
       const b = parse(Emergency, await json(req));
-      const r = await rt.emergency(b.owner, { text: b.text, spoken_at: b.spokenAt, source: "audio", ...(b.wake ? { wake: b.wake } : {}), args: { unidentified_ref: unidentifiedRef(new Date(b.spokenAt)), reason: emergencyReason(b.text), ...(o.emergencyClinicId ? { clinic_id: o.emergencyClinicId } : {}) } });
-      return [202, r];
+      return [202, await openArrival(b.owner, { text: b.text, spoken_at: b.spokenAt, source: "audio", ...(b.wake ? { wake: b.wake } : {}) })];
     }
     if (parts.length === 2 && parts[1] === "tracking" && m === "GET") {
       const owner = parse(Owner, url.searchParams.get("owner") ?? "");
-      return [200, { owner, target: tracked.get(owner)?.target ?? null }];
+      return [200, { owner, target: current(owner), ...(pending.has(owner) ? { pending: pending.get(owner)!.task_id } : {}) }];
+    }
+    // Each utterance's status in one listening session: accepted, processing, failed or completed, with the error when it failed.
+    if (parts.length === 2 && parts[1] === "listen" && m === "GET") {
+      const owner = parse(Owner, url.searchParams.get("owner") ?? "");
+      const session = parse(SessionId, url.searchParams.get("session_id") ?? "");
+      return [200, { session_id: session, utterances: [...(statuses.get(`${owner}\u0000${session}`)?.values() ?? [])].sort((x, y) => x.seq - y.seq) }];
     }
     if (parts.length === 2 && parts[1] === "listen" && m === "POST") return listen(req);
     const id = parts[1] ?? "";
