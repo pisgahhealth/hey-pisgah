@@ -1,0 +1,70 @@
+{
+ "artifact": "attribution-thresholds",
+ "revisions": [
+  {
+   "revision": 1,
+   "frozen_at": "2026-10-29T12:00:00Z",
+   "source": "R1 tuning set: 96 synthetic clips from macOS voices, before the held-out run",
+   "reason": "first rule; the synthetic gap says little about people",
+   "body": {
+    "speaker": {
+     "model": "nemo_en_titanet_small",
+     "template": "mean of three enrolment clips, whole-clip cosine",
+     "owner_min": 0.59,
+     "owner_margin": 0.25,
+     "other_min": 0.43,
+     "min_audio_ms": 500
+    },
+    "presence": null,
+    "authority": "the owner's own instruction to the agent"
+   },
+   "hash": "9a0a9559f0262bd9e0b042ad098358b923440052a03d82198410d8951872b550"
+  },
+  {
+   "revision": 2,
+   "frozen_at": "2026-10-29T20:00:00Z",
+   "source": "R1.b tuning lines of the owner's real recordings (one enrolled voice); other_min kept from revision 1 as a placeholder",
+   "reason": "the synthetic 0.59 refused half the owner's real held-out lines; 0.41 is halfway between the owner's lowest tuning score and the second voice's highest; no colleague was enrolled, so no margin",
+   "body": {
+    "speaker": {
+     "model": "nemo_en_titanet_small",
+     "template": "mean of three enrolment clips, whole-clip cosine",
+     "owner_min": 0.41,
+     "owner_margin": 0,
+     "other_min": 0.43,
+     "min_audio_ms": 500
+    },
+    "presence": null,
+    "authority": "the owner's own instruction to the agent"
+   },
+   "hash": "9cb7016f9bcd113583d4bf4232f6df454ee36cd5fee24e605e7da21ba7ab7eaa"
+  },
+  {
+   "revision": 3,
+   "frozen_at": "2026-10-30T08:00:00Z",
+   "source": "G4: the speaker rule of revision 2 unchanged; the presence rule added without data, provisional",
+   "reason": "R-26: replay is defended by session and presence, so their limits are frozen beside the voice rule before the v2 recordings are scored",
+   "body": {
+    "speaker": {
+     "model": "nemo_en_titanet_small",
+     "template": "mean of three enrolment clips, whole-clip cosine",
+     "owner_min": 0.41,
+     "owner_margin": 0,
+     "other_min": 0.43,
+     "min_audio_ms": 500
+    },
+    "presence": {
+     "live_window_ms": 60000,
+     "live_slack_ms": 3000,
+     "capture_overlap_ms": 2500,
+     "capture_future_ms": 2000,
+     "stale_capture_ms": 120000,
+     "presence_window_ms": 300000,
+     "seen_per_owner": 5000
+    },
+    "authority": "the owner's own instruction, or a yes bound to the read-back of the patient and batch on screen, from a chunk sequence that passed the session checks and was present"
+   },
+   "hash": "f1b3078b5c7ad0cb2d03dde56c7f98eb76bae84451d40d726899b19b31dbbfcb"
+  }
+ ]
+}

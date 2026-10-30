@@ -484,6 +484,8 @@ export type SayInput = {
   heard_at?: number;
   // The segment's voiceprint from the local speaker model, matched by the hospital while the gate reads the words.
   voiceprint?: Voiceprint | null;
+  // Why a heard line has no voiceprint to match, such as the person not being at the screen.
+  unverified_reason?: string;
 };
 type EarsOutcome = { check: EarsCheck; reading: EarReading | null; error: string | null };
 
@@ -686,7 +688,7 @@ export class EmrRuntime {
     const text = s.text.trim().slice(0, 1000);
     if (!text) throw new Error("empty utterance");
     // A spoken acceptance or the front desk's registration details reach the task handed to this owner, by rule and before any read.
-    if (!taskId) { const d = this.delegationLine(s.owner, text, s.spoken_at ?? this.wall().toISOString(), s.source ?? "text", s.target, s.voiceprint); if (d) return d; }
+    if (!taskId) { const d = this.delegationLine(s.owner, text, s.spoken_at ?? this.wall().toISOString(), s.source ?? "text", s.target, s.voiceprint, s.unverified_reason); if (d) return d; }
     const lineId = this.nextLineId(s.owner, text);
     const spokenAt = s.spoken_at ?? this.wall().toISOString();
     const prov: Provenance = { owner: s.owner, evidence: `transcript:${lineId}`, spoken_at: spokenAt };
@@ -737,7 +739,7 @@ export class EmrRuntime {
       const p = this.o.secondEar(s.clip, { run_id: t0.run_id, task_id: t0.task_id, line_id: lineId }).then((reading) => ({ reading, error: null }), (e: unknown) => ({ reading: null, error: e instanceof ModelError ? e.code : "ear_failed" }));
       this.doseEars.set(lineId, this.track(p));
     }
-    this.matchVoice(s.owner, lineId, s.source ?? "text", s.voiceprint, prov);
+    this.matchVoice(s.owner, lineId, s.source ?? "text", s.voiceprint, prov, s.unverified_reason);
     // A spoken pause or return is handled by rule; while called away nothing heard is decided, so no model is called.
     if (SPOKEN_PAUSE.test(text) && !CLOSED_TASK.has(live.task.state) && live.task.state !== "paused") { this.pauseSpoken(live, lineId, ctx); this.afterLine(live, lineId, true); return { task_id: live.task.task_id, line_id: lineId }; }
     if (live.task.state === "paused" && live.task.reason === "called_away") {
@@ -774,13 +776,13 @@ export class EmrRuntime {
   }
 
   // The hospital matches the segment's voiceprint while the gate reads the words, so attribution adds no wait of its own.
-  private matchVoice(owner: string, lineId: string, source: "text" | "audio", vp: Voiceprint | null | undefined, prov: Provenance): void {
+  private matchVoice(owner: string, lineId: string, source: "text" | "audio", vp: Voiceprint | null | undefined, prov: Provenance, unverifiedReason?: string): void {
     if (vp && this.o.port.speaker) {
       const t0 = Date.now();
       const fail = (reason: string) => ({ v: { speaker: "unverified", reason } as SpeakerVerdict, embed_ms: vp.ms, match_ms: Date.now() - t0 });
       this.speakers.set(lineId, this.o.port.speaker(owner, vp.vector, prov).then((v) => ({ v, embed_ms: vp.ms, match_ms: Date.now() - t0 })).catch(() => fail("match_failed")));
     } else if (source === "audio" && this.o.port.speaker) {
-      this.speakers.set(lineId, Promise.resolve({ v: { speaker: "unverified", reason: "no_voiceprint" } as SpeakerVerdict, embed_ms: null, match_ms: null }));
+      this.speakers.set(lineId, Promise.resolve({ v: { speaker: "unverified", reason: unverifiedReason ?? "no_voiceprint" } as SpeakerVerdict, embed_ms: null, match_ms: null }));
     }
   }
 
@@ -2417,11 +2419,11 @@ export class EmrRuntime {
   }
 
   // The words that a rule takes are kept as evidence on the task they belong to.
-  private ruledLine(l: Live, owner: string, text: string, spokenAt: string, source: "text" | "audio", as: string, vp?: Voiceprint | null): string {
+  private ruledLine(l: Live, owner: string, text: string, spokenAt: string, source: "text" | "audio", as: string, vp?: Voiceprint | null, unverifiedReason?: string): string {
     const lineId = this.nextLineId(owner, text);
     this.append(l, "utterance.heard", { line_id: lineId, text, source, spoken_at: spokenAt, via: "rule" });
     this.append(l, "line.ruled", { line_id: lineId, classes: ["instruction"], as });
-    this.matchVoice(owner, lineId, source, vp, { owner, evidence: `transcript:${lineId}`, spoken_at: spokenAt });
+    this.matchVoice(owner, lineId, source, vp, { owner, evidence: `transcript:${lineId}`, spoken_at: spokenAt }, unverifiedReason);
     // Only the owner's own line, or the owner's session typing, answers the questions the agent asked the owner.
     this.whenAttributed(l, lineId, (who) => {
       if (who && who.speaker !== "owner") return;
@@ -2445,7 +2447,7 @@ export class EmrRuntime {
   }
 
   // A spoken "accepted <task>" acknowledges the one open task it names, and the desk's phone or consent words fill a registration; anything else is not a delegation line.
-  delegationLine(owner: string, text: string, spokenAt: string, source: "text" | "audio", target?: EmrTarget, vp?: Voiceprint | null): { task_id: string; line_id: string } | null {
+  delegationLine(owner: string, text: string, spokenAt: string, source: "text" | "audio", target?: EmrTarget, vp?: Voiceprint | null, unverifiedReason?: string): { task_id: string; line_id: string } | null {
     const open = [...this.live.values()].filter((l) => l.task.owner === owner && !CLOSED_TASK.has(l.task.state))
       .flatMap((l) => l.task.delegations.filter((d) => d.side === "assignee" && d.delegation_id && !d.completed_at).map((d) => ({ l, d, title: d.title })));
     if (!open.length) return null;
@@ -2455,7 +2457,7 @@ export class EmrRuntime {
     const acc = acceptedTask(text, atHand.length ? atHand : waiting);
     if (acc) {
       const home = "hit" in acc ? acc.hit.l : open.at(-1)!.l;
-      const lineId = this.ruledLine(home, owner, text, spokenAt, source, "accept", vp);
+      const lineId = this.ruledLine(home, owner, text, spokenAt, source, "accept", vp, unverifiedReason);
       if ("hit" in acc) { const hit = acc.hit; this.whenAttributed(home, lineId, () => { this.ruleAct(home, lineId, ACK_KIND, { delegation_id: hit.d.delegation_id, title: hit.d.title, evidence: `transcript:${lineId}` }); this.settle(home, "accept_line"); }); }
       else if ("ambiguous" in acc) this.ask(home, lineId, `Which task do you accept? ${acc.ambiguous.map((x) => x.title).join("; ")}. Say accepted and its name.`);
       else this.note(home, `No task waiting for you matches that. Waiting: ${waiting.map((x) => x.title).join("; ") || "none"}.`);
@@ -2467,7 +2469,7 @@ export class EmrRuntime {
     const orders = open.filter((x) => x.d.task_kind === "dispense" && x.d.subject_id && (!target || !(target.admission_id || target.patient_id) || x.l.task.admission_id === target.admission_id || x.l.task.patient_id === target.patient_id));
     if (asked && orders.length === 1) {
       const { l, d } = orders[0]!;
-      const lineId = this.ruledLine(l, owner, text, spokenAt, source, "order", vp);
+      const lineId = this.ruledLine(l, owner, text, spokenAt, source, "order", vp, unverifiedReason);
       // Preparing and dispensing are the pharmacist's own acts, so only the owner's voice, or the owner's own session typing, asks for them.
       this.whenAttributed(l, lineId, (who) => {
         if (this.notOwnersWords(l, lineId, who, PREPARE_KIND)) return this.settle(l, "needs_owner_voice");
@@ -2487,13 +2489,13 @@ export class EmrRuntime {
     if (!reg.length || (!phone && !consent)) return null;
     if (reg.length > 1) {
       const l = reg.at(-1)!.l;
-      const lineId = this.ruledLine(l, owner, text, spokenAt, source, "registration", vp);
+      const lineId = this.ruledLine(l, owner, text, spokenAt, source, "registration", vp, unverifiedReason);
       this.ask(l, lineId, `${reg.length} registrations are waiting. Open the patient you are registering, then say it again.`);
       this.settle(l, "registration_ambiguous");
       return { task_id: l.task.task_id, line_id: lineId };
     }
     const { l, d } = reg[0]!;
-    const lineId = this.ruledLine(l, owner, text, spokenAt, source, "registration", vp);
+    const lineId = this.ruledLine(l, owner, text, spokenAt, source, "registration", vp, unverifiedReason);
     // Another clinician's details are not the desk's; an unverified voice's are kept with their line, so the registration waits for the owner's yes.
     this.whenAttributed(l, lineId, (who) => {
       if (who?.speaker === "other_clinician" && this.notOwnersWords(l, lineId, who, REGISTER_KIND)) return this.settle(l, "needs_owner_voice");
