@@ -81,7 +81,7 @@ export async function feedTalk(o: FeedOptions): Promise<AmbientRun> {
     const views = (await (await fetch(`${o.serveUrl}/tasks?owner=${encodeURIComponent(o.owner)}`)).json()) as View[];
     mine = views.filter((v) => v.admission_id === o.admissionId && v.transcript.some((t) => t.ambient?.session_id === o.sessionId));
     const lines = mine.flatMap((v) => v.transcript.filter((t) => t.ambient?.session_id === o.sessionId));
-    const open = mine.flatMap((v) => v.actions).some((a) => a.state === "proposed" || a.state === "sent" || a.state === "acknowledged");
+    const open = mine.flatMap((v) => v.actions).some((a) => a.state === "proposed" || a.state === "sent" || a.state === "uncertain" || a.state === "acknowledged");
     if ((lines.every((l) => l.decided) && !open) || Date.now() > end) break;
     await new Promise((r) => setTimeout(r, 500));
   }

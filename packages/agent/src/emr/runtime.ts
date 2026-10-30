@@ -23,7 +23,8 @@ import {
 import { VERBAL_LINE, VERBAL_ORDER_ARGS, VERBAL_ORDER_KIND, verbalMissingNote, verbalOrderSaid } from "./verbal.js";
 import { FROM_NOW_ON, PreferenceError, SCOPE_KINDS, describePref, describeScope, describeSource, readRule, scopeAnswer, type PrefField, type PreferenceMemory } from "./preferences.js";
 
-export type EmrActionState = "proposed" | "sent" | "acknowledged" | "completed" | "refused" | "cancelled" | "failed";
+// uncertain: sent, but the answer said nothing about whether the hospital saved it; reconciled under its own key, never failed for it.
+export type EmrActionState = "proposed" | "sent" | "uncertain" | "acknowledged" | "completed" | "refused" | "cancelled" | "failed";
 export type EmrAction = {
   action_id: string; kind: string; args: WorkArgs; summary: string; line_id: string; corrects_action_id: string | null;
   state: EmrActionState; intent_key: string | null; written: { record_id: string; record_version: number; event_ids: string[]; replayed: boolean } | null;
@@ -35,6 +36,8 @@ export type EmrAction = {
   unverified: boolean;
   // Saved by the door but not yet found by its verification read; reconciled by the record id or the same key, never marked failed for it.
   awaiting_verification: { since: string; attempts: number; reason: string } | null;
+  // Sent with no answer that says whether it was saved, and when its intent was journaled, so the record can be read for it.
+  uncertain: { since: string; attempts: number; reason: string } | null; intent_at: string | null;
   // Vitals heard from audio wait for the second ear to agree before the write.
   ears: boolean;
   // A voice order waits for the owner's own matched voice, or for the spoken confirmation a controlled drug needs; the lines that gave them.
@@ -100,6 +103,7 @@ export type EmrTaskView = {
     proof?: { record_id: string; record_version: number; event_ids: string[] };
     report?: string; draft?: string; unverified?: true; awaiting?: "owner_voice" | "confirm"; authorised_by_line?: string;
     awaiting_verification?: { since: string; attempts: number; reason: string };
+    uncertain?: { since: string; attempts: number; reason: string };
     // The page the strip opens and fills for this action; command_id and owner_id bind it through navigation.
     screen?: ScreenPlan & { command_id: string; owner_id: string };
   }[];
@@ -168,13 +172,16 @@ export type EmrRuntimeOptions = {
   preferences?: PreferenceMemory;
 };
 
-const OPEN_ACTION: ReadonlySet<EmrActionState> = new Set(["proposed", "sent", "acknowledged"]);
+const OPEN_ACTION: ReadonlySet<EmrActionState> = new Set(["proposed", "sent", "uncertain", "acknowledged"]);
 const CLOSED_TASK: ReadonlySet<TaskState> = new Set(["cancelled", "failed"]);
 // An action that will never write: its order is not one a held result waits on.
 const DEAD_STATES: ReadonlySet<EmrActionState> = new Set(["refused", "cancelled", "failed"]);
 // The waits between verification reads of a saved write; a restart reads it again after the last.
 export const RECONCILE_MS: readonly number[] = [1000, 3000, 10_000, 30_000, 60_000];
 const RESUME_WINDOW_MS = 10 * 60_000;
+// A record found for an uncertain write must be made no earlier than this before its intent was journaled, allowing for clock skew.
+const FIND_SKEW_MS = 5000;
+type EmrWritten = { record_id: string; record_version: number; event_ids: string[] };
 const Z = { recorded_at: 0, occurred_at: 0 };
 type P = Record<string, unknown>;
 
@@ -246,14 +253,15 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       t.actions.set(String(x["action_id"]), {
         action_id: String(x["action_id"]), kind: String(x["kind"] ?? OBSERVATION_KIND), args: x["args"] as WorkArgs, summary: String(x["summary"]), line_id: String(x["line_id"]),
         corrects_action_id: (x["corrects_action_id"] as string | null) ?? null, state: "proposed", intent_key: null, written: null, proof: null, reason: null,
-        proposed_at: e.wall_at, written_at: null, completed_at: null, report: null, draft: null, unverified: false, awaiting_verification: null, ears: !!x["ears"],
+        proposed_at: e.wall_at, written_at: null, completed_at: null, report: null, draft: null, unverified: false, awaiting_verification: null, uncertain: null, intent_at: null, ears: !!x["ears"],
         awaiting: (x["awaiting"] as EmrAction["awaiting"] | undefined) ?? null, authorised_by_line: (x["authorised_by_line"] as string | null | undefined) ?? null, confirmed_by_line: null,
         screen: (x["screen"] as ScreenPlan | undefined) ?? null, read_back: null
       });
       t.order.push(String(x["action_id"]));
       break;
     case "action.read_back": if (act) act.read_back = x["read_back"] as PaperworkReadBack; break;
-    case "action.intent": if (act) { act.state = "sent"; act.intent_key = String(x["intent_key"]); if (x["args"]) act.args = x["args"] as WorkArgs; } break;
+    case "action.intent": if (act) { act.state = "sent"; act.intent_key = String(x["intent_key"]); act.intent_at = e.wall_at; if (x["args"]) act.args = x["args"] as WorkArgs; } break;
+    case "action.uncertain": if (act) { act.state = "uncertain"; act.uncertain = { since: act.uncertain?.since ?? e.wall_at, attempts: Number(x["attempts"]), reason: String(x["reason"]) }; } break;
     case "action.written": if (act) { act.state = "acknowledged"; act.written = x["written"] as EmrAction["written"]; act.written_at = e.wall_at; } break;
     case "action.completed": if (act) { act.state = "completed"; act.proof = x["proof"] as EmrProof; act.completed_at = e.wall_at; } break;
     case "action.cancelled": if (act) { act.state = "cancelled"; act.reason = String(x["reason"]); } break;
@@ -339,6 +347,7 @@ export function viewOf(t: EmrTask): EmrTaskView {
       ...(a.proof ? { proof: { record_id: a.proof.record_id, record_version: a.proof.record_version, event_ids: a.proof.event_ids } } : {}),
       ...(a.report ? { report: a.report } : {}), ...(a.draft ? { draft: a.draft } : {}), ...(a.unverified ? { unverified: true as const } : {}), ...(a.awaiting ? { awaiting: a.awaiting } : {}),
       ...(a.awaiting_verification && a.state === "acknowledged" ? { awaiting_verification: { ...a.awaiting_verification } } : {}),
+      ...(a.uncertain && a.state === "uncertain" ? { uncertain: { ...a.uncertain } } : {}),
       ...(a.authorised_by_line && a.authorised_by_line !== a.line_id ? { authorised_by_line: a.authorised_by_line } : {}),
       ...(a.screen ? { screen: { ...a.screen, encounter: { patient_id: a.screen.encounter.patient_id ?? t.patient_id, visit_id: a.screen.encounter.visit_id ?? t.visit_id, admission_id: a.screen.encounter.admission_id ?? (t.admission_id || null) }, command_id: a.action_id, owner_id: t.owner } } : {})
     })),
@@ -610,9 +619,15 @@ export class EmrRuntime {
       this.live.set(id, l);
       if (CLOSED_TASK.has(l.task.state)) continue;
       this.resumeDependents(l);
+      // A write whose outcome is unknown is reconciled before any other work of the task: one left on its way when the process stopped is uncertain too.
       for (const aid of l.task.order) {
         const a = l.task.actions.get(aid)!;
-        if (a.state === "sent" || (a.state === "acknowledged" && !a.unverified)) this.enqueueExec(l, () => this.execute(l, aid));
+        if (a.state === "sent") this.append(l, "action.uncertain", { action_id: aid, attempts: 1, reason: "restarted while the write was on its way", status: null, next_in_ms: 0 });
+        if (a.state === "uncertain") this.enqueueExec(l, () => this.execute(l, aid));
+      }
+      for (const aid of l.task.order) {
+        const a = l.task.actions.get(aid)!;
+        if (a.state === "acknowledged" && !a.unverified) this.enqueueExec(l, () => this.execute(l, aid));
         else if (a.state === "proposed" && l.task.state === "running") this.hold(l, aid);
       }
       if (l.task.state === "running" && l.task.lines.some((x) => !x.decided)) {
@@ -1070,7 +1085,7 @@ export class EmrRuntime {
     for (const id of l.task.order) {
       const a = l.task.actions.get(id)!;
       if (a.state === "proposed") { this.append(l, "action.cancelled", { action_id: id, reason: "interrupted" }); cancelled.push(id); }
-      else if (a.state === "sent" || a.state === "acknowledged") inFlight.push(id);
+      else if (a.state === "sent" || a.state === "uncertain" || a.state === "acknowledged") inFlight.push(id);
     }
     if (!CLOSED_TASK.has(l.task.state)) this.setState(l, "paused", "interrupted");
     return { cancelled, in_flight: inFlight };
@@ -2206,23 +2221,9 @@ export class EmrRuntime {
       const args = a.kind === CLERKING_KIND ? { ...a.args, note: this.noteSoFar(t, a) } : CONFIRM_KINDS.has(a.kind) ? { ...a.args, primary_diagnosis: a.read_back!.diagnosis } : a.args;
       this.append(l, "action.intent", { action_id: actionId, intent_key: emrIntentKey(t.task_id, actionId, args), args });
     }
-    if (a.state !== "sent" && a.state !== "acknowledged") return;
+    if (a.state !== "sent" && a.state !== "uncertain" && a.state !== "acknowledged") return;
     const prov = this.provFor(t, a);
-    if (a.state === "sent") {
-      let c = await this.o.port.commit(a.kind, a.args, a.intent_key!, prov);
-      if (!c.ok && c.retryable) {
-        this.append(l, "action.retry", { action_id: actionId, reason: c.reason, status: c.status });
-        c = await this.o.port.commit(a.kind, a.args, a.intent_key!, prov);
-      }
-      if (!c.ok) {
-        this.append(l, c.retryable ? "action.failed" : "action.refused", { action_id: actionId, reason: c.reason, status: c.status, counted: c.counted });
-        if (a.kind === EMERGENCY_KIND) this.o.onArrivalFailed?.(t.owner, t.task_id, c.reason);
-        if (a.kind === "countersign" && !c.retryable) this.note(l, "Nothing was signed: the orders changed after they were read back, or one is not yours to sign now. Say sign everything to read them back again.");
-        return this.settle(l, c.retryable ? "write_failed" : "write_refused");
-      }
-      this.append(l, "action.written", { action_id: actionId, written: { record_id: c.record_id, record_version: c.record_version, event_ids: c.event_ids, replayed: c.replayed } });
-      if (c.report || c.draft) this.append(l, "action.reported", { action_id: actionId, report: c.report ?? null, draft: c.draft ?? null });
-    }
+    if ((a.state === "sent" || a.state === "uncertain") && !(await this.send(l, a, prov))) return;
     const w = a.written!;
     const v0 = Date.now();
     let proof: EmrProof | null;
@@ -2272,6 +2273,77 @@ export class EmrRuntime {
     // A pay link read back from the bill proves only that the request is recorded.
     if (a.kind === "send_pay_link") this.note(l, PAY_LINK_VERIFIED_NOTE);
     this.settle(l, "proved");
+  }
+
+  // Sends a journaled write; an answer that says nothing about whether it was saved holds it as uncertain, and the record is read for the key's effect before the same key is sent again.
+  private async send(l: Live, a: EmrAction, prov: Provenance): Promise<boolean> {
+    const t = l.task;
+    const first = a.state === "sent";
+    // A first send gets one reconcile at once; a later round reads and sends once.
+    for (let pass = 0; pass < (first ? 2 : 1); pass++) {
+      if (a.state === "uncertain") {
+        const found = await this.findWrite(l, a, prov);
+        if (found === "unread") return this.holdUncertain(l, a, first);
+        if (found) {
+          this.append(l, "action.reconciled", { action_id: a.action_id, by: "record", record_id: found.record_id });
+          this.append(l, "action.written", { action_id: a.action_id, written: { ...found, replayed: true } });
+          return true;
+        }
+        this.append(l, "action.retry", { action_id: a.action_id, reason: a.uncertain?.reason ?? "uncertain", status: null, same_key: true });
+      }
+      const c = await this.o.port.commit(a.kind, a.args, a.intent_key!, prov);
+      if (c.ok) {
+        this.append(l, "action.written", { action_id: a.action_id, written: { record_id: c.record_id, record_version: c.record_version, event_ids: c.event_ids, replayed: c.replayed } });
+        if (c.report || c.draft) this.append(l, "action.reported", { action_id: a.action_id, report: c.report ?? null, draft: c.draft ?? null });
+        return true;
+      }
+      // A replay the port would not send leaves the first send's outcome as unknown as before.
+      if (c.retryable || (a.state === "uncertain" && c.status === null)) {
+        this.append(l, "action.uncertain", { action_id: a.action_id, attempts: (a.uncertain?.attempts ?? 0) + 1, reason: c.retryable ? c.reason : `not sent again: ${c.reason}`, status: c.status, next_in_ms: null });
+        continue;
+      }
+      this.append(l, "action.refused", { action_id: a.action_id, reason: c.reason, status: c.status, counted: c.counted });
+      if (a.kind === EMERGENCY_KIND) this.o.onArrivalFailed?.(t.owner, t.task_id, c.reason);
+      if (a.kind === "countersign") this.note(l, "Nothing was signed: the orders changed after they were read back, or one is not yours to sign now. Say sign everything to read them back again.");
+      this.settle(l, "write_refused");
+      return false;
+    }
+    return this.holdUncertain(l, a, first);
+  }
+
+  // The record this write made, found by the port's own read of the hospital; null when nothing is found or several could be it, "unread" when the read failed.
+  private async findWrite(l: Live, a: EmrAction, prov: Provenance): Promise<EmrWritten | null | "unread"> {
+    if (!this.o.port.findWrite || !a.intent_key) return null;
+    const since = new Date(Date.parse(a.intent_at ?? a.proposed_at) - FIND_SKEW_MS).toISOString();
+    let r: Awaited<ReturnType<NonNullable<EmrPort["findWrite"]>>>;
+    try { r = await this.o.port.findWrite(a.kind, a.args, { intent_key: a.intent_key, since }, prov); } catch (e) {
+      this.append(l, "action.uncertain", { action_id: a.action_id, attempts: (a.uncertain?.attempts ?? 0) + 1, reason: `record read failed: ${e instanceof Error ? e.message.slice(0, 120) : "read failed"}`, status: null, next_in_ms: null });
+      return "unread";
+    }
+    if (!r.found) return null;
+    // A record another action already holds is not this write's.
+    const id = r.found.record_id;
+    const taken = [...this.live.values()].some((x) => [...x.task.actions.values()].some((y) => y !== a && y.kind === a.kind && y.written?.record_id === id));
+    return taken ? null : r.found;
+  }
+
+  // Keeps an uncertain write open and reads for it again on a timer; each process start gets its own round, so a restart always tries again.
+  private holdUncertain(l: Live, a: EmrAction, first: boolean): false {
+    const waits = this.o.reconcileMs ?? RECONCILE_MS;
+    const key = `u:${a.action_id}`;
+    const round = (this.reconRound.get(key) ?? 0) + 1;
+    this.reconRound.set(key, round);
+    const next = round <= waits.length ? waits[round - 1]! : null;
+    if (first) this.note(l, `${a.summary}: the hospital's answer was lost, so it may be saved. I will read the record and ask again under the same request before anything depends on it.`);
+    this.settle(l, "uncertain");
+    if (next === null || this.stopped) return false;
+    const timer = setTimeout(() => {
+      this.recon.delete(timer);
+      if (!this.stopped) this.enqueueExec(l, () => this.execute(l, a.action_id));
+    }, next);
+    timer.unref?.();
+    this.recon.add(timer);
+    return false;
   }
 
   private linkArrival(l: Live, a: EmrAction): void {

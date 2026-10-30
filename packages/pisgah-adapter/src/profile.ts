@@ -32,6 +32,8 @@ const WriteOp = z.strictObject({
     also: z.record(z.string().regex(/^[a-z_]{1,40}$/), Dotted).optional() }),
   before: z.array(BeforeSpec).max(3).optional(),
   proof: ProofSpec.optional(),
+  // A read that finds the record this write made without its id, for a write whose answer was lost: the row matching the arguments, made after the intent, its id and other records.
+  lookup: ReadSpec.extend({ find: z.strictObject({ list: ListPath, where: z.record(z.string(), z.string()) }), id: Dotted, made_at: Dotted, also: z.record(z.string().regex(/^[a-z_]{1,40}$/), Dotted).optional() }).optional(),
   // Why no read can show this write; the agent then reports it sent but not verified.
   unverifiable: z.string().min(1).max(200).optional()
 }).refine((w) => !!w.proof !== !!w.unverifiable, "a write needs a proof or a reason it cannot have one");
