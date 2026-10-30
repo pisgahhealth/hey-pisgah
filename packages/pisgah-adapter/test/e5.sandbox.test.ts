@@ -1,9 +1,7 @@
-import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { sherpaEmbedder, type Provenance, type SpeakerVerdict } from "@hey-pisgah/agent";
-import { parseEnvText } from "@hey-pisgah/model";
 import { loadProfile } from "../src/profile.js";
 import { PisgahPort, type DoorLog } from "../src/port.js";
 import { personCaller } from "../src/journey.sandbox.js";
@@ -14,15 +12,13 @@ import { speak, VOICES } from "./e3.sandbox.test.js";
 const RUN = process.env["SANDBOX"] === "1" && process.env["E5"] === "1";
 const now = () => new Date().toISOString();
 
-// One named fixture write from the private file, as the sandbox owner role, to give a synthetic stay the diagnosis the paperwork reads.
-function fixture(sb: SandboxBlock, name: string, vars: Record<string, string>): void {
-  const file = process.env["HEY_PISGAH_E5_SQL"];
-  if (!file) throw new Error("set HEY_PISGAH_E5_SQL to the private fixture file");
-  const sql = (JSON.parse(readFileSync(file, "utf8")) as Record<string, string>)[name];
-  if (!sql) throw new Error(`no fixture named ${name}`);
-  const url = parseEnvText(readFileSync(sb.env_file, "utf8"))["SANDBOX_APP_DB_OWNER_URL"]!;
-  if (!/@(localhost|127\.0\.0\.1):55433\//.test(url)) throw new Error("not the loopback sandbox");
-  execFileSync("psql", ["-X", "-At", "-v", "ON_ERROR_STOP=1", ...Object.entries(vars).flatMap(([k, v]) => ["-v", `${k}=${v}`]), url], { input: `${sql};\n`, encoding: "utf8" });
+// The stay's diagnosis comes the way the hospital records one: the doctor signs the stay's own visit with it at the door, encrypted like any other.
+async function diagnose(sb: SandboxBlock, person: ReturnType<typeof personCaller>, admission: string): Promise<void> {
+  const row = sandboxQuery(sb, "e5_stay_visit", { admission })[0];
+  if (!row) throw new Error("the stay has no visit to sign");
+  if (row["has_primary"] === true) return;
+  const r = await person("sign_consult_dx", { visit_id: String(row["visit_id"]), patient_id: String(row["patient_id"]), diagnosis: "ZZ-TEST E5 Acute gastroenteritis" });
+  if (!r.ok) throw new Error(`the doctor's sign with the diagnosis was refused (${r.status}): ${r.note ?? ""}`);
 }
 
 describe.skipIf(!RUN)("E5 discharge by voice and the accounts leg on the sandbox EMR", () => {
@@ -32,7 +28,8 @@ describe.skipIf(!RUN)("E5 discharge by voice and the accounts leg on the sandbox
     const stay = process.env["HEY_PISGAH_E5_STAY"]!, other = process.env["HEY_PISGAH_E5_OTHER"]!, unsignedStay = process.env["HEY_PISGAH_E5_UNSIGNED"]!;
     const embed = sherpaEmbedder({ modelPath: process.env["HEY_PISGAH_SPEAKER_MODEL"] ?? "", sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] })!;
     expect(embed).not.toBeNull();
-    for (const s of [stay, other, unsignedStay]) fixture(sb, "diagnosis", { admission: s });
+    const signer = personCaller(profile, sb, new Map(), []);
+    for (const s of [stay, other, unsignedStay]) await diagnose(sb, signer, s);
     const doc = mintAgentBearer(sb);
     const acc = mintAgentBearer(sb, sb.owners.find((o) => o.login.startsWith("accounts"))!);
     const log: DoorLog[] = [];

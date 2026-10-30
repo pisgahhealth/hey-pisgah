@@ -65,11 +65,13 @@ export type EmrDelegation = {
   action_id: string | null; line_id: string; at: string;
   assigned_at: string | null; acknowledged_at: string | null; completed_at: string | null; escalated_at: string | null; record_id: string | null;
   ward_review: "none" | "held" | "requested"; due_at: string | null;
-  registration: { name: string | null; phone: string | null; consent_line: string | null } | null;
+  registration: { name: string | null; phone: string | null; consent_line: string | null; phone_line?: string | null } | null;
   // The spoken identity this task completes, closed on the delegating side when the record names the patient.
   obligation_id: string | null;
   // The record the task is about, what its holder asked the agent to do with it and on which line, and what it waits on.
   subject_id?: string | null; asked?: "prepare" | "dispense" | null; asked_line?: string | null; waiting?: string | null; prepared_seen?: boolean;
+  // The verified write a hand-off came from, so each order said in one line is handed on once.
+  source_action_id?: string | null;
 };
 
 export function delegationSummary(kind: string, a: Record<string, unknown>): string | null {

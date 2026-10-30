@@ -15,6 +15,7 @@ import { EmrId, EmrPortError, type EmrPort, type EmrTarget } from "./port.js";
 import { gateArrival } from "./gate.js";
 import { EMERGENCY_KIND, EMERGENCY_LINE, EMERGENCY_PRESS, afterWake, identityFrom, emergencyHeardLoosely, emergencyReason, spokenPatient, unidentifiedRef } from "./entry.js";
 import { shortHash } from "../ids.js";
+import { openStream } from "@hey-pisgah/store";
 import { PreferenceError, PreferenceMemory, SCOPE_KINDS, describePref, describeScope, describeSource } from "./preferences.js";
 
 export const EMR_SERVE_PORT = 4100;
@@ -100,6 +101,9 @@ export const ARRIVAL_SAME_PHRASE_MS = 10_000;
 const ARRIVAL_RECENT_MS = 90_000;
 const ARRIVAL_RECENT_LINES = 4;
 type Track = { page: string; history: { target: EmrTarget | null; since: number }[] };
+// The serve's own stream of which patient each owner is with, so a restart keeps it.
+export const TRACKING_STREAM = "serve/tracking";
+const Z = { recorded_at: 0, occurred_at: 0 };
 type Pending = { task_id: string; reply: { task_id: string; line_id: string; action_id: string }; since: number; page: string; held: { bind: (t: EmrTarget) => Promise<void>; drop: (why: string) => void }[]; timer: NodeJS.Timeout };
 export type HeardStatus = { seq: number; at: string; status: "accepted" | "processing" | "failed" | "completed"; waiting?: "arrival" | "join"; error?: string; task_id?: string; line_id?: string; note?: string };
 const pageKey = (p: EmrTarget) => (p.admission_id || p.patient_id ? JSON.stringify(p) : "");
@@ -151,11 +155,22 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   // The patient each owner's agent is with over time: the page's patient when it changes, a spoken name, or an arrival it opened, ordered by when it was asked for.
   const tracked = new Map<string, Track>();
   const trackOf = (owner: string): Track => { let t = tracked.get(owner); if (!t) { t = { page: "", history: [] }; tracked.set(owner, t); } return t; };
-  const moveTo = (owner: string, target: EmrTarget | null, since: number) => {
+  const place = (owner: string, target: EmrTarget | null, since: number) => {
     const h = trackOf(owner).history;
     const at = h.findIndex((x) => x.since > since);
     h.splice(at < 0 ? h.length : at, 0, { target, since });
     if (h.length > 50) h.shift();
+  };
+  const trackStream = openStream(o.storeRoot, TRACKING_STREAM, { writer: true });
+  for (const e of trackStream.records()) {
+    const x = e.payload as { owner?: string; target?: EmrTarget | null; since?: number; page?: string };
+    if (!x.owner) continue;
+    if (e.record_type === "track.moved" && typeof x.since === "number") place(x.owner, x.target ?? null, x.since);
+    if (e.record_type === "track.page" && typeof x.page === "string") trackOf(x.owner).page = x.page;
+  }
+  const moveTo = (owner: string, target: EmrTarget | null, since: number) => {
+    trackStream.append("track.moved", { owner, target, since }, Z);
+    place(owner, target, since);
   };
   // The patient in effect when the words were captured, so a late upload never takes a patient chosen after it was said.
   const subjectAt = (owner: string, at: number): EmrTarget | null => [...(tracked.get(owner)?.history ?? [])].reverse().find((x) => x.since <= at)?.target ?? null;
@@ -217,7 +232,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   const subjectFor = (owner: string, page: EmrTarget, at: number): EmrTarget | null => {
     const key = pageKey(page);
     const t = trackOf(owner);
-    if (key !== t.page) { t.page = key; if (key) moveTo(owner, page, at); }
+    if (key !== t.page) { t.page = key; trackStream.append("track.page", { owner, page: key }, Z); if (key) moveTo(owner, page, at); }
     return subjectAt(owner, at);
   };
   // "hey Pisgah, emergency" opens one arrival; while it is pending a second phrase answers with the same arrival.
@@ -258,6 +273,8 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   const listenUntracked = async (owner: string, sessionId: string, seq: number, wav: Uint8Array, arrived: number, hint?: "emergency" | "after_wake"): Promise<unknown> => {
     let text = "";
     setStatus(owner, sessionId, seq, { status: "processing" });
+    // The voiceprint is worked out beside the words, so a spoken acceptance is attributed like any other line.
+    const print = o.embed ? o.embed(wav).catch(() => null) : null;
     try { text = afterWake((await transcribe(wav, [], `${sessionId}-${seq}`.slice(0, 64))).text); } catch (e) {
       if (!(e instanceof VoiceError)) throw e;
       o.log?.(`listen with no patient: the ear refused the audio (${e.code})`);
@@ -275,7 +292,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       return { session_id: sessionId, seq, accepted: true, utterances: [{ id: r.line_id, line_id: r.line_id, task_id: r.task_id, text, class: "instruction", classes: ["instruction"] }], partial: null, entry: "emergency" };
     }
     // "Accepted <task>" heard with no patient open reaches the one task handed to this owner that it names.
-    const handed = text ? rt.delegationLine(owner, text, spokenAt, "audio") : null;
+    const handed = text ? rt.delegationLine(owner, text, spokenAt, "audio", undefined, print ? await print : undefined) : null;
     if (handed) setStatus(owner, sessionId, seq, { status: "completed", task_id: handed.task_id, line_id: handed.line_id });
     if (handed) return { session_id: sessionId, seq, accepted: true, utterances: [{ id: handed.line_id, line_id: handed.line_id, task_id: handed.task_id, text, class: "instruction", classes: ["instruction"] }], partial: null, entry: "delegation" };
     const known = rt.openSubjects(owner).map((x) => ({ label: rt.task(x.task_id)?.label ?? "", target: x.target })).filter((k) => k.label);
@@ -588,6 +605,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       listening.close();
       await rt.stop();
       if (prefs && !o.runtime?.preferences) prefs.close();
+      trackStream.close();
       if (!o.client) client.close();
     }
   };

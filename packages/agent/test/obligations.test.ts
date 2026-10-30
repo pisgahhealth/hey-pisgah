@@ -2,9 +2,18 @@ import { describe, expect, it } from "vitest";
 import { readStream } from "@hey-pisgah/store";
 import { afterSaid, minutesSaid } from "../src/emr/work.js";
 import { percentile } from "../src/emr/runtime.js";
+import type { OrderResult, Orderables } from "../src/emr/port.js";
 import { ADMIT, ClerkFake, DOC, PAT, clerkBoot, ins } from "./clerking-helpers.js";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const FBC_ORDER = "ffffffff-1111-4222-8333-444444444444";
+// The clerking hospital with one blood count already on the visit, read by its id with its result state.
+class ResultFake extends ClerkFake {
+  fbc = "SENT";
+  orderables(): Orderables { return { tests: { fbc: ["full blood count", "blood count"] }, drugs: {} }; }
+  resultStates(): readonly string[] { return ["resulted"]; }
+  async orderResults(): Promise<OrderResult[]> { return [{ id: FBC_ORDER, test: "fbc", state: this.fbc }]; }
+}
 const fired = (root: string, taskId: string) => readStream(root, `emr/${taskId}`).filter((e) => e.record_type === "obligation.fired");
 
 describe("obligations held for a time or a condition", () => {
@@ -80,7 +89,7 @@ describe("obligations held for a time or a condition", () => {
 
   it("holds work until a result comes back, watching the record with no model call", async () => {
     const clock = { now: Date.now() };
-    const port = new ClerkFake();
+    const port = new ResultFake();
     port.admitted = true;
     let calls = 0;
     const a = clerkBoot(() => { calls += 1; return [ins("record_note", { note_type: "progress", text: "blood count back, reviewed", after: "result" })]; }, { port, clock, watchMs: 20 });
@@ -88,7 +97,12 @@ describe("obligations held for a time or a condition", () => {
     await a.rt.settled();
     await wait(100);
     expect(port.writes).toEqual([]);
+    // The work waits on the visit's blood count by its id; the screen's test list changing alone fires nothing.
+    expect(a.rt.view(said.task_id)!.obligations[0]).toMatchObject({ condition: { orders: [FBC_ORDER], tests: ["fbc"] } });
     port.tests = '[{"name":"FBC","status":"resulted"}]';
+    await wait(100);
+    expect(port.writes).toEqual([]);
+    port.fbc = "resulted";
     for (let i = 0; i < 100 && !port.writes.length; i++) await wait(20);
     await a.rt.settled();
     expect(port.writes.map((w) => w.kind)).toEqual(["record_note"]);

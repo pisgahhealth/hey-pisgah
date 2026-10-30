@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_RULE_KINDS, DISPENSE_KIND, ESCALATE_KIND, NUDGE_KIND, PREPARE_KIND, REGISTER_KIND, WARD_REVIEW_KIND, acceptedTask, orderAsked, consentSaid, phoneSaid, registrationFrom, registrationInstruction, teamSaid, type DelegationRead, type DelegationTeam } from "../src/emr/delegate.js";
 import type { EmrCommit, Provenance, WorkArgs } from "../src/emr/port.js";
+import type { SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
 import { ADMIT, CLERK_KINDS, ClerkFake, DOC, PAT, clerkBoot, ins } from "./clerking-helpers.js";
 
 const SURG = "surg-1", DESK = "desk-1", PHARM = "pharm-1";
@@ -85,6 +86,19 @@ class DelegationFake extends ClerkFake {
 }
 
 const boot = (script: Parameters<typeof clerkBoot>[0], port: DelegationFake) => clerkBoot(script, { port });
+
+// Voices the hospital matches: each assignee's own print is theirs, Dr B is named, anyone else is unverified.
+const vp = (n: number): Voiceprint => ({ vector: [n], ms: 20, model: "nemo_en_titanet_small" });
+const SURG_V = vp(7), DESK_V = vp(8), DRB_V = vp(2), STRANGER_V = vp(1);
+class VoiceDelegationFake extends DelegationFake {
+  private t = 0;
+  readonly speaker = async (owner: string, v: readonly number[]): Promise<SpeakerVerdict> => {
+    this.t += 1;
+    if ((owner === SURG && v[0] === 7) || (owner === DESK && v[0] === 8)) return { speaker: "owner", token: `v1.${String(1_761_700_000_000 + this.t)}.${"A".repeat(43)}` };
+    return v[0] === 2 ? { speaker: "other_clinician", label: "Dr B", role: "doctor" } : { speaker: "unverified", reason: "no_match" };
+  };
+}
+const spoken = (owner: string, text: string, v: Voiceprint | null, target: { admission_id?: string; patient_id?: string }) => ({ owner, target, text, source: "audio" as const, ...(v ? { voiceprint: v } : {}) });
 
 describe("delegation by rule between agents", () => {
   it("reads acceptance, phone and consent from the words, never from a model", () => {
@@ -267,5 +281,74 @@ describe("delegation by rule between agents", () => {
     expect(orderAsked("Don't dispense it yet.")).toBeNull();
     expect(orderAsked("She is in pain.")).toBeNull();
   });
-});
 
+  it("holds an unverified voice's spoken acceptance until the owner says yes, refuses Dr B's, and applies the owner's own at once", async () => {
+    const port = new VoiceDelegationFake();
+    port.admitted = true;
+    const a = boot((said) => (/surgical/i.test(said) ? [ins("schedule_review", { title: "surgical review", in_minutes: 60 })] : []), port);
+    await a.rt.say({ owner: DOC, target: { admission_id: ADMIT }, text: "Surgical review in one hour." });
+    await a.rt.settled();
+    await a.rt.pollOnce();
+    await a.rt.settled();
+    expect(port.kindsWritten(SURG)).toEqual([NUDGE_KIND]);
+    // Reproduced: an unverified voice's "accepted" acknowledged the surgeon's task.
+    const stranger = await a.rt.say(spoken(SURG, "Accepted surgical review.", STRANGER_V, { admission_id: ADMIT }));
+    await a.rt.settled();
+    expect(port.kindsWritten(SURG)).toEqual([NUDGE_KIND]);
+    const surg = a.rt.view(stranger.task_id)!;
+    expect(surg.actions.find((x) => x.kind === ACK_KIND)).toMatchObject({ state: "proposed", awaiting: "owner_voice" });
+    expect(surg.questions.at(-1)!.text).toBe("Held: Accept the task: Surgical review. I could not match the voice to you, so it waits until you say yes yourself.");
+    // Dr B's "yes" and Dr B's own acceptance change nothing.
+    await a.rt.say(spoken(SURG, "Yes.", DRB_V, { admission_id: ADMIT }));
+    await a.rt.say(spoken(SURG, "Accepted surgical review.", DRB_V, { admission_id: ADMIT }));
+    await a.rt.settled();
+    expect(port.kindsWritten(SURG)).toEqual([NUDGE_KIND]);
+    // The surgeon's own yes applies the held acceptance once.
+    await a.rt.say(spoken(SURG, "Yes.", SURG_V, { admission_id: ADMIT }));
+    await a.rt.settled();
+    expect(port.kindsWritten(SURG)).toEqual([NUDGE_KIND, ACK_KIND]);
+    expect(port.writes.find((w) => w.kind === ACK_KIND)!.prov.evidence).toBe(`transcript:${stranger.line_id}`);
+    await a.rt.stop();
+  });
+
+  it("applies the owner's own matched acceptance at once, and keeps automatic receipt of the task automatic", async () => {
+    const port = new VoiceDelegationFake();
+    port.admitted = true;
+    const a = boot((said) => (/surgical/i.test(said) ? [ins("schedule_review", { title: "surgical review", in_minutes: 60 })] : []), port);
+    await a.rt.say({ owner: DOC, target: { admission_id: ADMIT }, text: "Surgical review in one hour." });
+    await a.rt.settled();
+    await a.rt.pollOnce();
+    await a.rt.settled();
+    expect(port.kindsWritten(SURG)).toEqual([NUDGE_KIND]);
+    const own = await a.rt.say(spoken(SURG, "Accepted surgical review.", SURG_V, { admission_id: ADMIT }));
+    await a.rt.settled();
+    expect(port.kindsWritten(SURG)).toEqual([NUDGE_KIND, ACK_KIND]);
+    expect(port.writes.find((w) => w.kind === ACK_KIND)!.prov.evidence).toBe(`transcript:${own.line_id}`);
+    await a.rt.stop();
+  });
+
+  it("takes the desk's registration details only on the receptionist's own voice; an unverified consent holds the registration for her yes", async () => {
+    const port = new VoiceDelegationFake();
+    const a = boot(() => [], port);
+    const er = await a.rt.emergency(DOC, { text: "hey Pisgah, emergency", spoken_at: new Date().toISOString(), args: { unidentified_ref: "Unknown arrival 10:00", reason: "Emergency arrival" } });
+    await a.rt.settled();
+    await a.rt.say({ owner: DOC, target: { patient_id: UNNAMED }, text: "Her name is Grace Okafor." }, er.task_id);
+    await a.rt.settled();
+    await a.rt.pollOnce();
+    await a.rt.settled();
+    await a.rt.say(spoken(DESK, "Her phone is 0803 123 4567.", DESK_V, { patient_id: UNNAMED }));
+    await a.rt.settled();
+    // Dr B's consent line is refused, an unverified consent line holds the registration.
+    await a.rt.say(spoken(DESK, "She consents to registration.", DRB_V, { patient_id: UNNAMED }));
+    await a.rt.settled();
+    expect(port.kindsWritten(DESK)).not.toContain(REGISTER_KIND);
+    const unv = await a.rt.say(spoken(DESK, "She consents to registration.", STRANGER_V, { patient_id: UNNAMED }));
+    await a.rt.settled();
+    expect(port.kindsWritten(DESK)).not.toContain(REGISTER_KIND);
+    expect(a.rt.view(unv.task_id)!.actions.find((x) => x.kind === REGISTER_KIND)).toMatchObject({ state: "proposed", awaiting: "owner_voice" });
+    await a.rt.say(spoken(DESK, "Yes.", DESK_V, { patient_id: UNNAMED }));
+    await a.rt.settled();
+    expect(port.kindsWritten(DESK).filter((k) => k === REGISTER_KIND)).toHaveLength(1);
+    await a.rt.stop();
+  });
+});
