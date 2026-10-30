@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-30T07:13:29.034Z",
-  "commit": "4628eb5",
+  "generated_at": "2026-10-30T09:25:11.589Z",
+  "commit": "51c2566",
   "claims": [
     {
       "claim_id": "C-01",
@@ -70,14 +70,14 @@
         "discover_config_dev_valid": 6,
         "discover_invariance_pass": true,
         "discover_deny_clean": true,
-        "discover_dev_valid_any": 10,
+        "discover_dev_valid_any": 14,
         "discover_config": "revision 12, committed world, medium effort",
         "discover_config_runs": 8,
         "discover_config_lower": 0.35,
         "discover_config_upper": 0.97,
         "discover_share": 0.56,
         "discover_rework_events": 4,
-        "discover_history_runs": 33
+        "discover_history_runs": 41
       },
       "measured_at": "2026-10-28T03:21:27.939Z"
     },
@@ -341,14 +341,26 @@
         "discover_config_dev_valid": 6,
         "discover_invariance_pass": true,
         "discover_deny_clean": true,
-        "discover_dev_valid_any": 10,
+        "discover_dev_valid_any": 14,
         "discover_config": "revision 12, committed world, medium effort",
         "discover_config_runs": 8,
         "discover_config_lower": 0.35,
         "discover_config_upper": 0.97,
+        "discover_config_wilson_lower": 0.41,
+        "discover_config_wilson_upper": 0.93,
+        "discover_config_planted": 0,
+        "discover_config_planted_lower": 0,
+        "discover_config_planted_upper": 0.32,
+        "discover_low_dev_valid": 4,
+        "discover_low_runs": 8,
+        "discover_low_wilson_lower": 0.22,
+        "discover_low_wilson_upper": 0.78,
+        "discover_low_planted": 2,
+        "discover_low_planted_lower": 0.07,
+        "discover_low_planted_upper": 0.59,
         "discover_share": 0.56,
         "discover_rework_events": 4,
-        "discover_history_runs": 33
+        "discover_history_runs": 41
       },
       "measured_at": "2026-10-28T03:21:27.939Z"
     },
