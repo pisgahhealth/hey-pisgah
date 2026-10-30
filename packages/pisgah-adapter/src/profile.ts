@@ -73,7 +73,10 @@ export const VersionsSpec = z.strictObject({
   facts_source: z.string().min(1).max(200),
   steps: z.record(z.string(), WatchCond).default({}),
   events: z.record(z.string(), WatchCond).default({}),
-  documents: z.record(z.string(), z.strictObject({ kind: z.string().min(1), ask: z.string().min(1).max(300) })).default({})
+  documents: z.record(z.string(), z.strictObject({ kind: z.string().min(1), ask: z.string().min(1).max(300) })).default({}),
+  // The watched fact naming the patient's ward and the workflow ward each EMR ward stands for; with these the ward comes from the record, not from ward_id.
+  ward_fact: z.string().min(1).max(80).optional(),
+  wards: z.record(z.string().min(1).max(120), z.string().regex(/^[A-Z][A-Za-z0-9_]*$/)).optional()
 });
 export type VersionsSpec = z.infer<typeof VersionsSpec>;
 

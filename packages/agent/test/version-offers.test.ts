@@ -150,9 +150,9 @@ const SIGNOFF_ONLY: Counterparts = { steps: { st05: { fact: "discharge.stage", e
 const MAPPED: Counterparts = {
   steps: { st01: { fact: "stay.round", equals: "recorded" }, st02: { fact: "discharge.take_home", equals: "ordered" }, ...SIGNOFF_ONLY.steps },
   events: {},
-  documents: { "discharge_summary.draft": { kind: "draft_discharge_summary", ask: "The round entry is in. Say draft the summary when you want it." } }
+  documents: { "discharge_summary.draft": { kind: "draft_stay_summary", ask: "The round entry is in. Say draft the summary when you want it." } }
 };
-const OWNERS = [{ id: "nurse", kinds: ["record_observation", "draft_discharge_summary"] }, { id: "doctor", kinds: ["record_note"] }];
+const OWNERS = [{ id: "nurse", kinds: ["record_observation", "draft_stay_summary"] }, { id: "doctor", kinds: ["record_note"] }];
 
 describe("the adopted version against this EMR's events", () => {
   it("reproduces the review: under the old counterparts the adopted version yields no offer, and the deploy check says why", () => {
@@ -168,7 +168,7 @@ describe("the adopted version against this EMR's events", () => {
   it("offers the summary draft at the round entry once the round entry, take-home order and sign-off are mapped, and the version deploys", () => {
     const { v1, v2 } = adopted();
     const r = readVersion(v2, v1, MAPPED, facts("self_pay"));
-    expect(r.offers.map((o) => [o.step_id, o.kind, o.when, o.changed])).toEqual([["st06", "draft_discharge_summary", [{ fact: "stay.round", equals: "recorded" }], true]]);
+    expect(r.offers.map((o) => [o.step_id, o.kind, o.when, o.changed])).toEqual([["st06", "draft_stay_summary", [{ fact: "stay.round", equals: "recorded" }], true]]);
     expect(r.lines).toEqual([]);
     const d = deployCheck(v2, v1, MAPPED, OWNERS);
     expect(d).toMatchObject({ deployable: true, changed: [{ step_id: "st06", status: "deployable", event: "round entry", owners: ["nurse"] }] });
