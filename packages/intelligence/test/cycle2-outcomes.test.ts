@@ -107,4 +107,69 @@ describe("the second cycle reads the new outcomes first", () => {
     first.close();
     expect(denyScan(appTexts("adaptive"))).toEqual([]);
   });
+
+  it("ends a reversed second cycle in a declared result: a rollback for a person, or a kept version that cites the reversed outcome", () => {
+    const reversed = reverseOutcomes(OUTCOMES, histories, loadV1());
+    const c = outcomeComparison(pool(reversed), loadV1());
+    const wardA = c.after.find((r) => r.ward_id === "A")!;
+    const outcomeEvent = pool(reversed).get(wardA.case_id)!.events.find((e) => e.kind === "step.completed")!.event_id;
+    const adoptedOps = [{ op: "remove_soft_edge", edge_id: "e04" }, { op: "set_prep_trigger", target: { step: "st06" }, when: { after: { step: "st01" } } }];
+    const storeRoot = tempRoot();
+    const s = new Session({ storeRoot, runId: "run-c2a00005", arm: "adaptive", cycle: 2, pool: pool(reversed), insufficientEvidence: true, now: () => new Date("2026-10-30T09:00:00Z") });
+    expect(s.proposeRollback({ version: 2, note: "n", evidence_event_ids: [outcomeEvent] })).toMatchObject({ ok: false, error: "read_outcomes_first" });
+    s.compareOutcomes();
+    expect(s.proposeRollback({ version: 2, note: "n", evidence_event_ids: [historyEvent()] })).toMatchObject({ ok: false, error: "evidence_rule" });
+    expect(s.proposeRollback({ version: 1, note: "n", evidence_event_ids: [outcomeEvent] })).toMatchObject({ ok: false, error: "unknown_version" });
+    expect(s.proposeRollback({ version: 2, note: "the ward A case waited longer under version 2", evidence_event_ids: [outcomeEvent] })).toMatchObject({ ok: true, result: "rollback_proposed", approval: "a person" });
+    s.close();
+    expect(cycleResponse(storeRoot, "run-c2a00005", { observed: OBSERVED, outcomes: reversed, adoptedOps })).toMatchObject({ response: "rollback_proposed", declared_result: true, declared: { result: "rollback_proposed", version: 2 } });
+    // Keeping the version is a declared result only when its citations include the reversed outcome.
+    const root2 = tempRoot();
+    const k = new Session({ storeRoot: root2, runId: "run-c2a00006", arm: "adaptive", cycle: 2, pool: pool(reversed), insufficientEvidence: true, now: () => new Date("2026-10-30T09:00:00Z") });
+    k.compareOutcomes();
+    expect(k.endSession({ result: "no_change_warranted", note: "one case", evidence_event_ids: [historyEvent()] })).toMatchObject({ ok: false, error: "outcomes_contradict" });
+    expect(k.endSession({ result: "no_change_warranted", note: "one reversed case does not outweigh the histories", evidence_event_ids: [outcomeEvent, historyEvent()] })).toMatchObject({ ok: true });
+    k.close();
+    expect(cycleResponse(root2, "run-c2a00006", { observed: OBSERVED, outcomes: reversed, adoptedOps })).toMatchObject({ response: "no_change_warranted", declared_result: true, declared_cites_outcome_events: 1 });
+  });
+
+  it("enters the declare stage before the cap in a second cycle, offering only the result tools, and records no_result_declared when nothing is declared", async () => {
+    const reversed = reverseOutcomes(OUTCOMES, histories, loadV1());
+    const wardA = outcomeComparison(pool(reversed), loadV1()).after.find((r) => r.ward_id === "A")!;
+    const outcomeEvent = pool(reversed).get(wardA.case_id)!.events.find((e) => e.kind === "step.completed")!.event_id;
+    const names = (b: Record<string, unknown>) => ((b.tools ?? []) as { function: { name: string } }[]).map((t) => t.function.name);
+    const run = async (runId: string, declares: boolean) => {
+      const storeRoot = tempRoot();
+      const offered: string[][] = [];
+      let step = 0;
+      const reply = (body: Record<string, unknown>, name: string, args: unknown) => ({ id: "m", object: "chat.completion" as const, created: 0, model: String(body.model), choices: [{ index: 0, message: { role: "assistant" as const, content: null, refusal: null, tool_calls: [{ id: `c${step}`, type: "function" as const, function: { name, arguments: JSON.stringify(args) } }] }, finish_reason: "tool_calls" as const, logprobs: null }], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } });
+      const mock: MockResponder = (r) => {
+        step += 1;
+        const tools = names(r.body);
+        offered.push(tools);
+        if (step === 1) return reply(r.body, "compare_outcomes", {});
+        const declareStage = tools.includes("propose_rollback") && !tools.includes("choose_question") && !tools.includes("get_experiment") && !tools.includes("list_cases");
+        if (declareStage && declares) return reply(r.body, "propose_rollback", { version: 2, note: "the reversed ward A outcome", evidence_event_ids: [outcomeEvent] });
+        if (declareStage) return { ...reply(r.body, "list_cases", {}), choices: [{ index: 0, message: { role: "assistant" as const, content: "Still reading.", refusal: null }, finish_reason: "stop" as const, logprobs: null }] };
+        // Reads in turn, never the same call twice running, so only the reserve can end the session.
+        const reads = ["list_cases", "get_ward_requirements", "get_derived_statistics", "get_workflow_definition"].filter((t) => tools.includes(t));
+        return reply(r.body, reads.length ? reads[step % reads.length]! : "compare_outcomes", {});
+      };
+      const client = createModelClient({ storeRoot, mode: "mock", budget: { runUsd: 100, runMaxCalls: 30, weekUsd: 1e6, weekStopFraction: 1, weekSince: () => new Date(0) }, mock });
+      const session = new Session({ storeRoot, runId, arm: "adaptive", cycle: 2, pool: pool(reversed), insufficientEvidence: true });
+      const out = await runCycleLoop({ client, session, maxCalls: 8, budgetUsd: 1, effort: "medium", sleep: async () => {} });
+      session.close();
+      client.close();
+      return { out, offered, log: readStream(storeRoot, sessionStreamId(runId)) };
+    };
+    const yes = await run("run-c2a00007", true);
+    expect(yes.log.some((e) => e.record_type === "declare.entered")).toBe(true);
+    expect(yes.out.stop).toBe("declared_negative");
+    expect(yes.offered.at(-1)!.sort()).toEqual(["compare_outcomes", "end_session", "propose_rollback"]);
+    expect(yes.out.calls).toBeLessThan(8);
+    const no = await run("run-c2a00008", false);
+    expect(no.out.stop).toBe("no_result_declared");
+    // A first cycle never enters it.
+    expect(denyScan(appTexts("adaptive"))).toEqual([]);
+  });
 });

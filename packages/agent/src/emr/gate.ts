@@ -265,6 +265,13 @@ export function gateCommitment(): Record<string, unknown> {
       const p = gatePrompt(dk, { ...names, tests: {}, drugs: {} });
       const tl = gateTool(dk);
       return { kinds: dk, prompt: p, prompt_sha256: sha256(p), tool_sha256: hashJson(tl), rules: [DIAGNOSIS_RULE], deny_hits: denyHits(`${p}\n${JSON.stringify(tl)}`) };
+    })(),
+    // The ward nurse who also drafts the stay summary an adopted workflow version offers.
+    summary: (() => {
+      const sk = ["record_observation", "add_care_plan_item", "record_note", "draft_handover", "draft_stay_summary"];
+      const p = gatePrompt(sk, names);
+      const tl = gateTool(sk);
+      return { kinds: sk, prompt: p, prompt_sha256: sha256(p), tool_sha256: hashJson(tl), deny_hits: denyHits(`${p}\n${JSON.stringify(tl)}`) };
     })()
   };
 }

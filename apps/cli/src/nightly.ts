@@ -23,7 +23,9 @@ export function openWork(storeRoot: string, departmentOf: (owner: string) => str
     const encounter = t.admission_id || t.visit_id || "";
     if (!encounter) continue;
     const seq = (type: string, key: string, id: string) => recs.find((e) => e.record_type === type && (e.payload as Row)[key] === id)?.seq ?? 0;
-    const base = { encounter, owner: t.owner, department: departmentOf(t.owner) };
+    // The ward the task last read for its patient, when the record named one.
+    const ward = [...recs].reverse().map((e) => ((e.payload as Row)["facts"] as Row | undefined)?.["ward"]).find((w): w is string => typeof w === "string" && w.length > 0);
+    const base = { encounter, owner: t.owner, department: departmentOf(t.owner), ...(ward ? { ward } : {}) };
     for (const q of t.questions.filter((x) => x.answered_by === null)) open.push({ ...base, item_id: `oi-${q.question_id}`, kind: "question", title: q.text.slice(0, 160), state: "open", due_at: null, refs: [`${sid}#${seq("question.asked", "question_id", q.question_id)}`] });
     for (const o of t.obligations.filter((x) => x.state === "held")) open.push({ ...base, item_id: `oi-${o.obligation_id}`, kind: "obligation", title: o.title.slice(0, 160), state: "held", due_at: o.due_at, refs: [`${sid}#${seq("obligation.held", "obligation_id", o.obligation_id)}`] });
     for (const id of t.order) {

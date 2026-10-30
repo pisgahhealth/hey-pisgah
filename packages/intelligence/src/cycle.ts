@@ -8,7 +8,9 @@ import { armTools, dispatch, toolDefs } from "./tools.js";
 export type Stage = keyof typeof STAGES;
 
 // Turns each stage allows before the controller moves on, and the cycle cap; these are the cycle's transitions, not read or hypothesis budgets.
-export const CYCLE = { turns: { prior: 4, observe: 4, decide: 3, construct: 3, interpret: 2 }, max_cycles: 10 } as const;
+export const CYCLE = { turns: { prior: 4, observe: 4, decide: 3, construct: 3, interpret: 2, declare: 2 }, max_cycles: 10 } as const;
+// A second cycle keeps room for this many calls at the most a call has cost, so it can still declare a result before the cap.
+export const DECLARE_RESERVE_CALLS = 4;
 
 const READS = ["list_cases", "get_derived_statistics", "get_case_timeline", "get_record", "compute_intervals", "get_queue_snapshot", "get_staff_activity", "get_ward_requirements", "get_workflow_definition"];
 // The tools the controller offers in each stage; the model never sees the others.
@@ -17,11 +19,12 @@ export const STAGE_TOOLS: Record<Stage, readonly string[]> = {
   observe: [...READS, "record_hypothesis", "set_hypothesis_status", "choose_question", "list_ledger", "end_session"],
   decide: ["record_hypothesis", "choose_question", "end_session"],
   construct: ["get_workflow_definition", "list_cases", "get_precondition_table", "run_sweep", "run_experiment"],
-  interpret: ["get_experiment", "set_hypothesis_status", "record_hypothesis", "submit_proposal", "get_validation_report", "list_ledger", "next_cycle", "end_session"]
+  interpret: ["get_experiment", "set_hypothesis_status", "record_hypothesis", "submit_proposal", "get_validation_report", "list_ledger", "next_cycle", "end_session"],
+  declare: ["compare_outcomes", "submit_proposal", "propose_rollback", "end_session"]
 };
 
 // Added to these stages only in a second cycle whose pool holds outcomes or observed journeys.
-export const SECOND_CYCLE_TOOLS: Partial<Record<Stage, readonly string[]>> = { prior: ["compare_outcomes"], observe: ["compare_outcomes"] };
+export const SECOND_CYCLE_TOOLS: Partial<Record<Stage, readonly string[]>> = { prior: ["compare_outcomes"], observe: ["compare_outcomes", "propose_rollback"], decide: ["propose_rollback"], interpret: ["propose_rollback"] };
 
 export type CycleOptions = LoopOptions & { effort: "low" | "medium" | "high" | "xhigh" };
 
@@ -53,6 +56,8 @@ export async function runCycleLoop(o: CycleOptions): Promise<LoopOutcome> {
   const arm = new Set<string>(armTools("adaptive"));
   // submit_proposal is offered in interpret only once a delivered experiment made the primary metric better on the cases it moved.
   const offered = (st: Stage) => new Set([...STAGE_TOOLS[st], ...(s.hasNewEvidence() ? SECOND_CYCLE_TOOLS[st] ?? [] : [])].filter((t) => arm.has(t) && (t !== "submit_proposal" || s.improvedExperiments().length > 0)));
+  // Entered once in a second cycle when the budget reserve is reached; its turns end in a declared result or a recorded no_result.
+  let declaring = false;
 
   for (s.cycle = 0; !stop && s.cycle < CYCLE.max_cycles; s.cycle++) {
     s.question = null;
@@ -82,6 +87,11 @@ export async function runCycleLoop(o: CycleOptions): Promise<LoopOutcome> {
     while (!stop && !closed) {
       if (s.stop) { stop = { reason: s.stop.reason, detail: s.stop.detail }; break; }
       const u = o.client.runUsage(s.runId);
+      if (!declaring && s.hasNewEvidence() && turns > 0 && ((maxCost > 0 && u.usd + DECLARE_RESERVE_CALLS * maxCost > o.budgetUsd) || u.calls + DECLARE_RESERVE_CALLS > o.maxCalls)) {
+        declaring = true;
+        s.log("declare.entered", { cycle: s.cycle, turn: turns, usd: u.usd, calls: u.calls, reserve_calls: DECLARE_RESERVE_CALLS, max_cost: maxCost });
+        enter("declare");
+      }
       if (u.calls >= o.maxCalls) { stop = { reason: "budget_calls", detail: `${u.calls} calls` }; break; }
       if (u.usd + maxCost > o.budgetUsd) { stop = { reason: "budget_usd", detail: `${u.usd.toFixed(4)} spent, next call could pass the cap` }; break; }
       const stage: Stage = at.stage;
@@ -132,6 +142,7 @@ export async function runCycleLoop(o: CycleOptions): Promise<LoopOutcome> {
       }
       if (s.stop) continue;
       const spent = stageTurns >= CYCLE.turns[stage] || idle >= 2;
+      if (stage === "declare") { if (spent) stop = { reason: "no_result_declared", detail: `${stageTurns} declare turns without a result` }; continue; }
       if ((stage === "prior" || stage === "observe" || stage === "decide") && s.question) {
         if (s.counters.experiments_used >= ExperimentBudget.experiments) enter("interpret"); else enter("construct");
       } else if (stage === "construct" && s.experiments.size > experimentAtStage) enter("interpret");

@@ -7,13 +7,15 @@ export const WORK_KINDS = [
   OBSERVATION_KIND, "draft_consult_note", "request_admission", "record_triage_vitals", "add_care_plan_item",
   "record_note", "draft_handover", "page_staff", "schedule_follow_up", "prepare_bill", "send_pay_link",
   "open_consult", "record_clerking", "record_allergy", "admit_patient", "assign_bed", "schedule_review",
-  "order_test", "prescribe", "countersign", "release_home", "record_diagnosis"
+  "order_test", "prescribe", "countersign", "release_home", "record_diagnosis", "draft_stay_summary"
 ] as const;
 export type WorkKind = (typeof WORK_KINDS)[number];
 // The delegation kinds an owner may also hold; each is taken by rule, so the gate never lists them.
 export const DELEGATION_KINDS: readonly string[] = [...DELEGATION_RULE_KINDS];
 // Kinds that only read the record and report back; they change nothing in it.
-export const READ_ONLY_KINDS: ReadonlySet<string> = new Set(["draft_handover", "prepare_bill"]);
+export const READ_ONLY_KINDS: ReadonlySet<string> = new Set(["draft_handover", "prepare_bill", "draft_stay_summary"]);
+// Read-only drafts the clinician reviews and then saves as a note on the stay, with the label the saved note carries.
+export const SAVED_DRAFTS: Readonly<Record<string, "handover" | "stay_summary">> = { draft_handover: "handover", draft_stay_summary: "stay_summary" };
 // Order kinds one spoken line may ask for several of at once; the line names every such item it asked for, so the hospital binds it to that batch.
 export const BATCH_KINDS: ReadonlySet<string> = new Set(["order_test", "prescribe"]);
 // Kinds the owner's own matched voice asks for and a later matched confirm line releases; any other voice never writes them.
@@ -59,8 +61,9 @@ export const WORK_ARGS: Record<Exclude<WorkKind, typeof OBSERVATION_KIND>, z.Zod
   request_admission: z.strictObject({ visit_id: EmrId, patient_id: EmrId.optional(), ward_class: z.enum(WARD_CLASSES), admission_type: z.enum(ADMISSION_TYPES), reason: Text.max(2000) }),
   record_triage_vitals: z.strictObject({ visit_id: EmrId, patient_id: EmrId.optional(), ...vitals, priority: z.enum(PRIORITIES).optional(), note: Text.max(500).optional() }).refine(anyVital, "triage needs at least one measurement"),
   add_care_plan_item: z.strictObject({ admission_id: EmrId, title: Text.max(200), item_kind: z.enum(ITEM_KINDS), cadence: z.string().min(1).max(8) }),
-  record_note: z.strictObject({ admission_id: EmrId, note_type: z.enum(NOTE_TYPES), text: Text, label: z.enum(["handover"]).optional() }),
+  record_note: z.strictObject({ admission_id: EmrId, note_type: z.enum(NOTE_TYPES), text: Text, label: z.enum(["handover", "stay_summary"]).optional() }),
   draft_handover: z.strictObject({ admission_id: EmrId }),
+  draft_stay_summary: z.strictObject({ admission_id: EmrId }),
   page_staff: z.strictObject({ to: z.string().regex(/^[a-z_]{1,30}$/), text: Text.max(1500), patient_id: EmrId.optional(), visit_id: EmrId.optional(), admission_id: EmrId.optional() }),
   schedule_follow_up: z.strictObject({ visit_id: EmrId, patient_id: EmrId.optional(), clinic: z.string().regex(/^[a-z_]{1,30}$/), date: z.iso.date(), note: Text.max(500).optional() }),
   prepare_bill: z.strictObject({ admission_id: EmrId }),
@@ -94,6 +97,7 @@ export const WORK_TEXT: Record<Exclude<WorkKind, typeof OBSERVATION_KIND>, strin
   add_care_plan_item: "add_care_plan_item: add one item to the care plan: title in the clinician's words, item_kind (medication, nursing, observation, diet) and cadence (OD, BD, TDS, QID, q2h, q4h, q6h, q8h, q12h, STAT, PRN). One clause per item.",
   record_note: "record_note: write a note in the record: note_type (progress, ward_round, nursing) and text, the words dictated. Saving a handover draft you made is record_note with text null.",
   draft_handover: "draft_handover: draft a shift handover from the record for the clinician to review; nothing is written until they say to save it.",
+  draft_stay_summary: "draft_stay_summary: draft the summary of the stay from the record for the clinician to review, for when the patient goes home; nothing is written until they say to save it. Saving that draft once reviewed is record_note with text null, never another draft_stay_summary.",
   page_staff: "page_staff: send a page to another department or person; to names who (one of the page targets listed below) and text is the message in the clinician's words.",
   schedule_follow_up: "schedule_follow_up: book a follow-up appointment; clinic names the clinic (one of the clinics listed below) and date is the day said, written as YYYY-MM-DD.",
   prepare_bill: "prepare_bill: read the patient's bill and report what is charged, paid and outstanding; nothing is changed.",
@@ -151,8 +155,9 @@ export function summariseWork(kind: string, a: Record<string, unknown>): string 
       return `Record triage: ${v}${a["priority"] ? `, priority ${a["priority"]}` : ""}`;
     }
     case "add_care_plan_item": return `Add to the care plan: ${t(a["title"], 60)} (${a["cadence"]})`;
-    case "record_note": return `${a["label"] === "handover" ? "Save the handover" : `Write a ${String(a["note_type"]).replace(/_/g, " ")} note`}: "${t(a["text"], 60)}"`;
+    case "record_note": return `${a["label"] === "handover" ? "Save the handover" : a["label"] === "stay_summary" ? "Save the stay summary draft" : `Write a ${String(a["note_type"]).replace(/_/g, " ")} note`}: "${t(a["text"], 60)}"`;
     case "draft_handover": return "Draft the shift handover from the record";
+    case "draft_stay_summary": return "Draft the stay summary from the record";
     case "page_staff": return `Page ${t(a["to"], 30)}: "${t(a["text"], 60)}"`;
     case "schedule_follow_up": return `Book a follow-up in ${String(a["clinic"]).replace(/_/g, " ")} on ${a["date"]}`;
     case "prepare_bill": return "Prepare the bill view";

@@ -1,16 +1,26 @@
 import { computeFacts } from "./facts.js";
-import { isUrgent, payloadHash, type Memo } from "./memo.js";
-import { sourcesHash, type NightSources } from "./sources.js";
+import { canonical } from "@hey-pisgah/contracts";
+import { isUrgent, payloadHash, type Memo, type MemoItem } from "./memo.js";
+import { itemIsFor, sourcesHash, type NightSources, type OpenItem } from "./sources.js";
 
 export type CheckCode =
   | "stale_sources" | "unsupported_fact" | "invented_figure" | "unlabelled" | "uncited" | "false_completion" | "unknown_item" | "missing_open_item"
-  | "missing_urgent" | "patient_name" | "unauthorised_encounter" | "preview_leak";
+  | "missing_urgent" | "patient_name" | "unauthorised_encounter" | "preview_leak" | "altered_description" | "altered_destination" | "altered_due_date";
 export type CheckFailure = { item: string; code: CheckCode; detail: string };
 // Three outcomes kept apart: verified, unsupported or incomplete with the failures, and a checker that broke, which is never a pass.
 export type Verdict =
   | { status: "verified"; payload_hash: string; sources_hash: string; failures: []; checked_at: string }
   | { status: "unsupported_or_incomplete"; payload_hash: string; sources_hash: string; failures: CheckFailure[]; checked_at: string }
   | { status: "verifier_error"; payload_hash: string | null; sources_hash: string | null; failures: []; error: string; checked_at: string };
+
+// The fields of an actionable item that must equal the record's, each with the code its change gets.
+function itemDiff(i: MemoItem, src: Pick<OpenItem, "kind" | "title" | "refs" | "department" | "due_at">, from: string): CheckFailure[] {
+  const f: CheckFailure[] = [];
+  if (i.title !== src.title || i.kind !== src.kind || canonical(i.refs) !== canonical(src.refs)) f.push({ item: i.item_id, code: "altered_description", detail: `the description differs from ${from}` });
+  if (i.department !== src.department) f.push({ item: i.item_id, code: "altered_destination", detail: `the department differs from ${from}` });
+  if (i.due_at !== src.due_at) f.push({ item: i.item_id, code: "altered_due_date", detail: `the due date differs from ${from}` });
+  return f;
+}
 
 const numbers = (t: string) => (t.match(/\d+(?:\.\d+)?/g) ?? []).map(Number);
 const strings = (v: unknown): string[] => (typeof v === "string" ? [v] : Array.isArray(v) ? v.flatMap(strings) : v && typeof v === "object" ? Object.values(v).flatMap(strings) : []);
@@ -45,18 +55,26 @@ export function checkMemo(m: Memo, s: NightSources): CheckFailure[] {
     const src = open.get(i.item_id);
     if (!src) { f.push({ item: i.item_id, code: "unknown_item", detail: "no open item in the records has this id" }); continue; }
     if (src.state === "done") f.push({ item: i.item_id, code: "false_completion", detail: "the records show this done, the memo lists it open" });
+    // What the item asks, where it goes and when it is due are the record's own, not only its id and state.
+    f.push(...itemDiff(i, src, "the record"));
+    if (recipient && !itemIsFor(recipient, src)) f.push({ item: i.item_id, code: "altered_destination", detail: "the record does not send this item to this recipient or their ward" });
     const want = isUrgent(src, now) && src.state !== "failed" ? "overdue" : src.state;
     if (i.state !== want) f.push({ item: i.item_id, code: i.state === "done" ? "false_completion" : "unknown_item", detail: `the records show ${want}, the memo says ${i.state}` });
     if (i.encounter !== null && !(recipient?.authorised.includes(i.encounter) && i.encounter === src.encounter)) f.push({ item: i.item_id, code: "unauthorised_encounter", detail: "the encounter is named to a recipient the record does not authorise for it" });
   }
   // Completeness against the records, not against the memo's own list: every open item this recipient should see is there.
   if (recipient) {
-    for (const src of s.open.filter((i) => i.state !== "done" && (i.owner === recipient.id || (recipient.incoming && i.department === recipient.department)))) {
+    for (const src of s.open.filter((i) => i.state !== "done" && itemIsFor(recipient, i))) {
       if (!m.unfinished.some((i) => i.item_id === src.item_id)) f.push({ item: src.item_id, code: "missing_open_item", detail: "the records show this open for the recipient and the memo leaves it out" });
       if (isUrgent(src, now) && !m.urgent.some((i) => i.item_id === src.item_id)) f.push({ item: src.item_id, code: "missing_urgent", detail: "an overdue or failed item must be surfaced as urgent" });
     }
   }
-  for (const i of m.urgent) if (!m.unfinished.some((u) => u.item_id === i.item_id && u.state === i.state)) f.push({ item: i.item_id, code: "unknown_item", detail: "an urgent item must be one of the unfinished items" });
+  for (const i of m.urgent) {
+    const u = m.unfinished.find((x) => x.item_id === i.item_id && x.state === i.state);
+    if (!u) { f.push({ item: i.item_id, code: "unknown_item", detail: "an urgent item must be one of the unfinished items" }); continue; }
+    f.push(...itemDiff(i, u, "its unfinished item"));
+    if (i.encounter !== u.encounter) f.push({ item: i.item_id, code: "altered_destination", detail: "the urgent entry names another encounter than its unfinished item" });
+  }
   // No patient name anywhere in the payload; names are shown only inside the EMR, from the encounter id, to someone authorised.
   const text = strings(m).join("\n").toLowerCase();
   for (const name of s.labels.filter((l) => l.trim().length >= 3)) if (text.includes(name.toLowerCase())) f.push({ item: m.memo_id, code: "patient_name", detail: "a patient's name is in the memo" });

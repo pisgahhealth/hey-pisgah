@@ -3,6 +3,7 @@ import { languageBiasFrom, nodeSocket, recordingSocket, replaySocket } from "@he
 import { KEPT_LEVERS, asrSwitch, earSwitch, keepingContext, leversFrom, localDirs, recordingTranscriber, sherpaEmbedder, startEmrServe, voiceTranscriber } from "@hey-pisgah/agent";
 import { loadProfile, staffHintsOf } from "./profile.js";
 import { PisgahPort } from "./port.js";
+import { adoptedForEmr } from "./versions.js";
 import { SandboxBlock, mintAgentBearer, sandboxQuery } from "./sandbox.js";
 
 // Starts the EMR-facing serve over the agent door on HEY_PISGAH_EMR_PORT (default 4100); the bearer comes from the environment or a sandbox mint.
@@ -37,6 +38,10 @@ async function main(): Promise<void> {
   const embed = modelPath ? sherpaEmbedder({ modelPath, sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] }) : null;
   if (modelPath && !embed) process.stderr.write("speaker model did not load; attribution is off\n");
   const asr = asrSwitch(process.env["HEY_PISGAH_ASR"]);
+  // With HEY_PISGAH_VERSION_LOG naming a person's version log and a profile versions block, the adopted version's offers run on every encounter it applies to.
+  const versionLog = process.env["HEY_PISGAH_VERSION_LOG"];
+  if (versionLog && !profile.versions) throw new Error("HEY_PISGAH_VERSION_LOG is set but the profile has no versions block");
+  const adopted = versionLog ? adoptedForEmr(store, versionLog, () => loadProfile().versions!) : null;
   // The realtime ear's events are kept beside the transcripts when recording, and a kept run's events answer in place of the network when HEY_PISGAH_REALTIME_REPLAY names them.
   const replayFile = process.env["HEY_PISGAH_REALTIME_REPLAY"];
   const realtimeSocket = replayFile ? replaySocket(replayFile) : rec && asr === "meta-stream" ? recordingSocket(nodeSocket, join(rec, "realtime.jsonl")) : undefined;
@@ -57,10 +62,10 @@ async function main(): Promise<void> {
     listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4100),
     // The wake-phrase spotter's files for the strip, and the A&E clinic an emergency opened by voice lands on.
     ...(process.env["HEY_PISGAH_KWS_DIR"] ? { kwsDir: process.env["HEY_PISGAH_KWS_DIR"] } : {}),
-    ...(process.env["HEY_PISGAH_EMERGENCY_CLINIC"] ? { emergencyClinicId: process.env["HEY_PISGAH_EMERGENCY_CLINIC"] } : {}), runtime: { holdMs: Number(process.env["HEY_PISGAH_HOLD_MS"] ?? 4000), speed: leversFrom(process.env["HEY_PISGAH_SPEED"] ?? KEPT_LEVERS), keepHeard: process.env["HEY_PISGAH_KEEP_HEARD"] === "1", ...(profile.owners.length ? { watchMs: Number(process.env["HEY_PISGAH_WATCH_MS"] ?? 5000) } : {}) },
+    ...(process.env["HEY_PISGAH_EMERGENCY_CLINIC"] ? { emergencyClinicId: process.env["HEY_PISGAH_EMERGENCY_CLINIC"] } : {}), runtime: { holdMs: Number(process.env["HEY_PISGAH_HOLD_MS"] ?? 4000), speed: leversFrom(process.env["HEY_PISGAH_SPEED"] ?? KEPT_LEVERS), keepHeard: process.env["HEY_PISGAH_KEEP_HEARD"] === "1", ...(profile.owners.length ? { watchMs: Number(process.env["HEY_PISGAH_WATCH_MS"] ?? 5000) } : {}), ...(adopted ? { versions: adopted.wiring } : {}) },
     log: (l) => process.stderr.write(`${l}\n`)
   });
-  process.stdout.write(`emr serve on ${s.urls.join(" ")} (mode ${s.client.mode}, ${Object.keys(bearers).length} owner${Object.keys(bearers).length > 1 ? "s" : ""}, speaker model ${embed ? "on" : "off"}, ears ${earSwitch(process.env["HEY_PISGAH_EAR"])}/${asr})\n`);
+  process.stdout.write(`emr serve on ${s.urls.join(" ")} (mode ${s.client.mode}, ${Object.keys(bearers).length} owner${Object.keys(bearers).length > 1 ? "s" : ""}, speaker model ${embed ? "on" : "off"}, ears ${earSwitch(process.env["HEY_PISGAH_EAR"])}/${asr}${adopted ? `, workflow version ${adopted.def.version} adopted` : ""})\n`);
   const stop = () => { void s.close().then(() => process.exit(0)); };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);

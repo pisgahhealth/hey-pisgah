@@ -18,8 +18,17 @@ export async function plantedFaults(s: NightSources, memos: readonly Memo[], now
     const f0 = withFacts.facts[0]!;
     cases["invented_figure"] = await publish(s, { ...withFacts, facts: withFacts.facts.map((f) => (f === f0 ? { ...f, value: f.value + 7 } : f)) });
   } else notApplicable.push("invented_figure");
-  if (withItems) cases["false_completion"] = await publish(s, { ...withItems, unfinished: withItems.unfinished.map((i, k) => (k === 0 ? { ...i, state: "done" as const } : i)) });
-  else notApplicable.push("false_completion");
+  if (withItems) {
+    const alter = (f: (i: Memo["unfinished"][number]) => Memo["unfinished"][number]): Memo => {
+      const unfinished = withItems.unfinished.map((i, k) => (k === 0 ? f(i) : i));
+      return { ...withItems, unfinished, urgent: withItems.urgent.map((u) => unfinished.find((i) => i.item_id === u.item_id) ?? u) };
+    };
+    cases["false_completion"] = await publish(s, alter((i) => ({ ...i, state: "done" as const })));
+    // The item's id and state stay the record's; only what it asks, where it goes or when it is due is changed.
+    cases["altered_description"] = await publish(s, alter((i) => ({ ...i, title: `${i.title} (changed)` })));
+    cases["altered_destination"] = await publish(s, alter((i) => ({ ...i, department: i.department === "nurse" ? "doctor" : "nurse" })));
+    cases["altered_due_date"] = await publish(s, alter((i) => ({ ...i, due_at: i.due_at ? new Date(Date.parse(i.due_at) + 86_400_000).toISOString() : now.toISOString() })));
+  } else notApplicable.push("false_completion", "altered_description", "altered_destination", "altered_due_date");
   if (any) {
     const name = s.labels[0] ?? PLANTED_NAME;
     const src = s.labels.length ? s : { ...s, labels: [PLANTED_NAME] };

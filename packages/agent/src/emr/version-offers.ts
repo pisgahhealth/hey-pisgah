@@ -18,7 +18,9 @@ export type TriggerReading = {
   status: TriggerStatus; reason: string; when: WatchCondition[]; kind: string | null; unmet: { fact: string; wanted: string; is: string | null }[];
 };
 export type VersionOffer = { key: string; version: number; step_id: string; document_id: string; stage: string; when: WatchCondition[]; kind: string; ask: string; changed: boolean };
-export type VersionRules = { version: number; definition_hash: string; parent_version: number | null; readings: TriggerReading[]; offers: VersionOffer[]; lines: string[] };
+// An offer the newest adopted version would make here that its scope keeps from this patient, with the reason the strip and the record show.
+export type WithheldOffer = { key: string; version: number; in_force: number; step_id: string; document_id: string; stage: string; when: WatchCondition[]; kind: string; reason: string };
+export type VersionRules = { version: number; definition_hash: string; parent_version: number | null; readings: TriggerReading[]; offers: VersionOffer[]; lines: string[]; withheld?: WithheldOffer[]; ward_id?: string };
 // The ward requirement data the monitor reads at each offer.
 export type RequirementsNow = { ward_id: string; requirement_version: string; facts: Facts };
 export type OfferCheck =
@@ -163,20 +165,56 @@ export function checkOffer(def: WD, o: VersionOffer, now: RequirementsNow, check
   return { ok: false, requirement_version: now.requirement_version, failures, revision_ops: revisionOps(failures), conflict };
 }
 
-// The adopted version, its parent and the requirement data, wired for one EMR runtime.
+// The adopted version, its parent and the requirement data, wired for one EMR runtime; the encounter's own watched facts choose the version in force.
+export type Encounter = Readonly<Record<string, string | null>>;
 export type VersionWiring = {
-  rulesFor(owner: string, kinds: readonly string[]): VersionRules | null;
-  check(o: VersionOffer): OfferCheck;
+  rulesFor(owner: string, kinds: readonly string[], encounter?: Encounter): VersionRules | null;
+  check(o: VersionOffer, encounter?: Encounter): OfferCheck;
 };
+export type VersionPick = { def: WD; parent: WD | null };
 
-export function versionWiring(o: { def: WD; parent: WD | null; counterparts: Counterparts; requirements: () => RequirementsNow; checks?: readonly RequirementCheck[] }): VersionWiring {
+// Why a version's scope keeps it from this patient, in the record's own terms.
+export function scopeReason(def: WD, inForce: WD, now: RequirementsNow): string {
+  const wards = def.scope.wards === "all" ? "every ward" : `ward${def.scope.wards.length === 1 ? "" : "s"} ${def.scope.wards.join(", ")}`;
+  const wardOk = def.scope.wards === "all" || def.scope.wards.includes(now.ward_id);
+  return wardOk ? `version ${def.version} applies on ${wards} only when its condition holds, and it does not hold for this patient, so version ${inForce.version} is in force`
+    : `version ${def.version} is adopted for ${wards} and this patient is on ward ${now.ward_id}, so version ${inForce.version} is in force`;
+}
+
+// requirements may return null while the record has not named the patient's ward, and then nothing is read or offered; resolve picks the version per encounter, and newest is the adopted version whose withheld offers are recorded.
+export function versionWiring(o: { def: WD; parent: WD | null; counterparts: Counterparts; requirements: (encounter?: Encounter) => RequirementsNow | null; checks?: readonly RequirementCheck[]; resolve?: (facts: Facts) => VersionPick; newest?: VersionPick }): VersionWiring {
+  const pick = (now: RequirementsNow): VersionPick => (o.resolve ? o.resolve(now.facts) : { def: o.def, parent: o.parent });
   return {
-    rulesFor: (_owner, kinds) => {
-      const r = readVersion(o.def, o.parent, o.counterparts, o.requirements().facts);
-      return { ...r, offers: r.offers.filter((x) => kinds.includes(x.kind)) };
+    rulesFor: (_owner, kinds, encounter) => {
+      const now = o.requirements(encounter);
+      if (!now) return null;
+      const p = pick(now);
+      const r = readVersion(p.def, p.parent, o.counterparts, now.facts);
+      const newest = o.newest ?? { def: o.def, parent: o.parent };
+      const withheld: WithheldOffer[] = newest.def.version === p.def.version ? [] : readVersion(newest.def, newest.parent, o.counterparts, now.facts).offers
+        .filter((x) => x.changed && kinds.includes(x.kind))
+        .map((x) => ({ key: `withheld:${x.key}`, version: x.version, in_force: p.def.version, step_id: x.step_id, document_id: x.document_id, stage: x.stage, when: x.when, kind: x.kind, reason: scopeReason(newest.def, p.def, now) }));
+      return { ...r, offers: r.offers.filter((x) => kinds.includes(x.kind)), withheld, ward_id: now.ward_id };
     },
-    check: (offer) => checkOffer(o.def, offer, o.requirements(), o.checks)
+    check: (offer, encounter) => {
+      const now = o.requirements(encounter);
+      if (!now) return { ok: false, requirement_version: "unknown", failures: [], revision_ops: [], conflict: "Not offered: the record does not name this patient's ward yet." };
+      return checkOffer(pick(now).def, offer, now, o.checks);
+    }
   };
+}
+
+// The replayed registry for per-encounter resolution, and the newest adopted version with its parent; each logged version must rebuild to its hash.
+export function adoptedRegistry(storeRoot: string): { resolve: (facts: Facts) => VersionPick; newest: VersionPick; log: ReturnType<VersionDesk["records"]> } {
+  const desk = new VersionDesk(storeRoot, Registry.load([loadV1()]));
+  try {
+    const reg = desk.registry;
+    const withParent = (def: WD): VersionPick => ({ def, parent: def.parent_version === null ? null : reg.get(def.parent_version) });
+    const top = reg.adoptedVersions().at(-1) ?? reg.get(1);
+    return { resolve: (facts) => withParent(reg.current(facts)), newest: withParent(top), log: desk.records() };
+  } finally {
+    desk.close();
+  }
 }
 
 // The version in force for these facts after replaying a store's version log; each logged version must rebuild to its hash.
