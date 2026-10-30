@@ -74,6 +74,8 @@ describe("hands-free entry rules", () => {
   it("takes a name and phone said the way people say them, hesitations and repeats included", () => {
     expect(identityFrom("Her name is Grace, Grace Okafor, the number is oh-eight-oh-three, one two three, four five six seven.")).toMatchObject({ name: "Grace Okafor", phone: "08031234567" });
     expect(identityFrom("Em, her name na Grace Okafor, her number na zero eight zero three one two three four five six seven")).toMatchObject({ name: "Grace Okafor", phone: "08031234567" });
+    // The local streaming ear hears "her name na" as "her name now" (rehearsal, 30 Oct).
+    expect(identityFrom("She's talking small now. Her name now blessing. Blessing Adie me. The number is over eight oh three")).toMatchObject({ name: "Blessing Adie" });
     expect(identityFrom("the bystander said she's called, eh, Blessing... Blessing Adeyemi")).toMatchObject({ name: "Blessing Adeyemi", phone: null });
     expect(identityFrom("They call him Chukwuemeka Obi, he no get phone")).toMatchObject({ name: "Chukwuemeka Obi", phone: null });
     // A first name alone, or a name nobody gave for this patient, is not taken.

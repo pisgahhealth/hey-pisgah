@@ -52,7 +52,8 @@ export function unidentifiedRef(at: Date, timeZone = "Africa/Lagos"): string {
 
 export type SpokenIdentity = { name: string; phone: string | null; words: string };
 // The words that introduce a name, as people say them, Nigerian English included ("her name na").
-const NAMING = /\b(?:(?:her|his|their|the patient'?s|patient'?s)\s+name\s+(?:is|na)|(?:she|he)\s+(?:is called|is named|says (?:she|he) is|says (?:her|his) name is)|(?:she|he)'s called|(?:they|people) call (?:her|him)|the patient is(?:\s+called)?)\b/i;
+// "now" is how the local streaming ear hears the Nigerian "na" after "her name".
+const NAMING = /\b(?:(?:her|his|their|the patient'?s|patient'?s)\s+name\s+(?:is|na|now)|(?:she|he)\s+(?:is called|is named|says (?:she|he) is|says (?:her|his) name is)|(?:she|he)'s called|(?:they|people) call (?:her|him)|the patient is(?:\s+called)?)\b/i;
 const NAME_RUN = /[A-Z][a-z'-]+(?:\s+[A-Z][a-z'-]+){1,3}/g;
 const NOT_NAME = /^(?:And|Phone|Her|His|She|He|The|Number|Em|Eh|Er|Um|Uh)$/;
 const PHONE = /(?:\+?234|0)\s*[789]\s*[01](?:[\s-]*\d){8}/;
@@ -61,8 +62,10 @@ const PHONE = /(?:\+?234|0)\s*[789]\s*[01](?:[\s-]*\d){8}/;
 export function identityFrom(line: string): SpokenIdentity | null {
   const m = NAMING.exec(line);
   if (!m) return null;
-  const rest = line.slice(m.index + m[0].length).replace(/\.{2,}|…/g, ",").split(/[.!?;]\s|\bnumber\b|\bphone\b/i)[0]!;
-  const runs = [...rest.matchAll(NAME_RUN)].map((r) => r[0].split(/\s+/).filter((w) => !NOT_NAME.test(w)).join(" ")).filter((n) => n.split(" ").length >= 2);
+  // The name is in the first sentence after the naming words, or the next one when an ear broke the sentence after a lone first name.
+  const parts = line.slice(m.index + m[0].length).replace(/\.{2,}|…/g, ",").split(/\bnumber\b|\bphone\b/i)[0]!.split(/[.!?;]\s/);
+  const runsIn = (t: string) => [...t.matchAll(NAME_RUN)].map((r) => r[0].split(/\s+/).filter((w) => !NOT_NAME.test(w)).join(" ")).filter((n) => n.split(" ").length >= 2);
+  const runs = runsIn(parts[0] ?? "").length ? runsIn(parts[0] ?? "") : runsIn(parts[1] ?? "");
   const name = runs.sort((x, y) => y.length - x.length)[0];
   if (!name) return null;
   const p = PHONE.exec(digitsSpoken(line));
