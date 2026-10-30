@@ -8,6 +8,7 @@ import { investigateDay, investigatorMessage, criticMessage, scanNightPrompts } 
 import { composeMemo, payloadHash, type Investigation, type Memo } from "../src/nightly/memo.js";
 import { alertHash, heldTransport, memoPublisher, sendOnVerdict } from "../src/nightly/publish.js";
 import { plantedFaults } from "../src/nightly/faults.js";
+import { repairFromRecords } from "../src/nightly/repair.js";
 import { sourcesHash } from "../src/nightly/sources.js";
 import type { DayEvent, NightSources } from "../src/nightly/sources.js";
 import { checkMemo, verifyMemo } from "../src/nightly/verify.js";
@@ -223,5 +224,23 @@ describe("the nightly memo: facts by rule, findings labelled, names never", () =
     const r = await p.publish(memoFor(s, "doc-1"));
     expect(r.verdict.status).toBe("verifier_error");
     expect(t.sent).toHaveLength(0);
+  });
+
+  it("repairs a memo once from the records: an unsupported figure in a cause is left out and the rest delivered; a fault the records carry is withheld with its reason", async () => {
+    const s = sources();
+    const bad = doctorInv();
+    bad[0]!.causes.push({ finding_id: "sc-doctor-2", department: "doctor", text: "About 40 refusals a week come from the door.", cites: ["f-doctor-writes_refused"], critic: null });
+    const dropped: { finding_id: string; code: string }[] = [];
+    const { t, p } = publisher(s, { maxRepairs: 1, repair: repairFromRecords(s, bad, NOW, dropped as never) });
+    const r = await p.publish(memoFor(s, "doc-1", bad));
+    expect(r).toMatchObject({ status: "delivered", repairs: 1 });
+    expect(dropped).toMatchObject([{ finding_id: "sc-doctor-2", code: "invented_figure" }]);
+    expect(r.final.suspected_causes.map((c) => c.finding_id)).toEqual(["sc-doctor-1"]);
+    expect((t.sent.find((d) => d.kind === "memo")!.body as Memo).suspected_causes).toHaveLength(1);
+    // A name inside the records' own task wording cannot be repaired away, so the memo is withheld with that reason.
+    const named: NightSources = { ...s, open: s.open.map((i) => (i.item_id === "oi-1" ? { ...i, title: "Ask Bassey Etim about observations" } : i)) };
+    const w = await publisher(named, { maxRepairs: 1, repair: repairFromRecords(named, doctorInv(), NOW) }).p.publish(memoFor(named, "doc-1"));
+    expect(w).toMatchObject({ status: "withheld", repairs: 1 });
+    expect(w.verdict.failures.map((f) => f.code)).toContain("patient_name");
   });
 });
