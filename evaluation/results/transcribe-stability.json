@@ -1,0 +1,2240 @@
+{
+ "generated_by": "packages/voice/research/stability.publish.run.ts",
+ "model": "muse-voice-transcribe-1.0",
+ "r1b_run_to_run": {
+  "source": "run 1 = packages/voice/research/real-set.json heard.voice_transcribe (R1.b first pass, three at a time, hashes not checked by that pass); run 2 = fixtures/real.readings.json transcript.raw (hash-checked); both with the vitals hints, PUSH_TO_TALK, fresh session ids",
+  "clips": 70,
+  "clips_with_any_word_change": 53,
+  "clips_raw_string_differs": 63,
+  "ref_words": 1060,
+  "word_edits": 130,
+  "run_to_run_word_rate": 0.1226,
+  "clips_values_moved": [
+   "H02"
+  ],
+  "top_changes": [
+   {
+    "heard": "chop -> charge",
+    "n": 2,
+    "ids": [
+     "H43",
+     "H43"
+    ]
+   },
+   {
+    "heard": "abdomen -> is",
+    "n": 1,
+    "ids": [
+     "H09"
+    ]
+   },
+   {
+    "heard": "added -> other",
+    "n": 1,
+    "ids": [
+     "T05"
+    ]
+   },
+   {
+    "heard": "akon -> okon",
+    "n": 1,
+    "ids": [
+     "T09"
+    ]
+   },
+   {
+    "heard": "also -> so",
+    "n": 1,
+    "ids": [
+     "H22"
+    ]
+   },
+   {
+    "heard": "alsoalso -> also",
+    "n": 1,
+    "ids": [
+     "H19"
+    ]
+   },
+   {
+    "heard": "at -> please",
+    "n": 1,
+    "ids": [
+     "H27"
+    ]
+   },
+   {
+    "heard": "bring -> put",
+    "n": 1,
+    "ids": [
+     "T23"
+    ]
+   },
+   {
+    "heard": "ceftriaxone -> cefitriaxone",
+    "n": 1,
+    "ids": [
+     "T13"
+    ]
+   },
+   {
+    "heard": "chart -> check",
+    "n": 1,
+    "ids": [
+     "T22"
+    ]
+   },
+   {
+    "heard": "charter -> oxygen",
+    "n": 1,
+    "ids": [
+     "H04"
+    ]
+   },
+   {
+    "heard": "did -> managed",
+    "n": 1,
+    "ids": [
+     "H23"
+    ]
+   }
+  ]
+ },
+ "probe": {
+  "clips_manifest": {
+   "r1b-H02": {
+    "sha256": "475d0894e8a04f380276aab2aa8633e8ff3c23eaff46e0f69e0b12deac2e7117",
+    "listed_sha256": "f3918e0f6d0bbff9866268f70a719de208c34d2a314b03417538abc0efd2f5f3",
+    "matches_listed": false,
+    "set": "final",
+    "note": "recut from the m4a; the listed cut differs by rounding (G4 saw the same)"
+   },
+   "r1b-H22": {
+    "sha256": "9fc5782ecc5c66b3bf25f76916575830cc77f35dd907ea2721cf3ccf377ca011",
+    "listed_sha256": "e5e7f91ae77e081bdf4ddcd9dc3a696259fc5f31dece87c527cbb5c0a486d44d",
+    "matches_listed": false,
+    "set": "final",
+    "note": "recut from the m4a; the listed cut differs by rounding (G4 saw the same)"
+   },
+   "r1b-H28": {
+    "sha256": "de1da1516b1af92515da29f65dad2089a29159f3d493b20866e9eb80b0e803cb",
+    "listed_sha256": "de1da1516b1af92515da29f65dad2089a29159f3d493b20866e9eb80b0e803cb",
+    "matches_listed": true,
+    "set": "final",
+    "note": null
+   },
+   "r1b-H45": {
+    "sha256": "7c6be224ea35d1ab096d2a0311d61c9fc3b4cfeaeea435056b7f8747194f183c",
+    "listed_sha256": "7c6be224ea35d1ab096d2a0311d61c9fc3b4cfeaeea435056b7f8747194f183c",
+    "matches_listed": true,
+    "set": "final",
+    "note": null
+   },
+   "v2-O017": {
+    "sha256": "577e0235c787ed475c4e3fe1b20e7cea403df13c3f15a83904d174d00a6ad444",
+    "listed_sha256": "73bf26238196db0780f8c5d20a89da6dc2c24b9f33974e25bbae4bcf1f4a9338",
+    "matches_listed": false,
+    "set": "tuning",
+    "note": "recut from the m4a; the listed cut differs by rounding (G4 saw the same)"
+   },
+   "v2-O027": {
+    "sha256": "f7a8e8bb2d7911788a40cd06d8ff0d02e8a870ceae68324f49b6312626244c58",
+    "listed_sha256": "405111b5d3697b046db2dd2b37a92c895b254db5b8bda41c93d8484dfa5367c5",
+    "matches_listed": false,
+    "set": "held_out",
+    "note": "recut from the m4a; the listed cut differs by rounding (G4 saw the same)"
+   },
+   "v2-V025": {
+    "sha256": "8103ef469710300db43f12140f003763bb92924617ae5f3ba060c358935f88fb",
+    "listed_sha256": "8103ef469710300db43f12140f003763bb92924617ae5f3ba060c358935f88fb",
+    "matches_listed": true,
+    "set": "tuning",
+    "note": null
+   },
+   "v2-O035": {
+    "sha256": "6beed2543833857088edeb4242f7891767169bd16d0e78a9399c662b6094afac",
+    "listed_sha256": "6beed2543833857088edeb4242f7891767169bd16d0e78a9399c662b6094afac",
+    "matches_listed": true,
+    "set": "held_out",
+    "note": null
+   },
+   "v2-O049": {
+    "sha256": "0dc79af5e98282c491a040642eba7e1a16484b55691e6fb592575480e4bdf237",
+    "listed_sha256": "0dc79af5e98282c491a040642eba7e1a16484b55691e6fb592575480e4bdf237",
+    "matches_listed": true,
+    "set": "tuning",
+    "note": null
+   },
+   "say-24k": {
+    "sha256": "9c41b2e1e3dc98d6bb929855cd55375e51a434ab98ecef4c72ecfdad1b91e6fa",
+    "listed_sha256": null,
+    "matches_listed": null,
+    "set": "synthetic",
+    "note": "say, default voice, 24 kHz, made for the probe"
+   }
+  },
+  "calls": 200,
+  "voided_429": [],
+  "failed": [],
+  "cost_usd": 0.06944,
+  "summary": {
+   "A1": {
+    "clips": 10,
+    "clips_not_identical": 10,
+    "pooled_pairwise_word_rate": 0.1094,
+    "clips_values_moved": [
+     "r1b-H02",
+     "v2-O035"
+    ],
+    "clips_turns_moved": [],
+    "clips_audio_ms_moved": []
+   },
+   "A2": {
+    "clips": 10,
+    "clips_not_identical": 10,
+    "pooled_pairwise_word_rate": 0.1712,
+    "clips_values_moved": [
+     "r1b-H02",
+     "r1b-H22",
+     "v2-O027"
+    ],
+    "clips_turns_moved": [],
+    "clips_audio_ms_moved": []
+   },
+   "D": {
+    "clips": 10,
+    "clips_not_identical": 9,
+    "pooled_pairwise_word_rate": 0.1401,
+    "clips_values_moved": [
+     "r1b-H02"
+    ],
+    "clips_turns_moved": [],
+    "clips_audio_ms_moved": []
+   },
+   "B": {
+    "clips": 10,
+    "clips_not_identical": 10,
+    "pooled_pairwise_word_rate": 0.2896,
+    "clips_values_moved": [
+     "r1b-H45",
+     "v2-O017",
+     "v2-O049",
+     "say-24k"
+    ],
+    "clips_turns_moved": [],
+    "clips_audio_ms_moved": []
+   },
+   "E": {
+    "clips": 10,
+    "clips_not_identical": 9,
+    "pooled_pairwise_word_rate": 0.1585,
+    "clips_values_moved": [
+     "v2-O035"
+    ],
+    "clips_turns_moved": [],
+    "clips_audio_ms_moved": []
+   }
+  },
+  "per_clip": {
+   "A1": {
+    "r1b-H02": {
+     "calls": 5,
+     "distinct_strings": 5,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 7,
+      "word_edits": 13,
+      "words": 53,
+      "rate": 0.2453
+     },
+     "distinct_values": 2,
+     "values": [
+      "18,88",
+      "18"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "record pulse eighty-eight and respiratory rate eighteen.",
+      "record pulse etiates and respiratory rates eighteen.",
+      "Record pulse eighty-eight and respiratory rate eighteen.",
+      "Record pulse, eighty-eight and respiratory rate eighteen.",
+      "Record pulse, etiettes and respiratory rates eighteen."
+     ]
+    },
+    "r1b-H22": {
+     "calls": 5,
+     "distinct_strings": 4,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 7,
+      "word_edits": 20,
+      "words": 62,
+      "rate": 0.3226
+     },
+     "distinct_values": 1,
+     "values": [
+      "100,160"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "so about 160 over 100 this is high.",
+      "so about 160 over 100, this is high.",
+      "so about 160 over 100, this is this is high.",
+      "what is also about one sixty over hundred this is high."
+     ]
+    },
+    "r1b-H28": {
+     "calls": 5,
+     "distinct_strings": 5,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 7,
+      "word_edits": 8,
+      "words": 63,
+      "rate": 0.127
+     },
+     "distinct_values": 1,
+     "values": [
+      "112"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "uh Doctor our pulse is now one hundred and twelve",
+      "uh doctor our pulse pulse is now one hundred and twelve.",
+      "uh doctor, our pulse is now one hundred and twelve.",
+      "uh doctor our pulse is now hundred and twelve",
+      "uh doctor pulse is now one hundred and twelve oh"
+     ]
+    },
+    "r1b-H45": {
+     "calls": 5,
+     "distinct_strings": 5,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 10,
+      "word_edits": 42,
+      "words": 234,
+      "rate": 0.1795
+     },
+     "distinct_values": 1,
+     "values": [
+      "150,50,95"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "How blood pressure is even one fifty over ninety five fifty Yes go on oga have fun have fun have fun fun I don't tire the hospital just busy today",
+      "how blood pressure is even one one fifty over ninety five. fifty yes go go on have fun have fun have fun the hospital just busy today",
+      "how blood pressure is even one fifty over ninety five fifty yes go on Oga have fun have fun have fun fun the hospital is just busy today",
+      "How blood pressure is even one fifty over ninety five. Fifty. Yes go on Oga, have fun, have fun, have fun. The hospital just busy today.",
+      "How blood pressure is even one fifty over ninety five? Fifty. Yes go on have fun, have fun, have fun, not tired, the hospital is just busy today"
+     ]
+    },
+    "v2-O017": {
+     "calls": 5,
+     "distinct_strings": 2,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 50,
+      "rate": 0
+     },
+     "distinct_values": 1,
+     "values": [
+      "508"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "okay so metronidazole five hundred eight hourly IV",
+      "okay so metronidazole five hundred eight hourly IV,"
+     ]
+    },
+    "v2-O027": {
+     "calls": 5,
+     "distinct_strings": 5,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 7,
+      "word_edits": 8,
+      "words": 184,
+      "rate": 0.0435
+     },
+     "distinct_values": 1,
+     "values": [
+      "130,130,85,85,92"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "BP is quite high. It's 130 over 85, but not too high, but 130 over 85 and the pulse is about 92.",
+      "BP is quite high, it's 130 over 85. But not too high, but but 130 over 85 and the pulse is about 92.",
+      "bp is quite high, it's one thirty over eighty five. But not too high, but one thirty over eighty five and the pulse is about ninety two.",
+      "BP is quite high. It's 130 over 85 but not too high but 130 over 85 and the pulse pulse is about 92.",
+      "BP is quite high. It's 130 over 85. But not too high but 130 over 85 and the pulse is about 92."
+     ]
+    },
+    "v2-V025": {
+     "calls": 5,
+     "distinct_strings": 2,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 50,
+      "rate": 0
+     },
+     "distinct_values": 1,
+     "values": [
+      "508"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "okay so metronidazole five hundred eight hourly IV",
+      "okay so metronidazole five hundred eight hourly IV."
+     ]
+    },
+    "v2-O035": {
+     "calls": 5,
+     "distinct_strings": 4,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 40,
+      "rate": 0
+     },
+     "distinct_values": 2,
+     "values": [
+      "100,112,160",
+      "100,100,112,160"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "BP is 160 over 100. Pulse, 112.",
+      "BP is 160 over 100. 100, pulse 112,",
+      "BP is 160 over 100, pulse 112.",
+      "BP is 160 over 100. Pulse 112."
+     ]
+    },
+    "v2-O049": {
+     "calls": 5,
+     "distinct_strings": 2,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 70,
+      "rate": 0
+     },
+     "distinct_values": 1,
+     "values": [
+      "16,93"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "sats is ninety three on room air, respiratory rate sixteen.",
+      "sats is 93 on room air, respiratory rate 16."
+     ]
+    },
+    "say-24k": {
+     "calls": 5,
+     "distinct_strings": 4,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 4,
+      "word_edits": 4,
+      "words": 62,
+      "rate": 0.0645
+     },
+     "distinct_values": 1,
+     "values": [
+      "37.6,92"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "pulse is 92 and the temperature is 37.6.",
+      "pulse is ninety-two and the temperature is thirty-seven point six.",
+      "pulse is ninety-two and and the temperature is thirty seven point six.",
+      "pulse is ninety-two and the temperature is thirty seven point six."
+     ]
+    }
+   },
+   "A2": {
+    "r1b-H02": {
+     "calls": 5,
+     "distinct_strings": 4,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 7,
+      "word_edits": 11,
+      "words": 57,
+      "rate": 0.193
+     },
+     "distinct_values": 2,
+     "values": [
+      "18,88",
+      "18"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "record pulse eighty-eight and respiratory rate eighteen.",
+      "Record pulse, pulse eighty-eight and respiratory rate eighteen.",
+      "Record pulse pause etiates and respiratory rate eighteen",
+      "record pulse, 88 and respiratory rate 18"
+     ]
+    },
+    "r1b-H22": {
+     "calls": 5,
+     "distinct_strings": 5,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 7,
+      "word_edits": 30,
+      "words": 66,
+      "rate": 0.4545
+     },
+     "distinct_values": 2,
+     "values": [
+      "100,160",
+      "100,100,160"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "so about 160 over 100, this is high",
+      "So about 160 over 100, this is high.",
+      "What temperature is also about 160 over 100. This is high.",
+      "so about 160 over 100, this is high.",
+      "What is also about 160 over 100, this is 100, this is high."
+     ]
+    },
+    "r1b-H28": {
+     "calls": 5,
+     "distinct_strings": 5,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 10,
+      "word_edits": 24,
+      "words": 65,
+      "rate": 0.3692
+     },
+     "distinct_values": 1,
+     "values": [
+      "112"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "Yeah, doctor, her pulse is now 112",
+      "uh doctor her pulse is pulse is now one hundred and twelve",
+      "uh doctor her pulse is now one hundred and twelve",
+      "uh doctor pulse is now one hundred and twelve",
+      "Doctor, her pulse pulse is now 112"
+     ]
+    },
+    "r1b-H45": {
+     "calls": 5,
+     "distinct_strings": 5,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 10,
+      "word_edits": 58,
+      "words": 203,
+      "rate": 0.2857
+     },
+     "distinct_values": 1,
+     "values": [
+      "150,50,95"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "how blood pressure is even one one fifty over ninety five. fifty. Yes go on Oga, the hospital just busy today.",
+      "how blood pressure is even one fifty over ninety five. fifty. Yes go on on Oga have fun have fun have fun I'm not tired. The hospital is just busy today.",
+      "How blood pressure is even one fifty over ninety five? Fifty. Yes go on Oga have fun have fun have fun. The hospital just busy today.",
+      "how blood pressure is even one fifty over ninety five fifty yes go on have fun have fun have fun the hospital just busy today",
+      "how what pressure is even one fifty over ninety five fifty yes go on over have fun have fun have fun the hospital just busy today"
+     ]
+    },
+    "v2-O017": {
+     "calls": 5,
+     "distinct_strings": 3,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 4,
+      "word_edits": 4,
+      "words": 51,
+      "rate": 0.0784
+     },
+     "distinct_values": 1,
+     "values": [
+      "508"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "okay so metronidazole five hundred eight hourly IV,",
+      "okay so metronidazole five hundred eight hourly IV",
+      "okay so metronidazole five hundred eight hourly eight hourly IV"
+     ]
+    },
+    "v2-O027": {
+     "calls": 5,
+     "distinct_strings": 5,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 4,
+      "word_edits": 4,
+      "words": 184,
+      "rate": 0.0217
+     },
+     "distinct_values": 2,
+     "values": [
+      "130,130,85,85,92",
+      "130,130,40,85,85,92"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "BP is quite high. It's one thirty over over eighty five. But not too high but one thirty over eighty five and the pulse is about ninety two.",
+      "BP is quite high, it's one thirty over eighty five. But not too high, but one thirty over forty eighty five and the pulse is about ninety two.",
+      "BP is quite high, it's 130 over 85, but not too high, but 130 over 85 and the pulse is about 92.",
+      "bp is quite high it's 130 over 85 but not too high but 130 over 85 and the pulse is about 92",
+      "BP is quite high, it's 130 over 85 but not too high but 130 over 85 and the pulse is about 92."
+     ]
+    },
+    "v2-V025": {
+     "calls": 5,
+     "distinct_strings": 3,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 4,
+      "word_edits": 8,
+      "words": 50,
+      "rate": 0.16
+     },
+     "distinct_values": 1,
+     "values": [
+      "508"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "okay so metronidazole five hundred eight hourly IV",
+      "okay so metronidazole five hundred eight hourly IV,",
+      "okay, so metronidas or five hundred eight hourly IV."
+     ]
+    },
+    "v2-O035": {
+     "calls": 5,
+     "distinct_strings": 4,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 40,
+      "rate": 0
+     },
+     "distinct_values": 1,
+     "values": [
+      "100,112,160"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "BP is 160 over 100. Pulse 112.",
+      "BP is 160 over 100. pulse 112",
+      "BP is 160 over 100, pulse 112,",
+      "BP is 160 over 100. Pulse, 112."
+     ]
+    },
+    "v2-O049": {
+     "calls": 5,
+     "distinct_strings": 4,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 7,
+      "word_edits": 7,
+      "words": 77,
+      "rate": 0.0909
+     },
+     "distinct_values": 1,
+     "values": [
+      "16,93"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "sats is ninety three on room air. respiratory rate rate sixteen.",
+      "sats is ninety three on room air respiratory rate is sixteen",
+      "sats is ninety three on room air, respiratory rate sixteen.",
+      "sats is ninety three on room air respiratory rate sixteen."
+     ]
+    },
+    "say-24k": {
+     "calls": 5,
+     "distinct_strings": 5,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 60,
+      "rate": 0
+     },
+     "distinct_values": 1,
+     "values": [
+      "37.6,92"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "pulse is ninety-two and the temperature is thirty seven point six. six.",
+      "pulse is ninety-two and the temperature is thirty seven point six.",
+      "pulse is ninety-two and the temperature is thirty seven point point six.",
+      "pulse is ninety-two and the temperature is thirty seven point six",
+      "pulse is ninety two and the temperature is thirty seven point six."
+     ]
+    }
+   },
+   "D": {
+    "r1b-H02": {
+     "calls": 5,
+     "distinct_strings": 4,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 9,
+      "word_edits": 15,
+      "words": 56,
+      "rate": 0.2679
+     },
+     "distinct_values": 2,
+     "values": [
+      "18,88",
+      "18,80"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "record pulse eighty-eight and respiratory respiratory rate eighteen.",
+      "record pulse eighty-eight and respiratory rate eighteen.",
+      "record pulse eighty-eight and respiratory rate rate eighteen.",
+      "record pulse, eighty-eights and respiratory rates eighteen."
+     ]
+    },
+    "r1b-H22": {
+     "calls": 5,
+     "distinct_strings": 5,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 8,
+      "word_edits": 28,
+      "words": 68,
+      "rate": 0.4118
+     },
+     "distinct_values": 1,
+     "values": [
+      "100,160"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "so about 160 over 100, this is high.",
+      "so about one sixty over hundred this is this is high.",
+      "so about 160 160 over 100, this is high.",
+      "So about 160 over 100. This is This is high.",
+      "What temperature is also about one sixty over hundred this is high"
+     ]
+    },
+    "r1b-H28": {
+     "calls": 5,
+     "distinct_strings": 5,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 9,
+      "word_edits": 22,
+      "words": 54,
+      "rate": 0.4074
+     },
+     "distinct_values": 1,
+     "values": [
+      "112"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "uh the pulse is now 112",
+      "uh doctor her pulse pulse is now one hundred and twelve",
+      "uh doctor our pulse is now hundred and twelve",
+      "uh doctor her pulse is now 112,",
+      "uh Doctor our pulse is now hundred and twelve"
+     ]
+    },
+    "r1b-H45": {
+     "calls": 5,
+     "distinct_strings": 5,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 9,
+      "word_edits": 32,
+      "words": 197,
+      "rate": 0.1624
+     },
+     "distinct_values": 1,
+     "values": [
+      "150,50,95"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "how blood pressure is even one fifty over ninety five. fifty. Yes go on Oga have fun have fun have fun The hospital just busy today.",
+      "how blood pressure is even one fifty over ninety five fifty yes go on have fun the hospital just busy today",
+      "How blood pressure is even one fifty over ninety five? fifty Yes go on Oga have fun have fun have fun The hospital is just busy today",
+      "How blood pressure is even one fifty over ninety five. Fifty. Yes go on Oga, have fun, have fun, have fun. The hospital just busy today.",
+      "How blood pressure is even one fifty over ninety five? Fifty. Yes go on Oga, have fun, have fun, have fun, not tired, the hospital just busy today."
+     ]
+    },
+    "v2-O017": {
+     "calls": 5,
+     "distinct_strings": 3,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 50,
+      "rate": 0
+     },
+     "distinct_values": 1,
+     "values": [
+      "508"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "okay so metronidazole five hundred eight hourly IV",
+      "okay, so metronidazole five hundred eight hourly IV",
+      "okay so metronidazole five hundred eight hourly IV,"
+     ]
+    },
+    "v2-O027": {
+     "calls": 5,
+     "distinct_strings": 3,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 4,
+      "word_edits": 4,
+      "words": 182,
+      "rate": 0.022
+     },
+     "distinct_values": 1,
+     "values": [
+      "130,130,85,85,92"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "BP is quite high, it's one thirty over eighty five. But not too high, but one thirty over eighty five and the pulse is about ninety two.",
+      "BP is quite high. It's 130 over 85. But not too high, but 130 over 85 and the pulse is about 92.",
+      "BP is quite high, it's 130 over over 85. But not too high, but 130 over 85 and the pulse is about 92."
+     ]
+    },
+    "v2-V025": {
+     "calls": 5,
+     "distinct_strings": 2,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 4,
+      "word_edits": 12,
+      "words": 56,
+      "rate": 0.2143
+     },
+     "distinct_values": 1,
+     "values": [
+      "508"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "okay so metronidazole five hundred eight hourly IV",
+      "okay so metronid has over five hundred eight hourly IV."
+     ]
+    },
+    "v2-O035": {
+     "calls": 5,
+     "distinct_strings": 1,
+     "identical": true,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 40,
+      "rate": 0
+     },
+     "distinct_values": 1,
+     "values": [
+      "100,112,160"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "BP is 160 over 100. Pulse 112."
+     ]
+    },
+    "v2-O049": {
+     "calls": 5,
+     "distinct_strings": 4,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 70,
+      "rate": 0
+     },
+     "distinct_values": 1,
+     "values": [
+      "16,93"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "sats is ninety-three on room air, respiratory rate sixteen.",
+      "sats is 93 on room air, respiratory rate 16.",
+      "sats is ninety three on room air, respiratory rate sixteen.",
+      "sats is ninety three on room air respiratory rate sixteen"
+     ]
+    },
+    "say-24k": {
+     "calls": 5,
+     "distinct_strings": 3,
+     "identical": false,
+     "words": {
+      "pairs": 10,
+      "pairs_with_word_change": 4,
+      "word_edits": 4,
+      "words": 62,
+      "rate": 0.0645
+     },
+     "distinct_values": 1,
+     "values": [
+      "37.6,92"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "pulse is ninety two and the temperature is thirty seven point six.",
+      "pulse is ninety-two and the temperature is thirty seven point six.",
+      "pulse is ninety-two and and the temperature is thirty-seven point six."
+     ]
+    }
+   },
+   "B": {
+    "r1b-H02": {
+     "calls": 3,
+     "distinct_strings": 2,
+     "identical": false,
+     "words": {
+      "pairs": 3,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 18,
+      "rate": 0
+     },
+     "distinct_values": 1,
+     "values": [
+      "18"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "Record pause etiates and respiratory rates 18.",
+      "Record pause etiates and respiratory rates eighteen."
+     ]
+    },
+    "r1b-H22": {
+     "calls": 3,
+     "distinct_strings": 3,
+     "identical": false,
+     "words": {
+      "pairs": 3,
+      "pairs_with_word_change": 2,
+      "word_edits": 4,
+      "words": 19,
+      "rate": 0.2105
+     },
+     "distinct_values": 1,
+     "values": [
+      "100,160"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "What I about 160 over 100, this is high.",
+      "About 160 over 100. This is high.",
+      "about 160 over 100 this is high"
+     ]
+    },
+    "r1b-H28": {
+     "calls": 3,
+     "distinct_strings": 2,
+     "identical": false,
+     "words": {
+      "pairs": 3,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 12,
+      "rate": 0
+     },
+     "distinct_values": 1,
+     "values": [
+      "112"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "The purpose is now 112.",
+      "The purpose is now 112.."
+     ]
+    },
+    "r1b-H45": {
+     "calls": 3,
+     "distinct_strings": 3,
+     "identical": false,
+     "words": {
+      "pairs": 3,
+      "pairs_with_word_change": 3,
+      "word_edits": 23,
+      "words": 67,
+      "rate": 0.3433
+     },
+     "distinct_values": 3,
+     "values": [
+      "95",
+      "7150,95",
+      "150,715,95"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "I bought pressure over 95 yes go on have fun have fun have fun i'm not tired the hospital is just busy today",
+      "I'm not sure it's 7150 over 95. Yes go on have fun have fun have fun The hospital is busy today",
+      "I blow pressure is 715 over 95. 150. Yes go on have fun have fun have have fun. The hospital is just busy today."
+     ]
+    },
+    "v2-O017": {
+     "calls": 3,
+     "distinct_strings": 3,
+     "identical": false,
+     "words": {
+      "pairs": 3,
+      "pairs_with_word_change": 3,
+      "word_edits": 9,
+      "words": 17,
+      "rate": 0.5294
+     },
+     "distinct_values": 3,
+     "values": [
+      "500",
+      "500,500",
+      "500,500,8,8"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "okay so metronidazole 500 eight hourly IV",
+      "Okay, so Metro needed 500 a 500 eight hourly IVB.",
+      "okay so Metro 500 8 500 8 hourly IB"
+     ]
+    },
+    "v2-O027": {
+     "calls": 3,
+     "distinct_strings": 3,
+     "identical": false,
+     "words": {
+      "pairs": 3,
+      "pairs_with_word_change": 3,
+      "word_edits": 10,
+      "words": 55,
+      "rate": 0.1818
+     },
+     "distinct_values": 1,
+     "values": [
+      "130,130,85,85,92"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "PP is quite high. It's 130 130 over 85. But not too high, but 130 over 85 and the pulse is about 92.",
+      "PP is quite high, it's 130 over 85. but not too high but 130 over 85 and the the pulse is about 92.",
+      "PPPP is quite high. It's 130 over 85, but not too high, but too high, but 130 over 85 and the pulse is about 92."
+     ]
+    },
+    "v2-V025": {
+     "calls": 3,
+     "distinct_strings": 3,
+     "identical": false,
+     "words": {
+      "pairs": 3,
+      "pairs_with_word_change": 3,
+      "word_edits": 13,
+      "words": 19,
+      "rate": 0.6842
+     },
+     "distinct_values": 1,
+     "values": [
+      "500"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "Okay, so so metro leaders o 500, eight hourly IV.",
+      "metronidasole 500 eight hourly IV",
+      "Okay, so metronidazole, 500 eight hourly IV."
+     ]
+    },
+    "v2-O035": {
+     "calls": 3,
+     "distinct_strings": 3,
+     "identical": false,
+     "words": {
+      "pairs": 3,
+      "pairs_with_word_change": 2,
+      "word_edits": 2,
+      "words": 12,
+      "rate": 0.1667
+     },
+     "distinct_values": 1,
+     "values": [
+      "100,112,160"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "BP is 160 over 100. Pulse 112.",
+      "BP is 160 over 100 pulse 112.",
+      "BP is is 160 over 100, pulse 112."
+     ]
+    },
+    "v2-O049": {
+     "calls": 3,
+     "distinct_strings": 3,
+     "identical": false,
+     "words": {
+      "pairs": 3,
+      "pairs_with_word_change": 3,
+      "word_edits": 8,
+      "words": 21,
+      "rate": 0.381
+     },
+     "distinct_values": 2,
+     "values": [
+      "16,93",
+      "16"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "startsstarts as 93 on room air respiratory rate 16.",
+      "sats is 93 on room air respiration rate 16",
+      "socks93 on room air, respiration rate 16."
+     ]
+    },
+    "say-24k": {
+     "calls": 3,
+     "distinct_strings": 3,
+     "identical": false,
+     "words": {
+      "pairs": 3,
+      "pairs_with_word_change": 3,
+      "word_edits": 6,
+      "words": 19,
+      "rate": 0.3158
+     },
+     "distinct_values": 2,
+     "values": [
+      "37.6,92,92",
+      "37.6,92"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "Pulse is 92 and 92 and the temperature is 37.6.",
+      "Pulses 92 and the temperature is 37.6.",
+      "Pulse is 92 92 and the temperature is 37.6."
+     ]
+    }
+   },
+   "E": {
+    "r1b-H02": {
+     "calls": 2,
+     "distinct_strings": 1,
+     "identical": true,
+     "words": {
+      "pairs": 1,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 5,
+      "rate": 0
+     },
+     "distinct_values": 1,
+     "values": [
+      "18,88"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "record pulse eighty-eight and respiratory rate eighteen."
+     ]
+    },
+    "r1b-H22": {
+     "calls": 2,
+     "distinct_strings": 2,
+     "identical": false,
+     "words": {
+      "pairs": 1,
+      "pairs_with_word_change": 1,
+      "word_edits": 2,
+      "words": 7,
+      "rate": 0.2857
+     },
+     "distinct_values": 1,
+     "values": [
+      "100,160"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "sorry, so about 160 over 100, this is high.",
+      "What about one sixty over hundred this is high"
+     ]
+    },
+    "r1b-H28": {
+     "calls": 2,
+     "distinct_strings": 2,
+     "identical": false,
+     "words": {
+      "pairs": 1,
+      "pairs_with_word_change": 1,
+      "word_edits": 1,
+      "words": 6,
+      "rate": 0.1667
+     },
+     "distinct_values": 1,
+     "values": [
+      "112"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "uh doctor our pulse is now one hundred and twelve",
+      "uh doctor pulse is now one hundred and twelve"
+     ]
+    },
+    "r1b-H45": {
+     "calls": 2,
+     "distinct_strings": 2,
+     "identical": false,
+     "words": {
+      "pairs": 1,
+      "pairs_with_word_change": 1,
+      "word_edits": 5,
+      "words": 16,
+      "rate": 0.3125
+     },
+     "distinct_values": 1,
+     "values": [
+      "150,50,95"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "How blood pressure is even one fifty over ninety five fifty what's going on the hospital is just busy today",
+      "How blood pressure is even one fifty over ninety five? fifty. Yes go have The hospital is busy today."
+     ]
+    },
+    "v2-O017": {
+     "calls": 2,
+     "distinct_strings": 2,
+     "identical": false,
+     "words": {
+      "pairs": 1,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 5,
+      "rate": 0
+     },
+     "distinct_values": 1,
+     "values": [
+      "508"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "okay, so metronidazole five hundred eight hourly IV",
+      "okay so metronidazole five hundred eight hourly IV"
+     ]
+    },
+    "v2-O027": {
+     "calls": 2,
+     "distinct_strings": 2,
+     "identical": false,
+     "words": {
+      "pairs": 1,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 18,
+      "rate": 0
+     },
+     "distinct_values": 1,
+     "values": [
+      "130,130,85,85,92"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "bp is quite high, it's one thirty over eighty eighty five but not too high but one one thirty over eighty five and the pulse is about ninety two.",
+      "BP is quite high, it's one thirty over eighty five, but not too high, but one thirty over eighty five and the pulse is about ninety two."
+     ]
+    },
+    "v2-V025": {
+     "calls": 2,
+     "distinct_strings": 2,
+     "identical": false,
+     "words": {
+      "pairs": 1,
+      "pairs_with_word_change": 1,
+      "word_edits": 3,
+      "words": 7,
+      "rate": 0.4286
+     },
+     "distinct_values": 1,
+     "values": [
+      "508"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "okay, so metric needles are five hundred eight hourly IV",
+      "okay so metronidazole five hundred eight hourly IV."
+     ]
+    },
+    "v2-O035": {
+     "calls": 2,
+     "distinct_strings": 2,
+     "identical": false,
+     "words": {
+      "pairs": 1,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 4,
+      "rate": 0
+     },
+     "distinct_values": 2,
+     "values": [
+      "100,112,160",
+      "100,100,112,160"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "BP is 160 over 100. Pulse 112.",
+      "BP is 160 over 100. 100, pulse 112."
+     ]
+    },
+    "v2-O049": {
+     "calls": 2,
+     "distinct_strings": 2,
+     "identical": false,
+     "words": {
+      "pairs": 1,
+      "pairs_with_word_change": 1,
+      "word_edits": 1,
+      "words": 7,
+      "rate": 0.1429
+     },
+     "distinct_values": 1,
+     "values": [
+      "16,93"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "sats is ninety-three on room air. Respiratory rate sixteen.",
+      "sats is ninety three on room air, respiratory rate rate sixteen."
+     ]
+    },
+    "say-24k": {
+     "calls": 2,
+     "distinct_strings": 2,
+     "identical": false,
+     "words": {
+      "pairs": 1,
+      "pairs_with_word_change": 1,
+      "word_edits": 1,
+      "words": 7,
+      "rate": 0.1429
+     },
+     "distinct_values": 1,
+     "values": [
+      "37.6,92"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "pulse is ninety-two and the the temperature is thirty seven point six,",
+      "pulse is ninety-two and and the temperature is thirty seven point six."
+     ]
+    }
+   }
+  },
+  "a1_against_a2": {
+   "r1b-H02": {
+    "strings_in_b_not_seen_in_a": 3,
+    "of": 5,
+    "together": {
+     "calls": 10,
+     "distinct_strings": 8,
+     "identical": false,
+     "words": {
+      "pairs": 45,
+      "pairs_with_word_change": 30,
+      "word_edits": 54,
+      "words": 245,
+      "rate": 0.2204
+     },
+     "distinct_values": 2,
+     "values": [
+      "18,88",
+      "18"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "record pulse eighty-eight and respiratory rate eighteen.",
+      "record pulse etiates and respiratory rates eighteen.",
+      "Record pulse eighty-eight and respiratory rate eighteen.",
+      "Record pulse, eighty-eight and respiratory rate eighteen.",
+      "Record pulse, etiettes and respiratory rates eighteen.",
+      "Record pulse, pulse eighty-eight and respiratory rate eighteen.",
+      "Record pulse pause etiates and respiratory rate eighteen",
+      "record pulse, 88 and respiratory rate 18"
+     ]
+    }
+   },
+   "r1b-H22": {
+    "strings_in_b_not_seen_in_a": 4,
+    "of": 5,
+    "together": {
+     "calls": 10,
+     "distinct_strings": 8,
+     "identical": false,
+     "words": {
+      "pairs": 45,
+      "pairs_with_word_change": 30,
+      "word_edits": 104,
+      "words": 298,
+      "rate": 0.349
+     },
+     "distinct_values": 2,
+     "values": [
+      "100,160",
+      "100,100,160"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "so about 160 over 100 this is high.",
+      "so about 160 over 100, this is high.",
+      "so about 160 over 100, this is this is high.",
+      "what is also about one sixty over hundred this is high.",
+      "so about 160 over 100, this is high",
+      "So about 160 over 100, this is high.",
+      "What temperature is also about 160 over 100. This is high.",
+      "What is also about 160 over 100, this is 100, this is high."
+     ]
+    }
+   },
+   "r1b-H28": {
+    "strings_in_b_not_seen_in_a": 5,
+    "of": 5,
+    "together": {
+     "calls": 10,
+     "distinct_strings": 10,
+     "identical": false,
+     "words": {
+      "pairs": 45,
+      "pairs_with_word_change": 41,
+      "word_edits": 87,
+      "words": 278,
+      "rate": 0.3129
+     },
+     "distinct_values": 1,
+     "values": [
+      "112"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "uh Doctor our pulse is now one hundred and twelve",
+      "uh doctor our pulse pulse is now one hundred and twelve.",
+      "uh doctor, our pulse is now one hundred and twelve.",
+      "uh doctor our pulse is now hundred and twelve",
+      "uh doctor pulse is now one hundred and twelve oh",
+      "Yeah, doctor, her pulse is now 112",
+      "uh doctor her pulse is pulse is now one hundred and twelve",
+      "uh doctor her pulse is now one hundred and twelve",
+      "uh doctor pulse is now one hundred and twelve",
+      "Doctor, her pulse pulse is now 112"
+     ]
+    }
+   },
+   "r1b-H45": {
+    "strings_in_b_not_seen_in_a": 5,
+    "of": 5,
+    "together": {
+     "calls": 10,
+     "distinct_strings": 10,
+     "identical": false,
+     "words": {
+      "pairs": 45,
+      "pairs_with_word_change": 44,
+      "word_edits": 216,
+      "words": 1007,
+      "rate": 0.2145
+     },
+     "distinct_values": 1,
+     "values": [
+      "150,50,95"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "How blood pressure is even one fifty over ninety five fifty Yes go on oga have fun have fun have fun fun I don't tire the hospital just busy today",
+      "how blood pressure is even one one fifty over ninety five. fifty yes go go on have fun have fun have fun the hospital just busy today",
+      "how blood pressure is even one fifty over ninety five fifty yes go on Oga have fun have fun have fun fun the hospital is just busy today",
+      "How blood pressure is even one fifty over ninety five. Fifty. Yes go on Oga, have fun, have fun, have fun. The hospital just busy today.",
+      "How blood pressure is even one fifty over ninety five? Fifty. Yes go on have fun, have fun, have fun, not tired, the hospital is just busy today",
+      "how blood pressure is even one one fifty over ninety five. fifty. Yes go on Oga, the hospital just busy today.",
+      "how blood pressure is even one fifty over ninety five. fifty. Yes go on on Oga have fun have fun have fun I'm not tired. The hospital is just busy today.",
+      "How blood pressure is even one fifty over ninety five? Fifty. Yes go on Oga have fun have fun have fun. The hospital just busy today.",
+      "how blood pressure is even one fifty over ninety five fifty yes go on have fun have fun have fun the hospital just busy today",
+      "how what pressure is even one fifty over ninety five fifty yes go on over have fun have fun have fun the hospital just busy today"
+     ]
+    }
+   },
+   "v2-O017": {
+    "strings_in_b_not_seen_in_a": 1,
+    "of": 5,
+    "together": {
+     "calls": 10,
+     "distinct_strings": 3,
+     "identical": false,
+     "words": {
+      "pairs": 45,
+      "pairs_with_word_change": 9,
+      "word_edits": 9,
+      "words": 226,
+      "rate": 0.0398
+     },
+     "distinct_values": 1,
+     "values": [
+      "508"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "okay so metronidazole five hundred eight hourly IV",
+      "okay so metronidazole five hundred eight hourly IV,",
+      "okay so metronidazole five hundred eight hourly eight hourly IV"
+     ]
+    }
+   },
+   "v2-O027": {
+    "strings_in_b_not_seen_in_a": 5,
+    "of": 5,
+    "together": {
+     "calls": 10,
+     "distinct_strings": 10,
+     "identical": false,
+     "words": {
+      "pairs": 45,
+      "pairs_with_word_change": 24,
+      "word_edits": 27,
+      "words": 828,
+      "rate": 0.0326
+     },
+     "distinct_values": 2,
+     "values": [
+      "130,130,85,85,92",
+      "130,130,40,85,85,92"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "BP is quite high. It's 130 over 85, but not too high, but 130 over 85 and the pulse is about 92.",
+      "BP is quite high, it's 130 over 85. But not too high, but but 130 over 85 and the pulse is about 92.",
+      "bp is quite high, it's one thirty over eighty five. But not too high, but one thirty over eighty five and the pulse is about ninety two.",
+      "BP is quite high. It's 130 over 85 but not too high but 130 over 85 and the pulse pulse is about 92.",
+      "BP is quite high. It's 130 over 85. But not too high but 130 over 85 and the pulse is about 92.",
+      "BP is quite high. It's one thirty over over eighty five. But not too high but one thirty over eighty five and the pulse is about ninety two.",
+      "BP is quite high, it's one thirty over eighty five. But not too high, but one thirty over forty eighty five and the pulse is about ninety two.",
+      "BP is quite high, it's 130 over 85, but not too high, but 130 over 85 and the pulse is about 92.",
+      "bp is quite high it's 130 over 85 but not too high but 130 over 85 and the pulse is about 92",
+      "BP is quite high, it's 130 over 85 but not too high but 130 over 85 and the pulse is about 92."
+     ]
+    }
+   },
+   "v2-V025": {
+    "strings_in_b_not_seen_in_a": 2,
+    "of": 5,
+    "together": {
+     "calls": 10,
+     "distinct_strings": 4,
+     "identical": false,
+     "words": {
+      "pairs": 45,
+      "pairs_with_word_change": 9,
+      "word_edits": 18,
+      "words": 225,
+      "rate": 0.08
+     },
+     "distinct_values": 1,
+     "values": [
+      "508"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "okay so metronidazole five hundred eight hourly IV",
+      "okay so metronidazole five hundred eight hourly IV.",
+      "okay so metronidazole five hundred eight hourly IV,",
+      "okay, so metronidas or five hundred eight hourly IV."
+     ]
+    }
+   },
+   "v2-O035": {
+    "strings_in_b_not_seen_in_a": 2,
+    "of": 5,
+    "together": {
+     "calls": 10,
+     "distinct_strings": 6,
+     "identical": false,
+     "words": {
+      "pairs": 45,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 180,
+      "rate": 0
+     },
+     "distinct_values": 2,
+     "values": [
+      "100,112,160",
+      "100,100,112,160"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "BP is 160 over 100. Pulse, 112.",
+      "BP is 160 over 100. 100, pulse 112,",
+      "BP is 160 over 100, pulse 112.",
+      "BP is 160 over 100. Pulse 112.",
+      "BP is 160 over 100. pulse 112",
+      "BP is 160 over 100, pulse 112,"
+     ]
+    }
+   },
+   "v2-O049": {
+    "strings_in_b_not_seen_in_a": 3,
+    "of": 5,
+    "together": {
+     "calls": 10,
+     "distinct_strings": 5,
+     "identical": false,
+     "words": {
+      "pairs": 45,
+      "pairs_with_word_change": 17,
+      "word_edits": 17,
+      "words": 322,
+      "rate": 0.0528
+     },
+     "distinct_values": 1,
+     "values": [
+      "16,93"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "sats is ninety three on room air, respiratory rate sixteen.",
+      "sats is 93 on room air, respiratory rate 16.",
+      "sats is ninety three on room air. respiratory rate rate sixteen.",
+      "sats is ninety three on room air respiratory rate is sixteen",
+      "sats is ninety three on room air respiratory rate sixteen."
+     ]
+    }
+   },
+   "say-24k": {
+    "strings_in_b_not_seen_in_a": 4,
+    "of": 5,
+    "together": {
+     "calls": 10,
+     "distinct_strings": 8,
+     "identical": false,
+     "words": {
+      "pairs": 45,
+      "pairs_with_word_change": 9,
+      "word_edits": 9,
+      "words": 277,
+      "rate": 0.0325
+     },
+     "distinct_values": 1,
+     "values": [
+      "37.6,92"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "pulse is 92 and the temperature is 37.6.",
+      "pulse is ninety-two and the temperature is thirty-seven point six.",
+      "pulse is ninety-two and and the temperature is thirty seven point six.",
+      "pulse is ninety-two and the temperature is thirty seven point six.",
+      "pulse is ninety-two and the temperature is thirty seven point six. six.",
+      "pulse is ninety-two and the temperature is thirty seven point point six.",
+      "pulse is ninety-two and the temperature is thirty seven point six",
+      "pulse is ninety two and the temperature is thirty seven point six."
+     ]
+    }
+   }
+  },
+  "a1_against_e": {
+   "r1b-H02": {
+    "strings_in_b_not_seen_in_a": 0,
+    "of": 2,
+    "together": {
+     "calls": 7,
+     "distinct_strings": 5,
+     "identical": false,
+     "words": {
+      "pairs": 21,
+      "pairs_with_word_change": 11,
+      "word_edits": 21,
+      "words": 112,
+      "rate": 0.1875
+     },
+     "distinct_values": 2,
+     "values": [
+      "18,88",
+      "18"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "record pulse eighty-eight and respiratory rate eighteen.",
+      "record pulse etiates and respiratory rates eighteen.",
+      "Record pulse eighty-eight and respiratory rate eighteen.",
+      "Record pulse, eighty-eight and respiratory rate eighteen.",
+      "Record pulse, etiettes and respiratory rates eighteen."
+     ]
+    }
+   },
+   "r1b-H22": {
+    "strings_in_b_not_seen_in_a": 2,
+    "of": 2,
+    "together": {
+     "calls": 7,
+     "distinct_strings": 6,
+     "identical": false,
+     "words": {
+      "pairs": 21,
+      "pairs_with_word_change": 18,
+      "word_edits": 39,
+      "words": 137,
+      "rate": 0.2847
+     },
+     "distinct_values": 1,
+     "values": [
+      "100,160"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "so about 160 over 100 this is high.",
+      "so about 160 over 100, this is high.",
+      "so about 160 over 100, this is this is high.",
+      "what is also about one sixty over hundred this is high.",
+      "sorry, so about 160 over 100, this is high.",
+      "What about one sixty over hundred this is high"
+     ]
+    }
+   },
+   "r1b-H28": {
+    "strings_in_b_not_seen_in_a": 2,
+    "of": 2,
+    "together": {
+     "calls": 7,
+     "distinct_strings": 7,
+     "identical": false,
+     "words": {
+      "pairs": 21,
+      "pairs_with_word_change": 14,
+      "word_edits": 16,
+      "words": 129,
+      "rate": 0.124
+     },
+     "distinct_values": 1,
+     "values": [
+      "112"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "uh Doctor our pulse is now one hundred and twelve",
+      "uh doctor our pulse pulse is now one hundred and twelve.",
+      "uh doctor, our pulse is now one hundred and twelve.",
+      "uh doctor our pulse is now hundred and twelve",
+      "uh doctor pulse is now one hundred and twelve oh",
+      "uh doctor our pulse is now one hundred and twelve",
+      "uh doctor pulse is now one hundred and twelve"
+     ]
+    }
+   },
+   "r1b-H45": {
+    "strings_in_b_not_seen_in_a": 2,
+    "of": 2,
+    "together": {
+     "calls": 7,
+     "distinct_strings": 7,
+     "identical": false,
+     "words": {
+      "pairs": 21,
+      "pairs_with_word_change": 21,
+      "word_edits": 153,
+      "words": 478,
+      "rate": 0.3201
+     },
+     "distinct_values": 1,
+     "values": [
+      "150,50,95"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "How blood pressure is even one fifty over ninety five fifty Yes go on oga have fun have fun have fun fun I don't tire the hospital just busy today",
+      "how blood pressure is even one one fifty over ninety five. fifty yes go go on have fun have fun have fun the hospital just busy today",
+      "how blood pressure is even one fifty over ninety five fifty yes go on Oga have fun have fun have fun fun the hospital is just busy today",
+      "How blood pressure is even one fifty over ninety five. Fifty. Yes go on Oga, have fun, have fun, have fun. The hospital just busy today.",
+      "How blood pressure is even one fifty over ninety five? Fifty. Yes go on have fun, have fun, have fun, not tired, the hospital is just busy today",
+      "How blood pressure is even one fifty over ninety five fifty what's going on the hospital is just busy today",
+      "How blood pressure is even one fifty over ninety five? fifty. Yes go have The hospital is busy today."
+     ]
+    }
+   },
+   "v2-O017": {
+    "strings_in_b_not_seen_in_a": 1,
+    "of": 2,
+    "together": {
+     "calls": 7,
+     "distinct_strings": 3,
+     "identical": false,
+     "words": {
+      "pairs": 21,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 105,
+      "rate": 0
+     },
+     "distinct_values": 1,
+     "values": [
+      "508"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "okay so metronidazole five hundred eight hourly IV",
+      "okay so metronidazole five hundred eight hourly IV,",
+      "okay, so metronidazole five hundred eight hourly IV"
+     ]
+    }
+   },
+   "v2-O027": {
+    "strings_in_b_not_seen_in_a": 2,
+    "of": 2,
+    "together": {
+     "calls": 7,
+     "distinct_strings": 7,
+     "identical": false,
+     "words": {
+      "pairs": 21,
+      "pairs_with_word_change": 11,
+      "word_edits": 12,
+      "words": 386,
+      "rate": 0.0311
+     },
+     "distinct_values": 1,
+     "values": [
+      "130,130,85,85,92"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "BP is quite high. It's 130 over 85, but not too high, but 130 over 85 and the pulse is about 92.",
+      "BP is quite high, it's 130 over 85. But not too high, but but 130 over 85 and the pulse is about 92.",
+      "bp is quite high, it's one thirty over eighty five. But not too high, but one thirty over eighty five and the pulse is about ninety two.",
+      "BP is quite high. It's 130 over 85 but not too high but 130 over 85 and the pulse pulse is about 92.",
+      "BP is quite high. It's 130 over 85. But not too high but 130 over 85 and the pulse is about 92.",
+      "bp is quite high, it's one thirty over eighty eighty five but not too high but one one thirty over eighty five and the pulse is about ninety two.",
+      "BP is quite high, it's one thirty over eighty five, but not too high, but one thirty over eighty five and the pulse is about ninety two."
+     ]
+    }
+   },
+   "v2-V025": {
+    "strings_in_b_not_seen_in_a": 1,
+    "of": 2,
+    "together": {
+     "calls": 7,
+     "distinct_strings": 3,
+     "identical": false,
+     "words": {
+      "pairs": 21,
+      "pairs_with_word_change": 6,
+      "word_edits": 18,
+      "words": 107,
+      "rate": 0.1682
+     },
+     "distinct_values": 1,
+     "values": [
+      "508"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "okay so metronidazole five hundred eight hourly IV",
+      "okay so metronidazole five hundred eight hourly IV.",
+      "okay, so metric needles are five hundred eight hourly IV"
+     ]
+    }
+   },
+   "v2-O035": {
+    "strings_in_b_not_seen_in_a": 1,
+    "of": 2,
+    "together": {
+     "calls": 7,
+     "distinct_strings": 5,
+     "identical": false,
+     "words": {
+      "pairs": 21,
+      "pairs_with_word_change": 0,
+      "word_edits": 0,
+      "words": 84,
+      "rate": 0
+     },
+     "distinct_values": 2,
+     "values": [
+      "100,112,160",
+      "100,100,112,160"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "BP is 160 over 100. Pulse, 112.",
+      "BP is 160 over 100. 100, pulse 112,",
+      "BP is 160 over 100, pulse 112.",
+      "BP is 160 over 100. Pulse 112.",
+      "BP is 160 over 100. 100, pulse 112."
+     ]
+    }
+   },
+   "v2-O049": {
+    "strings_in_b_not_seen_in_a": 2,
+    "of": 2,
+    "together": {
+     "calls": 7,
+     "distinct_strings": 4,
+     "identical": false,
+     "words": {
+      "pairs": 21,
+      "pairs_with_word_change": 6,
+      "word_edits": 6,
+      "words": 147,
+      "rate": 0.0408
+     },
+     "distinct_values": 1,
+     "values": [
+      "16,93"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "sats is ninety three on room air, respiratory rate sixteen.",
+      "sats is 93 on room air, respiratory rate 16.",
+      "sats is ninety-three on room air. Respiratory rate sixteen.",
+      "sats is ninety three on room air, respiratory rate rate sixteen."
+     ]
+    }
+   },
+   "say-24k": {
+    "strings_in_b_not_seen_in_a": 1,
+    "of": 2,
+    "together": {
+     "calls": 7,
+     "distinct_strings": 5,
+     "identical": false,
+     "words": {
+      "pairs": 21,
+      "pairs_with_word_change": 14,
+      "word_edits": 14,
+      "words": 131,
+      "rate": 0.1069
+     },
+     "distinct_values": 1,
+     "values": [
+      "37.6,92"
+     ],
+     "turns_identical": true,
+     "audio_ms_identical": true,
+     "bytes_identical": true,
+     "readings": [
+      "pulse is 92 and the temperature is 37.6.",
+      "pulse is ninety-two and the temperature is thirty-seven point six.",
+      "pulse is ninety-two and and the temperature is thirty seven point six.",
+      "pulse is ninety-two and the temperature is thirty seven point six.",
+      "pulse is ninety-two and the the temperature is thirty seven point six,"
+     ]
+    }
+   }
+  },
+  "b_changed_words": {
+   "r1b-H02": {
+    "hinted": [
+     "etiates",
+     "etiettes",
+     "rate",
+     "rates"
+    ],
+    "unhinted": []
+   },
+   "r1b-H22": {
+    "hinted": [
+     "about",
+     "also",
+     "is",
+     "over",
+     "so",
+     "this",
+     "what"
+    ],
+    "unhinted": [
+     "i",
+     "what"
+    ]
+   },
+   "r1b-H28": {
+    "hinted": [
+     "our",
+     "pulse"
+    ],
+    "unhinted": []
+   },
+   "r1b-H45": {
+    "hinted": [
+     "do",
+     "fun",
+     "go",
+     "i",
+     "is",
+     "not",
+     "oga",
+     "on",
+     "tire",
+     "tired"
+    ],
+    "unhinted": [
+     "am",
+     "blow",
+     "bought",
+     "fun",
+     "have",
+     "i",
+     "is",
+     "it",
+     "just",
+     "not",
+     "pressure",
+     "sure",
+     "tired"
+    ]
+   },
+   "v2-O017": {
+    "hinted": [],
+    "unhinted": [
+     "a",
+     "ib",
+     "iv",
+     "ivb",
+     "metro",
+     "metronidazole",
+     "needed"
+    ]
+   },
+   "v2-O027": {
+    "hinted": [
+     "but",
+     "pulse"
+    ],
+    "unhinted": [
+     "but",
+     "high",
+     "pp",
+     "pppp",
+     "the",
+     "too"
+    ]
+   },
+   "v2-V025": {
+    "hinted": [],
+    "unhinted": [
+     "leaders",
+     "metro",
+     "metronidasole",
+     "metronidazole",
+     "o",
+     "okay",
+     "so"
+    ]
+   },
+   "v2-O035": {
+    "hinted": [],
+    "unhinted": [
+     "is"
+    ]
+   },
+   "v2-O049": {
+    "hinted": [],
+    "unhinted": [
+     "as",
+     "is",
+     "respiration",
+     "respiratory",
+     "sats",
+     "socks93",
+     "startsstarts"
+    ]
+   },
+   "say-24k": {
+    "hinted": [
+     "and"
+    ],
+    "unhinted": [
+     "and",
+     "is",
+     "pulse",
+     "pulses"
+    ]
+   }
+  }
+ }
+}
