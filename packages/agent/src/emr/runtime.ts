@@ -8,7 +8,7 @@ import { primaryClass } from "./classes.js";
 import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
-import { READ_ONLY_KINDS, WORK_ARGS, afterSaid, cadenceSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
+import { OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareReadings, disagreementQuestion, normValue, quotedQuestion, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
@@ -1120,9 +1120,10 @@ export class EmrRuntime {
     });
     this.gateStage.set(lineId, r.stage ?? "full");
     if (l.task.state !== "running") return;
-    // Words meant for the agent answer its open question before they are acted on.
+    // Words meant for the agent answer its open question before they are acted on; a question waiting on the owner's voice closes only on the owner's line.
     if (clauses.some((c) => c.class === "instruction" || c.class === "correction")) {
-      for (const q of t.questions.filter((y) => y.answered_by === null)) this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
+      const speaker = this.speakerOf(t, lineId)?.speaker;
+      for (const q of t.questions.filter((y) => y.answered_by === null && (!y.rule || !speaker || speaker === "owner"))) this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
     }
     this.fresh = lineId;
     try {
@@ -1267,6 +1268,20 @@ export class EmrRuntime {
         break;
       }
       case "draft_handover": case "prepare_bill": case "send_pay_link": if (!needAdmission()) return; raw = { admission_id: t.admission_id }; break;
+      case "record_diagnosis": {
+        if (!needVisit() || !t.patient_id) return;
+        // Only the owner's own matched voice states the diagnosis; Dr B's words and an unverified voice never record it.
+        const who = this.speakerOf(t, lineId);
+        if (who?.speaker !== "owner") {
+          this.append(l, "speaker.refused", { line_id: lineId, kind, speaker: who?.label ?? who?.speaker ?? "no_voice" });
+          this.note(l, `${who?.speaker === "other_clinician" ? `${who.label} said a diagnosis` : "I could not match that voice to you"}, so no diagnosis was recorded. Say it yourself.`);
+          return this.settle(l, "needs_owner_voice");
+        }
+        const dx = said(c.text);
+        if (!dx) return this.ask(l, lineId, "What diagnosis should I record? Say it in your words.");
+        raw = { visit_id: t.visit_id, patient_id: t.patient_id, diagnosis: dx.slice(0, 500) };
+        break;
+      }
       case "release_home": {
         if (!needAdmission()) return;
         const advice = said(c.text);
@@ -1646,7 +1661,7 @@ export class EmrRuntime {
     }
     const args = DOCUMENTATION_KINDS.has(kind) && who && who.speaker !== "owner" ? this.attributed(kind, rawArgs, who) : rawArgs;
     let awaiting: EmrAction["awaiting"] = needsOwner && who?.speaker !== "owner" ? "owner_voice" : null;
-    const controlled = kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(args["drug"])]?.controlled;
+    const controlled = (kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(args["drug"])]?.controlled) || OWNER_CONFIRM_KINDS.has(kind);
     if (!awaiting && (controlled || CONFIRM_KINDS.has(kind))) awaiting = "confirm";
     const authorisedBy = kind === "countersign" || (ORDER_KINDS.has(kind) && who?.speaker === "owner") ? lineId : null;
     const actionId = `a-${shortHash(t.task_id, lineId, t.order.length + 1)}`;
@@ -1656,7 +1671,7 @@ export class EmrRuntime {
     const screen = this.screenOf(t, kind, args);
     this.append(l, "action.proposed", { action_id: actionId, kind, args, summary, line_id: lineId, corrects_action_id: correctsId, hold_ms: this.o.holdMs ?? 0, ...this.holdUntil(anchor), ...(ears ? { ears: true } : {}), ...(awaiting ? { awaiting } : {}), ...(authorisedBy ? { authorised_by_line: authorisedBy } : {}), ...(screen ? { screen } : {}) });
     if (awaiting === "owner_voice") this.ask(l, lineId, `Held: ${summary}. ${who ? "I could not match the voice to you" : "I heard no voice to match"}, so it waits until you say yes yourself.`, null, { kind: "authorise", action_id: actionId });
-    if (awaiting === "confirm" && !CONFIRM_KINDS.has(kind)) this.ask(l, lineId, `${summary}. This is a controlled drug: say confirm to send it.`, null, { kind: "confirm", action_id: actionId });
+    if (awaiting === "confirm" && !CONFIRM_KINDS.has(kind)) this.ask(l, lineId, confirmAsk(kind, summary), null, { kind: "confirm", action_id: actionId });
     this.settle(l, "proposed");
     if (CONFIRM_KINDS.has(kind)) void this.readBackPaperwork(l, lineId, actionId);
     this.noteHold(actionId, anchor);
@@ -1771,11 +1786,11 @@ export class EmrRuntime {
     }
     const a = t.actions.get(rule.action_id);
     if (!a || a.state !== "proposed" || !a.awaiting) { this.note(l, "There was nothing waiting for your word."); this.settle(l, "nothing_waiting"); return true; }
-    const controlled = a.kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(a.args["drug"])]?.controlled;
+    const controlled = (a.kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(a.args["drug"])]?.controlled) || OWNER_CONFIRM_KINDS.has(a.kind);
     const confirmKind = CONFIRM_KINDS.has(a.kind);
     if (a.awaiting === "owner_voice") {
       this.append(l, "action.authorised", { action_id: a.action_id, line_id: lineId, as: "authorise", awaiting: controlled || confirmKind ? "confirm" : null });
-      if (controlled) { this.ask(l, lineId, `${a.summary}. This is a controlled drug: say confirm to send it.`, null, { kind: "confirm", action_id: a.action_id }); this.settle(l, "asked"); return true; }
+      if (controlled) { this.ask(l, lineId, confirmAsk(a.kind, a.summary), null, { kind: "confirm", action_id: a.action_id }); this.settle(l, "asked"); return true; }
       if (confirmKind) {
         if (a.read_back) this.ask(l, lineId, paperworkAsk(a.summary, a.read_back), null, { kind: "confirm", action_id: a.action_id });
         this.settle(l, "asked");

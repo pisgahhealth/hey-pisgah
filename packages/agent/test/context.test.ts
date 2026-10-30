@@ -57,15 +57,15 @@ const listen = async (url: string, p: Part) => {
 };
 const tracking = async (url: string) => ((await (await fetch(`${url}/tasks/tracking?owner=${OWNER}`)).json()) as any).target;
 
-async function boot(heard: string[] = []) {
-  const root = emrRoot();
-  const port = new ContextEmr();
+async function boot(heard: string[] = [], again?: { root: string; port: ContextEmr }) {
+  const root = again?.root ?? emrRoot();
+  const port = again?.port ?? new ContextEmr();
   const client = mockClient(root, () => ({ decision: "aside", summary: "x" }), () => null);
   const s = await startEmrServe({
     storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 }, ears: "off",
     transcribe: async (_w, _k, sessionId) => ({ final: true, text: heard.shift() ?? "", audio_ms: 1000, session_id: sessionId, cost_usd: 0 })
   });
-  return { s, port };
+  return { s, port, root };
 }
 const lineIn = (s: Awaited<ReturnType<typeof boot>>["s"], taskId: string, text: string) => s.runtime.view(taskId)!.transcript.some((x) => x.text === text);
 
@@ -212,5 +212,23 @@ describe("the patient the clinician is with", () => {
     expect(port.writes).toHaveLength(2);
     await s.close();
   });
-});
 
+  it("remembers the patient the clinician is with across a serve restart, and the page it was last on", async () => {
+    const first = await boot();
+    await listen(first.s.url, { session: "s-r", seq: 0, patientId: PAGE_A });
+    expect(await tracking(first.s.url)).toEqual({ patient_id: PAGE_A });
+    await post(`${first.s.url}/tasks/emergency`, { owner: OWNER, spokenAt: new Date().toISOString() });
+    await first.s.runtime.settled();
+    expect(await tracking(first.s.url)).toEqual({ patient_id: ARRIVAL });
+    await first.s.close();
+    // Reproduced: a restarted serve forgot the arrival, and the same page then moved the agent back to patient A.
+    const again = await boot([], first);
+    expect(await tracking(again.s.url)).toEqual({ patient_id: ARRIVAL });
+    const r = await listen(again.s.url, { session: "s-r2", seq: 0, patientId: PAGE_A });
+    expect(r.tracking).toEqual({ patient_id: ARRIVAL });
+    // Negative control: moving to another page after the restart still moves the agent.
+    const b = await listen(again.s.url, { session: "s-r2", seq: 1, patientId: PAGE_B });
+    expect(b.tracking).toEqual({ patient_id: PAGE_B });
+    await again.s.close();
+  });
+});
