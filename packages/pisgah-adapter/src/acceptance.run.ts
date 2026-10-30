@@ -4,10 +4,11 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import type { EmrTaskView } from "@hey-pisgah/agent";
+import { parseWav } from "@hey-pisgah/voice";
 import { loadProfile } from "./profile.js";
 import { personCaller } from "./journey.sandbox.js";
 import type { DoorLog } from "./port.js";
-import { SandboxBlock, sandboxQuery } from "./sandbox.js";
+import { SandboxBlock, mintPersonCookie, sandboxQuery } from "./sandbox.js";
 import { FAKE_OWNERS } from "./acceptance.fake.js";
 import { didBy, loadScript, speedTable, stepStatus, writeAccResults, type AccResult, type CheckOutcome, type DelegationRow, type Expect, type Fault, type Line, type SpeakerRow, type SpeedErr, type SpeedRowIn, type StepOutcome, type Who } from "./acceptance.js";
 
@@ -117,15 +118,15 @@ const session = `acc-${Date.now().toString(36)}`;
 function render(voice: string, text: string, id: string): { file: string; ms: number } {
   const file = join(OUT, "clips", `${id}.wav`);
   execFileSync("say", ["-v", voice, "-r", String(RATE), "-o", file, "--file-format=WAVE", "--data-format=LEI16@16000", text], { timeout: 30_000 });
-  const bytes = readFileSync(file).length;
-  return { file, ms: Math.round(((bytes - 44) / 2 / 16000) * 1000) };
+  const info = parseWav(new Uint8Array(readFileSync(file)));
+  return { file, ms: info.ok ? Math.round(info.durationMs) : 0 };
 }
 // The words and voice ride as extra form fields the real serve ignores, so the in-memory hospital can stand in for its ear.
 async function postChunk(owner: string, file: string, ms: number, text: string, voice: string): Promise<unknown> {
   const form = new FormData();
   form.set("acc_text", text); form.set("acc_voice", voice);
   form.set("owner", owner); form.set("session_id", session); form.set("seq", String(seq++)); form.set("captured_at", String(Date.now() - ms));
-  form.set("presence", JSON.stringify({ visible: true, mic_live: true, input_age_ms: null }));
+  // No presence marker, as the strip sends none today; a marker with no recent input would mark every line not present.
   form.set("audio", new Blob([readFileSync(file)], { type: "audio/wav" }), "chunk.wav");
   const r = await fetch(`${SERVE}/tasks/listen`, { method: "POST", body: form });
   const end = new FormData();
@@ -173,7 +174,7 @@ async function deliver(line: Line): Promise<{ lineEnd: string | null; note: stri
 const nudgedOwner = (who: Who, ref: "A" | "B" | null): string | null => ownersOf(who).find((o) => ofPatient(ref, o).some((a) => a.kind === "nudge_owner" && a.state === "completed")) ?? null;
 
 // The browser the doctor works in, launched headed so the strip's own counter can be read; the person signs in and grants the microphone.
-type Page = { evaluate: <T>(fn: (arg: string) => T, arg: string) => Promise<T>; screenshot: (o: { path: string }) => Promise<unknown>; click: (s: string) => Promise<void>; goto: (u: string, o?: unknown) => Promise<unknown>; fill: (s: string, v: string) => Promise<void>; waitForURL: (f: (u: URL) => boolean, o?: unknown) => Promise<void>; waitForSelector: (s: string, o?: unknown) => Promise<unknown>; getByText: (t: string, o?: unknown) => { first: () => { isVisible: () => Promise<boolean>; click: () => Promise<void> } }; waitForLoadState: (s: string) => Promise<void> };
+type Page = { evaluate: <T>(fn: (arg: string) => T, arg: string) => Promise<T>; screenshot: (o: { path: string }) => Promise<unknown>; click: (s: string) => Promise<void>; goto: (u: string, o?: unknown) => Promise<unknown>; fill: (s: string, v: string) => Promise<void>; waitForURL: (f: (u: URL) => boolean, o?: unknown) => Promise<void>; waitForSelector: (s: string, o?: unknown) => Promise<unknown>; getByRole: (r: string, o?: unknown) => { waitFor: (o?: unknown) => Promise<void>; click: () => Promise<void>; locator: (s: string, o?: unknown) => { first: () => { click: () => Promise<void> } } }; waitForLoadState: (s: string) => Promise<void>; waitForFunction: (f: (a: string) => boolean, a: string, o?: unknown) => Promise<unknown>; locator: (s: string) => { count: () => Promise<number> } };
 let page: Page | null = null;
 let browserClose: (() => Promise<void>) | null = null;
 const STRIP = 'section[aria-label^="Agent for"]';
@@ -192,16 +193,24 @@ async function openBrowser(): Promise<void> {
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 90_000 }).catch(() => undefined);
   await page.waitForLoadState("networkidle").catch(() => undefined);
-  const ae = page.getByText("Accident & Emergency", { exact: false }).first();
-  if (await ae.isVisible().catch(() => false)) { await ae.click(); await page.waitForLoadState("networkidle").catch(() => undefined); }
+  // The clinic picker ticks clinics and needs Continue; the URL does not change while it shows.
+  const picker = page.getByRole("group", { name: "Clinics" });
+  if (await picker.waitFor({ timeout: 30_000 }).then(() => true, () => false)) {
+    await picker.locator("label", { hasText: "Accident & Emergency" }).first().click();
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 90_000 }).catch(() => undefined);
+  }
   await page.waitForSelector(STRIP, { timeout: 120_000 });
   log(`browser: signed in as ${script.people["doctor"]!.login}; the strip is mounted`);
   if (DRIVER === "human") {
     process.stdout.write("\n  In the Chrome window: press the ear button once to grant the microphone, then once more to start listening. Press Enter here when it says Listening.\n");
     await rl!.question("");
   } else {
+    // The first press grants the microphone and arms the wake spotter; once it says so, a second press starts listening, as F1's walks do.
     await page.click(`${STRIP} button[aria-label="Listen"]`);
-    await page.waitForSelector(`${STRIP} button[aria-label="Stop listening"]`, { timeout: 60_000 }).catch(async () => { await page!.click(`${STRIP} button[aria-label="Listen"]`); });
+    await page.waitForFunction((st: string) => /Say hey Pisgah/.test(document.querySelector(`${st} header`)?.textContent ?? ""), STRIP, { timeout: 90_000 }).catch(() => log("browser: the wake spotter did not say it was ready"));
+    if (!(await page.locator(`${STRIP} button[aria-label="Stop listening"]`).count())) await page.click(`${STRIP} button[aria-label="Listen"]`);
+    await page.waitForSelector(`${STRIP} button[aria-label="Stop listening"]`, { timeout: 30_000 }).catch(() => log("browser: the strip did not start listening"));
     log("browser: the harness pressed Listen (the one microphone grant, and a start if the strip asked for one)");
   }
 }
@@ -223,8 +232,10 @@ async function check(e: Expect, line: Line, lineId: string | null, before: Set<s
   }
   if ("identity" in e) {
     const ids = doctorTasks(e.identity).flatMap((t) => t.identities);
-    const hit = ids.find((i) => i.name === e.name);
-    return { ok: !!hit, detail: hit ? `held ${hit.name} ${hit.phone ?? "no phone"} (${hit.state})` : `held: ${ids.map((i) => i.name).join(", ") || "none"}` };
+    // The ear may spell a surname its own way, so a held name with the same first name counts, and the result says what was heard.
+    const first = e.name.split(" ")[0]!.toLowerCase();
+    const hit = ids.find((i) => i.name === e.name) ?? ids.find((i) => i.name.toLowerCase().startsWith(`${first} `));
+    return { ok: !!hit, detail: hit ? `held ${hit.name}${hit.name === e.name ? "" : ` (said ${e.name})`} ${hit.phone ?? "no phone"} (${hit.state})` : `held: ${ids.map((i) => i.name).join(", ") || "none"}` };
   }
   if ("act" in e) {
     const owners = e.owner ? ownersOf(e.owner) : [DOCTOR];
@@ -305,9 +316,12 @@ async function runLine(line: Line): Promise<void> {
     faults.push({ kind: "restart", line: line.id, at: started, killed_during: null, restarted_in_ms: r.ms, outcome: survivedDetail, ok: survived && target === trackingTarget });
   } else if (line.mode === "person") {
     const vars = Object.fromEntries(Object.entries(line.vars ?? {}).map(([k, v]) => [k, resolveVar(v)]));
+    // A step that names a test gets that test's order id from the record, as the person would see it on screen.
+    if (vars["order_test"] && HOSPITAL === "sandbox") { const o = (await hospital.query("acc_order_for_test", { visit: vars["visit"] ?? "", test: vars["order_test"] }))[0]; vars["order_id"] = String(o?.["order_id"] ?? ""); }
     // A settle names the amount owed, so the stay's bill is read first, as the accounts person reads it on screen.
     if (line.op === "settle" && !vars["outstanding"] && hospital.hasPerson("bill")) { const b = await hospital.person("bill", vars); vars["outstanding"] = String((b.json as { bill?: { outstandingNgn?: string } } | null)?.bill?.outstandingNgn ?? "0.00"); }
     if (HOSPITAL === "sandbox" && line.op === "acc_lab_result") { const r = await labResult(vars); note = r.note; if (!r.ok) errors.push(r.note); }
+    else if (HOSPITAL === "sandbox" && line.op === "acc_lab_cancel") { const r = await labCancel(vars); note = r.note; if (!r.ok) errors.push(r.note); }
     else if (!hospital.hasPerson(line.op!)) { blocked = true; errors.push(`person op ${line.op} is not in the profile`); }
     else { const r = await hospital.person(line.op!, vars); note = `person ${line.op}: ${r.status} ${r.note ?? ""}`.trim(); if (!r.ok) errors.push(note); }
     otherTouches.push({ line: line.id, who: line.who, what: `person step ${line.op} at that person's screen` });
@@ -363,6 +377,24 @@ async function labResult(vars: Record<string, string>): Promise<{ ok: boolean; n
     o = (await read()) ?? o;
   }
   return { ok: true, note: steps.join("; ") };
+}
+
+// The lab scientist cancels a never-started test at her own screen; the web offers this and the door does not, so the harness calls her server action under her own web session.
+async function labCancel(vars: Record<string, string>): Promise<{ ok: boolean; note: string }> {
+  const o = (await hospital.query("acc_order_for_test", { visit: vars["visit"] ?? "", test: vars["test"] ?? "" }))[0];
+  if (!o?.["case_id"]) return { ok: false, note: `no ${vars["test"]} case on the visit` };
+  const sb = SandboxBlock.parse(loadProfile().sandbox);
+  const cookie = mintPersonCookie(sb, { login: env("ACC_LAB_LOGIN", "lab.grace") });
+  const page = env("ACC_LAB_CANCEL_PAGE", "/lab/orders/{order_id}").replace("{order_id}", String(o["order_id"]));
+  await fetch(`${APP}${page}`, { headers: { cookie } }).catch(() => undefined);
+  const manifest = JSON.parse(readFileSync(env("ACC_ACTION_MANIFEST"), "utf8")) as { node: Record<string, unknown> };
+  const id = Object.entries(manifest.node).find(([, v]) => JSON.stringify(v).includes(env("ACC_LAB_CANCEL_ACTION", "cancelNeverStartedDiagnosticCase")))?.[0];
+  if (!id) return { ok: false, note: "the cancel action is not compiled into the app copy yet" };
+  const body = [{ caseId: String(o["case_id"]), expectedVersion: Number(o["case_version"]), reasonCode: "requester_cancelled", idempotencyKey: `acc-cancel-${String(o["case_id"])}` }];
+  const r = await fetch(`${APP}${page}`, { method: "POST", headers: { cookie, "next-action": id, "content-type": "text/plain;charset=UTF-8", origin: APP, accept: "text/x-component" }, body: JSON.stringify(body) });
+  const text = await r.text();
+  const ok = r.ok && /"success":true/.test(text);
+  return { ok, note: `lab cancel ${r.status} ${ok ? "cancelled" : text.slice(0, 200)}` };
 }
 
 // Kills the serve while the named write is under way, then restarts it, and records whether the write ended verified once.
