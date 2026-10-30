@@ -34,8 +34,12 @@ export function emergencyHeardLoosely(line: string): boolean {
   return /h[aeiy]{0,2}\W*p[iy]\W*[sz]?\W*[gk]|pisg|pizg|pisk|pesk/i.test(before.replace(/\s+/g, "")) || /^(?:hey|hi|hay|okay|ok)\W*$/i.test(before);
 }
 
+// The line an Emergency press leaves as its evidence: what happened, not words nobody said.
+export const EMERGENCY_PRESS = "Emergency button pressed";
+
 // What the clinician said after the phrase, kept as the arrival reason when it is more than the phrase.
 export function emergencyReason(line: string): string {
+  if (line === EMERGENCY_PRESS) return "Emergency arrival, opened by a press; reason not yet stated";
   const rest = line.replace(EMERGENCY_LINE, "").replace(/^[\s,.:;-]+/, "").trim();
   return rest.length >= 3 ? `Emergency arrival: ${rest}`.slice(0, 500) : "Emergency arrival, opened by voice; reason not yet stated";
 }

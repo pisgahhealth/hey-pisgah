@@ -186,5 +186,31 @@ describe("the patient the clinician is with", () => {
     expect(port.writes).toHaveLength(1);
     await s.close();
   });
+
+  it("opens the same pending arrival from the Emergency press, binds the words said after it, and one arrival per press", async () => {
+    const { s, port } = await boot(["Her name is Grace Okafor, phone 0803 123 4567"]);
+    let open!: () => void;
+    port.gate = new Promise((r) => { open = r; });
+    const pressed = await post(`${s.url}/tasks/emergency`, { owner: OWNER, press: true, spokenAt: new Date().toISOString() });
+    expect(pressed.status).toBe(202);
+    const heard = await listen(s.url, { session: "s-7", seq: 0, capturedAt: Date.now() });
+    expect(heard.pending).toBe(true);
+    const twice = await post(`${s.url}/tasks/emergency`, { owner: OWNER, press: true, spokenAt: new Date().toISOString() });
+    expect(twice.body.task_id).toBe(pressed.body.task_id);
+    open();
+    await until(() => s.runtime.view(pressed.body.task_id)!.identities.length === 1);
+    await s.runtime.settled();
+    const v = s.runtime.view(pressed.body.task_id)!;
+    expect(v.transcript[0]).toMatchObject({ text: "Emergency button pressed", source: "text" });
+    expect(port.writes).toHaveLength(1);
+    expect(port.writes[0]!.args["reason"]).toBe("Emergency arrival, opened by a press; reason not yet stated");
+    expect(port.writes[0]!.prov.evidence).toBe(`transcript:${pressed.body.line_id}`);
+    // A press after the first arrival is confirmed is a new arrival.
+    const next = await post(`${s.url}/tasks/emergency`, { owner: OWNER, press: true, spokenAt: new Date().toISOString() });
+    await s.runtime.settled();
+    expect(next.body.task_id).not.toBe(pressed.body.task_id);
+    expect(port.writes).toHaveLength(2);
+    await s.close();
+  });
 });
 

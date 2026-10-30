@@ -10,7 +10,7 @@ import { ListenError, ListenSessions, type ListenOptions, type Transcriber } fro
 import { parseWav } from "@hey-pisgah/voice";
 import type { Embedder } from "./speaker.js";
 import { EmrId, EmrPortError, type EmrPort, type EmrTarget } from "./port.js";
-import { EMERGENCY_LINE, afterWake, emergencyHeardLoosely, emergencyReason, spokenPatient, unidentifiedRef } from "./entry.js";
+import { EMERGENCY_LINE, EMERGENCY_PRESS, afterWake, emergencyHeardLoosely, emergencyReason, spokenPatient, unidentifiedRef } from "./entry.js";
 import { shortHash } from "../ids.js";
 import { PreferenceError, PreferenceMemory, SCOPE_KINDS, describePref, describeScope, describeSource } from "./preferences.js";
 
@@ -63,7 +63,8 @@ const ListenMeta = z.strictObject({
   // Set when the device spotted "emergency" with no wake before it, so this audio is checked by transcript for the phrase.
   hint: z.enum(["emergency", "after_wake"]).optional()
 });
-const Emergency = z.strictObject({ owner: Owner, text: z.string().min(1).max(300).default("hey Pisgah, emergency"), spokenAt: z.iso.datetime({ offset: true }), wake: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).optional() });
+// The strip's Emergency button opens the same arrival as the phrase; its line says it was pressed, never that it was said.
+const Emergency = z.strictObject({ owner: Owner, text: z.string().min(1).max(300).default("hey Pisgah, emergency"), spokenAt: z.iso.datetime({ offset: true }), wake: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).optional(), press: z.boolean().optional() });
 // One wake measured in the browser: phrase end to the visible armed state, on the page's clock.
 const Wake = z.strictObject({ owner: Owner, keyword: z.enum(["wake", "emergency"]), phrase_end_ms: z.number(), armed_ms: z.number(), latency_ms: z.number().min(0).max(60_000), spotter: z.string().max(80), page: z.string().max(200).optional(), audio_ms: z.number().optional() });
 const KWS_FILE = /^[A-Za-z0-9_.-]{1,120}$/;
@@ -187,13 +188,13 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     return subjectAt(owner, at);
   };
   // "hey Pisgah, emergency" opens one arrival; while it is pending a second phrase answers with the same arrival.
-  const openArrival = async (owner: string, e: { text: string; spoken_at: string; source: "text" | "audio"; wake?: Record<string, unknown> }) => {
+  const openArrival = async (owner: string, e: { text: string; spoken_at: string; source: "text" | "audio"; wake?: Record<string, unknown>; press?: boolean }) => {
     const p = pending.get(owner);
     if (p) return p.reply;
-    // The device and the transcript can both hear one phrase, so a phrase within the window of the last one is that same arrival.
+    // The device and the transcript can both hear one phrase, so a phrase within the window of the last one is that same arrival; a press is never heard twice.
     const said = Date.parse(e.spoken_at);
     const last = arrivals.get(owner);
-    if (last && Math.abs(said - last.at) < ARRIVAL_SAME_PHRASE_MS) return last.reply;
+    if (!e.press && last && Math.abs(said - last.at) < ARRIVAL_SAME_PHRASE_MS) return last.reply;
     const r = await rt.emergency(owner, { text: e.text, spoken_at: e.spoken_at, source: e.source, ...(e.wake ? { wake: e.wake } : {}), args: { unidentified_ref: unidentifiedRef(new Date(e.spoken_at)), reason: emergencyReason(e.text), ...(o.emergencyClinicId ? { clinic_id: o.emergencyClinicId } : {}) } });
     arrivals.set(owner, { reply: r, at: said });
     const v = rt.view(r.task_id);
@@ -397,6 +398,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     // "hey Pisgah, emergency" spotted on the device: an unnamed arrival with no patient open, its line the evidence.
     if (parts.length === 2 && parts[1] === "emergency" && m === "POST") {
       const b = parse(Emergency, await json(req));
+      if (b.press) return [202, await openArrival(b.owner, { text: EMERGENCY_PRESS, spoken_at: b.spokenAt, source: "text", wake: { ...(b.wake ?? {}), press: true }, press: true })];
       return [202, await openArrival(b.owner, { text: b.text, spoken_at: b.spokenAt, source: "audio", ...(b.wake ? { wake: b.wake } : {}) })];
     }
     if (parts.length === 2 && parts[1] === "tracking" && m === "GET") {
