@@ -24,8 +24,8 @@ export type EmrTarget = { admission_id?: string; patient_id?: string };
 // What the agent may know about the patient in context; every string came from the record, so prompts wrap it as untrusted text.
 // admission_id is empty while the patient is not yet admitted; visit_id names the arrival then.
 export type EmrContext = { admission_id: string; patient_id: string | null; visit_id?: string | null; label: string; facts: Record<string, string | null>; keywords: string[] };
-// Who the write is for and which spoken line asked for it; an order also carries the owner's matched lines that authorised and, for a controlled drug, confirmed it.
-export type Provenance = { owner: string; evidence: string; spoken_at: string; voice?: { authorisation?: string; confirmation?: string }; read_back_digest?: string };
+// Who the write is for and which spoken line asked for it; an order also carries the owner's matched lines that authorised and, for a controlled drug, confirmed it, and every item the authorising line named when it named several.
+export type Provenance = { owner: string; evidence: string; spoken_at: string; voice?: { authorisation?: string; confirmation?: string; batch?: readonly string[] }; read_back_digest?: string };
 // A read-only kind returns what it found as report; a draft is held for the owner to review before anything is written.
 export type EmrCommit =
   | { ok: true; record_id: string; record_version: number; event_ids: string[]; replayed: boolean; report?: string; draft?: string }
@@ -73,6 +73,8 @@ export interface EmrPort {
   orderResults?(owner: string, subject: EmrTarget & { visit_id?: string | null }, prov: Provenance): Promise<OrderResult[]>;
   // The order states that mean the result is back.
   resultStates?(owner: string): readonly string[];
+  // The content digest of one write as the hospital will see it, so one spoken line can name every item it asked for.
+  voiceItem?(kind: EmrWriteKind, args: WorkArgs): string | null;
   // Who spoke one segment, matched by the hospital against its enrolled voices; the template never leaves the hospital.
   speaker?(owner: string, voiceprint: readonly number[], prov: Provenance): Promise<SpeakerVerdict>;
   // The batch of voice orders the owner may countersign now on one visit, read back with its digest.

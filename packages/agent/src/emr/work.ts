@@ -14,6 +14,8 @@ export type WorkKind = (typeof WORK_KINDS)[number];
 export const DELEGATION_KINDS: readonly string[] = [...DELEGATION_RULE_KINDS];
 // Kinds that only read the record and report back; they change nothing in it.
 export const READ_ONLY_KINDS: ReadonlySet<string> = new Set(["draft_handover", "prepare_bill"]);
+// Order kinds one spoken line may ask for several of at once; the line names every such item it asked for, so the hospital binds it to that batch.
+export const BATCH_KINDS: ReadonlySet<string> = new Set(["order_test", "prescribe"]);
 // Kinds the owner's own matched voice asks for and a later matched confirm line releases; any other voice never writes them.
 export const OWNER_CONFIRM_KINDS: ReadonlySet<string> = new Set(["record_diagnosis"]);
 

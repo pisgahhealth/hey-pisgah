@@ -8,7 +8,7 @@ import { primaryClass } from "./classes.js";
 import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
-import { OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
+import { BATCH_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareReadings, disagreementQuestion, normValue, quotedQuestion, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
@@ -455,6 +455,10 @@ export const PAY_LINK_VERIFIED_NOTE = "Pay link request verified: the bill shows
 
 export const OWNER_YES = /^(?:yes|yeah|yes please|yes sign(?: them| it| everything)?|sign(?: them| it)?|go ahead|send it|do it|confirm(?:ed)?|i confirm|yes confirm)$/;
 export const OWNER_NO = /^(?:no|nope|don'?t|do not|cancel(?: it| that)?|leave it)$/;
+// The owner's natural yes to a countersign batch read back on screen, within the answer window; never a controlled-drug, diagnosis or discharge confirm, and never a held order from an unmatched voice.
+export const READ_BACK_YES = /^(?:(?:ok(?:ay)?|yeah|yes)\s+)?(?:go on|go ahead|sign (?:them|it|those)(?: all)?)$/;
+// A bare "mm" is that yes only while the countersign read-back is still the last thing shown.
+export const READ_BACK_MM = /^(?:m{2,}|m+h+m+|mm hmm|uh huh)$/;
 export const SPOKEN_RESUME = /\bwhere were we\b|\b(?:let'?s|we can) (?:carry on|continue|pick (?:this|it|that) (?:back )?up)\b|^(?:ok(?:ay)?,?\s+)?i'?m back\b/i;
 
 // One open task: its decision queue, its write chain, the gate calls started before their turn, and the context each gated line was said in.
@@ -1751,7 +1755,10 @@ export class EmrRuntime {
     const sign = SIGN_EVERYTHING.test(text);
     const open = t.questions.filter((y) => y.answered_by === null && y.rule).at(-1) ?? null;
     const q = open && Date.parse(line.at) - Date.parse(open.at) <= (this.o.answerWindowMs ?? 600_000) ? open : null;
-    const yes = text.split(" ").length <= 5 && OWNER_YES.test(text);
+    // The short yes and the read-back's batch are one rule: it answers only the countersign question it follows, whose args carry that batch's digest.
+    const readBack = !!q && q.rule?.kind === "countersign";
+    const lastShown = readBack && t.questions.at(-1) === q && !t.notes.some((n) => Date.parse(n.at) >= Date.parse(q.at));
+    const yes = text.split(" ").length <= 5 && (OWNER_YES.test(text) || (readBack && READ_BACK_YES.test(text)) || (lastShown && READ_BACK_MM.test(text)));
     const no = text.split(" ").length <= 4 && OWNER_NO.test(text);
     return sign || (q && (yes || no)) ? { sign, yes, no, q } : null;
   }
@@ -2098,7 +2105,16 @@ export class EmrRuntime {
     const voiced = (lineId: string | null) => { const tok = lineId ? this.tokens.get(lineId) : undefined; return lineId && tok ? `transcript:${lineId}~${tok}` : undefined; };
     const authorisation = voiced(a.authorised_by_line);
     const confirmation = a.kind === "countersign" ? authorisation : voiced(a.confirmed_by_line);
-    return { ...base, voice: { ...(authorisation ? { authorisation } : {}), ...(confirmation ? { confirmation } : {}) } };
+    const batch = authorisation && BATCH_KINDS.has(a.kind) ? this.batchOfLine(t, a.authorised_by_line) : undefined;
+    return { ...base, voice: { ...(authorisation ? { authorisation } : {}), ...(confirmation ? { confirmation } : {}), ...(batch ? { batch } : {}) } };
+  }
+
+  // Every order item one line authorised, in any state, when there are several; the hospital binds the line to exactly this list on its first use.
+  private batchOfLine(t: EmrTask, lineId: string | null): string[] | undefined {
+    if (!lineId || !this.o.port.voiceItem) return undefined;
+    const items = [...t.actions.values()].filter((x) => x.authorised_by_line === lineId && BATCH_KINDS.has(x.kind)).map((x) => this.o.port.voiceItem!(x.kind, x.args));
+    const set = [...new Set(items)];
+    return set.length > 1 && set.every((d): d is string => typeof d === "string") ? set.sort() : undefined;
   }
 
   // Journal, write, reconcile once by replaying the same key, then prove by a fresh read; the task state is checked right before the write.

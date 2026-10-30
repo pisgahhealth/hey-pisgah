@@ -10,7 +10,9 @@ const EVIDENCE = /^[A-Za-z0-9_.:#/-]{1,200}$/;
 const QUERY_VALUE = /^[A-Za-z0-9_.:|-]{1,80}$/;
 const IDEM = /^[A-Za-z0-9_.:-]{1,255}$/;
 // A voice authority header is the matched line's evidence and the hospital's token for it.
-const VOICE = /^transcript:[A-Za-z0-9_.:#/-]{1,180}~v1\.\d{13}\.[A-Za-z0-9_-]{43}$/;
+const TOKEN = /^(?:v1\.\d{13}\.[A-Za-z0-9_-]{43}|v2\.\d{13}\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43})$/;
+const VOICE = new RegExp(`^transcript:[A-Za-z0-9_.:#/-]{1,180}~${TOKEN.source.slice(1, -1)}$`);
+const DIGEST = /^[0-9a-f]{64}$/;
 
 export type DoorLog = {
   at: string; method: string; path: string; status: number | null; ms: number; replayed: boolean;
@@ -127,7 +129,7 @@ export class PisgahPort implements EmrPort {
     if (r.kind !== "response" || r.status !== 200) return { speaker: "unverified", reason: r.kind === "response" ? `door_${r.status}` : r.reason };
     const j = r.json as Record<string, unknown> | null;
     const sp = j?.["speaker"];
-    if (sp === "owner" && typeof j?.["token"] === "string" && /^v1\.\d{13}\.[A-Za-z0-9_-]{43}$/.test(j["token"])) return { speaker: "owner", token: j["token"] };
+    if (sp === "owner" && typeof j?.["token"] === "string" && TOKEN.test(j["token"])) return { speaker: "owner", token: j["token"] };
     if (sp === "other_clinician") { const c = (j?.["clinician"] ?? {}) as Record<string, unknown>; return { speaker: "other_clinician", label: String(c["label"] ?? "Another clinician").slice(0, 60), role: String(c["role"] ?? "") }; }
     return { speaker: "unverified", reason: typeof j?.["reason"] === "string" ? String(j["reason"]).slice(0, 40) : "no_match" };
   }
@@ -216,13 +218,16 @@ export class PisgahPort implements EmrPort {
     if (!bearer) return this.refuse(method, clean, "no_bearer_for_owner");
     if (!EVIDENCE.test(prov.evidence) || Number.isNaN(Date.parse(prov.spoken_at)) || (init.idempotencyKey !== undefined && !IDEM.test(init.idempotencyKey))) return this.refuse(method, clean, "bad_header");
     if ([prov.voice?.authorisation, prov.voice?.confirmation].some((v) => v !== undefined && !VOICE.test(v))) return this.refuse(method, clean, "bad_header");
-    if (prov.read_back_digest !== undefined && !/^[0-9a-f]{64}$/.test(prov.read_back_digest)) return this.refuse(method, clean, "bad_header");
+    if (prov.read_back_digest !== undefined && !DIGEST.test(prov.read_back_digest)) return this.refuse(method, clean, "bad_header");
+    const batch = prov.voice?.batch;
+    if (batch !== undefined && (batch.length < 1 || batch.length > 20 || !batch.every((d) => DIGEST.test(d)))) return this.refuse(method, clean, "bad_header");
     if (this.profile.confirm.includes(clean) && (method !== "POST" || !this.profile.headers.confirmation || !prov.voice?.confirmation || (!!this.profile.headers.read_back_digest && !prov.read_back_digest))) return this.refuse(method, clean, "needs_confirmation");
     const h = this.profile.headers;
     const shown: Record<string, string> = {
       [h.on_behalf_of]: prov.owner, [h.origin]: this.profile.origin_value, [h.evidence]: prov.evidence, [h.spoken_at]: prov.spoken_at,
       ...(h.authorisation && prov.voice?.authorisation ? { [h.authorisation]: prov.voice.authorisation } : {}), ...(h.confirmation && prov.voice?.confirmation ? { [h.confirmation]: prov.voice.confirmation } : {}),
       ...(h.read_back_digest && prov.read_back_digest ? { [h.read_back_digest]: prov.read_back_digest } : {}),
+      ...(h.authorisation_batch && batch?.length && prov.voice?.authorisation ? { [h.authorisation_batch]: [...new Set(batch)].sort().join(",") } : {}),
       ...(init.idempotencyKey ? { [h.idempotency]: init.idempotencyKey } : {}), ...(init.body !== undefined ? { "content-type": "application/json" } : {}), accept: "application/json"
     };
     const t0 = performance.now();
@@ -413,6 +418,15 @@ export class PisgahPort implements EmrPort {
       if (a["subject_table"] && a["subject_id"]) v["subject"] = { table: a["subject_table"], id: a["subject_id"] };
     }
     return v;
+  }
+
+  // The digest of the exact path and body this kind's write would send, the same text the hospital hashes; null when the write needs a pre-read first.
+  voiceItem(kind: string, a: WorkArgs): string | null {
+    const op = this.profile.work[kind];
+    if (!op || !("method" in op) || READ_ONLY_KINDS.has(kind) || (op.before?.length ?? 0) > 0) return null;
+    const vars = this.varsFor(kind, a);
+    const path = fillPath(op.path, Object.fromEntries(Object.entries(vars).map(([k, x]) => [k, str(x) ?? undefined]))).replace(/^\/+|\/+$/g, "");
+    try { return sha256(canonical({ path, body: fillTemplate(op.body, vars) })); } catch { return null; }
   }
 
   // A write kind from the profile: pre-reads fill values, the key makes a retry replay, and the answer names the record.

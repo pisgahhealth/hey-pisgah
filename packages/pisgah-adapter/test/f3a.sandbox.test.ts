@@ -126,7 +126,7 @@ describe.skipIf(!RUN)("F3a from an empty emergency encounter to discharge by voi
       };
       const tag = Date.now().toString(36);
       const instr = (await tokenOf(VOICES.owner, "The diagnosis is perforated appendicitis.", `f3a-${tag}-i`))!;
-      const conf = (await tokenOf(VOICES.owner, "Confirm.", `f3a-${tag}-c`))!;
+      const conf = (await tokenOf(VOICES.owner, "Confirmed.", `f3a-${tag}-c`))!;
       expect(await tokenOf(VOICES.drb, "The diagnosis is perforated appendicitis.", `f3a-${tag}-b`)).toBeNull();
       const A = h.authorisation!, C = h.confirmation!;
       const controls = {
@@ -147,8 +147,8 @@ describe.skipIf(!RUN)("F3a from an empty emergency encounter to discharge by voi
       expect(again.status).toBeGreaterThanOrEqual(400);
       expect(again.text).toMatch(/already used/);
       // Put the confirmed diagnosis back as the owner's own words, by voice, so the record carries the confirmed one.
-      const instr2 = (await tokenOf(VOICES.owner, "The diagnosis is acute appendicitis.", `f3a-${tag}-i2`))!;
-      const conf2 = (await tokenOf(VOICES.owner, "Confirm.", `f3a-${tag}-c2`))!;
+      const instr2 = (await tokenOf(VOICES.owner, "The diagnosis is acute appendicitis, as I said.", `f3a-${tag}-i2`))!;
+      const conf2 = (await tokenOf(VOICES.owner, "I confirm.", `f3a-${tag}-c2`))!;
       expect((await raw({ [A]: instr2, [C]: conf2 }, { [DX]: diagnosis }, instr2.split("~")[0])).status).toBe(200);
       expect((await draftOf())).toBe(diagnosis);
 
@@ -175,7 +175,8 @@ describe.skipIf(!RUN)("F3a from an empty emergency encounter to discharge by voi
       result["home_question"] = view().questions.at(-1)?.text ?? null;
       expect(rel.state, JSON.stringify(view().notes.slice(-3))).toBe("proposed");
       expect(view().questions.at(-1)!.text).toContain(`Diagnosis from the record: ${diagnosis}`);
-      const homeConfirm = await sayOwn(VOICES.owner, "Confirm.");
+      // Each owner line here is worded differently, since the hospital gives one recording a token for one line only.
+      const homeConfirm = await sayOwn(VOICES.owner, "Yes, confirm.");
       const out = await until("the stay closed and proved", () => actionsOf("release_home").find((a) => ["completed", "refused", "failed"].includes(a.state)), 120_000);
       expect(out.state, JSON.stringify({ out, notes: view().notes.slice(-3) })).toBe("completed");
       expect(sandboxQuery(sb, "e5_stay", { admission })[0]!["state"]).toBe("discharged");

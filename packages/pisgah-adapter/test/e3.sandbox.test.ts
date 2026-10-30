@@ -51,14 +51,17 @@ describe.skipIf(!RUN)("E3 voice orders, countersign and attribution on the sandb
     const port = new PisgahPort(profile, { bearers: { [mine.owner]: mine.bearer } });
     const dir = join(process.env["HEY_PISGAH_E3_TMP"] ?? "/tmp", `e3-${Date.now().toString(36)}`);
     const prov = (line: string): Provenance => ({ owner: mine.owner, evidence: `transcript:${line}`, spoken_at: now() });
-    const matched = async (voice: string, text: string, line: string): Promise<SpeakerVerdict> => port.speaker!(mine.owner, (await embed(speak(voice, text, join(dir, `${line}.wav`))))!.vector, prov(line));
+    // Each line id and recording is new for this run, since a spoken line is bound to the first patient and order it authorises and one recording earns one token.
+    const run = Date.now().toString(36);
+    const matched = async (voice: string, text: string, line: string): Promise<SpeakerVerdict> => port.speaker!(mine.owner, (await embed(speak(voice, `${text} Run ${run}.`, join(dir, `${line}.wav`))))!.vector, prov(line));
     const authorised = (line: string, v: SpeakerVerdict) => (v.speaker === "owner" ? `transcript:${line}~${v.token}` : undefined);
     const result: Record<string, unknown> = { visit_kind: "registered and paid" };
+    const L = (x: string) => `${x}-${run}`;
 
     // Attribution: the owner's voice gets a token, Dr B is named with no token, and an unenrolled voice is unverified.
-    const own = await matched(VOICES.owner, "Send a full blood count.", "e3-own-1");
-    const drb = await matched(VOICES.drb, "Send a full blood count.", "e3-drb-1");
-    const str = await matched(VOICES.stranger, "Send a full blood count.", "e3-str-1");
+    const own = await matched(VOICES.owner, "Send a full blood count.", L("e3-own-1"));
+    const drb = await matched(VOICES.drb, "Send a full blood count.", L("e3-drb-1"));
+    const str = await matched(VOICES.stranger, "Send a full blood count.", L("e3-str-1"));
     expect(own.speaker).toBe("owner");
     expect(drb).toMatchObject({ speaker: "other_clinician", label: expect.stringMatching(/^Dr\./) });
     expect(str.speaker).toBe("unverified");
@@ -66,24 +69,24 @@ describe.skipIf(!RUN)("E3 voice orders, countersign and attribution on the sandb
 
     // Negative control: with no matched line, and with a token for another line, the door sends nothing.
     const args = { visit_id: visit, patient_id: patient, test: "fbc" };
-    const none = await port.commit("order_test", args, `e3-none-${visit}`, prov("e3-str-1"));
+    const none = await port.commit("order_test", args, `e3-none-${visit}`, prov(L("e3-str-1")));
     expect(none).toMatchObject({ ok: false, status: 403 });
-    const stolen = await port.commit("order_test", args, `e3-stolen-${visit}`, { ...prov("e3-str-1"), voice: { authorisation: `transcript:e3-str-1~${(own as { token: string }).token}` } });
+    const stolen = await port.commit("order_test", args, `e3-stolen-${visit}`, { ...prov(L("e3-str-1")), voice: { authorisation: `transcript:${L("e3-str-1")}~${(own as { token: string }).token}` } });
     expect(stolen).toMatchObject({ ok: false, status: 403 });
     expect(sandboxQuery(sb, "order_states_for_visit", { visit })).toHaveLength(0);
 
     // The owner's matched line sends the test as a voice order, unsigned, and the agent is named apart from the issuer.
-    const sent = await port.commit("order_test", args, `e3-fbc-${visit}`, { ...prov("e3-own-1"), voice: { authorisation: authorised("e3-own-1", own)! } });
+    const sent = await port.commit("order_test", args, `e3-fbc-${visit}`, { ...prov(L("e3-own-1")), voice: { authorisation: authorised(L("e3-own-1"), own)! } });
     expect(sent, JSON.stringify(sent)).toMatchObject({ ok: true });
     const fbcState = (sent as { record_id: string }).record_id;
     // Negative control: the same matched line cannot send the same order again under a fresh key.
-    expect(await port.commit("order_test", args, `e3-fbc-again-${visit}`, { ...prov("e3-own-1"), voice: { authorisation: authorised("e3-own-1", own)! } })).toMatchObject({ ok: false, status: 403 });
-    expect(await port.prove("order_test", args, sent as { record_id: string; record_version: number; event_ids: string[] }, prov("e3-own-1"))).not.toBeNull();
+    expect(await port.commit("order_test", args, `e3-fbc-again-${visit}`, { ...prov(L("e3-own-1")), voice: { authorisation: authorised(L("e3-own-1"), own)! } })).toMatchObject({ ok: false, status: 403 });
+    expect(await port.prove("order_test", args, sent as { record_id: string; record_version: number; event_ids: string[] }, prov(L("e3-own-1")))).not.toBeNull();
     const [row] = sandboxQuery(sb, "order_states_for_visit", { visit });
     expect(row).toMatchObject({ id: fbcState, kind: "lab", requested_by: mine.agent, issued_by: mine.owner, authorised_by: mine.owner, sent_by: mine.agent, verbal: true, receiver_role: "lab_tech", countersigned_by: null, emergency: false, order_status: "AWAITING_PAYMENT" });
     expect(sandboxQuery(sb, "visit_status", { visit })[0]?.["consultation_state"]).not.toBe("completed");
     const audit = sandboxQuery(sb, "audit_for_visit", { visit }).find((a) => a["action_type"] === "visit.voice_order_sent");
-    expect(audit).toMatchObject({ actor: mine.agent, agent: mine.agent, on_behalf_of: mine.owner, evidence: "transcript:e3-own-1" });
+    expect(audit).toMatchObject({ actor: mine.agent, agent: mine.agent, on_behalf_of: mine.owner, evidence: `transcript:${L("e3-own-1")}` });
 
     // Negative control: a non-emergency order waits its payment hold, so the lab board does not show it.
     const lab = await person("lab_queue", {});
@@ -91,54 +94,55 @@ describe.skipIf(!RUN)("E3 voice orders, countersign and attribution on the sandb
     expect(JSON.stringify(lab.json)).not.toContain(String(row!["diagnostic_order_id"]));
 
     // A prescription goes through the consultation's own prescribe path under the owner, and reaches the pharmacy board while the consultation is open.
-    expect(await port.commit("open_consult", { visit_id: visit, patient_id: patient }, `e3-open-${visit}`, prov("e3-own-1"))).toMatchObject({ ok: true });
-    const ownRx = await matched(VOICES.owner, "Give paracetamol tablets 500 milligrams by mouth three times a day, quantity 6.", "e3-own-rx");
+    expect(await port.commit("open_consult", { visit_id: visit, patient_id: patient }, `e3-open-${visit}`, prov(L("e3-own-1")))).toMatchObject({ ok: true });
+    const ownRx = await matched(VOICES.owner, "Give paracetamol tablets 500 milligrams by mouth three times a day, quantity 6.", L("e3-own-rx"));
     const rxArgs = { visit_id: visit, patient_id: patient, drug: "paracetamol_oral", dose: "500 mg", route: "oral", frequency: 3, quantity: 6 };
-    const rx = await port.commit("prescribe", rxArgs, `e3-rx-${visit}`, { ...prov("e3-own-rx"), voice: { authorisation: authorised("e3-own-rx", ownRx)! } });
+    const rx = await port.commit("prescribe", rxArgs, `e3-rx-${visit}`, { ...prov(L("e3-own-rx")), voice: { authorisation: authorised(L("e3-own-rx"), ownRx)! } });
     expect(rx, JSON.stringify(rx)).toMatchObject({ ok: true });
-    expect(await port.prove("prescribe", rxArgs, rx as { record_id: string; record_version: number; event_ids: string[] }, prov("e3-own-rx"))).not.toBeNull();
+    expect(await port.prove("prescribe", rxArgs, rx as { record_id: string; record_version: number; event_ids: string[] }, prov(L("e3-own-rx")))).not.toBeNull();
     expect(sandboxQuery(sb, "visit_status", { visit })[0]?.["consultation_state"]).toBe("in_consultation");
     const pharm = await person("pharmacy_queue", {});
     expect(JSON.stringify(pharm.json)).toContain((rx as { record_id: string }).record_id);
 
     // A controlled drug is refused without the owner's spoken confirmation, and sent with it; it then needs a second clinician.
-    const ownMo = await matched(VOICES.owner, "Give morphine 5 milligrams IV, one dose.", "e3-own-mo");
+    const ownMo = await matched(VOICES.owner, "Give morphine 5 milligrams IV, one dose.", L("e3-own-mo"));
     const moArgs = { visit_id: visit, patient_id: patient, drug: "morphine", dose: "5 mg", route: "iv", quantity: 1 };
-    const noConfirm = await port.commit("prescribe", moArgs, `e3-mo-noconfirm-${visit}`, { ...prov("e3-own-mo"), voice: { authorisation: authorised("e3-own-mo", ownMo)! } });
+    const noConfirm = await port.commit("prescribe", moArgs, `e3-mo-noconfirm-${visit}`, { ...prov(L("e3-own-mo")), voice: { authorisation: authorised(L("e3-own-mo"), ownMo)! } });
     expect(noConfirm).toMatchObject({ ok: false });
-    const ownConfirm = await matched(VOICES.owner, "Confirm.", "e3-own-confirm");
-    const strConfirm = await matched(VOICES.stranger, "Confirm.", "e3-str-confirm");
+    const ownConfirm = await matched(VOICES.owner, "Confirm.", L("e3-own-confirm"));
+    const strConfirm = await matched(VOICES.stranger, "Confirm.", L("e3-str-confirm"));
     expect(strConfirm.speaker).not.toBe("owner");
-    const mo = await port.commit("prescribe", moArgs, `e3-mo-${visit}`, { ...prov("e3-own-mo"), voice: { authorisation: authorised("e3-own-mo", ownMo)!, confirmation: authorised("e3-own-confirm", ownConfirm)! } });
+    const mo = await port.commit("prescribe", moArgs, `e3-mo-${visit}`, { ...prov(L("e3-own-mo")), voice: { authorisation: authorised(L("e3-own-mo"), ownMo)!, confirmation: authorised(L("e3-own-confirm"), ownConfirm)! } });
     expect(mo, JSON.stringify(mo)).toMatchObject({ ok: true });
     const states = sandboxQuery(sb, "order_states_for_visit", { visit });
     expect(states.find((s) => s["controlled"])).toMatchObject({ needs_second_countersign: true, kind: "prescription" });
 
     // Sign everything: the read-back names three orders; an order sent after it is not in the batch the yes signs.
-    const rb = await port.readBack!(mine.owner, visit, prov("e3-own-sign"));
+    const rb = await port.readBack!(mine.owner, visit, prov(L("e3-own-sign")));
     expect(rb.items).toHaveLength(3);
-    const ownUa = await matched(VOICES.owner, "Send a urinalysis.", "e3-own-ua");
-    const ua = await port.commit("order_test", { ...args, test: "urinalysis" }, `e3-ua-${visit}`, { ...prov("e3-own-ua"), voice: { authorisation: authorised("e3-own-ua", ownUa)! } });
+    const ownUa = await matched(VOICES.owner, "Send a urinalysis.", L("e3-own-ua"));
+    const ua = await port.commit("order_test", { ...args, test: "urinalysis" }, `e3-ua-${visit}`, { ...prov(L("e3-own-ua")), voice: { authorisation: authorised(L("e3-own-ua"), ownUa)! } });
     expect(ua).toMatchObject({ ok: true });
-    const yes = await matched(VOICES.owner, "Yes.", "e3-own-yes");
+    const yes = await matched(VOICES.owner, "Yes.", L("e3-own-yes"));
     const csArgs = { visit_id: visit, item_ids: rb.items.map((i) => i.stateId), items_digest: rb.itemsDigest!, read_back_at: rb.readBackAt, read_back_seal: rb.seal!, labels: rb.items.map((i) => i.label) };
     // Negative control: the agent with no matched yes cannot countersign anything.
-    expect(await port.commit("countersign", csArgs, `e3-cs-none-${visit}`, prov("e3-own-yes"))).toMatchObject({ ok: false, status: 403 });
-    const cs = await port.commit("countersign", csArgs, `e3-cs-${visit}`, { ...prov("e3-own-yes"), voice: { confirmation: authorised("e3-own-yes", yes)! } });
+    expect(await port.commit("countersign", csArgs, `e3-cs-none-${visit}`, prov(L("e3-own-yes")))).toMatchObject({ ok: false, status: 403 });
+    const cs = await port.commit("countersign", csArgs, `e3-cs-${visit}`, { ...prov(L("e3-own-yes")), voice: { confirmation: authorised(L("e3-own-yes"), yes)! } });
     expect(cs, JSON.stringify(cs)).toMatchObject({ ok: true });
     const after = sandboxQuery(sb, "order_states_for_visit", { visit });
     expect(after.filter((s) => s["countersigned_by"] === mine.owner).map((s) => s["id"]).sort()).toEqual([...csArgs.item_ids].sort());
     expect(after.find((s) => s["id"] === (ua as { record_id: string }).record_id)?.["countersigned_by"]).toBeNull();
     const [batch] = sandboxQuery(sb, "batches_for_visit", { visit });
-    expect(batch).toMatchObject({ signer: mine.owner, entered_by: mine.agent, signer_role: "issuer", method: "voice", voice_verdict: "owner", evidence: "transcript:e3-own-yes" });
+    expect(batch).toMatchObject({ signer: mine.owner, entered_by: mine.agent, signer_role: "issuer", method: "voice", voice_verdict: "owner", evidence: `transcript:${L("e3-own-yes")}` });
 
     // Negative control: an order changed after its read-back is not signed; the change here is simulated by cancelling it in the database.
-    const rb2 = await port.readBack!(mine.owner, visit, prov("e3-own-sign2"));
+    const rb2 = await port.readBack!(mine.owner, visit, prov(L("e3-own-sign2")));
     expect(rb2.items.map((i) => i.stateId)).toEqual([(ua as { record_id: string }).record_id]);
     const uaOrder = String(after.find((s) => s["id"] === (ua as { record_id: string }).record_id)?.["diagnostic_order_id"]);
     const changed = controlSql(sb, "owner", "simulate_change", { order: uaOrder });
-    const yes2 = await matched(VOICES.owner, "Yes.", "e3-own-yes2");
-    const cs2 = await port.commit("countersign", { visit_id: visit, item_ids: rb2.items.map((i) => i.stateId), items_digest: rb2.itemsDigest!, read_back_at: rb2.readBackAt, read_back_seal: rb2.seal!, labels: [] }, `e3-cs2-${visit}`, { ...prov("e3-own-yes2"), voice: { confirmation: authorised("e3-own-yes2", yes2)! } });
+    // Worded apart from the first yes, since one recording earns a token for one line only.
+    const yes2 = await matched(VOICES.owner, "Yes please.", L("e3-own-yes2"));
+    const cs2 = await port.commit("countersign", { visit_id: visit, item_ids: rb2.items.map((i) => i.stateId), items_digest: rb2.itemsDigest!, read_back_at: rb2.readBackAt, read_back_seal: rb2.seal!, labels: [] }, `e3-cs2-${visit}`, { ...prov(L("e3-own-yes2")), voice: { confirmation: authorised(L("e3-own-yes2"), yes2)! } });
     result["change_after_read_back"] = { simulated_by: changed.ok ? "status set to CANCELLED by the owner role" : `not simulated: ${changed.out}`, countersign: cs2 };
     if (changed.ok) expect(cs2).toMatchObject({ ok: false, status: 409 });
     expect(sandboxQuery(sb, "order_states_for_visit", { visit }).find((s) => s["id"] === (ua as { record_id: string }).record_id)?.["countersigned_by"]).toBeNull();
@@ -183,12 +187,13 @@ describe.skipIf(!RUN)("E3 voice orders, countersign and attribution on the sandb
     expect(em.ok, JSON.stringify(em)).toBe(true);
     const emVisit = String((em.json as { visitId: string }).visitId), emPatient = String((em.json as { id: string }).id);
     expect(sandboxQuery(sb, "visit_status", { visit: emVisit })[0]?.["front_desk_status"]).toBe("emergency_override");
-    const ownEm = await matched(VOICES.owner, "Send a full blood count, stat.", "e3-own-em");
+    const ownEm = await matched(VOICES.owner, "Send a full blood count, stat.", L("e3-own-em"));
     const emArgs = { visit_id: emVisit, patient_id: emPatient, test: "fbc", priority: "stat" };
-    const emSent = await port.commit("order_test", emArgs, `e3-em-${emVisit}`, { ...prov("e3-own-em"), voice: { authorisation: authorised("e3-own-em", ownEm)! } });
+    const emSent = await port.commit("order_test", emArgs, `e3-em-${emVisit}`, { ...prov(L("e3-own-em")), voice: { authorisation: authorised(L("e3-own-em"), ownEm)! } });
     expect(emSent, JSON.stringify(emSent)).toMatchObject({ ok: true });
     const [emRow] = sandboxQuery(sb, "order_states_for_visit", { visit: emVisit });
-    expect(emRow).toMatchObject({ emergency: true, order_status: "AWAITING_PAYMENT" });
+    // Since E5 the emergency edge routes the order to the bench at once; its charge stays held until the result.
+    expect(emRow).toMatchObject({ emergency: true, order_status: "ROUTED_TO_LAB" });
     const emLab = await person("lab_queue", {});
     expect(JSON.stringify(emLab.json)).toContain(String(emRow!["diagnostic_order_id"]));
     result["emergency"] = { visit: emVisit, on_lab_board: true };
@@ -196,10 +201,10 @@ describe.skipIf(!RUN)("E3 voice orders, countersign and attribution on the sandb
     // The one simulated deadline: the urinalysis falls due a minute after sending, and the next read puts it on the issuer's bell without a patient name.
     if (process.env["E3_SKIP_OVERDUE"] === "1") return;
     await new Promise((r) => setTimeout(r, 65_000));
-    const ownUa2 = await matched(VOICES.owner, "Send a urinalysis.", "e3-own-ua2");
-    const ua2 = await port.commit("order_test", { ...args, test: "urinalysis" }, `e3-ua2-${visit}`, { ...prov("e3-own-ua2"), voice: { authorisation: authorised("e3-own-ua2", ownUa2)! } });
+    const ownUa2 = await matched(VOICES.owner, "Send another urinalysis.", L("e3-own-ua2"));
+    const ua2 = await port.commit("order_test", { ...args, test: "urinalysis" }, `e3-ua2-${visit}`, { ...prov(L("e3-own-ua2")), voice: { authorisation: authorised(L("e3-own-ua2"), ownUa2)! } });
     expect(ua2).toMatchObject({ ok: true });
-    await port.readBack!(mine.owner, visit, prov("e3-own-sign3"));
+    await port.readBack!(mine.owner, visit, prov(L("e3-own-sign3")));
     const bell = sandboxQuery(sb, "bell_for", { person: mine.owner });
     expect(bell.some((b) => b["title"] === "Countersign overdue" && String(b["source_key"]).endsWith((ua as { record_id: string }).record_id))).toBe(true);
     // The alert names no patient: its words are the fixed overdue sentence.
