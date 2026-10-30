@@ -14,6 +14,7 @@ import { preconditionTable } from "./preconditions.js";
 import { derivedStatistics } from "./stats.js";
 import { OP_KINDS, SWEEP_LIMITS, scopedOperations, sweep, sweepView } from "./sweep.js";
 import { DiscoveryPool } from "./pool.js";
+import { outcomeComparison, type OutcomeComparison } from "./outcomes.js";
 import { checkAfter, checkBefore, pairDiagnostics, type Deltas } from "./prediction.js";
 import { LEDGER_SHAPES, expectedShapes } from "./shapes.js";
 import { UNKNOWN_ID } from "./unknown.js";
@@ -244,6 +245,28 @@ export class Session {
 
   // Read tools: every id outside the discovery pool gets the same unknown_id.
   listCases(): Result { return views.listCases(this.pool); }
+
+  // A second cycle reads the verified outcomes and observed journeys before anything else it concludes; this is the read, figures side by side with the histories.
+  outcomesRead = false;
+  private comparison: OutcomeComparison | null = null;
+  hasNewEvidence(): boolean { return (this.o.cycle ?? 1) === 2 && this.pool.ids().some((id) => this.pool.get(id)!.source !== "history"); }
+  compareOutcomes(): Result {
+    if (!this.hasNewEvidence()) return refusal("not_available", "This tool is not available in this session.");
+    const c = this.comparison ?? outcomeComparison(this.pool, this.base);
+    this.comparison = c;
+    for (const id of c.read_case_ids) this.view(id);
+    this.outcomesRead = true;
+    this.log("outcomes.compared", { read_case_ids: c.read_case_ids, contradicts_adopted: c.contradicts_adopted, supports_adopted: c.supports_adopted });
+    this.observe(`outcomes: ${c.after.map((r) => `${r.case_id} v${r.workflow_version ?? "?"} wait ${r.post_signoff_wait_min ?? "none"} against ${r.before_median_wait_min ?? "none"} (${r.direction})`).join("; ")}; ${c.observed.length} observed journeys`);
+    return { ok: true, ...c };
+  }
+  // The refusal a second cycle gets when it concludes before reading the outcomes, or declares no change while its outcomes contradict the version in force.
+  private secondCycleRefusal(result: "proposal" | "no_change_warranted" | "insufficient_evidence"): Result | null {
+    if (!this.hasNewEvidence()) return null;
+    if (!this.outcomesRead) return refusal("read_outcomes_first", "In a second cycle, read the verified outcomes and observed journeys with compare_outcomes before a proposal or a result.");
+    if (result === "no_change_warranted" && this.comparison?.contradicts_adopted) return refusal("outcomes_contradict", "The verified outcomes under the adopted version are worse than the histories of their ward. Respond to them with a proposal, or end with insufficient_evidence and the measurement that would settle it.", { after: this.comparison.after });
+    return null;
+  }
 
   // A record_hypothesis schema error with the expected shape of each failing field, counted per run.
   private hypothesisSchemaError(message: string, error: z.ZodError): Result {
@@ -591,6 +614,8 @@ export class Session {
   // Appends a proposal to the proposals stream after the evidence rule for this arm; the evaluator's pipeline validates it.
   async submitProposal(rawIn: unknown): Promise<Result> {
     if (this.counters.proposals_used >= this.proposalLimit()) return refusal("proposals_exhausted", "No proposal submissions are left.");
+    const second = this.secondCycleRefusal("proposal");
+    if (second) return second;
     const cycleArm = this.o.arm === "adaptive";
     const { raw, extra } = cycleArm ? split(rawIn, ["trade_offs"]) : { raw: rawIn, extra: {} };
     const to = cycleArm ? TradeOffs.safeParse(extra.trade_offs) : null;
@@ -600,6 +625,9 @@ export class Session {
     const a = parsed.data;
     const ev = a.evidence;
     if ((a.parent_proposal_id && !this.proposals.has(a.parent_proposal_id)) || ev.hypothesis_ids.some((h) => !this.hypotheses.has(h)) || ev.experiment_ids.some((x) => !this.experiments.has(x)) || ev.event_ids.some((e) => !this.pool.event(e))) return UNKNOWN_ID;
+    // A proposal made while the outcomes contradict the adopted version answers them only if it cites one of their events.
+    const worse = new Set((this.comparison?.contradicts_adopted ? this.comparison.after.filter((r) => r.direction === "worse" && r.workflow_version !== this.base.version) : []).map((r) => r.case_id));
+    if (this.hasNewEvidence() && worse.size && !ev.event_ids.some((e) => worse.has(this.pool.event(e)!.case_id))) return refusal("outcomes_contradict", "The verified outcomes under the adopted version are worse than the histories of their ward. A proposal made now cites at least one event of those outcomes, or the session ends with insufficient_evidence.", { cases: [...worse] });
     const ran = ev.experiment_ids.filter((x) => this.experiments.get(x)!.status === "completed");
     const arm = this.o.arm;
     if ((arm === "adaptive" || arm === "a4") && (ran.length === 0 || ev.hypothesis_ids.length === 0)) return refusal("evidence_rule", "A proposal cites at least one completed experiment and one hypothesis from this session.");
@@ -714,6 +742,8 @@ export class Session {
     if (a.evidence_event_ids.some((e) => !this.pool.event(e))) return UNKNOWN_ID;
     if (a.result === "insufficient_evidence" && (!this.o.insufficientEvidence || !a.insufficient)) return refusal("not_available", "This result is not available in this session.");
     if (this.o.arm !== "prior" && a.evidence_event_ids.length === 0) return refusal("evidence_rule", "A session result cites the recorded events inspected.");
+    const second = this.secondCycleRefusal(a.result);
+    if (second) return second;
     this.log("session.result", { result: a.result, note: a.note, evidence_event_ids: a.evidence_event_ids, ...(a.insufficient ? { insufficient: a.insufficient } : {}) });
     this.stopWith("declared_negative", a.result);
     return { ok: true, result: a.result };

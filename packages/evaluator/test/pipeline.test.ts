@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { canonical } from "@hey-pisgah/contracts";
 import { caseIdFor, loadPool } from "@hey-pisgah/cases";
 import { RESERVED_CANARIES, seedList } from "@hey-pisgah/cases/reserved";
-import { loadHandCase } from "@hey-pisgah/hospital";
+import { REWORK_BUDGET_MIN_PER_CASE, loadHandCase } from "@hey-pisgah/hospital";
 import { eventLogHash } from "@hey-pisgah/simulator";
 import { openStream, readStream } from "@hey-pisgah/store";
 import type { Facts } from "@hey-pisgah/workflow";
@@ -22,7 +22,7 @@ describe("validation pipeline", () => {
   it("validates a planted good proposal on the 15 dev cases", async () => {
     const r = await validateProposal(proposal(hand.g2.ops));
     expect(r.status).toBe("dev_validated");
-    expect(r.gate).toEqual({ pass: true, no_regression: true, prohibited_attempts: 0, exception_check: true, fences_intact: true, documents_kept: true });
+    expect(r.gate).toMatchObject({ pass: true, no_regression: true, prohibited_attempts: 0, exception_check: true, fences_intact: true, documents_kept: true, rework_budget_min_per_case: REWORK_BUDGET_MIN_PER_CASE, rework_within_budget: true });
     expect(r.cases).toHaveLength(15);
     expect(r.cases.some((c) => (c.delta.post_signoff_wait_min ?? 0) <= -60)).toBe(true);
     expect(validationSummary([r])).toMatchObject({ dev_gate_pass: true, exception_check_pass: true, fences_unchanged: true, proposals_validated: 1 });
@@ -114,6 +114,23 @@ describe("dev gate", () => {
     expect(devGate([row(true, true, false, false)], x)).toMatchObject({ pass: false, exception_check: false });
     expect(devGate([row(true, true)], { ...x, aborted: true })).toMatchObject({ pass: false, fences_intact: false });
   });
+  it("passes extra rework up to the per-case budget and fails one minute over it, counting in-scope cases only", () => {
+    const reworked = (min: number, inScope = true): CaseRow => ({ ...row(true, true, inScope, !inScope), delta: { post_signoff_wait_min: -20, bed_release_delay_min: 0, rework_min: min, unnecessary_docs: 0 } });
+    expect(devGate([reworked(3), reworked(1)], { ...x, reworkBudgetMinPerCase: 3 })).toMatchObject({ pass: true, rework_max_added_min: 3, rework_within_budget: true });
+    expect(devGate([reworked(4), reworked(1)], { ...x, reworkBudgetMinPerCase: 3 })).toMatchObject({ pass: false, rework_max_added_min: 4, rework_within_budget: false });
+    expect(devGate([reworked(1)], { ...x, reworkBudgetMinPerCase: 0 })).toMatchObject({ pass: false, rework_within_budget: false });
+    expect(devGate([reworked(-5)], { ...x, reworkBudgetMinPerCase: 0 })).toMatchObject({ pass: true, rework_max_added_min: 0 });
+    expect(devGate([reworked(0), { ...reworked(9, false), identical_log: true }], { ...x, reworkBudgetMinPerCase: 0 }).rework_within_budget).toBe(true);
+    expect(devGate([reworked(REWORK_BUDGET_MIN_PER_CASE)], x)).toMatchObject({ pass: true, rework_budget_min_per_case: REWORK_BUDGET_MIN_PER_CASE });
+    expect(devGate([reworked(REWORK_BUDGET_MIN_PER_CASE + 1)], x).pass).toBe(false);
+  });
+  it("assesses the adopted form against the budget on the dev cases: 2 minutes on one case passes at 2 and fails at 1", async () => {
+    const ops = [{ op: "remove_soft_edge", edge_id: "e04" }, { op: "set_prep_trigger", target: { step: "st06" }, when: { after: { step: "st01" } } }];
+    const at2 = await validateProposal(proposal(ops), { reworkBudgetMinPerCase: 2 });
+    expect([at2.status, at2.gate?.rework_max_added_min, at2.gate?.rework_within_budget]).toEqual(["dev_validated", 2, true]);
+    const at1 = await validateProposal(proposal(ops), { reworkBudgetMinPerCase: 1 });
+    expect([at1.status, at1.gate?.rework_within_budget, at1.gate?.no_regression, at1.gate?.documents_kept]).toEqual(["dev_failed", false, true, true]);
+  }, 60_000);
 });
 
 describe("validations stream", () => {

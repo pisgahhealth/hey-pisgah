@@ -14,16 +14,18 @@ export type PoolCase = {
   notes: readonly Note[];
   file: CaseFile | null;
   source: "history" | "outcome" | "observed";
+  // The workflow version an outcome ran under, when its source file says.
+  workflow_version?: number | null;
 };
 
 // The shape a second-cycle outcome takes on the learning/outcomes stream.
-export type OutcomeCase = { case_id: string; ward_id: string; payer_type: string; requirement_version: string; facts: Facts; events: SimEvent[] };
+export type OutcomeCase = { case_id: string; ward_id: string; payer_type: string; requirement_version: string; facts: Facts; events: SimEvent[]; workflow_version?: number | null };
 
 // Observed cases from a file, each event checked against the frozen event shape so nothing else reaches the tools.
 export function loadObserved(file: string): OutcomeCase[] {
   const raw = JSON.parse(readFileSync(file, "utf8")) as { cases?: OutcomeCase[] } | OutcomeCase[];
   const list = Array.isArray(raw) ? raw : raw.cases ?? [];
-  return list.map((c) => ({ case_id: CaseId.parse(c.case_id), ward_id: String(c.ward_id), payer_type: String(c.payer_type), requirement_version: String(c.requirement_version), facts: c.facts, events: c.events.map((e) => SimEvent.parse(e)) }));
+  return list.map((c) => ({ case_id: CaseId.parse(c.case_id), ward_id: String(c.ward_id), payer_type: String(c.payer_type), requirement_version: String(c.requirement_version), facts: c.facts, events: c.events.map((e) => SimEvent.parse(e)), workflow_version: typeof c.workflow_version === "number" ? c.workflow_version : null }));
 }
 
 // The discovery pool and nothing else; every lookup outside it answers null, which tools turn into the uniform unknown_id.
@@ -37,7 +39,7 @@ export class DiscoveryPool {
       const s = f.initial_state;
       this.add({ case_id: f.case_id, ward_id: s.ward_id, payer_type: s.payer_type, requirement_version: s.requirement_version, facts: f.schedule.facts as Facts, events: f.history.events, notes: s.notes, file: f, source: "history" });
     }
-    for (const o of outcomes) if (!this.byId.has(o.case_id)) this.add({ ...o, notes: [], file: null, source: "outcome" });
+    for (const o of outcomes) if (!this.byId.has(o.case_id)) this.add({ ...o, workflow_version: o.workflow_version ?? null, notes: [], file: null, source: "outcome" });
     for (const o of observed) if (!this.byId.has(o.case_id)) this.add({ case_id: o.case_id, ward_id: o.ward_id, payer_type: o.payer_type, requirement_version: o.requirement_version, facts: o.facts, events: o.events, notes: [], file: null, source: "observed" });
   }
 
@@ -48,6 +50,12 @@ export class DiscoveryPool {
 
   ids(): string[] {
     return [...this.byId.keys()].sort();
+  }
+
+  // The listing order: verified outcomes first, then observed journeys, then histories, each by id.
+  listed(): string[] {
+    const rank = { outcome: 0, observed: 1, history: 2 } as const;
+    return this.ids().sort((a, b) => rank[this.byId.get(a)!.source] - rank[this.byId.get(b)!.source] || (a < b ? -1 : a > b ? 1 : 0));
   }
 
   get(id: unknown): PoolCase | null {

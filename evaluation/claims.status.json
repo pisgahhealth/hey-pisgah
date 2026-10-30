@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-30T03:07:34.689Z",
-  "commit": "9e35070",
+  "generated_at": "2026-10-30T07:08:53.503Z",
+  "commit": "b8b7ed8",
   "claims": [
     {
       "claim_id": "C-01",
@@ -67,13 +67,17 @@
       "claim_id": "C-06",
       "status": "green",
       "values": {
-        "discover_dev_valid": 4,
+        "discover_config_dev_valid": 2,
         "discover_invariance_pass": true,
         "discover_deny_clean": true,
         "discover_dev_valid_any": 6,
-        "discover_runs": 12,
+        "discover_config": "revision 12, committed world, medium effort",
+        "discover_config_runs": 3,
+        "discover_config_lower": 0.09,
+        "discover_config_upper": 0.99,
         "discover_share": 0.56,
-        "discover_rework_events": 4
+        "discover_rework_events": 4,
+        "discover_history_runs": 28
       },
       "measured_at": "2026-10-28T03:21:27.939Z"
     },
@@ -93,9 +97,14 @@
         "draft_earlier_by_min": 146,
         "wait_v1_min": 166,
         "wait_adopted_min": 57,
+        "dev_cases": 15,
+        "dev_median_wait_delta_min": 0,
+        "dev_moved": 5,
+        "dev_shorter": 4,
+        "dev_longer": 1,
         "withheld_case": "c-2a14921a"
       },
-      "measured_at": "2026-10-30T01:24:26.096Z"
+      "measured_at": "2026-10-30T06:10:21.797Z"
     },
     {
       "claim_id": "C-08",
@@ -120,15 +129,16 @@
     },
     {
       "claim_id": "C-10",
-      "status": "amber",
+      "status": "green",
       "values": {
         "cycle2_result_recorded": true,
         "no_hypothesis_cited_as_evidence": true,
-        "read.outcomes": 0,
+        "read.outcomes": 2,
         "result": "new_proposal",
-        "stop": "dev_valid_proposal (p-9335e542)"
+        "reversed_pairs_summary": "with the ward A outcome reversed so the adopted change hurt, 0 of 3 said the evidence is insufficient, 0 proposed a rollback, 2 declined the change (cited the reversed outcome, did not propose it again, but ended on the budget cap without a result) and 1 proposed it again; unreversed, 1 of 3 proposed it again and 2 reached no result",
+        "stop": "dev_valid_proposal (p-08e023d0)"
       },
-      "measured_at": "2026-10-30T01:33:10.514Z"
+      "measured_at": "2026-10-30T06:10:05.292Z"
     },
     {
       "claim_id": "C-11",
@@ -328,13 +338,17 @@
       "claim_id": "C-26",
       "status": "green",
       "values": {
-        "discover_dev_valid": 4,
+        "discover_config_dev_valid": 2,
         "discover_invariance_pass": true,
         "discover_deny_clean": true,
         "discover_dev_valid_any": 6,
-        "discover_runs": 12,
+        "discover_config": "revision 12, committed world, medium effort",
+        "discover_config_runs": 3,
+        "discover_config_lower": 0.09,
+        "discover_config_upper": 0.99,
         "discover_share": 0.56,
-        "discover_rework_events": 4
+        "discover_rework_events": 4,
+        "discover_history_runs": 28
       },
       "measured_at": "2026-10-28T03:21:27.939Z"
     },
@@ -344,19 +358,29 @@
       "values": {
         "adopted_by_person": true,
         "human_approval": false,
+        "deployable": true,
+        "emr_offers_made": 0,
         "fresh_applicable.executed_differently": true,
         "fresh_applicable.actions_open": 0,
         "fresh_applicable.state": "done",
         "withheld.version_withheld": true,
         "withheld.actions_open": 0,
         "withheld.state": "done",
+        "emr_offer_seen": true,
         "applicable_case": "c-110f6ad7",
         "draft_earlier_by_min": 146,
         "wait_v1_min": 166,
         "wait_adopted_min": 57,
-        "withheld_case": "c-2a14921a"
+        "dev_cases": 15,
+        "dev_median_wait_delta_min": 0,
+        "dev_moved": 5,
+        "dev_shorter": 4,
+        "dev_longer": 1,
+        "withheld_case": "c-2a14921a",
+        "emr_offer_reason": "the fresh EMR journey could not run: the journey seed does not check the journey patient in again while an earlier run's stay (accepted, no bed) is still live, and the A&E nurse's cover can start only in her morning shift; both are M5.0's open seed items; on a live stay through the door the adopted version offered it 1 time at its trigger point and version 1 0",
+        "deployment_reason": "every changed step has a watched trigger point, a work kind and an owner"
       },
-      "measured_at": "2026-10-30T01:24:26.096Z"
+      "measured_at": "2026-10-30T06:10:21.797Z"
     },
     {
       "claim_id": "C-28",
@@ -372,9 +396,11 @@
         "authorised_delivered": 2,
         "correct_refusals": 1,
         "refusals": 1,
-        "incorrect_outcomes": 0
+        "incorrect_outcomes": 0,
+        "urgent_alerts_authorised": 2,
+        "urgent_items_authorised": 2
       },
-      "measured_at": "2026-10-30T02:49:10.437Z"
+      "measured_at": "2026-10-30T06:43:12.247Z"
     }
   ]
 }

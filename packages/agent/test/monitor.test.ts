@@ -67,7 +67,7 @@ describe("runtime guards on conflicts and questions", () => {
 
 describe("adoption, suspension and revert", () => {
   // A planted proposal and a planted dev_validated report, so the desk's own checks are what is under test.
-  function planted(root: string, hashOverride?: string): string {
+  function planted(root: string, hashOverride?: string, gate: Record<string, unknown> | null = { rework_budget_min_per_case: 10, rework_max_added_min: 2, rework_within_budget: true }): string {
     const r = Registry.load([loadV1()]);
     const built = r.propose(1, A_PRIOR.ops, meta, { scope: A_PRIOR.scope, fallback: 1 }).version!;
     const body = { proposal_id: "p-aaaa0001", parent_proposal_id: null, base_version: 1, ops: A_PRIOR.ops, scope: A_PRIOR.scope, rationale: "r", evidence: { hypothesis_ids: [], experiment_ids: [], event_ids: [] }, expected_effects: [], known_exceptions: [], viewed_case_ids: [], status: "submitted" };
@@ -75,7 +75,7 @@ describe("adoption, suspension and revert", () => {
     const e = ps.append("proposal.submitted", { ...body, hash: hashJson(body) }, { recorded_at: 0, occurred_at: 0 });
     ps.close();
     const vs = openStream(root, "learning/validations", { writer: true });
-    vs.append("validation.completed", { proposal_ref: { stream_id: e.stream_id, seq: e.seq }, report: { status: "dev_validated", hashes: { proposal: hashOverride ?? built.definition_hash } } }, { recorded_at: 0, occurred_at: 0 });
+    vs.append("validation.completed", { proposal_ref: { stream_id: e.stream_id, seq: e.seq }, report: { status: "dev_validated", hashes: { proposal: hashOverride ?? built.definition_hash }, gate } }, { recorded_at: 0, occurred_at: 0 });
     vs.close();
     return "p-aaaa0001";
   }
@@ -105,6 +105,23 @@ describe("adoption, suspension and revert", () => {
     expect(again.revert(2, MANAGER, "back to v1").status).toBe("reverted");
     expect(again.records().map((r) => r.record_type)).toEqual(["version.change_refused", "version.change_refused", "version.created", "version.adopted", "version.change_refused", "version.suspended", "version.reverted"]);
     again.close();
+  });
+
+  it("records the rework budget the person approved, and refuses a validation that never assessed it or found it exceeded", () => {
+    const root = tempRoot();
+    const desk = new VersionDesk(root, Registry.load([loadV1()]));
+    desk.adopt(planted(root), MANAGER);
+    const adopted = desk.records().find((r) => r.record_type === "version.adopted")!.payload as { rework_budget: unknown };
+    expect(adopted.rework_budget).toEqual({ min_per_case: 10, max_added_min: 2, approved_by: "wm_test" });
+    desk.close();
+    for (const [gate, why] of [[null, /before the rework budget/], [{ rework_budget_min_per_case: 1, rework_max_added_min: 2, rework_within_budget: false }, /over the 1-minute budget/]] as const) {
+      const r = tempRoot();
+      const id = planted(r, undefined, gate);
+      const d = new VersionDesk(r, Registry.load([loadV1()]));
+      expect(() => d.adopt(id, MANAGER)).toThrow(why);
+      expect(d.records().some((x) => x.record_type === "version.adopted")).toBe(false);
+      d.close();
+    }
   });
 
   it("refuses a proposal whose rebuilt version differs from the validated one", () => {
