@@ -11000,6 +11000,1719 @@
      "sweeps": 3
     }
    ]
+  },
+  "rev12_runs": {
+   "measured_at": "2026-10-30T00:28:08.280Z",
+   "commitment": {
+    "revision": 12,
+    "hash": "bb888f4cf5ec81d0ff0d831162eb474cc92e5db023971983617aa7378733b122"
+   },
+   "k_of_n": {
+    "n": 3,
+    "dev_valid_proposal": 2,
+    "found_planted": 0,
+    "planted_step_delivered_better": 3,
+    "honest_negative": 0,
+    "no_outcome": 1
+   },
+   "runs": [
+    {
+     "run_id": "run-e6d40001",
+     "outcome": "no_outcome",
+     "stop": "cycles_exhausted (10 cycles)",
+     "note": "medium",
+     "commitment": {
+      "hash": "bb888f4cf5ec81d0ff0d831162eb474cc92e5db023971983617aa7378733b122",
+      "revision": 12
+     },
+     "hashes": {
+      "prompt": "8db50d70738eea48382029ed3a1ccef81c5bf6a71bc8d2328b8d76d4792eaf90",
+      "tools": "796d6f517ceab48f8966f19d71b7a3f48f8546c96fded2bab487ca5b6352a7c1"
+     },
+     "effort": "medium",
+     "model": "meta-models/Muse-Spark-Open-816B-A42B",
+     "check_discovery": "FAIL",
+     "needs": {
+      "hypotheses": true,
+      "experiment": true,
+      "outcome": false,
+      "deny_list": true,
+      "stopped": true
+     },
+     "hypotheses": [
+      {
+       "hypothesis_id": "h-7990678a",
+       "status": "retained",
+       "statement": "Preparing discharge_summary draft (st06) before clinical discharge reduces post-signoff wait to departure.",
+       "competing": {
+        "none_identified_reason": "first hypothesis; competitor follows"
+       },
+       "if_true": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 10
+       },
+       "if_false": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 10
+       }
+      },
+      {
+       "hypothesis_id": "h-db7d31a1",
+       "status": "revised",
+       "statement": "Pharmacy handover bottleneck (st04>st15) causes most post-signoff delay, not discharge summary.",
+       "competing": [
+        "h-7990678a"
+       ],
+       "if_true": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 10
+       },
+       "if_false": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 10
+       }
+      },
+      {
+       "hypothesis_id": "h-306d0df8",
+       "status": "rejected",
+       "statement": "Pharmacy handover bottleneck dominates; early discharge_summary draft yields no post-signoff gain on non-TTO cases relative to TTO cases.",
+       "competing": [
+        "h-7990678a"
+       ],
+       "if_true": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 5
+       },
+       "if_false": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 5
+       }
+      },
+      {
+       "hypothesis_id": "h-791408f4",
+       "status": "open",
+       "statement": "Early st06 trigger causes rework because source data not final, increasing rework_events by ~1-2 per case.",
+       "competing": {
+        "none_identified_reason": "side effect observation, no competitor needed"
+       },
+       "if_true": {
+        "comparison": "intervention_gt_control",
+        "metric": "rework_events",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 0
+       },
+       "if_false": {
+        "comparison": "no_difference",
+        "metric": "rework_events",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 0
+       }
+      },
+      {
+       "hypothesis_id": "h-8517929a",
+       "status": "open",
+       "statement": "Removing soft edge st15>st14 (e05) allows discharge_summary handover (st14) to run in parallel with take-home handover, reducing post-signoff wait to departure.",
+       "competing": {
+        "none_identified_reason": "first of pair for this experiment, second follows immediately"
+       },
+       "if_true": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-01c6ad09",
+          "c-11060afa",
+          "c-15de451b"
+         ]
+        },
+        "tolerance_min": 5
+       },
+       "if_false": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-01c6ad09",
+          "c-11060afa",
+          "c-15de451b"
+         ]
+        },
+        "tolerance_min": 5
+       }
+      },
+      {
+       "hypothesis_id": "h-dccc90e0",
+       "status": "open",
+       "statement": "Removing e05 alone does not reduce time to departure because st16 is still gated by st15 via e21, so departure remains blocked even if document handover runs early.",
+       "competing": {
+        "none_identified_reason": "paired null for e05 experiment"
+       },
+       "if_true": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-01c6ad09",
+          "c-11060afa",
+          "c-15de451b"
+         ]
+        },
+        "tolerance_min": 3
+       },
+       "if_false": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-01c6ad09",
+          "c-11060afa",
+          "c-15de451b"
+         ]
+        },
+        "tolerance_min": 3
+       }
+      },
+      {
+       "hypothesis_id": "h-bccc38b0",
+       "status": "open",
+       "statement": "Early discharge_summary draft can be sourced from expected_discharge record (stable before signoff) to avoid rework while keeping post-signoff gain.",
+       "competing": [
+        "h-791408f4"
+       ],
+       "if_true": {
+        "comparison": "no_difference",
+        "metric": "rework_events",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 0
+       },
+       "if_false": {
+        "comparison": "intervention_gt_control",
+        "metric": "rework_events",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 1
+       }
+      },
+      {
+       "hypothesis_id": "h-a55d97b9",
+       "status": "rejected",
+       "statement": "Early st06 trigger with rebind to expected_discharge eliminates rework increase.",
+       "competing": {
+        "none_identified_reason": "first of rebind pair, second follows"
+       },
+       "if_true": {
+        "comparison": "no_difference",
+        "metric": "rework_events",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-01c6ad09",
+          "c-8c9cd194"
+         ]
+        },
+        "tolerance_min": 0
+       },
+       "if_false": {
+        "comparison": "intervention_gt_control",
+        "metric": "rework_events",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-01c6ad09",
+          "c-8c9cd194"
+         ]
+        },
+        "tolerance_min": 1
+       }
+      },
+      {
+       "hypothesis_id": "h-a1082ff0",
+       "status": "retained",
+       "statement": "Early st06 trigger with rebind still causes rework increase.",
+       "competing": [
+        "h-a55d97b9"
+       ],
+       "if_true": {
+        "comparison": "intervention_gt_control",
+        "metric": "rework_events",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-01c6ad09",
+          "c-8c9cd194"
+         ]
+        },
+        "tolerance_min": 1
+       },
+       "if_false": {
+        "comparison": "no_difference",
+        "metric": "rework_events",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-01c6ad09",
+          "c-8c9cd194"
+         ]
+        },
+        "tolerance_min": 0
+       }
+      },
+      {
+       "hypothesis_id": "h-c249d158",
+       "status": "open",
+       "statement": "Removing start-soft edge e05 (st15>st14) on TTO cases with discharge_summary allows st14 (hand_over_document) to start earlier, reducing rework-free wait.",
+       "competing": [
+        "h-dccc90e0"
+       ],
+       "if_true": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-01c6ad09",
+          "c-11060afa",
+          "c-15de451b",
+          "c-2758a627",
+          "c-5e518c31",
+          "c-9fe91b9e"
+         ]
+        },
+        "tolerance_min": 5
+       },
+       "if_false": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-01c6ad09",
+          "c-11060afa",
+          "c-15de451b",
+          "c-2758a627",
+          "c-5e518c31",
+          "c-9fe91b9e"
+         ]
+        },
+        "tolerance_min": 5
+       }
+      }
+     ],
+     "experiments": [
+      {
+       "experiment_id": "x-d3288b8f",
+       "ops": [
+        {
+         "edge_id": "e04",
+         "op": "remove_soft_edge"
+        },
+        {
+         "op": "set_prep_trigger",
+         "target": {
+          "step": "st06"
+         },
+         "when": {
+          "after": {
+           "step": "st01"
+          }
+         }
+        }
+       ],
+       "case_ids": [
+        "c-491dbab0",
+        "c-8c9cd194",
+        "c-ed324a69",
+        "c-01c6ad09",
+        "c-11060afa",
+        "c-15de451b"
+       ],
+       "expected_change": {
+        "behaviour": "start_time",
+        "step": "st06"
+       },
+       "delivered": true,
+       "outcome_class": "delivered_outcome_better",
+       "prediction_check": {
+        "after": {
+         "contradicted": [
+          "h-306d0df8"
+         ],
+         "per_hypothesis": {
+          "h-306d0df8": {
+           "landed": "if_false"
+          },
+          "h-7990678a": {
+           "landed": "if_true"
+          }
+         }
+        },
+        "before": {
+         "distinguishes": [
+          [
+           "h-7990678a",
+           "h-306d0df8"
+          ]
+         ],
+         "speaks_to": [
+          "h-7990678a",
+          "h-306d0df8"
+         ]
+        }
+       },
+       "event_logs_identical_to_control": "0 of 6 cases",
+       "behaviour_note": null,
+       "no_pair_reason": null,
+       "median_delta": {
+        "bed_release_delay_min": 0,
+        "duplicates": 0,
+        "planned_checks": 0,
+        "post_signoff_wait_min": -48,
+        "prohibited_attempted": 0,
+        "prohibited_executed": 0,
+        "required_steps_done": 0,
+        "rework_events": 2,
+        "rework_min": 2,
+        "stale_actions": 0,
+        "unnecessary_docs": 0,
+        "unnecessary_min": 0,
+        "unplanned_interventions": 0
+       }
+      },
+      {
+       "experiment_id": "x-044a1d1b",
+       "ops": [
+        {
+         "edge_id": "e04",
+         "op": "remove_soft_edge"
+        },
+        {
+         "op": "set_prep_trigger",
+         "target": {
+          "step": "st06"
+         },
+         "when": {
+          "after": {
+           "step": "st01"
+          }
+         }
+        },
+        {
+         "document_id": "discharge_summary",
+         "op": "rebind_section",
+         "section_id": "discharge_details",
+         "source": {
+          "field_path": "discharge_details",
+          "record_kind": "expected_discharge",
+          "version_policy": "current"
+         }
+        }
+       ],
+       "case_ids": [
+        "c-491dbab0",
+        "c-8c9cd194",
+        "c-ed324a69",
+        "c-01c6ad09",
+        "c-11060afa",
+        "c-5e518c31"
+       ],
+       "expected_change": {
+        "behaviour": "start_time",
+        "step": "st06"
+       },
+       "delivered": true,
+       "outcome_class": "delivered_outcome_better",
+       "prediction_check": {
+        "after": {
+         "contradicted": [
+          "h-8517929a",
+          "h-bccc38b0",
+          "h-a55d97b9"
+         ],
+         "per_hypothesis": {
+          "h-791408f4": {
+           "landed": "if_true"
+          },
+          "h-7990678a": {
+           "landed": "if_true"
+          },
+          "h-8517929a": {
+           "landed": "if_false"
+          },
+          "h-a1082ff0": {
+           "landed": "if_true"
+          },
+          "h-a55d97b9": {
+           "landed": "if_false"
+          },
+          "h-bccc38b0": {
+           "landed": "if_false"
+          },
+          "h-dccc90e0": {
+           "landed": "if_true"
+          }
+         }
+        },
+        "before": {
+         "distinguishes": [
+          [
+           "h-791408f4",
+           "h-bccc38b0"
+          ],
+          [
+           "h-791408f4",
+           "h-a55d97b9"
+          ],
+          [
+           "h-8517929a",
+           "h-dccc90e0"
+          ],
+          [
+           "h-bccc38b0",
+           "h-a1082ff0"
+          ],
+          [
+           "h-a55d97b9",
+           "h-a1082ff0"
+          ]
+         ],
+         "speaks_to": [
+          "h-7990678a",
+          "h-791408f4",
+          "h-8517929a",
+          "h-dccc90e0",
+          "h-bccc38b0",
+          "h-a55d97b9",
+          "h-a1082ff0"
+         ]
+        }
+       },
+       "event_logs_identical_to_control": "0 of 6 cases",
+       "behaviour_note": null,
+       "no_pair_reason": null,
+       "median_delta": {
+        "bed_release_delay_min": 0,
+        "duplicates": 0,
+        "planned_checks": 0,
+        "post_signoff_wait_min": -43.5,
+        "prohibited_attempted": 0,
+        "prohibited_executed": 0,
+        "required_steps_done": 0,
+        "rework_events": 2,
+        "rework_min": 2,
+        "stale_actions": 0,
+        "unnecessary_docs": 0,
+        "unnecessary_min": 0,
+        "unplanned_interventions": 0
+       }
+      }
+     ],
+     "notes": [],
+     "definition_unchanged_answers": 11,
+     "reading_budget_refusals": 0,
+     "experiment_budget_refusals": 0,
+     "hypothesis_schema_errors": 2,
+     "process": {
+      "valid_patches": 10,
+      "delivered": 2,
+      "informative": 2,
+      "updates_accepted": 4,
+      "updates_refused": 0
+     },
+     "lint_refusals": 8,
+     "cycles": 10,
+     "pair_refusals": 0,
+     "say_do_mismatches": 0,
+     "proposals": [],
+     "validations": [],
+     "declared_result": null,
+     "calls": 76,
+     "cost_usd": 1.9692,
+     "prompt_tokens": 1351223,
+     "prompt_tokens_per_call": 17779,
+     "prompt_tokens_max": 27421,
+     "completion_tokens": 65932,
+     "reasoning_tokens": 48475,
+     "variant": "pair",
+     "planted_gain_min": 383,
+     "proposal_shares": [],
+     "found_planted": false,
+     "planted_step_delivered_better": true,
+     "simulations": 86,
+     "sweeps": 1
+    },
+    {
+     "run_id": "run-e6d40002",
+     "outcome": "dev_valid_proposal",
+     "stop": "dev_valid_proposal (p-1b4c34eb)",
+     "note": "medium",
+     "commitment": {
+      "hash": "bb888f4cf5ec81d0ff0d831162eb474cc92e5db023971983617aa7378733b122",
+      "revision": 12
+     },
+     "hashes": {
+      "prompt": "8db50d70738eea48382029ed3a1ccef81c5bf6a71bc8d2328b8d76d4792eaf90",
+      "tools": "796d6f517ceab48f8966f19d71b7a3f48f8546c96fded2bab487ca5b6352a7c1"
+     },
+     "effort": "medium",
+     "model": "meta-models/Muse-Spark-Open-816B-A42B",
+     "check_discovery": "PASS",
+     "needs": {
+      "hypotheses": true,
+      "experiment": true,
+      "outcome": true,
+      "deny_list": true,
+      "stopped": true
+     },
+     "hypotheses": [
+      {
+       "hypothesis_id": "h-11421366",
+       "status": "open",
+       "statement": "Moving st06 prepare discharge_summary/draft to start after st01 will cut post_signoff_wait on summary-only critical paths",
+       "competing": {
+        "none_identified_reason": "First hypothesis in session, no competitor yet"
+       },
+       "if_true": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 60
+       },
+       "if_false": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 10
+       }
+      },
+      {
+       "hypothesis_id": "h-2bef9e2a",
+       "status": "rejected",
+       "statement": "Changing st06 timing will not reduce post_signoff_wait because departure is gated by financial clearance (st13>st16 fence) not summary completion",
+       "competing": [
+        "h-11421366"
+       ],
+       "if_true": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 10
+       },
+       "if_false": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 60
+       }
+      },
+      {
+       "hypothesis_id": "h-d3922cfa",
+       "status": "open",
+       "statement": "st06 start is blocked by its after-st05 trigger, not just e04; replacing edge alone leaves start rule equivalent",
+       "competing": {
+        "none_identified_reason": "revises rejected H1 to capture trigger mechanism"
+       },
+       "if_true": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 10
+       },
+       "if_false": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 60
+       }
+      },
+      {
+       "hypothesis_id": "h-f5bcfb73",
+       "status": "open",
+       "statement": "Setting st06 trigger to after st01 will reduce post_signoff_wait_min in summary-only cases by allowing draft work to overlap pre-signoff period",
+       "competing": [
+        "h-d3922cfa"
+       ],
+       "if_true": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-8c9cd194",
+          "c-ed324a69",
+          "c-491dbab0"
+         ]
+        },
+        "tolerance_min": 60
+       },
+       "if_false": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-8c9cd194",
+          "c-ed324a69",
+          "c-491dbab0"
+         ]
+        },
+        "tolerance_min": 10
+       }
+      },
+      {
+       "hypothesis_id": "h-3834c2e6",
+       "status": "retained",
+       "statement": "Both e04 soft edge and st06 trigger must be moved to after st01 to allow discharge_summary draft to start before clinical signoff",
+       "competing": [
+        "h-f5bcfb73"
+       ],
+       "if_true": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-8c9cd194",
+          "c-ed324a69",
+          "c-491dbab0"
+         ]
+        },
+        "tolerance_min": 60
+       },
+       "if_false": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-8c9cd194",
+          "c-ed324a69",
+          "c-491dbab0"
+         ]
+        },
+        "tolerance_min": 10
+       }
+      }
+     ],
+     "experiments": [
+      {
+       "experiment_id": "x-c1b5a427",
+       "ops": [
+        {
+         "after": {
+          "step": "st01"
+         },
+         "gate": "start",
+         "op": "move_step_after",
+         "step": {
+          "step": "st06"
+         }
+        }
+       ],
+       "case_ids": [
+        "c-491dbab0",
+        "c-8c9cd194",
+        "c-ed324a69",
+        "c-01c6ad09",
+        "c-2758a627",
+        "c-47f5064f"
+       ],
+       "expected_change": {
+        "behaviour": "start_time",
+        "step": "st06"
+       },
+       "delivered": true,
+       "outcome_class": "delivered_outcome_worse",
+       "prediction_check": {
+        "after": {
+         "contradicted": [],
+         "per_hypothesis": {
+          "h-11421366": {
+           "landed": "inconclusive"
+          },
+          "h-2bef9e2a": {
+           "landed": "inconclusive"
+          }
+         }
+        },
+        "before": {
+         "distinguishes": [
+          [
+           "h-11421366",
+           "h-2bef9e2a"
+          ]
+         ],
+         "speaks_to": [
+          "h-11421366",
+          "h-2bef9e2a"
+         ]
+        }
+       },
+       "event_logs_identical_to_control": "5 of 6 cases",
+       "behaviour_note": null,
+       "no_pair_reason": null,
+       "median_delta": {
+        "bed_release_delay_min": 0,
+        "duplicates": 0,
+        "planned_checks": 0,
+        "post_signoff_wait_min": 0,
+        "prohibited_attempted": 0,
+        "prohibited_executed": 0,
+        "required_steps_done": 0,
+        "rework_events": 0,
+        "rework_min": 0,
+        "stale_actions": 0,
+        "unnecessary_docs": 0,
+        "unnecessary_min": 0,
+        "unplanned_interventions": 0
+       }
+      },
+      {
+       "experiment_id": "x-efd8766c",
+       "ops": [
+        {
+         "op": "set_prep_trigger",
+         "target": {
+          "step": "st06"
+         },
+         "when": {
+          "after": {
+           "step": "st01"
+          }
+         }
+        }
+       ],
+       "case_ids": [
+        "c-491dbab0",
+        "c-8c9cd194",
+        "c-ed324a69"
+       ],
+       "expected_change": {
+        "behaviour": "start_time",
+        "step": "st06"
+       },
+       "delivered": false,
+       "outcome_class": "not_delivered",
+       "prediction_check": {
+        "after": {
+         "contradicted": [],
+         "per_hypothesis": {
+          "h-11421366": {
+           "landed": "inconclusive"
+          },
+          "h-2bef9e2a": {
+           "landed": "inconclusive"
+          },
+          "h-d3922cfa": {
+           "landed": "inconclusive"
+          },
+          "h-f5bcfb73": {
+           "landed": "inconclusive"
+          }
+         }
+        },
+        "before": {
+         "distinguishes": [
+          [
+           "h-11421366",
+           "h-2bef9e2a"
+          ],
+          [
+           "h-11421366",
+           "h-d3922cfa"
+          ],
+          [
+           "h-2bef9e2a",
+           "h-f5bcfb73"
+          ],
+          [
+           "h-d3922cfa",
+           "h-f5bcfb73"
+          ]
+         ],
+         "speaks_to": [
+          "h-11421366",
+          "h-2bef9e2a",
+          "h-d3922cfa",
+          "h-f5bcfb73"
+         ]
+        }
+       },
+       "event_logs_identical_to_control": "3 of 3 cases",
+       "behaviour_note": "behaviour unchanged: the two definitions differ, and every matched run produced an event log identical to its control",
+       "no_pair_reason": null,
+       "median_delta": {
+        "bed_release_delay_min": 0,
+        "duplicates": 0,
+        "planned_checks": 0,
+        "post_signoff_wait_min": 0,
+        "prohibited_attempted": 0,
+        "prohibited_executed": 0,
+        "required_steps_done": 0,
+        "rework_events": 0,
+        "rework_min": 0,
+        "stale_actions": 0,
+        "unnecessary_docs": 0,
+        "unnecessary_min": 0,
+        "unplanned_interventions": 0
+       }
+      },
+      {
+       "experiment_id": "x-dd24131b",
+       "ops": [
+        {
+         "after": {
+          "step": "st01"
+         },
+         "gate": "start",
+         "op": "move_step_after",
+         "step": {
+          "step": "st06"
+         }
+        },
+        {
+         "op": "set_prep_trigger",
+         "target": {
+          "step": "st06"
+         },
+         "when": {
+          "after": {
+           "step": "st01"
+          }
+         }
+        }
+       ],
+       "case_ids": [
+        "c-491dbab0",
+        "c-8c9cd194",
+        "c-ed324a69"
+       ],
+       "expected_change": {
+        "behaviour": "start_time",
+        "step": "st06"
+       },
+       "delivered": true,
+       "outcome_class": "delivered_outcome_better",
+       "prediction_check": {
+        "after": {
+         "contradicted": [
+          "h-2bef9e2a",
+          "h-d3922cfa"
+         ],
+         "per_hypothesis": {
+          "h-11421366": {
+           "landed": "if_true"
+          },
+          "h-2bef9e2a": {
+           "landed": "if_false"
+          },
+          "h-3834c2e6": {
+           "landed": "if_true"
+          },
+          "h-d3922cfa": {
+           "landed": "if_false"
+          },
+          "h-f5bcfb73": {
+           "landed": "if_true"
+          }
+         }
+        },
+        "before": {
+         "distinguishes": [
+          [
+           "h-11421366",
+           "h-2bef9e2a"
+          ],
+          [
+           "h-11421366",
+           "h-d3922cfa"
+          ],
+          [
+           "h-2bef9e2a",
+           "h-f5bcfb73"
+          ],
+          [
+           "h-2bef9e2a",
+           "h-3834c2e6"
+          ],
+          [
+           "h-d3922cfa",
+           "h-f5bcfb73"
+          ],
+          [
+           "h-d3922cfa",
+           "h-3834c2e6"
+          ]
+         ],
+         "speaks_to": [
+          "h-11421366",
+          "h-2bef9e2a",
+          "h-d3922cfa",
+          "h-f5bcfb73",
+          "h-3834c2e6"
+         ]
+        }
+       },
+       "event_logs_identical_to_control": "0 of 3 cases",
+       "behaviour_note": null,
+       "no_pair_reason": null,
+       "median_delta": {
+        "bed_release_delay_min": 0,
+        "duplicates": 0,
+        "planned_checks": 0,
+        "post_signoff_wait_min": -88,
+        "prohibited_attempted": 0,
+        "prohibited_executed": 0,
+        "required_steps_done": 0,
+        "rework_events": 1,
+        "rework_min": 1,
+        "stale_actions": 0,
+        "unnecessary_docs": 0,
+        "unnecessary_min": 0,
+        "unplanned_interventions": 0
+       }
+      }
+     ],
+     "notes": [],
+     "definition_unchanged_answers": 1,
+     "reading_budget_refusals": 0,
+     "experiment_budget_refusals": 0,
+     "hypothesis_schema_errors": 2,
+     "process": {
+      "valid_patches": 3,
+      "delivered": 2,
+      "informative": 1,
+      "updates_accepted": 2,
+      "updates_refused": 1
+     },
+     "lint_refusals": 0,
+     "cycles": 3,
+     "pair_refusals": 0,
+     "say_do_mismatches": 1,
+     "proposals": [
+      "p-1b4c34eb"
+     ],
+     "validations": [
+      "dev_validated"
+     ],
+     "declared_result": null,
+     "calls": 22,
+     "cost_usd": 0.4479,
+     "prompt_tokens": 314421,
+     "prompt_tokens_per_call": 14292,
+     "prompt_tokens_max": 22710,
+     "completion_tokens": 12909,
+     "reasoning_tokens": 7319,
+     "variant": "pair",
+     "planted_gain_min": 383,
+     "proposal_shares": [
+      {
+       "proposal_id": "p-1b4c34eb",
+       "ops": [
+        {
+         "after": {
+          "step": "st01"
+         },
+         "gate": "start",
+         "op": "move_step_after",
+         "step": {
+          "step": "st06"
+         }
+        },
+        {
+         "op": "set_prep_trigger",
+         "target": {
+          "step": "st06"
+         },
+         "when": {
+          "after": {
+           "step": "st01"
+          }
+         }
+        }
+       ],
+       "status": "dev_validated",
+       "validation_gain_min": 216,
+       "share_of_planted": 0.56
+      }
+     ],
+     "found_planted": false,
+     "planted_step_delivered_better": true,
+     "simulations": 24,
+     "sweeps": 0
+    },
+    {
+     "run_id": "run-e6d40003",
+     "outcome": "dev_valid_proposal",
+     "stop": "dev_valid_proposal (p-a563fe32)",
+     "note": "medium",
+     "commitment": {
+      "hash": "bb888f4cf5ec81d0ff0d831162eb474cc92e5db023971983617aa7378733b122",
+      "revision": 12
+     },
+     "hashes": {
+      "prompt": "8db50d70738eea48382029ed3a1ccef81c5bf6a71bc8d2328b8d76d4792eaf90",
+      "tools": "796d6f517ceab48f8966f19d71b7a3f48f8546c96fded2bab487ca5b6352a7c1"
+     },
+     "effort": "medium",
+     "model": "meta-models/Muse-Spark-Open-816B-A42B",
+     "check_discovery": "PASS",
+     "needs": {
+      "hypotheses": true,
+      "experiment": true,
+      "outcome": true,
+      "deny_list": true,
+      "stopped": true
+     },
+     "hypotheses": [
+      {
+       "hypothesis_id": "h-b68721b9",
+       "status": "open",
+       "statement": "Removing soft edge e05 (st15 -> st14) allows hand_over_document to start after check (st08) without waiting for hand_over_take_home, reducing post-signoff wait.",
+       "competing": {
+        "none_identified_reason": "initial hypothesis from definition alone; competitor will be recorded next"
+       },
+       "if_true": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-01c6ad09",
+          "c-11060afa",
+          "c-15de451b",
+          "c-2758a627",
+          "c-5e518c31",
+          "c-9fe91b9e"
+         ]
+        },
+        "tolerance_min": 10
+       },
+       "if_false": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-01c6ad09",
+          "c-11060afa",
+          "c-15de451b",
+          "c-2758a627",
+          "c-5e518c31",
+          "c-9fe91b9e"
+         ]
+        },
+        "tolerance_min": 10
+       }
+      },
+      {
+       "hypothesis_id": "h-350f9801",
+       "status": "revised",
+       "statement": "Early discharge-summary prep via moving st06 trigger earlier yields larger gain than decoupling handovers, so e05 removal will not be the top post-signoff improvement.",
+       "competing": [
+        "h-b68721b9"
+       ],
+       "if_true": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-01c6ad09",
+          "c-11060afa",
+          "c-15de451b",
+          "c-2758a627",
+          "c-5e518c31",
+          "c-9fe91b9e"
+         ]
+        },
+        "tolerance_min": 10
+       },
+       "if_false": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-01c6ad09",
+          "c-11060afa",
+          "c-15de451b",
+          "c-2758a627",
+          "c-5e518c31",
+          "c-9fe91b9e"
+         ]
+        },
+        "tolerance_min": 10
+       }
+      },
+      {
+       "hypothesis_id": "h-097456f8",
+       "status": "open",
+       "statement": "Removing e05 yields no change in post-signoff wait; handover decoupling not on critical determinant.",
+       "competing": [
+        "h-b68721b9"
+       ],
+       "if_true": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-01c6ad09",
+          "c-11060afa",
+          "c-15de451b",
+          "c-2758a627",
+          "c-5e518c31",
+          "c-9fe91b9e"
+         ]
+        },
+        "tolerance_min": 5
+       },
+       "if_false": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-01c6ad09",
+          "c-11060afa",
+          "c-15de451b",
+          "c-2758a627",
+          "c-5e518c31",
+          "c-9fe91b9e"
+         ]
+        },
+        "tolerance_min": 5
+       }
+      },
+      {
+       "hypothesis_id": "h-06d6bbb5",
+       "status": "open",
+       "statement": "Moving discharge-summary draft preparation (st06) to start after expected-discharge record (st01) instead of after clinical discharge (st05) will reduce post-signoff wait.",
+       "competing": [
+        "h-b68721b9"
+       ],
+       "if_true": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 10
+       },
+       "if_false": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 10
+       }
+      },
+      {
+       "hypothesis_id": "h-0d3d044e",
+       "status": "open",
+       "statement": "Moving discharge-summary draft (st06) after expected-discharge record (st01) does not change post-signoff wait because nurse busy blocks and downstream check still dominate.",
+       "competing": [
+        "h-06d6bbb5"
+       ],
+       "if_true": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 10
+       },
+       "if_false": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 10
+       }
+      },
+      {
+       "hypothesis_id": "h-d51d9242",
+       "status": "open",
+       "statement": "Moving discharge-summary draft (st06) after expected-discharge record (st01) yields no meaningful change in post-signoff wait (within 5 min) because nurse busy blocks dominate.",
+       "competing": [
+        "h-06d6bbb5"
+       ],
+       "if_true": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 5
+       },
+       "if_false": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 10
+       }
+      },
+      {
+       "hypothesis_id": "h-d2fc6051",
+       "status": "retained",
+       "statement": "Removing soft edge e04 (st05>st06) and moving st06 trigger to after st01 together allow st06 to start before clinical discharge, reducing post-signoff wait, whereas trigger move alone is blocked by e04.",
+       "competing": [
+        "h-06d6bbb5"
+       ],
+       "if_true": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 10
+       },
+       "if_false": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 10
+       }
+      },
+      {
+       "hypothesis_id": "h-22a08aca",
+       "status": "revised",
+       "statement": "Removing soft edge e04 and moving st06 trigger to after st01 together yields no meaningful change in post-signoff wait (within 10 min) because downstream check and nurse capacity still dominate.",
+       "competing": [
+        "h-d2fc6051"
+       ],
+       "if_true": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 10
+       },
+       "if_false": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 10
+       }
+      },
+      {
+       "hypothesis_id": "h-62d838ac",
+       "status": "rejected",
+       "statement": "Removing soft edge e04 and moving st06 trigger to after st01 together yields no meaningful change in post-signoff wait (within 5 min) because downstream check and nurse capacity still dominate.",
+       "competing": [
+        "h-d2fc6051"
+       ],
+       "if_true": {
+        "comparison": "no_difference",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 5
+       },
+       "if_false": {
+        "comparison": "intervention_lt_control",
+        "metric": "post_signoff_wait_min",
+        "scope": {
+         "cases": [
+          "c-491dbab0",
+          "c-8c9cd194",
+          "c-ed324a69"
+         ]
+        },
+        "tolerance_min": 5
+       }
+      }
+     ],
+     "experiments": [
+      {
+       "experiment_id": "x-c5caeb3d",
+       "ops": [
+        {
+         "op": "set_prep_trigger",
+         "target": {
+          "step": "st06"
+         },
+         "when": {
+          "after": {
+           "step": "st01"
+          }
+         }
+        }
+       ],
+       "case_ids": [
+        "c-491dbab0",
+        "c-8c9cd194",
+        "c-ed324a69"
+       ],
+       "expected_change": {
+        "behaviour": "start_time",
+        "step": "st06"
+       },
+       "delivered": false,
+       "outcome_class": "not_delivered",
+       "prediction_check": {
+        "after": {
+         "contradicted": [],
+         "per_hypothesis": {
+          "h-06d6bbb5": {
+           "landed": "inconclusive"
+          },
+          "h-0d3d044e": {
+           "landed": "inconclusive"
+          },
+          "h-d51d9242": {
+           "landed": "inconclusive"
+          }
+         }
+        },
+        "before": {
+         "distinguishes": [
+          [
+           "h-06d6bbb5",
+           "h-d51d9242"
+          ]
+         ],
+         "speaks_to": [
+          "h-06d6bbb5",
+          "h-0d3d044e",
+          "h-d51d9242"
+         ]
+        }
+       },
+       "event_logs_identical_to_control": "3 of 3 cases",
+       "behaviour_note": "behaviour unchanged: the two definitions differ, and every matched run produced an event log identical to its control",
+       "no_pair_reason": null,
+       "median_delta": {
+        "bed_release_delay_min": 0,
+        "duplicates": 0,
+        "planned_checks": 0,
+        "post_signoff_wait_min": 0,
+        "prohibited_attempted": 0,
+        "prohibited_executed": 0,
+        "required_steps_done": 0,
+        "rework_events": 0,
+        "rework_min": 0,
+        "stale_actions": 0,
+        "unnecessary_docs": 0,
+        "unnecessary_min": 0,
+        "unplanned_interventions": 0
+       }
+      },
+      {
+       "experiment_id": "x-170aa603",
+       "ops": [
+        {
+         "edge_id": "e04",
+         "op": "remove_soft_edge"
+        },
+        {
+         "op": "set_prep_trigger",
+         "target": {
+          "step": "st06"
+         },
+         "when": {
+          "after": {
+           "step": "st01"
+          }
+         }
+        }
+       ],
+       "case_ids": [
+        "c-491dbab0",
+        "c-8c9cd194",
+        "c-ed324a69"
+       ],
+       "expected_change": {
+        "behaviour": "start_time",
+        "step": "st06"
+       },
+       "delivered": true,
+       "outcome_class": "delivered_outcome_better",
+       "prediction_check": {
+        "after": {
+         "contradicted": [
+          "h-0d3d044e",
+          "h-d51d9242",
+          "h-62d838ac"
+         ],
+         "per_hypothesis": {
+          "h-06d6bbb5": {
+           "landed": "if_true"
+          },
+          "h-0d3d044e": {
+           "landed": "if_false"
+          },
+          "h-62d838ac": {
+           "landed": "if_false"
+          },
+          "h-d2fc6051": {
+           "landed": "if_true"
+          },
+          "h-d51d9242": {
+           "landed": "if_false"
+          }
+         }
+        },
+        "before": {
+         "distinguishes": [
+          [
+           "h-06d6bbb5",
+           "h-d51d9242"
+          ],
+          [
+           "h-06d6bbb5",
+           "h-62d838ac"
+          ],
+          [
+           "h-d51d9242",
+           "h-d2fc6051"
+          ],
+          [
+           "h-d2fc6051",
+           "h-62d838ac"
+          ]
+         ],
+         "speaks_to": [
+          "h-06d6bbb5",
+          "h-0d3d044e",
+          "h-d51d9242",
+          "h-d2fc6051",
+          "h-62d838ac"
+         ]
+        }
+       },
+       "event_logs_identical_to_control": "0 of 3 cases",
+       "behaviour_note": null,
+       "no_pair_reason": null,
+       "median_delta": {
+        "bed_release_delay_min": 0,
+        "duplicates": 0,
+        "planned_checks": 0,
+        "post_signoff_wait_min": -88,
+        "prohibited_attempted": 0,
+        "prohibited_executed": 0,
+        "required_steps_done": 0,
+        "rework_events": 1,
+        "rework_min": 1,
+        "stale_actions": 0,
+        "unnecessary_docs": 0,
+        "unnecessary_min": 0,
+        "unplanned_interventions": 0
+       }
+      }
+     ],
+     "notes": [],
+     "definition_unchanged_answers": 2,
+     "reading_budget_refusals": 0,
+     "experiment_budget_refusals": 0,
+     "hypothesis_schema_errors": 3,
+     "process": {
+      "valid_patches": 5,
+      "delivered": 1,
+      "informative": 1,
+      "updates_accepted": 2,
+      "updates_refused": 0
+     },
+     "lint_refusals": 3,
+     "cycles": 5,
+     "pair_refusals": 0,
+     "say_do_mismatches": 0,
+     "proposals": [
+      "p-a563fe32"
+     ],
+     "validations": [
+      "dev_validated"
+     ],
+     "declared_result": null,
+     "calls": 38,
+     "cost_usd": 0.8294,
+     "prompt_tokens": 566813,
+     "prompt_tokens_per_call": 14916,
+     "prompt_tokens_max": 23357,
+     "completion_tokens": 28432,
+     "reasoning_tokens": 17877,
+     "variant": "pair",
+     "planted_gain_min": 383,
+     "proposal_shares": [
+      {
+       "proposal_id": "p-a563fe32",
+       "ops": [
+        {
+         "edge_id": "e04",
+         "op": "remove_soft_edge"
+        },
+        {
+         "op": "set_prep_trigger",
+         "target": {
+          "step": "st06"
+         },
+         "when": {
+          "after": {
+           "step": "st01"
+          }
+         }
+        }
+       ],
+       "status": "dev_validated",
+       "validation_gain_min": 216,
+       "share_of_planted": 0.56
+      }
+     ],
+     "found_planted": false,
+     "planted_step_delivered_better": true,
+     "simulations": 17,
+     "sweeps": 1
+    }
+   ]
   }
  }
 }
