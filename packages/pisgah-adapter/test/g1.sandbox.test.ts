@@ -4,12 +4,12 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { ModelClient, parseEnvText } from "@hey-pisgah/model";
-import { EmrRuntime, sherpaEmbedder, type EmrTaskView, type Provenance, type SpeakerVerdict } from "@hey-pisgah/agent";
+import { EmrRuntime, type EmrTaskView, type Provenance, type SpeakerVerdict } from "@hey-pisgah/agent";
 import { PisgahPort } from "../src/port.js";
 import { loadProfile } from "../src/profile.js";
 import { mintAgentBearer, SandboxBlock, sandboxQuery } from "../src/sandbox.js";
 import { speak, VOICES } from "./e3.sandbox.test.js";
-import { freshArrival } from "./sandbox-helpers.js";
+import { freshArrival, paceAudio, sandboxEmbedder, voiceOf } from "./sandbox-helpers.js";
 
 // Runs only with SANDBOX=1 and G1=1 against the loopback sandbox; the owner's lines are matched by the local speaker model and no language model is called.
 const RUN = process.env["SANDBOX"] === "1" && process.env["G1"] === "1";
@@ -38,7 +38,7 @@ describe.skipIf(!RUN)("G1 one spoken authorisation, one patient, one encounter, 
   const states = (v: typeof A) => sandboxQuery(sb, "order_states_for_visit", { visit: v.visit });
 
   beforeAll(async () => {
-    const embed = sherpaEmbedder({ modelPath: process.env["HEY_PISGAH_SPEAKER_MODEL"] ?? "", sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] })!;
+    const embed = sandboxEmbedder()!;
     expect(embed).not.toBeNull();
     const a = await freshArrival(profile);
     sb = a.sb;
@@ -49,7 +49,9 @@ describe.skipIf(!RUN)("G1 one spoken authorisation, one patient, one encounter, 
     const dir = join(process.env["HEY_PISGAH_G1_TMP"] ?? "/tmp", `g1-${run}`);
     // Every line id and recording is new for this run, so no earlier run's spent line or recording is reused.
     matched = async (text, line) => {
-      const v: SpeakerVerdict = await port.speaker!(m.owner, (await embed(speak(VOICES.owner, `${text} Run ${run}.`, join(dir, `${line}.wav`))))!.vector, prov(line));
+      const print = (await embed(speak(VOICES.owner, `${text} Run ${run}.`, join(dir, `${line}.wav`))))!;
+      await paceAudio(print);
+      const v: SpeakerVerdict = await port.speaker!(m.owner, voiceOf(print), prov(line));
       if (v.speaker !== "owner") throw new Error(`the owner's synthetic voice was not matched (${v.speaker})`);
       return `transcript:${line}~${v.token}`;
     };
@@ -112,9 +114,11 @@ describe.skipIf(!RUN)("G1 one spoken authorisation, one patient, one encounter, 
   }, 120_000);
 
   it("gives one recording a token for one line only", async () => {
-    const embed = sherpaEmbedder({ modelPath: process.env["HEY_PISGAH_SPEAKER_MODEL"] ?? "", sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] })!;
+    const embed = sandboxEmbedder()!;
     const wav = speak(VOICES.owner, `Send an abdominal ultrasound. Run ${run}.`, join(process.env["HEY_PISGAH_G1_TMP"] ?? "/tmp", `g1-${run}`, "same.wav"));
-    const print = (await embed(wav))!.vector;
+    const raw = (await embed(wav))!;
+    await paceAudio(raw);
+    const print = voiceOf(raw);
     const first = await port.speaker!(mine.owner, print, prov(`g1-${run}-same-1`));
     const again = await port.speaker!(mine.owner, print, prov(`g1-${run}-same-2`));
     results["same_recording"] = { first: first.speaker, again: again.speaker };
@@ -173,7 +177,7 @@ describe.skipIf(!RUN)("G1 one spoken authorisation, one patient, one encounter, 
   }, 180_000);
 
   it("signs exactly the read-back batch on the owner's spoken okay, sign them, through the runtime with no model call, and signs nothing after the batch changed", async () => {
-    const embed = sherpaEmbedder({ modelPath: process.env["HEY_PISGAH_SPEAKER_MODEL"] ?? "", sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] })!;
+    const embed = sandboxEmbedder()!;
     const root = mkdtempSync(join(tmpdir(), "g1-rt-"));
     // Every line here is settled by rule; a model call would throw and fail the run.
     const client = new ModelClient({ storeRoot: root, mode: "mock", mock: () => { throw new Error("G1 makes no model call"); } });
@@ -183,6 +187,7 @@ describe.skipIf(!RUN)("G1 one spoken authorisation, one patient, one encounter, 
     const say = async (v: typeof A, text: string) => {
       n += 1;
       const print = (await embed(speak(VOICES.owner, `${text} Run ${run}.`, join(dir, `rt-${n}.wav`))))!;
+      await paceAudio(print);
       return rt.say({ owner: mine.owner, target: { patient_id: v.patient }, text, source: "audio", voiceprint: print });
     };
     try {

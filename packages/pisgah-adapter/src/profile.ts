@@ -80,7 +80,7 @@ export type VersionsSpec = z.infer<typeof VersionsSpec>;
 export const DoorProfile = z.strictObject({
   base_url: z.url(),
   timeout_ms: z.number().int().min(1000).max(900_000).default(300_000),
-  headers: z.strictObject({ on_behalf_of: HeaderName, origin: HeaderName, evidence: HeaderName, spoken_at: HeaderName, idempotency: HeaderName, replayed: HeaderName, authorisation: HeaderName.optional(), confirmation: HeaderName.optional(), authorisation_batch: HeaderName.optional(), read_back_digest: HeaderName.optional() }),
+  headers: z.strictObject({ on_behalf_of: HeaderName, origin: HeaderName, evidence: HeaderName, spoken_at: HeaderName, idempotency: HeaderName, replayed: HeaderName, authorisation: HeaderName.optional(), confirmation: HeaderName.optional(), authorisation_batch: HeaderName.optional(), read_back_digest: HeaderName.optional(), audio_segments: HeaderName.optional() }),
   origin_value: z.string().regex(/^[a-z][a-z_]{0,39}$/),
   // Paths the port never calls, whatever asks; checked before the allowlist.
   deny: z.array(z.string().regex(/^[a-z0-9_-]+(\/[a-z0-9_-]+)*$/)).min(1),

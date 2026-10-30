@@ -256,7 +256,9 @@ function chain() {
   const partials: string[] = [];
   const l = {
     hintsFor: async () => ["pulse"], nextWords: (_s: string, p: string) => { partials.push(p); }, segment: async (c: { raw: string }) => { segments.push(c.raw); return []; },
-    flush: async () => undefined, unreportedOf: () => ({ utterances: [], errors: [] })
+    flush: async () => undefined, unreportedOf: () => ({ utterances: [], errors: [] }),
+    // The listen chain's live check passes every piece here; its own tests are in presence-heartbeat.test.ts.
+    admit: () => ({ refused: null, presence: { live: null } })
   } as unknown as ListenSessions;
   return { l, segments, partials };
 }

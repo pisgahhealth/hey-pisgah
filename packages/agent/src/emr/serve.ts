@@ -11,7 +11,8 @@ import { META_STREAM_MODEL, MetaStreamFailed, MetaStreamListener, probeRealtime 
 import { EmrRuntime, type EmrRuntimeOptions } from "./runtime.js";
 import { ListenError, ListenSessions, parallelReadings, type ListenOptions, type Transcriber } from "./listen.js";
 import { parseWav } from "@hey-pisgah/voice";
-import type { Embedder, LivenessMarker } from "./speaker.js";
+import { printWav, type Embedder, type LivenessMarker } from "./speaker.js";
+import { Heartbeats } from "./presence.js";
 import { EmrId, EmrPortError, type EmrPort, type EmrTarget } from "./port.js";
 import { gateArrival } from "./gate.js";
 import { EMERGENCY_KIND, EMERGENCY_LINE, EMERGENCY_PRESS, afterWake, identityFrom, emergencyHeardLoosely, emergencyReason, spokenPatient, unidentifiedRef } from "./entry.js";
@@ -81,6 +82,8 @@ const FollowUp = z.strictObject({ text: z.string().min(1).max(1000), task_id: z.
 const Open = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional() }).refine(hasTarget, "admissionId or patientId is required");
 // Listening needs no patient: the agent tracks the patient the clinician is with, or waits for the emergency phrase or a name.
 const SessionId = z.string().min(1).max(80).regex(/^[A-Za-z0-9_.:-]+$/);
+const PresenceOpen = z.strictObject({ owner: Owner, session_id: SessionId });
+const PresenceBeat = z.strictObject({ owner: Owner, session_id: SessionId, seq: z.number().int().min(0), at: z.number().int().positive(), visible: z.boolean(), mic_live: z.boolean(), mac: z.string().regex(/^[0-9a-f]{64}$/) });
 const ListenMeta = z.strictObject({
   owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional(),
   session_id: SessionId, seq: z.coerce.number().int().min(0).max(1_000_000),
@@ -230,14 +233,17 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   const onArrivalFailed = (owner: string, taskId: string, reason: string) => { if (pending.get(owner)?.task_id === taskId) void release(owner, null, reason); };
   const prefs = o.preferences === false ? null : o.runtime?.preferences ?? new PreferenceMemory(o.storeRoot);
   const several = !streamAsr && (o.vtReadings ?? 1) > 1;
-  const rt = new EmrRuntime({ ...(o.runtime ?? {}), storeRoot: o.storeRoot, client, port: o.port, ...(secondEar ? { secondEar } : {}), ...(several ? { secondOpinion: true } : {}), ...(o.releaseWhole ? { releaseWhole: true } : {}), ...(o.log ? { log: o.log } : {}), onSubject, onArrivalFailed, ...(o.emergencyClinicId ? { emergencyClinicId: o.emergencyClinicId } : {}), ...(prefs ? { preferences: prefs } : {}) });
+  // D30: the strip's signed heartbeats per strip session, and the owner's matched voice in each.
+  const heartbeats = new Heartbeats();
+  const clientOf = new Map<string, string>();
+  const onOwnerVoice = (owner: string, sid: string | null) => { if (sid) heartbeats.ownerVoice(owner, clientOf.get(sid) ?? sid); };
+  const rt = new EmrRuntime({ ...(o.runtime ?? {}), onOwnerVoice, storeRoot: o.storeRoot, client, port: o.port, ...(secondEar ? { secondEar } : {}), ...(several ? { secondOpinion: true } : {}), ...(o.releaseWhole ? { releaseWhole: true } : {}), ...(o.log ? { log: o.log } : {}), onSubject, onArrivalFailed, ...(o.emergencyClinicId ? { emergencyClinicId: o.emergencyClinicId } : {}), ...(prefs ? { preferences: prefs } : {}) });
   runtime = rt;
   rt.start();
   const transcribe = streamAsr ? streamAsr.transcribe : several ? parallelReadings(metaAsr, o.vtReadings!) : metaAsr;
   const origin = o.allowOrigin ?? "http://localhost:3311";
-  // Each patient's listening session reports its utterances' statuses under the strip's own session id.
-  const clientOf = new Map<string, string>();
-  const listening = new ListenSessions(rt, { ...(o.listen ?? {}), transcribe, ...(o.releaseWhole ? { releaseWhole: true } : {}), ...(o.staffHints?.length ? { staff: o.staffHints } : {}), ...(o.embed ? { embed: o.embed } : {}), onStatus: (owner, sid, seq, st) => setStatus(owner, clientOf.get(sid) ?? sid, seq, st) });
+  // Each patient's listening session reports its utterances' statuses under the strip's own session id, and is present only while that strip session beats.
+  const listening = new ListenSessions(rt, { ...(o.listen ?? {}), heartbeat: (owner, sid) => heartbeats.present(owner, clientOf.get(sid) ?? sid), transcribe, ...(o.releaseWhole ? { releaseWhole: true } : {}), ...(o.staffHints?.length ? { staff: o.staffHints } : {}), ...(o.embed ? { embed: o.embed } : {}), onStatus: (owner, sid, seq, st) => setStatus(owner, clientOf.get(sid) ?? sid, seq, st) });
   const streamer = streamAsr ? new StreamListener(listening, streamAsr, { refuseFasterThanLive: o.listen?.replay === "refuse" })
     : o.asr === "meta-stream" ? new MetaStreamListener(listening, { key: realtimeKey, ...(o.realtimeSocket ? { socket: o.realtimeSocket } : {}), languageBias: o.languageBias ?? [], ledger, runOf: (id) => rt.task(id)?.run_id ?? null, refuseFasterThanLive: o.listen?.replay === "refuse" })
     : null;
@@ -299,7 +305,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     let text = "";
     setStatus(owner, sessionId, seq, { status: "processing" });
     // The voiceprint is worked out beside the words, so a spoken acceptance is attributed like any other line.
-    const print = o.embed ? o.embed(wav).catch(() => null) : null;
+    const print = o.embed ? printWav(o.embed, wav).catch(() => null) : null;
     try { text = afterWake((await transcribe(wav, [], `${sessionId}-${seq}`.slice(0, 64))).text); } catch (e) {
       if (!(e instanceof VoiceError)) throw e;
       o.log?.(`listen with no patient: the ear refused the audio (${e.code})`);
@@ -473,7 +479,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     if (!heard.text) return [200, { task_id: null, line_id: null, transcript: "", audio_ms: heard.audio_ms, cost_usd: heard.cost_usd }];
     const spoken = new Date(arrived - heard.audio_ms).toISOString();
     const v = vitalsVocabulary(cleanTranscript(heard.text));
-    const voiceprint = o.embed ? await o.embed(wav).catch(() => null) : undefined;
+    const voiceprint = o.embed ? await printWav(o.embed, wav).catch(() => null) : undefined;
     const r = await rt.say({ owner: b.owner, target: { admission_id: ctx.admission_id }, text: v.text, source: "audio", spoken_at: spoken, audio: { audio_ms: heard.audio_ms, cost_usd: heard.cost_usd, session_id: heard.session_id }, clip: wav, rewrites: v.rewrites, ...(voiceprint !== undefined ? { voiceprint } : {}) });
     return [202, { ...r, transcript: v.text, audio_ms: heard.audio_ms, cost_usd: heard.cost_usd, keywords_dropped: keywordsDropped }];
   };
@@ -557,6 +563,16 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       return [200, { session_id: session, utterances: [...(statuses.get(`${owner}\u0000${session}`)?.values() ?? [])].sort((x, y) => x.seq - y.seq) }];
     }
     if (parts.length === 2 && parts[1] === "listen" && m === "POST") return listen(req);
+    // D30 presence: a strip session takes a key, then beats with it while its tab is visible and its microphone is live.
+    if (parts.length === 3 && parts[1] === "presence" && parts[2] === "open" && m === "POST") {
+      const b = parse(PresenceOpen, await json(req));
+      return [200, { session_id: b.session_id, ...heartbeats.open(b.owner, b.session_id) }];
+    }
+    if (parts.length === 3 && parts[1] === "presence" && parts[2] === "beat" && m === "POST") {
+      const b = parse(PresenceBeat, await json(req));
+      const r = heartbeats.beat(b);
+      return r.ok ? [200, { session_id: b.session_id, present: r.present, ...(r.reason ? { reason: r.reason } : {}) }] : [409, { session_id: b.session_id, error: r.reason, reopen: r.reason === "unknown_session" }];
+    }
     if (parts.length === 3 && parts[1] === "listen" && parts[2] === "stream" && m === "POST") return listenStream(req);
     const id = parts[1] ?? "";
     const task = rt.task(id);

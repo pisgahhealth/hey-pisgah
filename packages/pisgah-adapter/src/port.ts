@@ -2,7 +2,7 @@ import { canonical, sha256 } from "@hey-pisgah/contracts";
 import {
   EMERGENCY_KIND, EmrId, EmrPortError, OBSERVATION_KIND, ObservationArgs, READ_ONLY_KINDS,
   type DelegationRead, type DelegationTeam, type EmrCommit, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type EmrWriteKind, type InboxPage, type OrderResult, type Orderables, type Provenance,
-  type PaperworkReadBack, type ReadBack, type SayableNames, type SpeakerVerdict, type WatchOffer, type WatchRead, type WorkArgs
+  type PaperworkReadBack, type ReadBack, type SayableNames, type SpeakerInput, type SpeakerVerdict, type WatchOffer, type WatchRead, type WorkArgs
 } from "@hey-pisgah/agent";
 import { fillPath, fillTemplate, pathPattern, pick, type DoorProfile } from "./profile.js";
 
@@ -42,6 +42,7 @@ const same = (a: unknown, b: unknown): boolean => {
 };
 
 type Vars = Record<string, unknown>;
+const concatBytes = (ps: readonly Uint8Array[]): Uint8Array => { const o = new Uint8Array(ps.reduce((n, p) => n + p.byteLength, 0)); let at = 0; for (const p of ps) { o.set(p, at); at += p.byteLength; } return o; };
 const str = (v: unknown) => (v === null || v === undefined ? null : typeof v === "object" ? JSON.stringify(v).slice(0, 300) : String(v).slice(0, 300));
 
 // The hospital port over the platform's agent door: every call carries the agent bearer and the provenance headers, and only allowlisted routes are ever called.
@@ -53,14 +54,14 @@ export class PisgahPort implements EmrPort {
   private readonly learned = { admission_by_patient: new Map<string, string>(), visit_by_patient: new Map<string, string>(), patient_by_admission: new Map<string, string>(), label: new Map<string, string>() };
 
   // Present only when the profile names the hospital's speaker match and read-back, so an older profile keeps attribution off.
-  readonly speaker?: (owner: string, voiceprint: readonly number[], prov: Provenance) => Promise<SpeakerVerdict>;
+  readonly speaker?: (owner: string, voice: SpeakerInput, prov: Provenance) => Promise<SpeakerVerdict>;
   readonly readBack?: (owner: string, visitId: string, prov: Provenance) => Promise<ReadBack>;
   readonly readPaperwork?: (owner: string, admissionId: string, prov: Provenance) => Promise<PaperworkReadBack>;
   readonly orderResults?: (owner: string, subject: EmrTarget & { visit_id?: string | null }, prov: Provenance) => Promise<OrderResult[]>;
 
   constructor(readonly profile: DoorProfile, private readonly o: PisgahPortOptions) {
     const ops = profile.ops;
-    if (ops.speaker) this.speaker = (owner, voiceprint, prov) => this.matchSpeaker(owner, voiceprint, prov);
+    if (ops.speaker) this.speaker = (owner, voice, prov) => this.matchSpeaker(owner, voice, prov);
     if (ops.read_back) this.readBack = (owner, visitId, prov) => this.readBackFor(owner, visitId, prov);
     if (ops.paperwork) this.readPaperwork = (owner, admissionId, prov) => this.paperworkFor(owner, admissionId, prov);
     if (profile.result_orders) this.orderResults = (_owner, subject, prov) => this.resultsFor(subject, prov);
@@ -126,10 +127,12 @@ export class PisgahPort implements EmrPort {
     return { tests: Object.fromEntries(Object.entries(o?.tests ?? {}).map(([k, v]) => [k, v.words])), drugs: Object.fromEntries(Object.entries(o?.drugs ?? {}).map(([k, v]) => [k, { words: v.words, controlled: v.controlled }])) };
   }
 
-  // The hospital matches the voiceprint against its enrolled voices and answers only the verdict; a failure reads as unverified, never as the owner.
-  private async matchSpeaker(owner: string, voiceprint: readonly number[], prov: Provenance): Promise<SpeakerVerdict> {
+  // The hospital matches the voiceprint, or computes it from the line's audio, against its enrolled voices and answers only the verdict; a failure reads as unverified, never as the owner.
+  private async matchSpeaker(owner: string, voice: SpeakerInput, prov: Provenance): Promise<SpeakerVerdict> {
     const op = this.profile.ops.speaker!;
-    const r = await this.request("POST", op.path, prov, { body: { embedding: voiceprint, model: "nemo_en_titanet_small" } });
+    if ("pcm16k" in voice && voice.pcm16k.length > 1 && !this.profile.headers.audio_segments) return { speaker: "unverified", reason: "segments_unsupported" };
+    const audio = "pcm16k" in voice ? { bytes: concatBytes(voice.pcm16k), segments: voice.pcm16k.map((p) => p.byteLength) } : null;
+    const r = await this.request("POST", op.path, prov, audio ?? { body: { embedding: voice, model: "nemo_en_titanet_small" } });
     if (r.kind !== "response" || r.status !== 200) return { speaker: "unverified", reason: r.kind === "response" ? `door_${r.status}` : r.reason };
     const j = r.json as Record<string, unknown> | null;
     const sp = j?.["speaker"];
@@ -212,7 +215,7 @@ export class PisgahPort implements EmrPort {
   }
 
   // The only function that reaches the network: deny list first, then the allowlist, then the bearer for the named owner.
-  async request(method: "GET" | "POST", path: string, prov: Provenance, init: { body?: unknown; idempotencyKey?: string; query?: Record<string, string> } = {}): Promise<DoorResult> {
+  async request(method: "GET" | "POST", path: string, prov: Provenance, init: { body?: unknown; bytes?: Uint8Array; segments?: readonly number[]; idempotencyKey?: string; query?: Record<string, string> } = {}): Promise<DoorResult> {
     const clean = path.replace(/^\/+|\/+$/g, "");
     if (this.profile.deny.some((d) => clean === d || clean.startsWith(`${d}/`)) || this.profile.deny_exact.includes(clean)) return this.refuse(method, clean, "denied_path");
     if (!this.allow.some((a) => a.method === method && a.re.test(clean))) return this.refuse(method, clean, "not_allowlisted");
@@ -233,16 +236,17 @@ export class PisgahPort implements EmrPort {
       ...(h.authorisation && prov.voice?.authorisation ? { [h.authorisation]: prov.voice.authorisation } : {}), ...(h.confirmation && prov.voice?.confirmation ? { [h.confirmation]: prov.voice.confirmation } : {}),
       ...(h.read_back_digest && prov.read_back_digest ? { [h.read_back_digest]: prov.read_back_digest } : {}),
       ...(h.authorisation_batch && batch?.length && prov.voice?.authorisation ? { [h.authorisation_batch]: [...new Set(batch)].sort().join(",") } : {}),
-      ...(init.idempotencyKey ? { [h.idempotency]: init.idempotencyKey } : {}), ...(init.body !== undefined ? { "content-type": "application/json" } : {}), accept: "application/json"
+      ...(h.audio_segments && init.segments ? { [h.audio_segments]: init.segments.join(",") } : {}),
+      ...(init.idempotencyKey ? { [h.idempotency]: init.idempotencyKey } : {}), ...(init.bytes ? { "content-type": "application/octet-stream" } : init.body !== undefined ? { "content-type": "application/json" } : {}), accept: "application/json"
     };
     const t0 = performance.now();
     const at = this.now().toISOString();
     const log = (status: number | null, replayed: boolean, outcome: DoorLog["outcome"], reason?: string) =>
-      this.o.onRequest?.({ at, method, path: clean, status, ms: Math.round(performance.now() - t0), replayed, headers: { authorization: "Bearer <redacted>", ...redactVoice(shown, h) }, body: clean === this.profile.ops.speaker?.path ? { embedding: "<voiceprint withheld>" } : init.body ?? null, outcome, ...(reason ? { reason } : {}) });
+      this.o.onRequest?.({ at, method, path: clean, status, ms: Math.round(performance.now() - t0), replayed, headers: { authorization: "Bearer <redacted>", ...redactVoice(shown, h) }, body: clean === this.profile.ops.speaker?.path ? { [init.bytes ? "audio" : "embedding"]: init.bytes ? "<audio withheld>" : "<voiceprint withheld>" } : init.bytes ? "<bytes withheld>" : init.body ?? null, outcome, ...(reason ? { reason } : {}) });
     let res: Response;
     try {
       res = await (this.o.fetch ?? fetch)(`${this.profile.base_url.replace(/\/+$/, "")}/${clean}${qs}`, {
-        method, headers: { authorization: `Bearer ${bearer}`, ...shown }, ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
+        method, headers: { authorization: `Bearer ${bearer}`, ...shown }, ...(init.bytes ? { body: new Uint8Array(init.bytes) } : init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
         signal: AbortSignal.timeout(this.profile.timeout_ms)
       });
     } catch (e) {

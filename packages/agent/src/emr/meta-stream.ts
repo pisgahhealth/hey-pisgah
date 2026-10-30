@@ -79,8 +79,11 @@ export class MetaStreamListener {
     const l = this.live.get(sessionId);
     if (!l) throw new Error("this listening session is not streaming");
     if (l.failed) throw l.failed;
-    l.fed += samples.length;
     const now = this.now();
+    // The chunk path's own live check (copies, the owner's clock across every session, presence) runs on each piece before it is sent on.
+    const g = this.listen.admit({ owner: l.owner, session_id: sessionId, seq: `f${l.fed}`, samples, rate: l.rate, arrived_at: now });
+    if (g.refused) throw new StreamRefused(g.refused);
+    l.fed += samples.length;
     if (this.o.refuseFasterThanLive && (l.fed / l.rate) * 1000 > now - l.opened + STREAM_LIVE_SLACK_MS) throw new StreamRefused("faster_than_live");
     l.ring.push({ at_ms: l.fed_ms, x: samples });
     l.fed_ms += (samples.length / l.rate) * 1000;

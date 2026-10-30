@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { SpeakerVerdict } from "./speaker.js";
+import type { SpeakerInput, SpeakerVerdict } from "./speaker.js";
 import type { DelegationHandoff, DelegationRead, DelegationTeam } from "./delegate.js";
 
 // The one write kind an EMR agent holds in M1, and the shape of its arguments.
@@ -76,7 +76,7 @@ export interface EmrPort {
   // The content digest of one write as the hospital will see it, so one spoken line can name every item it asked for.
   voiceItem?(kind: EmrWriteKind, args: WorkArgs): string | null;
   // Who spoke one segment, matched by the hospital against its enrolled voices; the template never leaves the hospital.
-  speaker?(owner: string, voiceprint: readonly number[], prov: Provenance): Promise<SpeakerVerdict>;
+  speaker?(owner: string, voice: SpeakerInput, prov: Provenance): Promise<SpeakerVerdict>;
   // The batch of voice orders the owner may countersign now on one visit, read back with its digest.
   readBack?(owner: string, visitId: string, prov: Provenance): Promise<ReadBack>;
   // The tests and medicines the owner may order by voice, by the words that name them.

@@ -6,7 +6,7 @@ import type { EmrRuntime } from "./runtime.js";
 import { primaryClass } from "./classes.js";
 import { afterWake } from "./entry.js";
 import type { EmrContext, EmrTarget } from "./port.js";
-import { ReplayGuard, type Embedder, type LivenessMarker, type PresenceMode, type PresenceRule, type Voiceprint } from "./speaker.js";
+import { LINE_MATCH_MAX_MS, ReplayGuard, matchWindows, printLine, type Embedder, type GuardVerdict, type HeartbeatOf, type LivenessMarker, type PresenceMode, type PresenceRule, type Voiceprint } from "./speaker.js";
 
 export type Transcriber = (wav: Uint8Array, keywords: readonly string[], sessionId: string) => Promise<FinalTranscript>;
 
@@ -66,6 +66,8 @@ export type ListenOptions = {
   embed?: Embedder;
   // The replay defence: refuse copies and faster-than-live audio (the deployed serve turns this on; scripted feeds leave it off), whether a chunk must carry the strip's liveness marker, and the frozen rule.
   replay?: "refuse" | "off"; presence?: PresenceMode; presenceRule?: PresenceRule;
+  // In heartbeat presence, the strip session's signed heartbeat, given by the agent service.
+  heartbeat?: HeartbeatOf;
   heldEndWaitMs?: number;
   // Staff names sent in the recognition hints after the patient's own words; empty unless the serve is given them.
   staff?: readonly string[];
@@ -74,8 +76,6 @@ export type ListenOptions = {
   onStatus?: (owner: string, sessionId: string, seq: number, st: UtteranceStatus) => void;
 };
 
-// Speech, not digital silence: identical silent chunks are expected and are no sign of a copy.
-const hasSpeech = (wav: Uint8Array): boolean => { const { samples } = decodeWav(wav); for (const v of samples) if (Math.abs(v) > 0.01) return true; return false; };
 const totalMs = (parts: readonly Float32Array[], rate: number) => Math.round((parts.reduce((n, p) => n + p.length, 0) / rate) * 1000);
 
 // Continuous listening: chunks of one session are heard in order, capped chunks are joined as audio, a number cut at a pause is joined with what follows, and only a finished utterance reaches the runtime.
@@ -83,7 +83,15 @@ export class ListenSessions {
   private readonly sessions = new Map<string, Session>();
   private closed = false;
   private readonly guard: ReplayGuard;
-  constructor(private readonly rt: EmrRuntime, private readonly o: ListenOptions) { this.guard = new ReplayGuard(o.presence ?? "observed", o.presenceRule, o.replay === "refuse"); }
+  constructor(private readonly rt: EmrRuntime, private readonly o: ListenOptions) { this.guard = new ReplayGuard(o.presence ?? "observed", o.presenceRule, o.replay === "refuse", o.heartbeat); }
+
+  // The one live check for audio from either path: a strip chunk, or a piece of a frames stream (its samples as given, numbered by the stream).
+  admit(c: { owner: string; session_id: string; seq: number | string; samples: Float32Array; rate: number; arrived_at?: number; captured_at?: number | undefined; presence?: LivenessMarker | null | undefined }): GuardVerdict {
+    const bytes = new Uint8Array(c.samples.buffer, c.samples.byteOffset, c.samples.byteLength);
+    let speech = false;
+    for (const v of c.samples) if (Math.abs(v) > 0.01) { speech = true; break; }
+    return this.guard.check({ owner: c.owner, session_id: c.session_id, seq: c.seq, wav: bytes, audio_ms: Math.round((c.samples.length / c.rate) * 1000), speech, arrived_at: c.arrived_at ?? this.now(), captured_at: c.captured_at, marker: c.presence });
+  }
 
   // How many chunks the replay defence refused, by reason.
   replayRefusals(): Record<string, number> { return { ...this.guard.refusals }; }
@@ -98,7 +106,8 @@ export class ListenSessions {
     const info = parseWav(c.wav);
     if (!info.ok) throw new ListenError(400, `audio: ${info.reason}`);
     // A chunk a live microphone in this session could not have sent is refused before anything hears it, so the voice match never decides a replay.
-    const g = this.guard.check({ owner: c.owner, session_id: c.session_id, seq: c.seq, wav: c.wav, audio_ms: info.durationMs, speech: hasSpeech(c.wav), arrived_at: c.arrived_at ?? this.now(), captured_at: c.captured_at, marker: c.presence });
+    const { samples, sampleRate } = decodeWav(c.wav);
+    const g = this.admit({ owner: c.owner, session_id: c.session_id, seq: c.seq, samples, rate: sampleRate, arrived_at: c.arrived_at ?? this.now(), captured_at: c.captured_at, presence: c.presence });
     if (g.refused) throw new ListenError(409, `replayed audio refused: ${g.refused}`);
     return this.queue(c, info.durationMs, (sess) => this.hear(sess, c), wait);
   }
@@ -150,7 +159,7 @@ export class ListenSessions {
     const seq = s.next++;
     const run = s.chain.then(async () => {
       const v = vitalsVocabulary(cleanTranscript(c.raw));
-      const print = this.o.embed ? this.o.embed(encodeWav(c.samples, c.rate)).catch(() => null) : Promise.resolve(null);
+      const print = this.o.embed ? printLine(this.o.embed, matchWindows([c.samples], c.rate), c.rate) : Promise.resolve(null);
       const heard: Heard = {
         samples: [c.samples], seqs: [seq], rate: c.rate, audio_ms: totalMs([c.samples], c.rate), trailing_ms: c.trailing_ms, arrived: c.arrived,
         text: v.text, raw: c.raw, cost_usd: 0, keywords_dropped: false, rewrites: v.rewrites, strong: false, joined: false, heard_at: c.heard_at ?? this.now(), voiceprint: await print
@@ -163,7 +172,10 @@ export class ListenSessions {
         if (w.strong || continuesNumber(heard.text)) {
           const raw = `${w.raw.replace(/[.,;:!?]+$/, "")} ${c.raw}`;
           const jv = vitalsVocabulary(cleanTranscript(raw));
-          const joined: Heard = { ...heard, samples: [...w.samples, c.samples], seqs: [...w.seqs, seq], audio_ms: w.audio_ms + heard.audio_ms, text: jv.text, raw, rewrites: jv.rewrites, joined: true, voiceprint: w.voiceprint ?? heard.voiceprint, ...(w.released ? { continues: w.released.line_id } : {}) };
+          // The joined line is matched on every piece it was heard in, so a continuation in another voice never inherits the first speaker's authority.
+          const samples = [...w.samples, c.samples];
+          const voiceprint = this.o.embed ? await printLine(this.o.embed, matchWindows(samples, c.rate), c.rate) : null;
+          const joined: Heard = { ...heard, samples, seqs: [...w.seqs, seq], audio_ms: w.audio_ms + heard.audio_ms, text: jv.text, raw, rewrites: jv.rewrites, joined: true, voiceprint, ...(w.released ? { continues: w.released.line_id } : {}) };
           await this.settleHeard(s, c.session_id, joined, "joined_across_cut", joined.trailing_ms);
           return;
         }
@@ -395,8 +407,8 @@ export class ListenSessions {
     const asrId = `${sessionId}-${seqs.length > 1 ? `${seqs[0]}.` : ""}${seqs.at(-1)}`.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 64);
     let heard: FinalTranscript;
     let dropped = false;
-    // The voiceprint is worked out while the words are transcribed, so attribution adds no time to the line.
-    const print = this.o.embed && this.guard.lineOf(sessionId, seqs).live !== false ? this.o.embed(joined).catch(() => null) : Promise.resolve(null);
+    // The voiceprint is worked out while the words are transcribed, so attribution adds no time to the line; each heard piece is its own window.
+    const print = this.o.embed && this.guard.lineOf(sessionId, seqs, s.owner).live !== false ? printLine(this.o.embed, matchWindows(parts, rate), rate) : Promise.resolve(null);
     try {
       heard = await this.o.transcribe(joined, keywords, asrId);
     } catch (e) {
@@ -419,8 +431,9 @@ export class ListenSessions {
     // A joined line that waited again and went on alone still says it was joined.
     const finished = h.joined && why === "number_alone" ? "joined_across_cut" : why;
     // A line said while the person was not at the screen keeps its words but never reaches the voice match.
-    const present = this.guard.lineOf(sessionId, h.seqs);
-    const absent = present.live === false ? { voiceprint: null, unverified_reason: `not_present:${present.reason}` } : null;
+    const present = this.guard.lineOf(sessionId, h.seqs, s.owner);
+    const tooLong = h.audio_ms > LINE_MATCH_MAX_MS ? { voiceprint: null, unverified_reason: "too_long_to_match" } : null;
+    const absent = present.live === false ? { voiceprint: null, unverified_reason: `not_present:${present.reason}` } : tooLong;
     const r = await this.rt.say({
       owner: s.owner, target: { admission_id: s.ctx.admission_id }, text: h.text, source: "audio", spoken_at: new Date(h.arrived - h.audio_ms).toISOString(),
       audio: { audio_ms: h.audio_ms, cost_usd: h.cost_usd, session_id: sessionId },
