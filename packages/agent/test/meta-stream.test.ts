@@ -377,6 +377,49 @@ describe("the realtime session rules", () => {
     expect((await m.end("nopad")).failed).toMatch(/Ingress below real-time/);
   }, 10_000);
 
+  it("hands over on a patient change even when the old session's socket closes mid-line, so the new patient's lines are never stuck", async () => {
+    const clock = { now: 0 };
+    const meta = fakeMeta([
+      // The old session is cut off 300 ms after the change, inside the line it was finishing.
+      { dropAt: 1500, code: 1011, events: [...turn(0, 100, 600, "pulse 116"), { at_ms: 1100, ev: { type: "speechStart", turnId: 1, audioProcessedMs: 1000 } }].sort((x, y) => x.at_ms - y.at_ms) },
+      [...turn(0, 0, 600, "rate is 20"), ...turn(1, 1300, 1800, "pulse 98")]
+    ]);
+    const { l, bySession } = chain();
+    const m = new MetaStreamListener(l, { key: () => "k", socket: meta.factory, now: () => clock.now, padAfterMs: 0, joinWaitMs: 2000 });
+    await m.open({ owner: OWNER, target: { admission_id: ADM }, session_id: "cut", rate: RATE });
+    await play(m, "cut", clock, [["quiet", 100], ["tone", 500], ["quiet", 400], ["tone", 200]]);
+    await m.retarget("cut", { target: { patient_id: "99999999-8888-4777-8666-555555555555" }, listen_sid: "cut.1" });
+    await play(m, "cut", clock, [["tone", 600], ["quiet", 700], ["tone", 500], ["quiet", 1500]]);
+    // While the stream is still open, within the bounded wait: the new patient's lines are not left waiting on a socket that is gone.
+    for (let i = 0; i < 40 && bySession.length < 2; i++) await new Promise((r) => setTimeout(r, 100));
+    // The old line was cut before it completed: its end is never given to the new patient, and the new patient's own line goes on.
+    expect(bySession).toEqual(["cut: pulse 116", "cut.1: pulse 98"]);
+    expect((await m.end("cut")).errors.join(" ")).toMatch(/cut off when the realtime connection dropped during a patient change; say it again/);
+  });
+
+  it("paces audio that arrives late after a stall, trimming the silence it padded, so the stream never runs ahead of real time", async () => {
+    const meta = fakeMeta([[...turn(0, 0, 500, "pulse 116")]]);
+    const { l } = chain();
+    const m = new MetaStreamListener(l, { key: () => "k", socket: ingressRule(meta.factory) });
+    await m.open({ owner: OWNER, target: { admission_id: ADM }, session_id: "late", rate: RATE });
+    const t0 = Date.now();
+    m.feed("late", tone(500), t0);
+    m.feed("late", quiet(500), t0 + 500);
+    await new Promise((r) => setTimeout(r, 3000));
+    // The 2 s captured during the stall arrive at once with their capture times, then the sender is live again.
+    const leads: number[] = [];
+    const sentMs = () => (meta.conns[0]!.sentBytes / 2 / RATE) * 1000;
+    m.feed("late", tone(400), t0 + 1000);
+    m.feed("late", quiet(1600), t0 + 1400);
+    for (let i = 0; i < 20; i++) { m.feed("late", quiet(100), t0 + 3000 + i * 100); leads.push(sentMs() - (Date.now() - t0)); await new Promise((r) => setTimeout(r, 100)); }
+    const r = await m.end("late");
+    expect(r.failed).toBeNull();
+    expect(r.padded_ms).toBeGreaterThan(1000);
+    expect(r.trimmed_ms).toBeGreaterThan(1000);
+    // Once the late audio is in, the stream is back within half a second of the clock, never seconds ahead.
+    expect(Math.max(...leads.slice(5))).toBeLessThan(500);
+  }, 10_000);
+
   it("opens the session again after a dropped connection and sends the line it was cut in again, so its words are not lost", async () => {
     let now = 0;
     // The second session hears the resent audio from the start of the cut line, so its positions count from there.

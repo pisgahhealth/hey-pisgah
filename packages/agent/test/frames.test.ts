@@ -62,9 +62,9 @@ async function boot(o: { asr: "stream" | "rest"; lines?: string[]; transcribe?: 
   });
   rt = s.runtime;
   // One numbered part of a frames stream, as the strip posts it.
-  const part = async (q: { stream?: number; part: number; last?: boolean; session?: string; admissionId?: string | null; rate?: number }, body: Buffer) => {
+  const part = async (q: { stream?: number; part: number; last?: boolean; session?: string; admissionId?: string | null; rate?: number; t?: number }, body: Buffer) => {
     const page = q.admissionId === null ? "" : `&admissionId=${q.admissionId ?? ADM}`;
-    const r = await fetch(`${s.url}/tasks/listen/stream?owner=${OWNER}&session_id=${q.session ?? "strip-1"}&rate=${q.rate ?? RATE}&stream=${q.stream ?? 0}&part=${q.part}${q.last ? "&last=1" : ""}${page}`, { method: "POST", headers: { "content-type": "audio/pcm" }, body: new Uint8Array(body) });
+    const r = await fetch(`${s.url}/tasks/listen/stream?owner=${OWNER}&session_id=${q.session ?? "strip-1"}&rate=${q.rate ?? RATE}&stream=${q.stream ?? 0}&part=${q.part}${q.last ? "&last=1" : ""}${q.t ? `&t=${q.t}` : ""}${page}`, { method: "POST", headers: { "content-type": "audio/pcm" }, body: new Uint8Array(body) });
     return { status: r.status, body: (await r.json()) as Record<string, any> };
   };
   // A whole recording as parts of 80 ms frames, the last part closing the stream.
@@ -126,6 +126,22 @@ describe("the strip's frames route", () => {
     expect(two).toMatchObject({ status: 202, body: { tracking: { admission_id: ADM } } });
     await s.runtime.settled();
     expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, pulse: 116 }, { admission_id: ADM, pulse: 120 }]);
+    await s.close();
+  });
+
+  it("drops the line still being said when it ends a stream for the strip, and tells the strip's next part where the kept audio ended", async () => {
+    const { s, port, part } = await boot({ asr: "stream", lines: ["Chart his pulse 116", "Chart his pulse 120"], idleMs: 300 });
+    const t0 = Date.now() - 3000;
+    // The first line ends at a pause; the second is still being said when the strip goes quiet.
+    expect((await part({ part: 0, t: t0 }, pcm([["quiet", 200], ["tone", 1000], ["quiet", 1000], ["tone", 600]]))).status).toBe(202);
+    await new Promise((r) => setTimeout(r, 700));
+    const again = await part({ part: 1, t: t0 + 2800 }, pcm([["quiet", 80]]));
+    expect(again).toMatchObject({ status: 409, body: { restart: true, reason: "unknown_stream" } });
+    // Kept to the start of the dropped line, captured about 2.2 s in, so the strip sends that line as a chunk.
+    expect(again.body["kept_until"]).toBeGreaterThan(t0 + 1800);
+    expect(again.body["kept_until"]).toBeLessThan(t0 + 2300);
+    await s.runtime.settled();
+    expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, pulse: 116 }]);
     await s.close();
   });
 

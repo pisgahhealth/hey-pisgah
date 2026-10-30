@@ -107,7 +107,7 @@ const StreamMeta = z.strictObject({ owner: Owner, admissionId: EmrId.optional(),
 // One hour of 24 kHz audio.
 const STREAM_LIMIT = 24_000 * 2 * 3600;
 // The strip's frames come as short numbered parts of one stream, since a browser cannot stream a request body to this plain HTTP/1.1 service.
-const FramesMeta = StreamMeta.extend({ stream: z.coerce.number().int().min(0).max(9999), part: z.coerce.number().int().min(0), last: z.literal("1").optional() });
+const FramesMeta = StreamMeta.extend({ stream: z.coerce.number().int().min(0).max(9999), part: z.coerce.number().int().min(0), last: z.literal("1").optional(), t: z.coerce.number().int().optional() });
 // The frame size the strip is asked to send, 80 ms as Meta's examples use.
 export const FRAME_MS = 80;
 // Ten seconds of 24 kHz audio is the most one part may carry.
@@ -444,24 +444,31 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     for (const sid of f.sids) { utterances.push(...(frameHeard.get(sid)?.splice(0) ?? [])); const r = listening.unreportedOf(sid); utterances.push(...r.utterances); errors.push(...r.errors); }
     return { utterances, errors };
   };
-  const endFrames = async (f: Frames): Promise<{ utterances: ListenUtterance[]; errors: string[]; padded_ms?: number; resent_ms?: number; failed?: string | null }> => {
-    if (frames.get(`${f.owner}\u0000${f.key}`) === f) frames.delete(`${f.owner}\u0000${f.key}`);
+  // Streams ended without the strip's last part, kept briefly so the strip's next part learns where the kept audio ended.
+  const endedKept = new Map<string, number | null>();
+  // A stream the strip ended is finished whole; one ended for it (a fallback, a gap, idle) drops the line still being said, which the strip sends as a chunk.
+  const endFrames = async (f: Frames, dropOpen = false): Promise<{ utterances: ListenUtterance[]; errors: string[]; padded_ms?: number; resent_ms?: number; trimmed_ms?: number; failed?: string | null; kept_until: number | null }> => {
+    const mapKey = `${f.owner}\u0000${f.key}`;
+    if (frames.get(mapKey) === f) frames.delete(mapKey);
     if (f.idle) clearTimeout(f.idle);
-    const ended = await streamer!.end(f.key);
+    const ended = await streamer!.end(f.key, { dropOpen });
+    if (dropOpen) { endedKept.set(mapKey, ended.kept_until); if (endedKept.size > 200) endedKept.delete(endedKept.keys().next().value!); }
     const later = heardOf(f);
     for (const sid of f.sids) frameHeard.delete(sid);
     return { ...ended, utterances: [...later.utterances, ...ended.utterances], errors: [...later.errors, ...ended.errors] };
   };
   const listenFrames = async (req: IncomingMessage, q: URLSearchParams): Promise<[number, unknown]> => {
-    const b = parse(FramesMeta, { owner: q.get("owner") ?? undefined, session_id: q.get("session_id") ?? undefined, rate: q.get("rate") ?? undefined, stream: q.get("stream") ?? undefined, part: q.get("part") ?? undefined, ...(q.get("last") ? { last: q.get("last") } : {}), ...(q.get("admissionId") ? { admissionId: q.get("admissionId") } : {}), ...(q.get("patientId") ? { patientId: q.get("patientId") } : {}) });
+    const b = parse(FramesMeta, { owner: q.get("owner") ?? undefined, session_id: q.get("session_id") ?? undefined, rate: q.get("rate") ?? undefined, stream: q.get("stream") ?? undefined, part: q.get("part") ?? undefined, ...(q.get("last") ? { last: q.get("last") } : {}), ...(q.get("t") ? { t: q.get("t") } : {}), ...(q.get("admissionId") ? { admissionId: q.get("admissionId") } : {}), ...(q.get("patientId") ? { patientId: q.get("patientId") } : {}) });
     const body = await raw(req, FRAME_PART_LIMIT);
     if (body.length % 2) throw new HttpError(400, "audio: a part carries whole 16-bit samples");
     const key = `${b.session_id}.f${b.stream}`;
     const mapKey = `${b.owner}\u0000${key}`;
     const page = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
-    const at = Date.now();
+    const now = Date.now();
+    // The part is bound to when its first frame was captured, as a chunk is bound to when its words began.
+    const at = b.t !== undefined && b.t <= now + 5_000 && b.t >= now - 10 * 60_000 ? b.t : now;
     let f = frames.get(mapKey);
-    if (!f && b.part > 0) return [409, { restart: true, reason: "unknown_stream", stream: b.stream, part: b.part }];
+    if (!f && b.part > 0) return [409, { restart: true, reason: "unknown_stream", stream: b.stream, part: b.part, kept_until: endedKept.get(mapKey) ?? null }];
     if (f && b.part < f.next) return [200, { duplicate: true, stream: b.stream, part: b.part }];
     if (f && f.rate !== b.rate) throw new HttpError(400, "rate: a stream keeps the rate it opened with");
     // Speech after an emergency phrase on this page is held for the arrival on the chunk path, and a page with no patient is heard there too.
@@ -483,11 +490,11 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       f = nf;
     }
     const cur = f;
-    if (b.part > cur.next) { const ended = await endFrames(cur); return [409, { restart: true, reason: "part_missing", stream: b.stream, part: b.part, ...ended }]; }
+    if (b.part > cur.next) { const ended = await endFrames(cur, true); return [409, { restart: true, reason: "part_missing", stream: b.stream, part: b.part, ...ended }]; }
     const work = cur.busy.then(async (): Promise<[number, unknown]> => {
-      if (fallback) { const ended = await endFrames(cur); return [409, { fallback: "chunks", reason: fallback, stream: b.stream, part: b.part, ...ended }]; }
+      if (fallback) { const ended = await endFrames(cur, true); return [409, { fallback: "chunks", reason: fallback, stream: b.stream, part: b.part, ...ended }]; }
       const target = subjectFor(b.owner, page, at);
-      if (!target) { const ended = await endFrames(cur); return [409, { fallback: "chunks", reason: "no_patient", stream: b.stream, part: b.part, ...ended }]; }
+      if (!target) { const ended = await endFrames(cur, true); return [409, { fallback: "chunks", reason: "no_patient", stream: b.stream, part: b.part, ...ended }]; }
       // A move to another patient opens that patient's listening session; the line being said keeps the patient it began with.
       if (JSON.stringify(target) !== JSON.stringify(cur.target)) {
         cur.k += 1;
@@ -496,8 +503,8 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
         cur.target = target;
         await streamer!.retarget(cur.key, { target, listen_sid: cur.sid });
       }
-      try { if (body.length) streamer!.feed(cur.key, pcmOf(body)); } catch (e) {
-        const ended = await endFrames(cur);
+      try { if (body.length) streamer!.feed(cur.key, pcmOf(body), at); } catch (e) {
+        const ended = await endFrames(cur, true);
         if (e instanceof StreamRefused) return [409, { error: e.message, refused: true, stream: b.stream, part: b.part, ...ended }];
         if (e instanceof MetaStreamFailed) return [502, { error: e.message, stream: b.stream, part: b.part, ...ended }];
         throw e;
@@ -511,7 +518,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
         if (typeof ended.failed === "string") return [502, { error: ended.failed, stream: b.stream, part: b.part, ...ended }];
         return [202, { session_id: b.session_id, accepted: true, stream: b.stream, part: b.part, last: true, tracking: target, audio_ms: audioMs, ...ended }];
       }
-      cur.idle = setTimeout(() => { void endFrames(cur).catch(() => undefined); }, o.framesIdleMs ?? FRAME_IDLE_MS);
+      cur.idle = setTimeout(() => { void endFrames(cur, true).catch(() => undefined); }, o.framesIdleMs ?? FRAME_IDLE_MS);
       cur.idle.unref?.();
       const h = heardOf(cur);
       return [202, { session_id: b.session_id, accepted: true, stream: b.stream, part: b.part, tracking: target, audio_ms: audioMs, utterances: h.utterances, partial: null, ...(h.errors.length ? { errors: h.errors } : {}) }];
