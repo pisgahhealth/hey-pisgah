@@ -50,12 +50,15 @@ describe("claims:check", () => {
     expect(planted({ "completion.json": { off_diagonal: 1, premature_attempts_counted: true } })("C-13").status).toBe("red");
     expect(planted({ "completion.json": { off_diagonal: 0, premature_attempts_counted: false } })("C-13").status).toBe("amber");
   });
-  it("reads C-06 from the fields the validation summary actually writes", () => {
-    const fields = parseClaimPredicate(predicateOf("C-06")).fields;
-    expect(fields.every((f) => f in validationSummary([]))).toBe(true);
-    const file = registry.claims.find((c) => c.claim_id === "C-06")!.acceptance.result_path.split("/").at(-1)!;
-    expect(planted({ [file]: validationSummary([]) })("C-06").status).toBe("red");
-    expect(planted({ [file]: { ...validationSummary([]), proposals_validated: 2 } })("C-06").status).toBe("amber");
-    expect(planted({ [file]: { ...validationSummary([]), dev_gate_pass: true, exception_check_pass: true, fences_unchanged: true } })("C-06").status).toBe("green");
+  it("reads C-06 from the same discovery file and predicate as its successor C-26", () => {
+    const c06 = registry.claims.find((c) => c.claim_id === "C-06")!.acceptance;
+    const c26 = registry.claims.find((c) => c.claim_id === "C-26")!.acceptance;
+    expect(c06.result_path).toBe(c26.result_path);
+    expect(c06.predicate).toBe(c26.predicate);
+    const file = c06.result_path.split("/").at(-1)!;
+    const base = { discover_dev_valid: 0, discover_dev_valid_any: 0, discover_invariance_pass: false, discover_deny_clean: false };
+    expect(planted({ [file]: base })("C-06").status).toBe("red");
+    expect(planted({ [file]: { ...base, discover_dev_valid_any: 2 } })("C-06").status).toBe("amber");
+    expect(planted({ [file]: { discover_dev_valid: 1, discover_dev_valid_any: 1, discover_invariance_pass: true, discover_deny_clean: true } })("C-06").status).toBe("green");
   });
 });
