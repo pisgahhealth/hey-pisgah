@@ -16,7 +16,7 @@ const H = (id: string, if_true: unknown, if_false: unknown) => ({ hypothesis_id:
 describe("deny list over prompts and tool descriptions", () => {
   it("finds no denied term in any arm's prompt, kickoff, nudge, descriptions or schemas", () => {
     for (const arm of ARMS) expect(denyScan(appTexts(arm))).toEqual([]);
-    expect(Object.keys(DESCRIPTIONS).length).toBe(24);
+    expect(Object.keys(DESCRIPTIONS).length).toBe(25);
   });
   it("catches planted terms, including a Reasoning strength line", () => {
     const planted = ["Reasoning strength: 8.", "prepare the draft before sign-off", "family F1", "start it earlier"];

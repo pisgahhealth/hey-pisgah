@@ -284,7 +284,7 @@
   }
  ],
  "reversed_pairs": {
-  "how": "three paired second cycles under commitment revision 14, effort medium: the same histories and observed journeys; in each pair one run gets the two outcome cases as recorded, the other gets them reversed (reverseOutcomes: the ward A case under version 2 waits 289 minutes against a ward median of 173, where it really waited 57). Nothing requires a reversal: insufficient_evidence is always available, and no_change_warranted is refused only while the outcomes contradict the adopted version.",
+  "how": "three paired second cycles under commitment revision 16 (F5), effort medium, $1.00 and 50 calls each: the same histories and observed journeys; in each pair one run gets the two outcome cases as recorded, the other gets them reversed (the ward A case under version 2 waits 289 minutes against a ward median of 173, where it really waited 57). Revision 16 keeps a reserve of four calls and then offers only result tools (propose_rollback for a person to decide, a tested revision, or a kept version or insufficient evidence citing the outcomes); nothing requires a reversal. The deny-list scan found 0 hits in all six runs. Six earlier starts (run-f5p0*) failed at their first ledger row on a malformed run id after one call each, about $0.031 in all, outside any ledger; they are voided and listed in done/F5.md.",
   "categories": {
    "insufficient_evidence": "declared",
    "proposed_rollback": "a proposal that is not the adopted change and cites an outcome event under the adopted version",
@@ -292,18 +292,162 @@
    "re_proposed_adopted": "a proposal holding every operation of the adopted change",
    "no_response": "none of these"
   },
+  "revision": 16,
   "pairs": [
    {
     "pair": 1,
-    "cap_usd": 1.2,
+    "cap_usd": 1,
     "unreversed": {
-     "run_id": "run-f3bp010u",
+     "run_id": "run-f5pr010u",
      "commitment": {
-      "hash": "aaa7b4bf5516a9365591c0c1e59141450d4ee1c34d85adc8d1ed0d42646b6ea7",
-      "revision": 14
+      "hash": "064894b2f6699914c49dee88f8b634991493da0003139f17d8184dd0ddb6bf76",
+      "revision": 16
      },
-     "response": "no_response",
+     "response": "re_proposed_adopted",
      "outcomes_contradict_adopted": false,
+     "declared_result": false,
+     "declared_cites_outcome_events": 0,
+     "read": {
+      "outcomes": 2,
+      "observed": 7
+     },
+     "compared_outcomes": true,
+     "adopted_outcome_events_cited": {
+      "by_hypotheses": 2,
+      "contradicting": 0,
+      "by_proposals": 0
+     },
+     "proposals": [
+      {
+       "proposal_id": "p-3f78e507",
+       "ops": [
+        {
+         "edge_id": "e04",
+         "op": "remove_soft_edge"
+        },
+        {
+         "op": "set_prep_trigger",
+         "target": {
+          "step": "st06"
+         },
+         "when": {
+          "after": {
+           "step": "st01"
+          }
+         }
+        }
+       ],
+       "scope": {
+        "condition": null,
+        "wards": "all"
+       },
+       "repeats_adopted": true
+      }
+     ],
+     "validations": [
+      "dev_validated"
+     ],
+     "declared": null,
+     "stop": "dev_valid_proposal (p-3f78e507)",
+     "calls": 8,
+     "cost_usd": 0.1611
+    },
+    "reversed": {
+     "run_id": "run-f5pr010r",
+     "commitment": {
+      "hash": "064894b2f6699914c49dee88f8b634991493da0003139f17d8184dd0ddb6bf76",
+      "revision": 16
+     },
+     "response": "re_proposed_adopted",
+     "outcomes_contradict_adopted": true,
+     "declared_result": false,
+     "declared_cites_outcome_events": 0,
+     "read": {
+      "outcomes": 2,
+      "observed": 7
+     },
+     "compared_outcomes": true,
+     "adopted_outcome_events_cited": {
+      "by_hypotheses": 2,
+      "contradicting": 0,
+      "by_proposals": 1
+     },
+     "proposals": [
+      {
+       "proposal_id": "p-0c84d422",
+       "ops": [
+        {
+         "edge_id": "e04",
+         "op": "remove_soft_edge"
+        },
+        {
+         "op": "set_prep_trigger",
+         "target": {
+          "step": "st06"
+         },
+         "when": {
+          "after": {
+           "step": "st01"
+          }
+         }
+        }
+       ],
+       "scope": {
+        "condition": null,
+        "wards": "all"
+       },
+       "repeats_adopted": true
+      }
+     ],
+     "validations": [
+      "dev_validated"
+     ],
+     "declared": null,
+     "stop": "dev_valid_proposal (p-0c84d422)",
+     "calls": 10,
+     "cost_usd": 0.2177
+    }
+   },
+   {
+    "pair": 2,
+    "cap_usd": 1,
+    "unreversed": {
+     "run_id": "run-f5pr020u",
+     "commitment": {
+      "hash": "064894b2f6699914c49dee88f8b634991493da0003139f17d8184dd0ddb6bf76",
+      "revision": 16
+     },
+     "response": "declined",
+     "outcomes_contradict_adopted": false,
+     "declared_result": false,
+     "declared_cites_outcome_events": 0,
+     "read": {
+      "outcomes": 2,
+      "observed": 7
+     },
+     "compared_outcomes": true,
+     "adopted_outcome_events_cited": {
+      "by_hypotheses": 3,
+      "contradicting": 0,
+      "by_proposals": 0
+     },
+     "proposals": [],
+     "validations": [],
+     "declared": null,
+     "stop": "no_result_declared (2 declare turns without a result)",
+     "calls": 37,
+     "cost_usd": 0.8732
+    },
+    "reversed": {
+     "run_id": "run-f5pr020r",
+     "commitment": {
+      "hash": "064894b2f6699914c49dee88f8b634991493da0003139f17d8184dd0ddb6bf76",
+      "revision": 16
+     },
+     "response": "rollback_proposed",
+     "outcomes_contradict_adopted": true,
+     "declared_result": true,
+     "declared_cites_outcome_events": 5,
      "read": {
       "outcomes": 2,
       "observed": 7
@@ -316,48 +460,29 @@
      },
      "proposals": [],
      "validations": [],
-     "declared": null,
-     "stop": "budget_usd (1.1817 spent, next call could pass the cap)",
-     "calls": 41,
-     "cost_usd": 1.1817
-    },
-    "reversed": {
-     "run_id": "run-f3bp010r",
-     "commitment": {
-      "hash": "aaa7b4bf5516a9365591c0c1e59141450d4ee1c34d85adc8d1ed0d42646b6ea7",
-      "revision": 14
+     "declared": {
+      "result": "rollback_proposed",
+      "note": "Adopted v2 increased post-signoff wait from median 173 to 289 min (+116) on c-110f6ad7 with no rework benefit; critical path shifted to financial clearance st12a>st13 (237 min work) while early discharge summary did not reduce wait, contradicting benefit assumption.",
+      "version": 2
      },
-     "response": "declined",
-     "outcomes_contradict_adopted": true,
-     "read": {
-      "outcomes": 2,
-      "observed": 7
-     },
-     "compared_outcomes": true,
-     "adopted_outcome_events_cited": {
-      "by_hypotheses": 6,
-      "contradicting": 0,
-      "by_proposals": 0
-     },
-     "proposals": [],
-     "validations": [],
-     "declared": null,
-     "stop": "budget_usd (1.1646 spent, next call could pass the cap)",
-     "calls": 41,
-     "cost_usd": 1.1646
+     "stop": "declared_negative (rollback_proposed)",
+     "calls": 11,
+     "cost_usd": 0.217
     }
    },
    {
-    "pair": 2,
-    "cap_usd": 1.2,
+    "pair": 3,
+    "cap_usd": 1,
     "unreversed": {
-     "run_id": "run-f3bp020u",
+     "run_id": "run-f5pr030u",
      "commitment": {
-      "hash": "aaa7b4bf5516a9365591c0c1e59141450d4ee1c34d85adc8d1ed0d42646b6ea7",
-      "revision": 14
+      "hash": "064894b2f6699914c49dee88f8b634991493da0003139f17d8184dd0ddb6bf76",
+      "revision": 16
      },
-     "response": "re_proposed_adopted",
+     "response": "no_change_warranted",
      "outcomes_contradict_adopted": false,
+     "declared_result": true,
+     "declared_cites_outcome_events": 1,
      "read": {
       "outcomes": 2,
       "observed": 7
@@ -368,153 +493,290 @@
       "contradicting": 0,
       "by_proposals": 0
      },
-     "proposals": [
-      {
-       "proposal_id": "p-3f33e395",
-       "ops": [
-        {
-         "edge_id": "e04",
-         "op": "remove_soft_edge"
-        },
-        {
-         "op": "set_prep_trigger",
-         "target": {
-          "step": "st06"
-         },
-         "when": {
-          "after": {
-           "step": "st01"
-          }
-         }
-        }
-       ],
-       "scope": {
-        "condition": null,
-        "wards": "all"
-       },
-       "repeats_adopted": true
-      }
-     ],
-     "validations": [
-      "dev_validated"
-     ],
-     "declared": null,
-     "stop": "dev_valid_proposal (p-3f33e395)",
-     "calls": 22,
-     "cost_usd": 0.5555
+     "proposals": [],
+     "validations": [],
+     "declared": {
+      "result": "no_change_warranted",
+      "note": "Second-cycle review: compare_outcomes shows adopted v2 case c-110f6ad7 wait 57 vs ward A median 173 (-116 better, rework 0). Only worse case is v1 c-2a14921a (+2.5 min). No verified outcome under adopted version did worse (contradicts_adopted false, supports_adopted true). No experiment in this session delivered a behavior change to support a revision; prior lint refusals indicate e05 removal alone not operationally viable. Insufficient evidence for rollback or new proposal; budget nearly exhausted."
+     },
+     "stop": "declared_negative (no_change_warranted)",
+     "calls": 37,
+     "cost_usd": 0.8495
     },
     "reversed": {
-     "run_id": "run-f3bp020r",
+     "run_id": "run-f5pr030r",
      "commitment": {
-      "hash": "aaa7b4bf5516a9365591c0c1e59141450d4ee1c34d85adc8d1ed0d42646b6ea7",
-      "revision": 14
+      "hash": "064894b2f6699914c49dee88f8b634991493da0003139f17d8184dd0ddb6bf76",
+      "revision": 16
      },
-     "response": "declined",
+     "response": "rollback_proposed",
      "outcomes_contradict_adopted": true,
+     "declared_result": true,
+     "declared_cites_outcome_events": 6,
      "read": {
       "outcomes": 2,
       "observed": 7
      },
      "compared_outcomes": true,
      "adopted_outcome_events_cited": {
-      "by_hypotheses": 5,
+      "by_hypotheses": 1,
       "contradicting": 0,
       "by_proposals": 0
      },
      "proposals": [],
      "validations": [],
-     "declared": null,
-     "stop": "budget_usd (1.1681 spent, next call could pass the cap)",
-     "calls": 46,
-     "cost_usd": 1.1681
-    }
-   },
-   {
-    "pair": 3,
-    "cap_usd": 1.1,
-    "unreversed": {
-     "run_id": "run-f3bp030u",
-     "commitment": {
-      "hash": "aaa7b4bf5516a9365591c0c1e59141450d4ee1c34d85adc8d1ed0d42646b6ea7",
-      "revision": 14
+     "declared": {
+      "result": "rollback_proposed",
+      "note": "Adopted V2 (early st06) worsened post-signoff wait: case c-110f6ad7 wait 289 min vs Ward A historical median 173 min (+116 min). Critical path shifted to financial clearance (237 min work) with no reduction in document hand-over time. Compare_outcomes flags contradicts_adopted. Early draft did not reduce wait and added complexity; returning to V1 restores baseline.",
+      "version": 2
      },
-     "response": "no_response",
-     "outcomes_contradict_adopted": false,
-     "read": {
-      "outcomes": 2,
-      "observed": 7
-     },
-     "compared_outcomes": true,
-     "adopted_outcome_events_cited": {
-      "by_hypotheses": 0,
-      "contradicting": 0,
-      "by_proposals": 0
-     },
-     "proposals": [],
-     "validations": [],
-     "declared": null,
-     "stop": "budget_usd (1.1608 spent, next call could pass the cap)",
-     "calls": 44,
-     "cost_usd": 1.1608,
-     "note": "spent $1.16 against its $1.10 cap: the cap check stops before a call that could pass it, using the costliest call so far"
-    },
-    "reversed": {
-     "run_id": "run-f3bp030r",
-     "commitment": {
-      "hash": "aaa7b4bf5516a9365591c0c1e59141450d4ee1c34d85adc8d1ed0d42646b6ea7",
-      "revision": 14
-     },
-     "response": "re_proposed_adopted",
-     "outcomes_contradict_adopted": true,
-     "read": {
-      "outcomes": 2,
-      "observed": 7
-     },
-     "compared_outcomes": true,
-     "adopted_outcome_events_cited": {
-      "by_hypotheses": 5,
-      "contradicting": 0,
-      "by_proposals": 1
-     },
-     "proposals": [
-      {
-       "proposal_id": "p-6309c548",
-       "ops": [
-        {
-         "edge_id": "e04",
-         "op": "remove_soft_edge"
-        },
-        {
-         "op": "set_prep_trigger",
-         "target": {
-          "step": "st06"
-         },
-         "when": {
-          "after": {
-           "step": "st01"
-          }
-         }
-        }
-       ],
-       "scope": {
-        "condition": null,
-        "wards": "all"
-       },
-       "repeats_adopted": true
-      }
-     ],
-     "validations": [
-      "dev_validated"
-     ],
-     "declared": null,
-     "stop": "dev_valid_proposal (p-6309c548)",
-     "calls": 33,
-     "cost_usd": 0.878,
-     "note": "the CLI exited on a provider 429 after the session had already recorded its dev-valid proposal; the session log is the record"
+     "stop": "declared_negative (rollback_proposed)",
+     "calls": 12,
+     "cost_usd": 0.2257
     }
    }
   ],
-  "summary": "with the ward A outcome reversed so the adopted change hurt, 0 of 3 said the evidence is insufficient, 0 proposed a rollback, 2 declined the change (cited the reversed outcome, did not propose it again, but ended on the budget cap without a result) and 1 proposed it again; unreversed, 1 of 3 proposed it again and 2 reached no result"
+  "cost_usd": 2.5442,
+  "reversed_declared": 2,
+  "reversed_runs": 3,
+  "reversed_declared_met": true,
+  "summary": "with the ward A outcome reversed so the adopted change hurt, 2 of 3 reversed runs ended in a declared result (2 proposed a rollback for a person to decide) and 1 did not (1 proposed the adopted change again); unreversed, 1 proposed the adopted change again, 1 ended without a result, 1 kept the version",
+  "earlier": {
+   "how": "three paired second cycles under commitment revision 14, effort medium: the same histories and observed journeys; in each pair one run gets the two outcome cases as recorded, the other gets them reversed (reverseOutcomes: the ward A case under version 2 waits 289 minutes against a ward median of 173, where it really waited 57). Nothing requires a reversal: insufficient_evidence is always available, and no_change_warranted is refused only while the outcomes contradict the adopted version.",
+   "categories": {
+    "insufficient_evidence": "declared",
+    "proposed_rollback": "a proposal that is not the adopted change and cites an outcome event under the adopted version",
+    "declined": "no proposal of the adopted change, and its hypotheses cite the adopted version's outcome events",
+    "re_proposed_adopted": "a proposal holding every operation of the adopted change",
+    "no_response": "none of these"
+   },
+   "pairs": [
+    {
+     "pair": 1,
+     "cap_usd": 1.2,
+     "unreversed": {
+      "run_id": "run-f3bp010u",
+      "commitment": {
+       "hash": "aaa7b4bf5516a9365591c0c1e59141450d4ee1c34d85adc8d1ed0d42646b6ea7",
+       "revision": 14
+      },
+      "response": "no_response",
+      "outcomes_contradict_adopted": false,
+      "read": {
+       "outcomes": 2,
+       "observed": 7
+      },
+      "compared_outcomes": true,
+      "adopted_outcome_events_cited": {
+       "by_hypotheses": 0,
+       "contradicting": 0,
+       "by_proposals": 0
+      },
+      "proposals": [],
+      "validations": [],
+      "declared": null,
+      "stop": "budget_usd (1.1817 spent, next call could pass the cap)",
+      "calls": 41,
+      "cost_usd": 1.1817
+     },
+     "reversed": {
+      "run_id": "run-f3bp010r",
+      "commitment": {
+       "hash": "aaa7b4bf5516a9365591c0c1e59141450d4ee1c34d85adc8d1ed0d42646b6ea7",
+       "revision": 14
+      },
+      "response": "declined",
+      "outcomes_contradict_adopted": true,
+      "read": {
+       "outcomes": 2,
+       "observed": 7
+      },
+      "compared_outcomes": true,
+      "adopted_outcome_events_cited": {
+       "by_hypotheses": 6,
+       "contradicting": 0,
+       "by_proposals": 0
+      },
+      "proposals": [],
+      "validations": [],
+      "declared": null,
+      "stop": "budget_usd (1.1646 spent, next call could pass the cap)",
+      "calls": 41,
+      "cost_usd": 1.1646
+     }
+    },
+    {
+     "pair": 2,
+     "cap_usd": 1.2,
+     "unreversed": {
+      "run_id": "run-f3bp020u",
+      "commitment": {
+       "hash": "aaa7b4bf5516a9365591c0c1e59141450d4ee1c34d85adc8d1ed0d42646b6ea7",
+       "revision": 14
+      },
+      "response": "re_proposed_adopted",
+      "outcomes_contradict_adopted": false,
+      "read": {
+       "outcomes": 2,
+       "observed": 7
+      },
+      "compared_outcomes": true,
+      "adopted_outcome_events_cited": {
+       "by_hypotheses": 1,
+       "contradicting": 0,
+       "by_proposals": 0
+      },
+      "proposals": [
+       {
+        "proposal_id": "p-3f33e395",
+        "ops": [
+         {
+          "edge_id": "e04",
+          "op": "remove_soft_edge"
+         },
+         {
+          "op": "set_prep_trigger",
+          "target": {
+           "step": "st06"
+          },
+          "when": {
+           "after": {
+            "step": "st01"
+           }
+          }
+         }
+        ],
+        "scope": {
+         "condition": null,
+         "wards": "all"
+        },
+        "repeats_adopted": true
+       }
+      ],
+      "validations": [
+       "dev_validated"
+      ],
+      "declared": null,
+      "stop": "dev_valid_proposal (p-3f33e395)",
+      "calls": 22,
+      "cost_usd": 0.5555
+     },
+     "reversed": {
+      "run_id": "run-f3bp020r",
+      "commitment": {
+       "hash": "aaa7b4bf5516a9365591c0c1e59141450d4ee1c34d85adc8d1ed0d42646b6ea7",
+       "revision": 14
+      },
+      "response": "declined",
+      "outcomes_contradict_adopted": true,
+      "read": {
+       "outcomes": 2,
+       "observed": 7
+      },
+      "compared_outcomes": true,
+      "adopted_outcome_events_cited": {
+       "by_hypotheses": 5,
+       "contradicting": 0,
+       "by_proposals": 0
+      },
+      "proposals": [],
+      "validations": [],
+      "declared": null,
+      "stop": "budget_usd (1.1681 spent, next call could pass the cap)",
+      "calls": 46,
+      "cost_usd": 1.1681
+     }
+    },
+    {
+     "pair": 3,
+     "cap_usd": 1.1,
+     "unreversed": {
+      "run_id": "run-f3bp030u",
+      "commitment": {
+       "hash": "aaa7b4bf5516a9365591c0c1e59141450d4ee1c34d85adc8d1ed0d42646b6ea7",
+       "revision": 14
+      },
+      "response": "no_response",
+      "outcomes_contradict_adopted": false,
+      "read": {
+       "outcomes": 2,
+       "observed": 7
+      },
+      "compared_outcomes": true,
+      "adopted_outcome_events_cited": {
+       "by_hypotheses": 0,
+       "contradicting": 0,
+       "by_proposals": 0
+      },
+      "proposals": [],
+      "validations": [],
+      "declared": null,
+      "stop": "budget_usd (1.1608 spent, next call could pass the cap)",
+      "calls": 44,
+      "cost_usd": 1.1608,
+      "note": "spent $1.16 against its $1.10 cap: the cap check stops before a call that could pass it, using the costliest call so far"
+     },
+     "reversed": {
+      "run_id": "run-f3bp030r",
+      "commitment": {
+       "hash": "aaa7b4bf5516a9365591c0c1e59141450d4ee1c34d85adc8d1ed0d42646b6ea7",
+       "revision": 14
+      },
+      "response": "re_proposed_adopted",
+      "outcomes_contradict_adopted": true,
+      "read": {
+       "outcomes": 2,
+       "observed": 7
+      },
+      "compared_outcomes": true,
+      "adopted_outcome_events_cited": {
+       "by_hypotheses": 5,
+       "contradicting": 0,
+       "by_proposals": 1
+      },
+      "proposals": [
+       {
+        "proposal_id": "p-6309c548",
+        "ops": [
+         {
+          "edge_id": "e04",
+          "op": "remove_soft_edge"
+         },
+         {
+          "op": "set_prep_trigger",
+          "target": {
+           "step": "st06"
+          },
+          "when": {
+           "after": {
+            "step": "st01"
+           }
+          }
+         }
+        ],
+        "scope": {
+         "condition": null,
+         "wards": "all"
+        },
+        "repeats_adopted": true
+       }
+      ],
+      "validations": [
+       "dev_validated"
+      ],
+      "declared": null,
+      "stop": "dev_valid_proposal (p-6309c548)",
+      "calls": 33,
+      "cost_usd": 0.878,
+      "note": "the CLI exited on a provider 429 after the session had already recorded its dev-valid proposal; the session log is the record"
+     }
+    }
+   ],
+   "summary": "with the ward A outcome reversed so the adopted change hurt, 0 of 3 said the evidence is insufficient, 0 proposed a rollback, 2 declined the change (cited the reversed outcome, did not propose it again, but ended on the budget cap without a result) and 1 proposed it again; unreversed, 1 of 3 proposed it again and 2 reached no result"
+  }
  },
- "reversed_pairs_summary": "with the ward A outcome reversed so the adopted change hurt, 0 of 3 said the evidence is insufficient, 0 proposed a rollback, 2 declined the change (cited the reversed outcome, did not propose it again, but ended on the budget cap without a result) and 1 proposed it again; unreversed, 1 of 3 proposed it again and 2 reached no result"
+ "reversed_pairs_summary": "with the ward A outcome reversed so the adopted change hurt, 2 of 3 reversed runs ended in a declared result (2 proposed a rollback for a person to decide) and 1 did not (1 proposed the adopted change again); unreversed, 1 proposed the adopted change again, 1 ended without a result, 1 kept the version",
+ "reversed_declared": 2,
+ "reversed_runs": 3,
+ "reversed_declared_met": true
 }

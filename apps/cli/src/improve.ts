@@ -6,6 +6,7 @@ import { loadManifests, runAcceptance, runCase } from "@hey-pisgah/evaluator";
 import { loadV1, worldRules } from "@hey-pisgah/hospital";
 import { readStream } from "@hey-pisgah/store";
 import { Registry, type Facts } from "@hey-pisgah/workflow";
+import { adoptionApproval } from "./approval.js";
 import { devDistribution, devFields } from "./dev-distribution.js";
 
 type Row = Record<string, unknown>;
@@ -144,7 +145,7 @@ if (argv[0] === "child") {
       proposal: { adopted: (created["meta"] as Row)["proposal_id"], parent: flag("parent") ?? null, ops: created["ops"], scope: created["scope"], trade_offs: flag("trade-offs") ? JSON.parse(flag("trade-offs")!) : null },
       version: v, definition_hash: def.definition_hash, fallback_version: def.fallback_version,
       adopted_by_person: approver["role"] === "ward_manager", approver: approver["display_name"], approver_id: approver["staff_id"],
-      human_approval: false, human_approval_note: "Adopted by the disclosed synthetic ward manager on the coordinator's instruction; green needs Samuel's own approval at review.",
+      ...adoptionApproval(log, v),
       fresh_applicable: {
         ...app, resolved_version: desk.registry.current(facts(String(app["case_id"]))).version,
         executed_differently: app["workflow_version"] === v && app["summary_draft_at"] !== null && app["signoff_at"] !== null && Number(app["summary_draft_at"]) < Number(app["signoff_at"]),
@@ -177,6 +178,39 @@ if (argv[0] === "child") {
     writeFileSync(need("out"), `${JSON.stringify(out, null, 1)}\n`);
     console.log(JSON.stringify({ applicable: out.fresh_applicable.executed_differently, withheld: out.withheld.version_withheld, cost: out.cost_usd }));
   } finally { desk.close(); }
+} else if (argv[0] === "loop") {
+  // Adds the fresh EMR encounter's offer, its saved and proved action, the withheld case and the adoption record's approval to improve.json; the simulator fields stay as measured.
+  const file = need("file");
+  const cur = JSON.parse(readFileSync(file, "utf8")) as Row;
+  const a = JSON.parse(readFileSync(need("applicable-run"), "utf8")) as Row;
+  const b = JSON.parse(readFileSync(need("withheld-run"), "utf8")) as Row;
+  const log = readStream(need("store"), VERSIONS_STREAM).map((e) => ({ record_type: e.record_type, wall_at: e.wall_at, payload: e.payload }));
+  const v = Number(cur["version"]);
+  const saved = (a["a_saved"] ?? {}) as Row;
+  const notes = (saved["notes"] as Row[] | undefined) ?? [];
+  const prov = (saved["provenance"] as Row[] | undefined) ?? [];
+  const offerRows = ((a["a_offer"] as Row | undefined)?.["rows"] as Row[] | undefined) ?? [];
+  const w = ((b["b_withheld"] as Row | undefined) ?? {}) as Row;
+  const wRow = (w["row"] ?? {}) as Row;
+  const loop = {
+    mode: "sandbox door, live Spark Open gate on the nurse's two lines, the doctor's admission and round entry written by his agent through the door (scripted)",
+    applicable: {
+      ward_id: "A", version_in_force: v, offers_made: offerRows.length, offer_step: offerRows[0]?.["step_id"] ?? null, watched_before_round: a["a_watch_before_round"] ?? null,
+      approved_by: "the nurse's own spoken line through serve (say draft, then save once reviewed)",
+      action: { kind: "record_note", label: "stay_summary", persisted: notes.some((n) => n["id"] === saved["record_id"]), verified: !!saved["record_id"], by_owner_agent: prov.some((r) => r["origin"] === "voice"), provenance_rows: prov.length }
+    },
+    withheld: { ward_id: wRow["ward_id"] ?? null, version_in_force: w["version_in_force"] ?? null, offers_made: w["offers"] ?? null, questions: w["questions"] ?? null, refused_with_reason: !!wRow["reason"], reason: wRow["reason"] ?? null, reused_stay: ((b["stay_b"] as Row | undefined)?.["reused"]) ?? null }
+  };
+  const ok = loop.applicable.offers_made >= 1 && loop.applicable.action.persisted && loop.applicable.action.verified && loop.withheld.refused_with_reason && loop.withheld.offers_made === 0;
+  const { human_approval_note: _n, ...rest } = cur;
+  const approval = adoptionApproval(log, v);
+  const next = {
+    ...rest, ...approval, emr_loop: loop, emr_loop_complete: ok,
+    emr_offers_made: loop.applicable.offers_made, emr_offer_seen: loop.applicable.offers_made >= 1 || cur["emr_offer_seen"] === true, emr_journey_blocked: null,
+    emr_offer_reason: `on a fresh ward A stay the adopted version offered the summary draft at the round entry (${loop.applicable.offers_made} offer), the nurse approved it by voice and the reviewed draft was saved as a note on the stay and proved by a fresh read; on a ward B stay at the same trigger point it was withheld with the reason "${String(loop.withheld.reason ?? "")}"`
+  };
+  writeFileSync(file, `${JSON.stringify(next, null, 1)}\n`);
+  console.log(JSON.stringify({ emr_loop_complete: ok, human_approval: approval["human_approval"] }));
 } else if (argv[0] === "dev") {
   // Adds the dev-case distribution to an existing improve.json without touching its measured fields.
   const store = need("store");

@@ -190,8 +190,13 @@ describe("the nightly memo: facts by rule, findings labelled, names never", () =
     const memos = s.recipients.map((r) => memoFor(s, r.id));
     expect(memos.every((m) => m.unfinished.length === 0)).toBe(true);
     const f = await plantedFaults(s, memos, NOW);
-    expect(f.not_applicable).toEqual(["false_completion"]);
+    expect(f.not_applicable).toEqual(["false_completion", "altered_description", "altered_destination", "altered_due_date"]);
     expect(f).toMatchObject({ tried: 4, refused: 4 });
+    // With open work every fault applies, the three altered item fields included, and each is refused.
+    const full = sources();
+    const all = await plantedFaults(full, full.recipients.map((r) => memoFor(full, r.id)), NOW);
+    expect(all).toMatchObject({ tried: 8, refused: 8, not_applicable: [] });
+    expect(all.cases).toMatchObject({ altered_description: "unsupported_or_incomplete", altered_destination: "unsupported_or_incomplete", altered_due_date: "unsupported_or_incomplete" });
     const none = await plantedFaults({ ...s, labels: [] }, memos, NOW);
     expect(none.cases["patient_name"]).toBe("unsupported_or_incomplete");
   });
@@ -242,5 +247,76 @@ describe("the nightly memo: facts by rule, findings labelled, names never", () =
     const w = await publisher(named, { maxRepairs: 1, repair: repairFromRecords(named, doctorInv(), NOW) }).p.publish(memoFor(named, "doc-1"));
     expect(w).toMatchObject({ status: "withheld", repairs: 1 });
     expect(w.verdict.failures.map((f) => f.code)).toContain("patient_name");
+  });
+
+  it("reads the records again right before every delivery: a task done after the urgent alert is not in the memo, and a withheld memo's task alert carries only work still open", async () => {
+    const before = sources();
+    const m = memoFor(before, "doc-1");
+    // The urgent alert goes, then the question is answered before the memo is sent.
+    const after: NightSources = { ...before, open: before.open.map((i) => (i.item_id === "oi-1" ? { ...i, state: "done" as const } : i)) };
+    let reads = 0;
+    const recompose = (src: NightSources, x: Memo) => composeMemo(src, src.recipients.find((r) => r.id === x.recipient_id)!, computeFacts(src), doctorInv(), NOW);
+    const { t, p } = publisher(before, { refresh: () => (++reads <= 1 ? before : after), recompose });
+    const r = await p.publish(m);
+    expect(t.sent.map((d) => d.kind)).toEqual(["urgent", "memo"]);
+    const sent = t.sent.find((d) => d.kind === "memo")!.body as Memo;
+    expect(sent.unfinished.map((i) => i.item_id)).toEqual(["oi-2"]);
+    expect(r.status).toBe("delivered");
+    expect(reads).toBeGreaterThanOrEqual(2);
+    // A withheld memo: the task alert is built from the records read right before it goes.
+    const bad: Memo = { ...m, facts: m.facts.map((f, k) => (k === 0 ? { ...f, value: f.value + 7 } : f)) };
+    let reads2 = 0;
+    const w = publisher(before, { refresh: () => (++reads2 <= 0 ? before : after), recompose: (src, x) => ({ ...recompose(src, x), facts: bad.facts }) });
+    const r2 = await w.p.publish(bad);
+    expect(r2.status).toBe("withheld");
+    const alert = w.t.sent.find((d) => d.kind === "task");
+    expect(alert).toBeDefined();
+    expect((alert!.body as { items: { item_id: string }[] }).items.map((i) => i.item_id)).toEqual(["oi-2"]);
+  });
+
+  it("binds each actionable item's description, destination and due date to the records: an altered one is refused even when its id and state match", () => {
+    const s = sources();
+    const m = memoFor(s, "doc-1");
+    expect(checkMemo(m, s)).toEqual([]);
+    const alter = (f: (i: Memo["unfinished"][number]) => Memo["unfinished"][number]): Memo => {
+      const unfinished = m.unfinished.map((i) => (i.item_id === "oi-2" ? f(i) : i));
+      return { ...m, unfinished, urgent: m.urgent.map((u) => unfinished.find((i) => i.item_id === u.item_id)!) };
+    };
+    const codes = (x: Memo) => checkMemo(x, s).map((f) => f.code);
+    expect(codes(alter((i) => ({ ...i, title: "Review the chest" })))).toContain("altered_description");
+    expect(codes(alter((i) => ({ ...i, kind: "question" })))).toContain("altered_description");
+    expect(codes(alter((i) => ({ ...i, department: "nurse" })))).toContain("altered_destination");
+    expect(codes(alter((i) => ({ ...i, due_at: "2026-10-31T10:00:00.000Z" })))).toContain("altered_due_date");
+    expect(codes(alter((i) => ({ ...i, refs: ["emr/t-9#1"] })))).toContain("altered_description");
+    // The item delivered to someone it is not for: the nurse is incoming but the item is the doctor's department's.
+    const nurseMemo = memoFor(s, "nurse-1");
+    const moved: Memo = { ...nurseMemo, unfinished: [{ ...m.unfinished[1]!, encounter: null }], urgent: [] };
+    expect(checkMemo(moved, s).map((f) => f.code)).toContain("altered_destination");
+    // A ward-bound item reaches an incoming recipient only when it is for a ward they cover.
+    const warded: NightSources = { ...s, open: s.open.map((i) => (i.item_id === "oi-1" ? { ...i, ward: "ward-b" } : i)), recipients: s.recipients.map((r) => (r.id === "doc-3" ? { ...r, wards: ["ward-a"] } : r)) };
+    const doc3 = memoFor(warded, "doc-3");
+    expect(doc3.unfinished.map((i) => i.item_id)).toEqual(["oi-2"]);
+    expect(checkMemo(doc3, warded)).toEqual([]);
+    const smuggled: Memo = { ...doc3, unfinished: [...doc3.unfinished, { ...memoFor(warded, "doc-1").unfinished[0]!, encounter: E1 }] };
+    expect(checkMemo(smuggled, warded).map((f) => f.code)).toContain("altered_destination");
+    // An urgent entry must be the unfinished item itself, not a reworded copy.
+    const urgentCopy: Memo = { ...m, urgent: m.urgent.map((u) => ({ ...u, title: "Review the chest" })) };
+    expect(codes(urgentCopy)).toContain("altered_description");
+  });
+
+  it("each altered field is refused through the publisher too, with nothing delivered (negative controls)", async () => {
+    const s = sources();
+    const m = memoFor(s, "doc-1");
+    const cases: [string, Memo][] = [
+      ["altered_description", { ...m, unfinished: m.unfinished.map((i) => (i.item_id === "oi-1" ? { ...i, title: "Stop the observations" } : i)) }],
+      ["altered_destination", { ...m, unfinished: m.unfinished.map((i) => (i.item_id === "oi-1" ? { ...i, department: "accounts_clerk" } : i)) }],
+      ["altered_due_date", { ...m, unfinished: m.unfinished.map((i) => (i.item_id === "oi-1" ? { ...i, due_at: "2026-10-30T09:00:00.000Z" } : i)) }]
+    ];
+    for (const [code, x] of cases) {
+      const { t, p } = publisher(s);
+      const r = await p.publish(x);
+      expect(r.verdict.failures.map((f) => f.code)).toContain(code);
+      expect(t.sent.filter((d) => d.kind === "memo")).toHaveLength(0);
+    }
   });
 });
