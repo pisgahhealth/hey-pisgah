@@ -71,7 +71,7 @@ export class PisgahPort implements EmrPort {
       ops.read_admission, ops.write_observation, ...(ops.census ? [ops.census] : []),
       ...(ops.speaker ? [{ method: "POST", path: ops.speaker.path }] : []), ...(ops.read_back ? [{ method: "GET", path: ops.read_back.path }] : []),
       ...(ops.paperwork ? [{ method: "GET", path: ops.paperwork.path }] : []),
-      ...reads.map((path) => ({ method: "GET", path })), ...writes.map((path) => ({ method: "POST", path })), ...(profile.memos ? [{ method: "POST", path: profile.memos.path }] : [])
+      ...reads.map((path) => ({ method: "GET", path })), ...writes.map((path) => ({ method: "POST", path })), ...(profile.memos ? [{ method: "POST", path: profile.memos.path }, ...(profile.memos.alerts_path ? [{ method: "POST", path: profile.memos.alerts_path }] : [])] : [])
     ].map((x) => ({ method: x.method, re: pathPattern(x.path) }));
     for (const a of this.allow) for (const d of [...profile.deny, ...profile.deny_exact]) if (a.re.test(d)) throw new Error("the profile allows a denied path");
   }

@@ -690,12 +690,12 @@
       "acceptance": {
         "command": "npx tsx apps/cli/src/nightly.ts over the day's evidence and task stores, delivered through the door with a record expectation per recipient",
         "result_path": "evaluation/results/memo.json",
-        "predicate": "verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0 && authorised_recipients >= 1 && authorised_delivered == authorised_recipients && correct_refusals == refusals && incorrect_outcomes == 0 ; amber: verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0",
+        "predicate": "verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0 && authorised_recipients >= 1 && authorised_delivered == authorised_recipients && correct_refusals == refusals && incorrect_outcomes == 0 && urgent_alerts_authorised == urgent_items_authorised ; amber: verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0",
         "measured_on": "dev"
       },
       "wording": {
-        "pass": "Every memo was checked against the records; {authorised_delivered} of {authorised_recipients} authorised recipients received it through the door, {correct_refusals} of {refusals} refusals were correct, {checks_failed_closed} of {checks_tried} planted faults were refused and no preview named a patient",
-        "partial": "Every memo passed its checks and {checks_failed_closed} of {checks_tried} planted faults were refused, but only {authorised_delivered} of {authorised_recipients} authorised recipients received it and {correct_refusals} of {refusals} refusals were correct",
+        "pass": "Every memo was checked against the records; {authorised_delivered} of {authorised_recipients} authorised recipients received it through the door and {urgent_alerts_authorised} of {urgent_items_authorised} urgent items rang as their own alerts, {correct_refusals} of {refusals} refusals were correct, {checks_failed_closed} of {checks_tried} planted faults were refused and no preview named a patient",
+        "partial": "Every memo passed its checks and {checks_failed_closed} of {checks_tried} planted faults were refused, but only {authorised_delivered} of {authorised_recipients} authorised recipients received it, {urgent_alerts_authorised} of {urgent_items_authorised} urgent items rang on their own, and {correct_refusals} of {refusals} refusals were correct",
         "fail": "A memo failed its checks, named a patient where it must not, or a planted fault was published",
         "not_measured": "Not measured yet"
       },
@@ -922,6 +922,25 @@
         }
       },
       "reason": "The review found the adopted version made no offer in the EMR: its trigger (the round entry) had no EMR counterpart, so the improvement held only on the simulator. C-27 now also needs the deploy check (every changed step has a watched EMR trigger point, a work kind that prepares it and an owner whose agent holds that kind) and an offer seen in the EMR: green needs the offer on the fresh EMR journey, amber accepts the offer on a live stay through the door when the fresh journey could not run, and every wording says which and why. Nothing was loosened: every earlier clause stays."
+    },
+    {
+      "date": "2026-10-30",
+      "by": "F3b",
+      "claims": [
+        "C-28"
+      ],
+      "previous_predicates": {
+        "C-28": "verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0 && authorised_recipients >= 1 && authorised_delivered == authorised_recipients && correct_refusals == refusals && incorrect_outcomes == 0 ; amber: verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0"
+      },
+      "previous_wording": {
+        "C-28": {
+          "pass": "Every memo was checked against the records; {authorised_delivered} of {authorised_recipients} authorised recipients received it through the door, {correct_refusals} of {refusals} refusals were correct, {checks_failed_closed} of {checks_tried} planted faults were refused and no preview named a patient",
+          "partial": "Every memo passed its checks and {checks_failed_closed} of {checks_tried} planted faults were refused, but only {authorised_delivered} of {authorised_recipients} authorised recipients received it and {correct_refusals} of {refusals} refusals were correct",
+          "fail": "A memo failed its checks, named a patient where it must not, or a planted fault was published",
+          "not_measured": "Not measured yet"
+        }
+      },
+      "reason": "The review found urgent items had no route of their own and rang only inside the memo. The memo is now kept and its bell opens an authorised page, and each urgent item of a recipient the record authorises goes first as its own alert through its own door route. Green now also needs every such urgent item to have rung as its own alert; amber and red are unchanged. Nothing was loosened."
     }
   ]
 }
