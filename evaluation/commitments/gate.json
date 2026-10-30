@@ -830,7 +830,7 @@
   {
    "revision": 8,
    "hash": "b6d69ef0cd9c4c52a92903ad8b1dfec7e300e38b374b1e82ba5a95b8ac474989",
-   "reason": "Revision for R-27: an arrival gate (classes arrival, aside, unclear; purpose classify_intent) reads words heard with no patient in context and opens the pending arrival the emergency phrase opens; every earlier prompt and tool is byte-identical. A live probe on 12 natural lines (5 arrival talk, 7 ward chatter) went to the hosted fallback because the primary route refused with 429, so it is void under the run rule; the probe on the primary route is still to run.",
+   "reason": "revision 8: an arrival gate (classes arrival, aside, unclear; purpose classify_intent) reads words heard with no patient in context and opens the pending arrival the emergency phrase opens; every earlier prompt and tool is byte-identical. A live probe on 12 natural lines (5 arrival talk, 7 ward chatter) went to the hosted fallback because the primary route refused with 429, so it is void under the run rule; the probe on the primary route is still to run.",
    "body": {
     "artifact": "gate",
     "kinds": [
