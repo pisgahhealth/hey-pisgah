@@ -6,7 +6,7 @@ import type { Session } from "./session.js";
 import { dispatch, toolDefs } from "./tools.js";
 
 // Model settings every investigator call carries; they are part of the committed record.
-export const SETTINGS = { effort: "xhigh", parallel_tool_calls: true, max_completion_tokens: 32_000, context_chars: 30_000, history_chars: 70_000, turn_result_chars: 20_000, provider: "modal", model: "meta-models/Muse-Spark-Open-816B-A42B" } as const;
+export const SETTINGS = { effort: "xhigh", adaptive_controller: "cycle", adaptive_efforts: ["medium", "high"], parallel_tool_calls: true, max_completion_tokens: 32_000, context_chars: 30_000, history_chars: 70_000, turn_result_chars: 20_000, provider: "modal", model: "meta-models/Muse-Spark-Open-816B-A42B" } as const;
 
 // After this many repeated identical calls in one run, the run ends as stalled.
 export const REPEAT_LIMIT = 3;
@@ -33,6 +33,9 @@ export type LoopOptions = {
   model?: string;
   commitment?: { revision: number | null; hash: string | null };
   sleep?: (ms: number) => Promise<void>;
+  effort?: "low" | "medium" | "high" | "xhigh";
+  // A quarantined kickoff for oracle runs only; the session log marks the run as quarantined.
+  quarantinedKickoff?: string;
 };
 
 export type LoopOutcome = { stop: string; detail: string; calls: number; usd: number; turns: number };
@@ -143,9 +146,10 @@ export async function runLoop(o: LoopOptions): Promise<LoopOutcome> {
   const proposals = arm === "prior" ? 1 : 3;
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt(arm) },
-    { role: "user", content: kickoff(arm, { cases: s.pool.ids().length, calls: o.maxCalls, usd: o.budgetUsd, proposals, cycle: s.o.cycle ?? 1 }) }
+    { role: "user", content: o.quarantinedKickoff ?? kickoff(arm, { cases: s.pool.ids().length, calls: o.maxCalls, usd: o.budgetUsd, proposals, cycle: s.o.cycle ?? 1 }) }
   ];
-  s.log("session.opened", { run_id: s.runId, arm, cycle: s.o.cycle ?? 1, mode: o.client.mode, provider, model, settings: SETTINGS, max_calls: o.maxCalls, budget_usd: o.budgetUsd, hashes: armHashes(arm), commitment: o.commitment ?? null, insufficient_evidence: s.o.insufficientEvidence ?? false, system_prompt: messages[0]!.content, kickoff: messages[1]!.content });
+  const effort = o.effort ?? SETTINGS.effort;
+  s.log("session.opened", { run_id: s.runId, arm, cycle: s.o.cycle ?? 1, mode: o.client.mode, provider, model, settings: SETTINGS, max_calls: o.maxCalls, budget_usd: o.budgetUsd, hashes: armHashes(arm), commitment: o.commitment ?? null, effort, quarantined: o.quarantinedKickoff !== undefined, insufficient_evidence: s.o.insufficientEvidence ?? false, system_prompt: messages[0]!.content, kickoff: messages[1]!.content });
   let turns = 0;
   let idle = 0;
   let maxCost = 0;
@@ -166,7 +170,7 @@ export async function runLoop(o: LoopOptions): Promise<LoopOutcome> {
     for (;;) {
       try {
         res = await o.client.call({
-          provider, model, effort: SETTINGS.effort, messages: withNotes(dropOldTurns(compact(messages, SETTINGS.context_chars, digests, pinned), SETTINGS.history_chars, pinned), s.notes), tools, parallel_tool_calls: SETTINGS.parallel_tool_calls,
+          provider, model, effort, messages: withNotes(dropOldTurns(compact(messages, SETTINGS.context_chars, digests, pinned), SETTINGS.history_chars, pinned), s.notes), tools, parallel_tool_calls: SETTINGS.parallel_tool_calls,
           max_completion_tokens: SETTINGS.max_completion_tokens, purpose: `discovery.${arm}`, run_id: s.runId, task_id: null, task_state: null, thread: "main", affinity_key: s.runId
         });
         break;

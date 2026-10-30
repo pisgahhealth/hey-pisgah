@@ -22,7 +22,7 @@ describe("validation pipeline", () => {
   it("validates a planted good proposal on the 15 dev cases", async () => {
     const r = await validateProposal(proposal(hand.g2.ops));
     expect(r.status).toBe("dev_validated");
-    expect(r.gate).toEqual({ pass: true, no_regression: true, prohibited_attempts: 0, exception_check: true, fences_intact: true });
+    expect(r.gate).toEqual({ pass: true, no_regression: true, prohibited_attempts: 0, exception_check: true, fences_intact: true, documents_kept: true });
     expect(r.cases).toHaveLength(15);
     expect(r.cases.some((c) => (c.delta.post_signoff_wait_min ?? 0) <= -60)).toBe(true);
     expect(validationSummary([r])).toMatchObject({ dev_gate_pass: true, exception_check_pass: true, fences_unchanged: true, proposals_validated: 1 });
@@ -69,6 +69,16 @@ describe("validation pipeline", () => {
     const reservedIds = seedList().map((e) => caseIdFor(e.seed));
     for (const t of [...reservedIds, ...RESERVED_CANARIES]) expect(text.includes(t)).toBe(false);
     expect(/reserved|\bF(?:[1-9]|1[0-2]|V)\b|should_apply|famil/i.test(text)).toBe(false);
+  });
+});
+
+describe("required documents", () => {
+  it("refuses a change that switches a ward-required document off, though every acceptance check passes", async () => {
+    const r = await validateProposal(proposal([{ op: "add_condition", target: { step: { step: "st17b" } }, condition: { fact: "payment_status", eq: "unpaid" } }]));
+    expect(r.status).toBe("dev_failed");
+    expect(r.gate).toMatchObject({ pass: false, no_regression: true, exception_check: true, fences_intact: true, documents_kept: false });
+    expect(r.cases.every((c) => c.documents_dropped!.includes("refund_voucher"))).toBe(true);
+    expect(r.cases.every((c) => c.proposal.pass)).toBe(true);
   });
 });
 

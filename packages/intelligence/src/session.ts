@@ -7,10 +7,15 @@ import { readStream, openStream, type Stream } from "@hey-pisgah/store";
 import type { WorldRules } from "@hey-pisgah/simulator";
 import { applyOperations, evalCondition } from "@hey-pisgah/workflow";
 import { z } from "zod";
-import { runMatched, summarise, type Behaviour, type CaseResult, type Runner } from "./experiments.js";
+import { ExpectedChange, mayUpdate, outcomeClass, type OutcomeClass } from "./delivery.js";
+import { runMatched, summarise, type Behaviour, type CaseResult, type Receipt, type Runner } from "./experiments.js";
+import { lintExperiment, nonPreparableTargets, type LintResult } from "./lint.js";
+import { preconditionTable } from "./preconditions.js";
+import { derivedStatistics } from "./stats.js";
+import { OP_KINDS, SWEEP_LIMITS, scopedOperations, sweep, sweepView } from "./sweep.js";
 import { DiscoveryPool } from "./pool.js";
-import { checkAfter, checkBefore, type Deltas } from "./prediction.js";
-import { expectedShapes } from "./shapes.js";
+import { checkAfter, checkBefore, pairDiagnostics, type Deltas } from "./prediction.js";
+import { LEDGER_SHAPES, expectedShapes } from "./shapes.js";
 import { UNKNOWN_ID } from "./unknown.js";
 import * as views from "./views.js";
 
@@ -43,11 +48,13 @@ type Result = Record<string, unknown>;
 // The uniform unknown_id plus the argument path that held it; the path never carries the id, so it says nothing about other pools.
 const unknownField = (field: string, detail?: string): Result => ({ ...UNKNOWN_ID, field, ...(detail ? { detail } : {}) });
 
-// Takes the optional no_pair_reason off a run_experiment request, so the strict contract schema still checks the rest.
-function splitReason(raw: unknown): { raw: unknown; reason: string | undefined } {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw) || !("no_pair_reason" in raw)) return { raw, reason: undefined };
-  const { no_pair_reason: r, ...rest } = raw as Record<string, unknown>;
-  return { raw: rest, reason: typeof r === "string" && r.trim().length > 0 ? r.trim().slice(0, 300) : undefined };
+// Takes session-only fields off a request, so the strict contract schema still checks the rest.
+function split(raw: unknown, keys: readonly string[]): { raw: unknown; extra: Record<string, unknown> } {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { raw, extra: {} };
+  const rest: Record<string, unknown> = {};
+  const extra: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) (keys.includes(k) ? extra : rest)[k] = v;
+  return { raw: rest, extra };
 }
 const refusal = (error: string, message: string, extra: Result = {}): Result => ({ ok: false, error, message, ...extra });
 const zodIssues = (e: z.ZodError) => e.issues.slice(0, 8).map((i) => `${i.path.join(".") || "$"}: ${i.message}`);
@@ -80,16 +87,30 @@ export const StatusInput = z.strictObject({
 export const ProposalInput = WorkflowChangeProposal.omit({ proposal_id: true, viewed_case_ids: true, status: true, hash: true });
 
 export const NOTE_LIMIT = 20;
-export const NoteInput = z.strictObject({ note: z.string().trim().min(1).max(600), no_hypothesis_reason: z.string().trim().min(1).max(300).optional(), no_experiment_reason: z.string().trim().min(1).max(300).optional() });
+export const NoteInput = z.strictObject({ note: z.string().trim().min(1).max(600) });
 
-// After this many active hypotheses recorded since the last experiment, case reads and record_hypothesis wait for an experiment or a no_experiment_reason note.
-export const EXPERIMENT_BUDGET = { hypotheses: 3 } as const;
-export const EXPERIMENT_BUDGET_MESSAGE = `Experiment budget reached: ${EXPERIMENT_BUDGET.hypotheses} active hypotheses recorded since the last experiment. Call run_experiment, or record_note with a no_experiment_reason, before further record_hypothesis calls or case reads. This refusal is counted and uses no experiment.`;
+// The fields the investigation ledger keeps beside each hypothesis: its predicted size, the experiment that would falsify it, and what a null result would mean.
+export const LedgerFields = z.strictObject({
+  predicted_magnitude_min: z.number().int().min(0).max(600),
+  falsifying_experiment: z.string().trim().min(1).max(300),
+  if_null: z.string().trim().min(1).max(300)
+});
+export type LedgerFields = z.infer<typeof LedgerFields>;
+const LEDGER_KEYS = ["predicted_magnitude_min", "falsifying_experiment", "if_null"] as const;
 
-// Before any hypothesis exists, reads are budgeted per window; a no_hypothesis_reason note opens a new window.
-export const READ_BUDGET = { pages: 25, calls: 12 } as const;
-export const READ_BUDGET_MESSAGE = `Reading budget reached: ${READ_BUDGET.pages} timeline pages or ${READ_BUDGET.calls} model calls with no hypothesis recorded. Record a hypothesis with record_hypothesis, or a note with record_note that gives a no_hypothesis_reason, before further get_case_timeline or get_record reads. This refusal is counted and uses no experiment.`;
-export const DEFINITION_UNCHANGED = "The workflow definition is unchanged since your first read of it; its short form stays in this conversation.";
+// The question a cycle answers: the hypotheses its experiment must tell apart and the step behaviour it expects to move.
+export const QuestionInput = z.strictObject({ hypothesis_ids: z.array(z.string()).min(2).max(4), question: z.string().trim().min(1).max(300), expected_change: ExpectedChange });
+export type Question = z.infer<typeof QuestionInput>;
+
+export const SweepInput = z.strictObject({
+  op_kinds: z.array(z.enum(OP_KINDS)).min(1).max(OP_KINDS.length),
+  case_ids: z.array(z.string()).min(1).max(SWEEP_LIMITS.cases),
+  top_k: z.number().int().min(1).max(8).optional(),
+  target_steps: z.array(z.string().max(12)).min(1).max(6).optional(),
+  pairs: z.boolean().optional()
+});
+
+export const DEFINITION_UNCHANGED = "The workflow definition is unchanged since your first read of it in this cycle; its short form stays in this conversation.";
 
 export const EndInput = z.strictObject({
   result: z.enum(["no_change_warranted", "insufficient_evidence"]),
@@ -115,6 +136,11 @@ export type StoredExperiment = {
   abort_reason: string | null;
   behaviour: Behaviour | null;
   no_pair_reason: string | null;
+  expected_change?: ExpectedChange | null;
+  receipt?: Receipt | null;
+  delivered?: boolean | null;
+  outcome_class?: OutcomeClass | null;
+  lint?: LintResult | null;
 };
 
 export type StopReason = "dev_valid_proposal" | "declared_negative" | "lockout" | "proposals_exhausted" | "prior_proposal_submitted";
@@ -144,10 +170,14 @@ export class Session {
   readonly viewed = new Set<string>();
   readonly frozen = new Set<string>();
   readonly notes: string[] = [];
-  private readWindow = { pages: 0, callsAtStart: 0 };
-  private definitionRead: { turn: number; hash: string } | null = null;
-  private experimentWindowStart = new Set<string>();
-  counters = { hypothesis_schema_errors: 0, experiment_budget_refusals: 0, definition_unchanged: 0, read_refusals: 0, timeline_pages: 0, experiments_used: 0, invalid_requests: 0, pair_refusals: 0, no_pair_reasons: 0, zod_streak: 0, repairs: 0, listed_used: 0, proposals_used: 0, say_do_mismatches: 0, retains: 0, rejects: 0 };
+  readonly ledgerFields = new Map<string, LedgerFields>();
+  readonly observations: string[] = [];
+  // The tools the controller offers in the current stage; null outside the investigation cycle.
+  allowedTools: ReadonlySet<string> | null = null;
+  question: Question | null = null;
+  cycle = 0;
+  private definitionRead: { turn: number; hash: string; cycle: number } | null = null;
+  counters = { hypothesis_schema_errors: 0, definition_unchanged: 0, timeline_pages: 0, experiments_used: 0, invalid_requests: 0, lint_refusals: 0, question_refusals: 0, not_delivered: 0, delivered: 0, informative: 0, zod_streak: 0, repairs: 0, listed_used: 0, proposals_used: 0, say_do_mismatches: 0, retains: 0, rejects: 0, stage_refusals: 0, statistics_reads: 0, sweeps: 0, sweep_refusals: 0, simulations: 0 };
   stop: { reason: StopReason; detail: string } | null = null;
   private readonly streams: { hypotheses: Stream; experiments: Stream; proposals: Stream; log: Stream };
   private serial = 0;
@@ -200,51 +230,15 @@ export class Session {
     return refusal("invalid_arguments", message, { issues: zodIssues(error), expected: expectedShapes(error) });
   }
 
-  // Active hypotheses recorded since the last experiment or no_experiment_reason note.
-  private hypothesesInExperimentWindow(): number {
-    return this.active().filter((h) => !this.experimentWindowStart.has(h.hypothesis_id)).length;
-  }
-
-  // Once the window holds EXPERIMENT_BUDGET.hypotheses active hypotheses, case reads and record_hypothesis refuse until an experiment or a no_experiment_reason note.
-  private experimentBudgetRefusal(tool: string): Result | null {
-    if (this.o.arm !== "adaptive" || this.hypothesesInExperimentWindow() < EXPERIMENT_BUDGET.hypotheses) return null;
-    this.counters.experiment_budget_refusals += 1;
-    this.log("hypothesis_window.refused", { tool, active_in_window: this.hypothesesInExperimentWindow(), experiment_budget_refusals: this.counters.experiment_budget_refusals });
-    return refusal("experiment_budget", EXPERIMENT_BUDGET_MESSAGE);
-  }
-
-  private resetExperimentWindow(): void {
-    this.experimentWindowStart = new Set(this.hypotheses.keys());
-  }
-
-  // The refusal a budgeted read gets once the window is spent with no hypothesis recorded; null while reads may go on.
-  private readBudgetRefusal(tool: string): Result | null {
-    if (this.hypotheses.size > 0) return null;
-    const calls = this.o.usage?.().calls ?? 0;
-    if (this.readWindow.pages < READ_BUDGET.pages && calls - this.readWindow.callsAtStart < READ_BUDGET.calls) return null;
-    this.counters.read_refusals += 1;
-    this.log("read.refused", { tool, pages: this.readWindow.pages, calls_in_window: calls - this.readWindow.callsAtStart, read_refusals: this.counters.read_refusals });
-    return refusal("reading_budget", READ_BUDGET_MESSAGE);
-  }
-
   timeline(a: { case_id: string; order: "occurred" | "recorded"; offset?: number | undefined; limit?: number | undefined; kinds?: string[] | undefined }, cap?: number): Result {
-    const window = this.experimentBudgetRefusal("get_case_timeline");
-    if (window) return window;
-    const budget = this.readBudgetRefusal("get_case_timeline");
-    if (budget) return budget;
     const c = this.pool.get(a.case_id);
     if (!c) return UNKNOWN_ID;
     this.view(c.case_id);
-    this.readWindow.pages += 1;
     this.counters.timeline_pages += 1;
     return views.timeline(c, a, cap);
   }
 
   record(a: { case_id: string; record_kind?: string | undefined; document_id?: string | undefined }): Result {
-    const window = this.experimentBudgetRefusal("get_record");
-    if (window) return window;
-    const budget = this.readBudgetRefusal("get_record");
-    if (budget) return budget;
     const c = this.pool.get(a.case_id);
     if (!c) return UNKNOWN_ID;
     this.view(c.case_id);
@@ -252,8 +246,6 @@ export class Session {
   }
 
   intervals(a: { case_ids: string[]; from: views.Selector; to: views.Selector; clock: "occurred" | "recorded" }): Result {
-    const window = this.experimentBudgetRefusal("compute_intervals");
-    if (window) return window;
     const cs = a.case_ids.map((id) => this.pool.get(id));
     if (cs.some((c) => c === null)) return UNKNOWN_ID;
     for (const c of cs) this.view(c!.case_id);
@@ -261,8 +253,6 @@ export class Session {
   }
 
   queue(a: { case_id: string; at_min: number }): Result {
-    const window = this.experimentBudgetRefusal("get_queue_snapshot");
-    if (window) return window;
     const c = this.pool.get(a.case_id);
     if (!c) return UNKNOWN_ID;
     this.view(c.case_id);
@@ -270,8 +260,6 @@ export class Session {
   }
 
   staff(a: { case_id: string; role: string }): Result {
-    const window = this.experimentBudgetRefusal("get_staff_activity");
-    if (window) return window;
     const c = this.pool.get(a.case_id);
     if (!c) return UNKNOWN_ID;
     this.view(c.case_id);
@@ -279,21 +267,79 @@ export class Session {
   }
 
   requirements(a: { ward_id?: string | undefined }): Result { return views.wardRequirements(a.ward_id) ?? UNKNOWN_ID; }
-  // The full definition on the first read; later reads of the same definition answer with the turn and hash of that read and no body.
+  // The full definition on the first read of a cycle; later reads in the same cycle answer with the turn and hash of that read and no body.
   definition(turn?: number): Result {
     const hash = this.base.definition_hash;
-    if (turn !== undefined && this.definitionRead && this.definitionRead.hash === hash) {
+    if (turn !== undefined && this.definitionRead && this.definitionRead.hash === hash && this.definitionRead.cycle === this.cycle) {
       this.counters.definition_unchanged += 1;
       return { ok: true, unchanged: true, read_at_turn: this.definitionRead.turn, definition_hash: hash, note: DEFINITION_UNCHANGED };
     }
-    if (turn !== undefined) this.definitionRead = { turn, hash };
+    if (turn !== undefined) this.definitionRead = { turn, hash, cycle: this.cycle };
     return views.definitionView(this.base);
   }
 
+  // Per-step waiting, critical-path membership and the ranking of critical segments over the pool's recorded cases.
+  statistics(a: { top?: number | undefined } = {}): Result {
+    this.counters.statistics_reads += 1;
+    const cases = this.pool.ids().map((id) => this.pool.get(id)!).filter((c) => c.events.length > 0);
+    for (const c of cases) this.view(c.case_id);
+    const out = derivedStatistics(this.base, cases, Math.min(12, Math.max(1, a.top ?? 8)));
+    const ranking = out.ranking as { rank: number; segment: string; cases: number; total_wait_min: number; total_work_min: number }[];
+    this.observe(`statistics: top segments ${ranking.slice(0, 4).map((r) => `${r.rank}. ${r.segment} ${r.cases} cases wait ${r.total_wait_min} work ${r.total_work_min}`).join("; ")}`);
+    return { ok: true, ...out };
+  }
+
+  preconditions(): Result { return { ok: true, ...preconditionTable() }; }
+
+  // The neutral sweep: every legal single operation of the named kinds touching the scope steps and every pair of them, on matched cases.
+  runSweep(raw: unknown): Result {
+    if (this.o.arm !== "adaptive") return refusal("not_available", "This tool is not available in this session.");
+    const parsed = SweepInput.safeParse(raw);
+    if (!parsed.success) { this.counters.repairs += 1; return refusal("invalid_arguments", "The arguments do not match the schema.", { issues: zodIssues(parsed.error) }); }
+    if (this.counters.sweeps >= SWEEP_LIMITS.sweeps) return refusal("budget_exhausted", `At most ${SWEEP_LIMITS.sweeps} sweeps run in a session.`);
+    const a = parsed.data;
+    const files = a.case_ids.map((id) => this.pool.experimentable(id));
+    const bad = files.findIndex((f) => f === null);
+    if (bad >= 0 || new Set(a.case_ids).size !== a.case_ids.length) return unknownField(`case_ids[${Math.max(0, bad)}]`);
+    let scope: string[];
+    if (a.target_steps) {
+      const miss = a.target_steps.findIndex((st) => !this.base.steps.some((x) => x.step_id === st));
+      if (miss >= 0) return unknownField(`target_steps[${miss}]`);
+      scope = [...new Set(a.target_steps)].sort();
+    } else {
+      const cases = this.pool.ids().map((id) => this.pool.get(id)!).filter((c) => c.events.length > 0);
+      const ranking = derivedStatistics(this.base, cases, a.top_k ?? 3).ranking as { from: string | null; to: string }[];
+      scope = [...new Set(ranking.flatMap((r) => [r.from, r.to]).filter((x): x is string => x !== null))].sort();
+    }
+    const wards = [...new Set(this.pool.caseFacts().map((f) => String(f["ward_id"])))];
+    const singles = scopedOperations(this.base, new Set(scope), a.op_kinds, wards);
+    if (singles.length > SWEEP_LIMITS.singles || singles.length === 0) {
+      this.counters.sweep_refusals += 1;
+      const per = Object.fromEntries(a.op_kinds.map((k) => [k, scopedOperations(this.base, new Set(scope), [k], wards).length]));
+      return refusal("sweep_size", `A sweep takes 1 to ${SWEEP_LIMITS.singles} single operations; this scope gives ${singles.length}. Narrow op_kinds or target_steps, or lower top_k.`, { scope_steps: scope, singles_per_kind: per });
+    }
+    this.counters.sweeps += 1;
+    const out = sweep(this.base, singles, files as NonNullable<(typeof files)[number]>[], { caseFacts: this.pool.caseFacts(), ...(this.o.world ? { world: this.o.world } : {}), pairs: a.pairs ?? true });
+    this.counters.simulations += out.simulations;
+    for (const c of a.case_ids) this.view(c);
+    const view = sweepView(out, scope);
+    this.streams.experiments.append("sweep.completed", { session_id: this.o.runId, request: a, ...view }, { recorded_at: 0, occurred_at: 0 });
+    const best = (view.best_by_wait as { ops: unknown; sum_wait_delta: number; delivered: boolean }[]).slice(0, 3);
+    this.observe(`sweep ${this.counters.sweeps} over ${scope.join(",")} (${a.op_kinds.join(",")}) on ${a.case_ids.length} cases: ${out.singles} singles, ${out.pairs} pairs; best ${best.map((b) => `${JSON.stringify(b.ops)} sum ${b.sum_wait_delta}${b.delivered ? "" : " not delivered"}`).join("; ")}`);
+    return { ok: true, ...view, budget: { ...this.budgetView(), sweeps_left: SWEEP_LIMITS.sweeps - this.counters.sweeps } };
+  }
+
+  // One line the ledger keeps from a tool result, written by the session, never by the model.
+  observe(line: string): void {
+    if (this.observations.at(-1) === line) return;
+    this.observations.push(line.slice(0, 400));
+    this.log("ledger.observation", { cycle: this.cycle, line });
+  }
+
   // Records a hypothesis; ids are checked against the pool and the session, predictions against the per-metric caps.
-  recordHypothesis(raw: unknown): Result {
-    const budget = this.experimentBudgetRefusal("record_hypothesis");
-    if (budget) return budget;
+  recordHypothesis(rawIn: unknown): Result {
+    const needsLedger = this.o.arm === "adaptive";
+    const { raw, extra } = needsLedger ? split(rawIn, LEDGER_KEYS) : { raw: rawIn, extra: {} };
     const parsed = HypothesisInput.safeParse(raw);
     if (!parsed.success) return this.hypothesisSchemaError("The arguments do not match the schema.", parsed.error);
     const a = parsed.data;
@@ -308,6 +354,8 @@ export class Session {
       if (k >= 0) return unknownField(`${label}.scope.cases[${k}]`);
       if (pr.tolerance_min > toleranceCap(pr.metric)) return refusal("tolerance_cap", `tolerance_min for ${pr.metric} may be at most ${toleranceCap(pr.metric)}.`);
     }
+    const lf = needsLedger ? LedgerFields.safeParse(extra) : null;
+    if (lf && !lf.success) { this.counters.repairs += 1; this.counters.hypothesis_schema_errors += 1; return refusal("invalid_arguments", "The arguments do not match the schema.", { issues: zodIssues(lf.error), expected: LEDGER_SHAPES }); }
     const id = this.nextId("h");
     const content = { session_id: this.o.runId, statement: a.statement, mechanism: a.mechanism, subject_refs: a.subject_refs, competing: a.competing, evidence: a.evidence, if_true: a.if_true, if_false: a.if_false, refuted_if: a.refuted_if, revises: a.revises ?? null };
     const created = this.clocks();
@@ -316,6 +364,7 @@ export class Session {
     if (!checked.success) return this.hypothesisSchemaError("The hypothesis breaks a record rule.", checked.error);
     this.hypotheses.set(id, checked.data as HR);
     this.streams.hypotheses.append("hypothesis.recorded", checked.data, { recorded_at: 0, occurred_at: 0 });
+    if (lf?.success) { this.ledgerFields.set(id, lf.data); this.streams.hypotheses.append("hypothesis.ledger_fields", { hypothesis_id: id, session_id: this.o.runId, ...lf.data }, { recorded_at: 0, occurred_at: 0 }); }
     for (const c of new Set(a.evidence.map((e) => e.case_id))) this.view(c);
     if (a.revises) this.applyStatus(a.revises, "revised", [], [], `revised by ${id}`);
     return { ok: true, hypothesis_id: id, hash: rec.hash, status: "open" };
@@ -390,17 +439,18 @@ export class Session {
     return r.ok ? r.definition : null;
   }
 
-  // Validates in the published order, then runs matched control and intervention arms; the result carries numbers and diffs only.
+  // Validates in the published order (schema, ids, definition rules, the pre-run lint), then runs matched control and intervention arms; the result carries numbers, diffs and a receipt.
   runExperiment(rawIn: unknown): Result {
     if (this.o.arm !== "adaptive") return refusal("not_available", "This tool is not available in this session.");
     if (this.locked) return refusal("locked_out", "Three refused requests ended access to experiments.");
     if (this.counters.experiments_used >= ExperimentBudget.experiments) return refusal("budget_exhausted", "No experiments are left.");
-    const { raw, reason } = splitReason(rawIn);
+    const { raw, extra } = split(rawIn, ["expected_change"]);
     const parsed = ExperimentRequest.safeParse(raw);
-    if (!parsed.success) {
+    const ex = ExpectedChange.safeParse(extra.expected_change ?? this.question?.expected_change);
+    if (!parsed.success || !ex.success) {
       this.counters.zod_streak += 1;
       this.counters.repairs += 1;
-      const issues = zodIssues(parsed.error);
+      const issues = [...(parsed.success ? [] : zodIssues(parsed.error)), ...(ex.success ? [] : zodIssues(ex.error).map((i) => `expected_change.${i}`))];
       if (this.counters.zod_streak > 2) { this.counters.zod_streak = 0; return this.invalid("schema", raw, issues, refusal("invalid_request", "The request failed the schema three times and counts as refused.", { issues })); }
       return refusal("invalid_arguments", "The request does not match the schema.", { issues, repairs_left: 3 - this.counters.zod_streak });
     }
@@ -410,22 +460,43 @@ export class Session {
     const base = this.resolveBase(q.base);
     const files = q.case_ids.map((id) => this.pool.experimentable(id));
     if (!live(q.hypothesis_id) || q.distinguishes.some((d) => !live(d)) || !base || files.some((f) => f === null) || new Set(q.case_ids).size !== q.case_ids.length) return this.invalid("ids", raw, ["unknown id"], UNKNOWN_ID);
-    const act = this.active();
-    if (act.length < 2 && !act.some((h) => !Array.isArray(h.competing))) {
-      return this.invalid("preregistration", raw, ["needs two hypotheses, or one with a stated reason"], refusal("preregistration", "Record two competing hypotheses, or one with the reason no competitor was identified, before the first experiment."));
+    const blocked = nonPreparableTargets(base, q.ops);
+    if (blocked.length) return this.lintRefusal(rawIn, q.ops, q.case_ids.length, { ok: false, reasons: ["not_preparable"], detail: { not_preparable: blocked, rule: "Operations may target only steps whose action is prepare_document and that are not external." } });
+    const applied = applyOperations(base, q.ops, { caseFacts: this.pool.caseFacts() });
+    if (!applied.ok) return this.invalid("static", raw, applied.errors.map((e) => `${e.code}: ${e.message}`), refusal("invalid_request", "The change breaks a definition rule.", { stage: "static", errors: applied.errors.map((e) => `${e.code}: ${e.message}`) }));
+    const cited = [...new Set([q.hypothesis_id, ...q.distinguishes])].map((id) => this.hypotheses.get(id)!);
+    const previous = [...this.experiments.values()].filter((x) => x.source === "request" && x.status === "completed").map((x) => ({ experiment_id: x.experiment_id, intervention_hash: x.intervention_hash ?? "", base_hash: x.base_hash, case_ids: (x.request as { case_ids: string[] }).case_ids }));
+    const lint = lintExperiment({ base, next: applied.definition, ops: q.ops, caseIds: q.case_ids, cited, previous, factsOf: this.factsOf, expectedStep: ex.data.step, nextHash: applied.definition.definition_hash, baseHash: base.definition_hash });
+    if (!lint.ok) return this.lintRefusal(rawIn, q.ops, q.case_ids.length, lint);
+    return this.execute("request", { ...q, expected_change: ex.data }, base, q.ops, files as NonNullable<(typeof files)[number]>[], this.active(), cited.map((h) => h.hypothesis_id), null, ex.data, lint);
+  }
+
+  // A lint refusal: logged, observed in the ledger, no experiment used and not counted toward the lockout.
+  private lintRefusal(rawIn: unknown, ops: readonly Operation[], cases: number, lint: LintResult): Result {
+    this.counters.lint_refusals += 1;
+    this.streams.experiments.append("experiment.lint_refused", { session_id: this.o.runId, request: rawIn, lint, lint_refusals: this.counters.lint_refusals }, { recorded_at: 0, occurred_at: 0 });
+    this.observe(`lint refused ${JSON.stringify(ops)} on ${cases} cases: ${lint.reasons.join(", ")}`);
+    return refusal("lint_refused", "The pre-run lint refused this experiment; it used no experiment and is not counted as a refused request.", { reasons: lint.reasons, lint: lint.detail, budget: this.budgetView() });
+  }
+
+  // Records the question this cycle's experiment must answer; refused unless two of the named hypotheses can be told apart on some pool case.
+  chooseQuestion(raw: unknown): Result {
+    const parsed = QuestionInput.safeParse(raw);
+    if (!parsed.success) { this.counters.repairs += 1; return refusal("invalid_arguments", "The arguments do not match the schema.", { issues: zodIssues(parsed.error) }); }
+    const a = parsed.data;
+    const live = (id: string) => this.hypotheses.has(id) && !["revised", "rejected"].includes(this.hypotheses.get(id)!.status);
+    const bad = a.hypothesis_ids.findIndex((id) => !live(id));
+    if (bad >= 0) return unknownField(`hypothesis_ids[${bad}]`);
+    if (!this.base.steps.some((st) => st.step_id === a.expected_change.step)) return unknownField("expected_change.step");
+    const named = a.hypothesis_ids.map((id) => this.hypotheses.get(id)!);
+    const pairs = this.distinguishablePairs(named);
+    if (pairs.length === 0) {
+      this.counters.question_refusals += 1;
+      return refusal("no_discrimination", "No two of the named hypotheses can be told apart: two if_true predictions are told apart only when they name the same metric, share an experimentable pool case, and the delta ranges they allow (intervention minus control) do not overlap.", { pairs: pairDiagnostics(named, this.pool.ids().filter((id) => this.pool.experimentable(id) !== null), this.factsOf) });
     }
-    const ran = [...this.experiments.values()].filter((x) => x.source === "request").length;
-    let noPair: string | null = null;
-    if (ran >= 1 && this.distinguishablePairs(act).length === 0) {
-      if (reason === undefined) {
-        this.counters.pair_refusals += 1;
-        this.streams.experiments.append("experiment.refused_pair", { session_id: this.o.runId, request_hash: hashJson(JSON.parse(JSON.stringify(raw ?? null))), active: act.map((h) => h.hypothesis_id), pair_refusals: this.counters.pair_refusals }, { recorded_at: 0, occurred_at: 0 });
-        return refusal("no_distinguishable_pair", "From the second experiment on, hold two active hypotheses whose if_true predictions do not overlap on one metric for a shared pool case, or give no_pair_reason saying why no such pair can be formed. This request used no experiment.", { budget: this.budgetView() });
-      }
-      noPair = reason;
-      this.counters.no_pair_reasons += 1;
-    }
-    return this.execute("request", q, base, q.ops, files as NonNullable<(typeof files)[number]>[], act, [q.hypothesis_id, ...q.distinguishes], noPair);
+    this.question = a;
+    this.log("question.chosen", { cycle: this.cycle, ...a, distinguishable: pairs });
+    return { ok: true, question: a.question, hypothesis_ids: a.hypothesis_ids, expected_change: a.expected_change, distinguishable_pairs: pairs };
   }
 
   // Pairs of active hypotheses whose if_true predictions are disjoint on one metric for a shared experimentable pool case.
@@ -446,16 +517,17 @@ export class Session {
     return this.execute("listed", { index: i, ops: entry.ops, case_ids: entry.case_ids }, this.base, entry.ops, files as NonNullable<(typeof files)[number]>[], this.active(), [], null);
   }
 
-  private execute(source: "request" | "listed", request: unknown, base: WD, ops: readonly Operation[], files: NonNullable<ReturnType<DiscoveryPool["experimentable"]>>[], act: HR[], cited: string[], noPair: string | null): Result {
+  private execute(source: "request" | "listed", request: unknown, base: WD, ops: readonly Operation[], files: NonNullable<ReturnType<DiscoveryPool["experimentable"]>>[], act: HR[], cited: string[], noPair: string | null, expected: ExpectedChange | null = null, lint: LintResult | null = null): Result {
     const caseIds = files.map((f) => f.case_id);
     const before = checkBefore(act, caseIds, this.factsOf);
     const xid = this.nextId("x");
-    const m = runMatched(base, ops, files, { caseFacts: this.pool.caseFacts(), experimentId: xid, ...(this.o.world ? { world: this.o.world } : {}), ...(this.o.runner ? { runner: this.o.runner } : {}) });
+    const m = runMatched(base, ops, files, { caseFacts: this.pool.caseFacts(), experimentId: xid, ...(expected ? { expected } : {}), ...(this.o.world ? { world: this.o.world } : {}), ...(this.o.runner ? { runner: this.o.runner } : {}) });
     if (!m.ok) {
       if (source === "listed") throw new Error(`listed experiment refused: ${m.errors.join("; ")}`);
       return this.invalid(m.stage, request, m.errors, refusal("invalid_request", "The change breaks a definition rule.", { stage: m.stage, errors: m.errors }));
     }
     if (source === "request") this.counters.experiments_used += 1;
+    this.counters.simulations += 2 * caseIds.length;
     for (const c of caseIds) this.view(c);
     const hashes: Record<string, string> = {};
     for (const id of new Set([...cited, ...before.speaks_to])) {
@@ -464,21 +536,29 @@ export class Session {
       hashes[id] = h.hash;
       if (!this.frozen.has(id)) { this.frozen.add(id); this.streams.hypotheses.append("hypothesis.frozen", { hypothesis_id: id, session_id: this.o.runId, hash: h.hash, experiment_id: xid }, { recorded_at: 0, occurred_at: 0 }); }
     }
-    const after = m.aborted ? null : checkAfter(act, before, caseIds, m.deltas, this.factsOf);
+    // Delivery: the named behaviour moved in at least one case, or, with nothing named, at least one event log differs from control.
+    const movedCases = m.receipt && expected ? m.receipt.target.filter((t) => t.moved).map((t) => t.case_id) : (m.behaviour?.changed_cases ?? []);
+    const delivered = !m.aborted && movedCases.length > 0;
+    const movedDeltas: Deltas = Object.fromEntries(movedCases.map((c) => [c, m.deltas[c] ?? {}]));
+    const cls = m.aborted ? null : outcomeClass(delivered, movedCases.map((c) => m.deltas[c]?.post_signoff_wait_min ?? null));
+    const after = m.aborted ? null : checkAfter(act, before, movedCases, movedDeltas, this.factsOf, delivered);
+    if (!m.aborted) { if (delivered) this.counters.delivered += 1; else this.counters.not_delivered += 1; if (cls && mayUpdate(cls)) this.counters.informative += 1; }
     const stored: StoredExperiment = {
       experiment_id: xid, session_id: this.o.runId, source, request, status: m.aborted ? "aborted" : "completed", base_hash: m.base_hash, intervention_hash: m.intervention_hash,
-      hypothesis_hashes: hashes, warnings: m.warnings, cases: m.cases, summary: summarise(m.cases), deltas: m.deltas, prediction_check: { before, after }, abort_reason: m.aborted ? `${m.aborted.case_id}: ${m.aborted.reason}` : null, behaviour: m.behaviour, no_pair_reason: noPair
+      hypothesis_hashes: hashes, warnings: m.warnings, cases: m.cases, summary: summarise(m.cases), deltas: m.deltas, prediction_check: { before, after }, abort_reason: m.aborted ? `${m.aborted.case_id}: ${m.aborted.reason}` : null, behaviour: m.behaviour, no_pair_reason: noPair,
+      expected_change: expected, receipt: m.receipt, delivered: m.aborted ? null : delivered, outcome_class: cls, lint
     };
     this.experiments.set(xid, stored);
-    if (source === "request") this.resetExperimentWindow();
     this.streams.experiments.append(m.aborted ? "experiment.aborted" : "experiment.completed", stored, { recorded_at: 0, occurred_at: 0 });
+    if (!m.aborted) this.observe(`${xid} ${JSON.stringify(ops)} on ${caseIds.length} cases: ${expected ? `${expected.step} ${expected.behaviour} moved in ${movedCases.length} of ${caseIds.length}` : `logs changed in ${movedCases.length} of ${caseIds.length}`}; ${cls}; median wait delta ${String(stored.summary.post_signoff_wait_min)}`);
     return this.experimentView(stored);
   }
 
   // What the model sees of an experiment: never the prediction check, never a verdict.
   experimentView(x: StoredExperiment): Result {
     if (x.status === "aborted") return { ok: false, error: "experiment_aborted", experiment_id: x.experiment_id, message: x.abort_reason, budget: this.budgetView() };
-    return { ok: true, experiment_id: x.experiment_id, request: x.request, base_hash: x.base_hash, intervention_hash: x.intervention_hash, warnings: x.warnings, behaviour: x.behaviour, cases: x.cases.map(caseView), median_delta: x.summary, budget: this.budgetView() };
+    const receipt = x.receipt ? { ...x.receipt, delivered: `${x.receipt.delivered_cases} of ${x.receipt.target.length} cases`, outcome: x.outcome_class } : null;
+    return { ok: true, experiment_id: x.experiment_id, request: x.request, base_hash: x.base_hash, intervention_hash: x.intervention_hash, warnings: x.warnings, receipt, behaviour: x.behaviour, cases: x.cases.map(caseView), median_delta: x.summary, budget: this.budgetView() };
   }
 
   getExperiment(a: { experiment_id: string }): Result {
@@ -514,6 +594,7 @@ export class Session {
     if (this.o.validate) await this.o.validate(this.o.storeRoot);
     const report = this.report(id);
     const status = report ? String(report.status) : "pending";
+    this.observe(`${id} submitted ${JSON.stringify(a.ops)}: validation ${status}`);
     if (status === "dev_validated" && arm !== "prior") this.stopWith("dev_valid_proposal", id);
     else if (arm === "prior") this.stopWith("prior_proposal_submitted", id);
     else if (this.counters.proposals_used >= this.proposalLimit()) this.stopWith("proposals_exhausted", `${this.counters.proposals_used} proposals`);
@@ -539,14 +620,9 @@ export class Session {
     const parsed = NoteInput.safeParse(raw);
     if (!parsed.success) { this.counters.repairs += 1; return refusal("invalid_arguments", "The arguments do not match the schema.", { issues: zodIssues(parsed.error) }); }
     if (this.notes.length >= NOTE_LIMIT) return refusal("notes_full", `At most ${NOTE_LIMIT} notes are kept.`);
-    const reason = parsed.data.no_hypothesis_reason;
-    const noExp = parsed.data.no_experiment_reason;
-    const text = [parsed.data.note, reason ? `(no hypothesis yet: ${reason})` : null, noExp ? `(no experiment yet: ${noExp})` : null].filter(Boolean).join(" ");
-    this.notes.push(text);
-    this.log("note.recorded", { number: this.notes.length, note: text, no_hypothesis_reason: reason ?? null, no_experiment_reason: noExp ?? null });
-    if (reason && this.hypotheses.size === 0) this.readWindow = { pages: 0, callsAtStart: this.o.usage?.().calls ?? 0 };
-    if (noExp) this.resetExperimentWindow();
-    return { ok: true, note_number: this.notes.length, notes_left: NOTE_LIMIT - this.notes.length, ...(reason ? { reading_window_reopened: this.hypotheses.size === 0 } : {}), ...(noExp ? { experiment_window_reopened: true } : {}) };
+    this.notes.push(parsed.data.note);
+    this.log("note.recorded", { number: this.notes.length, note: parsed.data.note });
+    return { ok: true, note_number: this.notes.length, notes_left: NOTE_LIMIT - this.notes.length };
   }
 
   // Cases cited by an active hypothesis, in its evidence or its prediction scopes.
@@ -559,14 +635,39 @@ export class Session {
     return out;
   }
 
+  // The investigation ledger, filled by the session from tool results: observations, hypotheses with their ledger fields, experiments with receipts, proposals.
   ledger(): Result {
+    const tested = (id: string) => [...this.experiments.values()].filter((x) => Object.keys(x.hypothesis_hashes).includes(id)).map((x) => x.experiment_id);
     return {
-      hypotheses: [...this.hypotheses.values()].map((h) => ({ hypothesis_id: h.hypothesis_id, statement: h.statement.slice(0, 160), status: h.status, competing: h.competing, revises: h.revises })),
-      experiments: [...this.experiments.values()].map((x) => ({ experiment_id: x.experiment_id, status: x.status, request: x.request })),
-      proposals: [...this.proposals.values()].map((p) => ({ proposal_id: p.proposal_id, validation: (this.report(p.proposal_id)?.status as string | undefined) ?? "pending" })),
+      cycle: this.cycle,
+      observations: this.observations.slice(-16),
+      hypotheses: [...this.hypotheses.values()].map((h) => {
+        const lf = this.ledgerFields.get(h.hypothesis_id);
+        const sign = h.if_true.comparison === "intervention_lt_control" ? "down" : h.if_true.comparison === "intervention_gt_control" ? "up" : "none";
+        return { hypothesis_id: h.hypothesis_id, status: h.status, statement: h.statement, mechanism: h.mechanism, competing: h.competing, cited_events: h.evidence.map((e) => `${e.event_id} ${e.case_id} ${e.stance}`), predicted: { metric: h.if_true.metric, sign, magnitude_min: lf?.predicted_magnitude_min ?? null, tolerance_min: h.if_true.tolerance_min }, falsifying_experiment: lf?.falsifying_experiment ?? null, if_null: lf?.if_null ?? null, refuted_if: h.refuted_if, tested_in: tested(h.hypothesis_id) };
+      }),
+      experiments: [...this.experiments.values()].map((x) => {
+        const r = x.request as { ops?: unknown; case_ids?: string[] };
+        const first = x.receipt?.first_divergence.find((d) => d.first !== null) ?? null;
+        return { experiment_id: x.experiment_id, status: x.status, ops: r.ops, cases: r.case_ids?.length ?? 0, expected_change: x.expected_change ?? null, delivered: x.receipt ? `${x.receipt.delivered_cases} of ${x.receipt.target.length} cases` : null, outcome: x.outcome_class ?? null, median_delta: Object.fromEntries(Object.entries(x.summary).filter(([, v]) => v !== 0 && v !== null)), first_divergence: first };
+      }),
+      lint_refusals: this.counters.lint_refusals,
+      question: this.question,
+      proposals: [...this.proposals.values()].map((p) => ({ proposal_id: p.proposal_id, ops: p.ops, validation: (this.report(p.proposal_id)?.status as string | undefined) ?? "pending" })),
       budget: this.budgetView()
     };
   }
+
+  // Closes the current cycle at the investigator's request; the controller opens the next one with a fresh conversation.
+  nextCycle(raw: unknown): Result {
+    const parsed = z.strictObject({ reason: z.string().trim().min(1).max(300) }).safeParse(raw);
+    if (!parsed.success) { this.counters.repairs += 1; return refusal("invalid_arguments", "The arguments do not match the schema.", { issues: zodIssues(parsed.error) }); }
+    this.log("cycle.closed_by_model", { cycle: this.cycle, reason: parsed.data.reason });
+    this.observe(`cycle ${this.cycle} closed: ${parsed.data.reason}`);
+    this.cycleClosed = true;
+    return { ok: true, cycle: this.cycle };
+  }
+  cycleClosed = false;
 
   // A declared negative ends the run; it must cite the recorded events inspected when the arm has records.
   endSession(raw: unknown): Result {

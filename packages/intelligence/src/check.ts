@@ -4,9 +4,17 @@ import { denyScan } from "./deny.js";
 import { appTexts } from "./prompts.js";
 import { STREAMS, sessionStreamId, type Arm, type StoredExperiment } from "./session.js";
 
-const READ_TOOLS = new Set(["list_cases", "get_case_timeline", "get_record", "compute_intervals", "get_queue_snapshot", "get_staff_activity", "get_ward_requirements", "get_workflow_definition"]);
+const READ_TOOLS = new Set(["list_cases", "get_case_timeline", "get_record", "compute_intervals", "get_queue_snapshot", "get_staff_activity", "get_ward_requirements", "get_workflow_definition", "get_derived_statistics", "get_precondition_table", "run_sweep", "run_experiment", "choose_question"]);
 type Row = Record<string, unknown>;
 const payloads = (root: string, id: string, type: string): Row[] => readStream(root, id).filter((e) => e.record_type === type).map((e) => e.payload as Row);
+
+// The fields of a tool result that echo the model's own words, dropped before the scan of app-written text.
+const ECHOED: Record<string, string[]> = { run_experiment: ["request"], choose_question: ["question"] };
+function appPart(name: string, text: string): string {
+  const keys = ECHOED[name];
+  if (!keys) return text;
+  try { const v = JSON.parse(text) as Row; for (const k of keys) delete v[k]; return JSON.stringify(v); } catch { return text; }
+}
 
 export type DiscoveryCheck = { pass: boolean; lines: string[]; summary: Row };
 
@@ -37,7 +45,7 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
   for (const s of statuses) last.set(s.hypothesis_id as string, s.status as string);
   const competed = hyps.filter((h) => Array.isArray(h.competing) || hyps.some((o) => Array.isArray(o.competing) && o.competing.includes(h.hypothesis_id)));
   const reasoned = hyps.filter((h) => !Array.isArray(h.competing));
-  say(`run ${runId}  arm ${arm}  mode ${String(opened.mode)}  model ${String(opened.model)}  effort ${String((opened.settings as Row).effort)}`);
+  say(`run ${runId}  arm ${arm}  mode ${String(opened.mode)}  model ${String(opened.model)}  effort ${String(opened.effort ?? (opened.settings as Row).effort)}`);
   const c = opened.commitment as { revision: number | null; hash: string | null } | null;
   say(`commitment ${c?.revision ? `revision ${c.revision} ${String(c.hash).slice(0, 12)}` : "none"}  prompt ${String((opened.hashes as Row).prompt).slice(0, 12)}  tools ${String((opened.hashes as Row).tools).slice(0, 12)}`);
   say(`hypotheses ${hyps.length}: ${competed.length} in a competing pair, ${reasoned.length} with a stated reason`);
@@ -52,6 +60,10 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
     say(`    after: ${per || "nothing landed"}; contradicted ${pc.after?.contradicted.join(", ") || "none"}`);
     if (x.behaviour) say(`    behaviour: event logs identical to control in ${x.behaviour.event_logs_identical_to_control}${x.behaviour.note ? "; behaviour unchanged" : ""}`);
   }
+  const lintRefused = exps.filter((e) => e.record_type === "experiment.lint_refused").length;
+  const process = processCompletion(done, aborted, lintRefused, statuses, refused);
+  say(`process: valid patches ${process.valid_patches}  delivered ${process.delivered}  informative ${process.informative}  status updates accepted ${process.updates_accepted} refused ${process.updates_refused}  lint refusals ${lintRefused}`);
+  for (const x of done) if (x.receipt) say(`  ${x.experiment_id} expected ${x.expected_change?.step} ${x.expected_change?.behaviour}: delivered ${x.receipt.delivered_cases} of ${x.receipt.target.length}, ${x.outcome_class}`);
   const pairRefused = exps.filter((e) => e.record_type === "experiment.refused_pair").length;
   const reasons = done.filter((x) => x.no_pair_reason).map((x) => `${x.experiment_id}: ${String(x.no_pair_reason).slice(0, 120)}`);
   say(`pair gate: ${pairRefused} refused, ${reasons.length} run on a stated no_pair_reason${reasons.length ? ` (${reasons.join("; ")})` : ""}`);
@@ -80,7 +92,7 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
     ...appTexts(arm),
     { label: "session.system", text: String(opened.system_prompt) },
     { label: "session.kickoff", text: String(opened.kickoff) },
-    ...tools.filter((t) => READ_TOOLS.has(t.name as string)).map((t, i) => ({ label: `tool_output.${String(t.name)}.${i}`, text: String(t.result) }))
+    ...tools.filter((t) => READ_TOOLS.has(t.name as string)).map((t, i) => ({ label: `tool_output.${String(t.name)}.${i}`, text: appPart(String(t.name), String(t.result)) }))
   ];
   const hits = denyScan(scanned);
   say(`deny-list scan: ${scanned.length} texts, ${hits.length} hits${hits.length ? `: ${hits.slice(0, 5).map((h) => `${h.label} /${h.pattern}/`).join("; ")}` : ""}`);
@@ -94,5 +106,18 @@ export function checkDiscovery(storeRoot: string, runId: string): DiscoveryCheck
   };
   const pass = Object.values(needs).every(Boolean);
   say(`check: ${Object.entries(needs).map(([k, v]) => `${k} ${v ? "pass" : "FAIL"}`).join("  ")}  => ${pass ? "PASS" : "FAIL"}`);
-  return { pass, lines, summary: { run_id: runId, arm, needs, calls: rows.length, usd, prompt_tokens: promptTokens, prompt_tokens_per_call: promptPerCall, prompt_tokens_max: promptMax, hypotheses: hyps.length, experiments: done.length, aborted, invalid, pair_refusals: pairRefused, no_pair_reasons: reasons.length, say_do_mismatches: refused.length, notes: notes.length, definition_unchanged: Number(counters.definition_unchanged ?? 0), read_refusals: Number(counters.read_refusals ?? 0), experiment_budget_refusals: Number(counters.experiment_budget_refusals ?? 0), hypothesis_schema_errors: Number(counters.hypothesis_schema_errors ?? 0), proposals: props.map((p) => p.proposal_id), validations: reports.map((r) => r.status), stop: stopped?.stop ?? null, deny_hits: hits.length } };
+  return { pass, lines, summary: { run_id: runId, arm, needs, calls: rows.length, usd, prompt_tokens: promptTokens, prompt_tokens_per_call: promptPerCall, prompt_tokens_max: promptMax, hypotheses: hyps.length, experiments: done.length, aborted, invalid, pair_refusals: pairRefused, no_pair_reasons: reasons.length, say_do_mismatches: refused.length, notes: notes.length, definition_unchanged: Number(counters.definition_unchanged ?? 0), read_refusals: Number(counters.read_refusals ?? 0), experiment_budget_refusals: Number(counters.experiment_budget_refusals ?? 0), hypothesis_schema_errors: Number(counters.hypothesis_schema_errors ?? 0), proposals: props.map((p) => p.proposal_id), validations: reports.map((r) => r.status), stop: stopped?.stop ?? null, deny_hits: hits.length, process, lint_refusals: lintRefused, cycles: stopped?.cycles ?? null } };
+}
+
+export type ProcessCompletion = { valid_patches: number; delivered: number; informative: number; updates_accepted: number; updates_refused: number };
+
+// The process columns: patches that passed the definition rules, interventions delivered, results that told a cited pair apart, and status updates the checker accepted or refused.
+export function processCompletion(done: readonly StoredExperiment[], aborted: number, lintRefused: number, statuses: readonly Row[], refused: readonly Row[]): ProcessCompletion {
+  const delivered = done.filter((x) => x.delivered === true || (x.delivered === undefined && x.behaviour?.note === null));
+  const informative = delivered.filter((x) => {
+    const per = x.prediction_check.after?.per_hypothesis ?? {};
+    return x.prediction_check.before.distinguishes.some(([a, b]) => per[a]?.landed !== "inconclusive" && per[b]?.landed !== "inconclusive" && per[a]?.landed !== per[b]?.landed);
+  });
+  const updates = statuses.filter((s) => s.status === "retained" || s.status === "rejected");
+  return { valid_patches: done.length + aborted + lintRefused, delivered: delivered.length, informative: informative.length, updates_accepted: updates.length, updates_refused: refused.length };
 }

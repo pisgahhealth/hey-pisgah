@@ -25,3 +25,10 @@ export function expectedShapes(error: z.ZodError): { field: string; type: string
   }
   return [...out.entries()].map(([field, s]) => ({ field, ...s }));
 }
+
+// The ledger fields record_hypothesis takes in the investigation cycle, shown on a schema error.
+export const LEDGER_SHAPES: Record<string, Shape> = {
+  predicted_magnitude_min: { type: "integer 0 to 600, the size of the effect if_true predicts", example: 20 },
+  falsifying_experiment: { type: "string, 1 to 300 characters", example: "Remove e99 and retrigger st17a on the deposit record; the voucher wait stays." },
+  if_null: { type: "string, 1 to 300 characters, what you conclude if the experiment delivers the change and the outcome does not move", example: "The voucher wait is set by the clerk's queue, not by e99." }
+};
