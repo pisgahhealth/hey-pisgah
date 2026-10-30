@@ -473,6 +473,8 @@ export type SayInput = {
   heard_at?: number;
   // The segment's voiceprint from the local speaker model, matched by the hospital while the gate reads the words.
   voiceprint?: Voiceprint | null;
+  // Why a heard line has no voiceprint to match, such as the person not being at the screen.
+  unverified_reason?: string;
 };
 type EarsOutcome = { check: EarsCheck; reading: EarReading | null; error: string | null };
 
@@ -731,7 +733,7 @@ export class EmrRuntime {
       const fail = (reason: string) => ({ v: { speaker: "unverified", reason } as SpeakerVerdict, embed_ms: vp.ms, match_ms: Date.now() - t0 });
       this.speakers.set(lineId, this.o.port.speaker(s.owner, vp.vector, prov).then((v) => ({ v, embed_ms: vp.ms, match_ms: Date.now() - t0 })).catch(() => fail("match_failed")));
     } else if (s.source === "audio" && this.o.port.speaker) {
-      this.speakers.set(lineId, Promise.resolve({ v: { speaker: "unverified", reason: "no_voiceprint" } as SpeakerVerdict, embed_ms: null, match_ms: null }));
+      this.speakers.set(lineId, Promise.resolve({ v: { speaker: "unverified", reason: s.unverified_reason ?? "no_voiceprint" } as SpeakerVerdict, embed_ms: null, match_ms: null }));
     }
     // A spoken pause or return is handled by rule; while called away nothing heard is decided, so no model is called.
     if (SPOKEN_PAUSE.test(text) && !CLOSED_TASK.has(live.task.state) && live.task.state !== "paused") { this.pauseSpoken(live, lineId, ctx); this.afterLine(live, lineId, true); return { task_id: live.task.task_id, line_id: lineId }; }

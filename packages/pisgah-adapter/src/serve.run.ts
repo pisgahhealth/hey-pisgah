@@ -43,6 +43,8 @@ async function main(): Promise<void> {
     // Both local ears are off unless switched on: HEY_PISGAH_EAR=parakeet and HEY_PISGAH_ASR=stream, with the models under HEY_PISGAH_ASR_DIR.
     asr: asrSwitch(process.env["HEY_PISGAH_ASR"]), local: { ...localDirs(process.env["HEY_PISGAH_ASR_DIR"] ?? join(process.cwd(), ".hey-pisgah", "asr")), sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] },
     ...(embed ? { embed } : {}),
+    // The replay defence is on for the live serve; presence becomes required once the strip sends its liveness marker.
+    listen: { replay: process.env["HEY_PISGAH_REPLAY_GUARD"] === "off" ? "off" : "refuse", presence: process.env["HEY_PISGAH_PRESENCE"] === "required" ? "required" : "observed" },
     listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4100),
     // The wake-phrase spotter's files for the strip, and the A&E clinic an emergency opened by voice lands on.
     ...(process.env["HEY_PISGAH_KWS_DIR"] ? { kwsDir: process.env["HEY_PISGAH_KWS_DIR"] } : {}),

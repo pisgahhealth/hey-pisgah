@@ -1,0 +1,95 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { hashJson } from "@hey-pisgah/contracts";
+import { PRESENCE_RULE, denyHits } from "@hey-pisgah/agent";
+import { SEED, readThresholds, thresholdsAt } from "../research/thresholds.js";
+import { V2_LINES, V2_ROLE, v2Counts } from "../research/v2.lines.js";
+import { authorityOf, identityOf, scoreV2, upper95, type V2Row } from "../research/v2.score.js";
+
+const root = join(import.meta.dirname, "..", "..", "..");
+const fx = JSON.parse(readFileSync(join(import.meta.dirname, "..", "research", "fixtures", "v2.readings.json"), "utf8")) as { built_at: string; rows: V2Row[] };
+const published = JSON.parse(readFileSync(join(root, "evaluation", "results", "attribution-v2.json"), "utf8"));
+const rule = thresholdsAt(fx.built_at)!.body.speaker;
+
+describe("the v2 recording script", () => {
+  it("asks for at least 300 non-owner lines, 30 overlaps, a replayed sequence, short answers by everyone, and a changed patient and batch", () => {
+    const c = v2Counts();
+    expect(V2_LINES.filter((l) => V2_ROLE[l.who] !== "owner").length).toBeGreaterThanOrEqual(300);
+    expect(c.overlap).toBeGreaterThanOrEqual(30);
+    expect(V2_LINES.filter((l) => l.replay_of).every((l) => l.set === "held_out" && V2_LINES.find((o) => o.id === l.replay_of)?.set === "tuning")).toBe(true);
+    expect(new Set(V2_LINES.filter((l) => l.block === "Y").map((l) => l.who))).toEqual(new Set(["S", "N", "C", "U"]));
+    expect(V2_LINES.some((l) => l.context.read_back && l.context.read_back.patient !== l.context.patient)).toBe(true);
+    expect(V2_LINES.some((l) => l.context.read_back && l.context.batch_now !== l.context.read_back.batch)).toBe(true);
+    expect(new Set(V2_LINES.map((l) => l.id)).size).toBe(V2_LINES.length);
+  });
+
+  it("is written as ward talk (R-27) and passes the deny-list scan", () => {
+    for (const l of V2_LINES) {
+      expect(l.words).not.toMatch(/^(hey )?pisgah\b/i);
+      expect(denyHits(`${l.words} ${l.overlap?.words ?? ""}`)).toEqual([]);
+    }
+  });
+});
+
+describe("frozen thresholds", () => {
+  it("keeps every revision with its source, date, reason and body hash, and never rewrites one", () => {
+    const f = readThresholds();
+    expect(f.revisions.map(({ hash: _h, ...r }) => r)).toEqual(SEED);
+    for (const r of f.revisions) {
+      expect(r.hash).toBe(hashJson(r.body));
+      expect(r.source.length && r.reason.length && r.frozen_at.length).toBeTruthy();
+    }
+  });
+
+  it("freezes the replay defence's limits beside the voice rule, so a code change without a new revision goes red", () => {
+    expect(readThresholds().revisions.at(-1)!.body.presence).toEqual({ ...PRESENCE_RULE });
+  });
+
+  it("scores the v2 set with the revision frozen before the set was built", () => {
+    expect(published.thresholds.revision).toBe(thresholdsAt(fx.built_at)!.revision);
+    expect(published.thresholds.frozen_at < fx.built_at).toBe(true);
+  });
+});
+
+describe("the v2 harness on the data held now", () => {
+  it("reproduces the published table from the kept readings", () => {
+    expect(scoreV2(fx.rows.filter((r) => r.source === "synthetic"), rule)).toEqual(published.synthetic);
+    expect(scoreV2(fx.rows.filter((r) => r.source === "real"), rule)).toEqual(published.real);
+  });
+
+  it("gives the binomial upper bound for zero and small error counts", () => {
+    expect(upper95(0, 30)).toBeCloseTo(1 - 0.05 ** (1 / 30), 3);
+    expect(upper95(0, 4)).toBeCloseTo(0.5271, 3);
+    expect(upper95(1, 20)).toBeCloseTo(0.2161, 2);
+    expect(upper95(0, 0)).toBeNull();
+  });
+
+  it("goes red when the voice calls everyone the owner (negative control)", () => {
+    const fooled = fx.rows.map((r) => ({ ...r, cos: { S: 0.99 } }));
+    expect(fooled.filter((r) => r.role !== "owner" && r.replay === null && authorityOf(r, rule)).length).toBeGreaterThan(0);
+  });
+
+  it("goes red when presence is ignored: replays played with the owner away act (negative control)", () => {
+    const away = fx.rows.filter((r) => r.replay === "played_owner_away");
+    expect(away.length).toBeGreaterThan(0);
+    expect(away.filter((r) => authorityOf(r, rule)).length).toBe(0);
+    expect(away.filter((r) => authorityOf({ ...r, presence: "live" }, rule)).length).toBeGreaterThan(0);
+    expect(away.filter((r) => identityOf(r, rule) === "owner").length).toBeGreaterThan(0);
+  });
+
+  it("goes red when a yes is not bound to its patient and batch (negative control)", () => {
+    const changed = fx.rows.filter((r) => r.category === "changed_patient" || r.category === "changed_batch");
+    expect(changed.length).toBeGreaterThan(0);
+    expect(changed.filter((r) => authorityOf(r, rule)).length).toBe(0);
+    const unbound = changed.map((r) => ({ ...r, context: { ...r.context, patient: r.context.read_back!.patient, batch_now: r.context.read_back!.batch } }));
+    expect(unbound.filter((r) => authorityOf(r, rule)).length).toBeGreaterThan(0);
+  });
+
+  it("keeps no voice embedding and no audio, only cosines", () => {
+    const text = JSON.stringify(fx);
+    expect(text).not.toMatch(/data:audio|UklGR/);
+    for (const r of fx.rows) if (r.cos) for (const v of Object.values(r.cos)) expect(typeof v).toBe("number");
+    expect(fx.rows.every((r) => !r.cos || Object.keys(r.cos).length <= 4)).toBe(true);
+  });
+});

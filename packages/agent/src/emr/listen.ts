@@ -6,7 +6,7 @@ import type { EmrRuntime } from "./runtime.js";
 import { primaryClass } from "./classes.js";
 import { afterWake } from "./entry.js";
 import type { EmrContext, EmrTarget } from "./port.js";
-import type { Embedder, Voiceprint } from "./speaker.js";
+import { ReplayGuard, type Embedder, type LivenessMarker, type PresenceMode, type PresenceRule, type Voiceprint } from "./speaker.js";
 
 export type Transcriber = (wav: Uint8Array, keywords: readonly string[], sessionId: string) => Promise<FinalTranscript>;
 
@@ -24,7 +24,7 @@ export const HELD_END_WAIT_MS = CHUNK_CAP_MS + 2000;
 
 // One stretch the streaming ear ended at a pause, with its words, its audio and the quiet already heard at its end.
 export type StreamSegment = { owner: string; target: EmrTarget; session_id: string; samples: Float32Array; rate: number; raw: string; trailing_ms: number; arrived: number; heard_at?: number };
-export type ListenChunk = { owner: string; target: EmrTarget; session_id: string; seq: number; wav: Uint8Array; arrived_at?: number };
+export type ListenChunk = { owner: string; target: EmrTarget; session_id: string; seq: number; wav: Uint8Array; arrived_at?: number; captured_at?: number; presence?: LivenessMarker | null };
 // The strip's end-of-utterance marker: no audio, only the place in the session where speech stopped.
 export type ListenEnd = Omit<ListenChunk, "wav">;
 // What the strip shows for each utterance: accepted on arrival, processing while heard or held, then failed or completed.
@@ -58,17 +58,25 @@ export type ListenOptions = {
   now?: () => number; classesOf?: (taskId: string, lineId: string) => string[];
   // The local speaker model; without it no line carries a voiceprint and attribution stays off.
   embed?: Embedder;
+  // The replay defence: refuse copies and faster-than-live audio (the deployed serve turns this on; scripted feeds leave it off), whether a chunk must carry the strip's liveness marker, and the frozen rule.
+  replay?: "refuse" | "off"; presence?: PresenceMode; presenceRule?: PresenceRule;
   heldEndWaitMs?: number;
   onStatus?: (owner: string, sessionId: string, seq: number, st: UtteranceStatus) => void;
 };
 
+// Speech, not digital silence: identical silent chunks are expected and are no sign of a copy.
+const hasSpeech = (wav: Uint8Array): boolean => { const { samples } = decodeWav(wav); for (const v of samples) if (Math.abs(v) > 0.01) return true; return false; };
 const totalMs = (parts: readonly Float32Array[], rate: number) => Math.round((parts.reduce((n, p) => n + p.length, 0) / rate) * 1000);
 
 // Continuous listening: chunks of one session are heard in order, capped chunks are joined as audio, a number cut at a pause is joined with what follows, and only a finished utterance reaches the runtime.
 export class ListenSessions {
   private readonly sessions = new Map<string, Session>();
   private closed = false;
-  constructor(private readonly rt: EmrRuntime, private readonly o: ListenOptions) {}
+  private readonly guard: ReplayGuard;
+  constructor(private readonly rt: EmrRuntime, private readonly o: ListenOptions) { this.guard = new ReplayGuard(o.presence ?? "observed", o.presenceRule, o.replay === "refuse"); }
+
+  // How many chunks the replay defence refused, by reason.
+  replayRefusals(): Record<string, number> { return { ...this.guard.refusals }; }
 
   session(id: string): { owner: string; admission_id: string; next: number; held_ms: number; waiting: string | null; dropped: number } | null {
     const s = this.sessions.get(id);
@@ -79,6 +87,9 @@ export class ListenSessions {
   async chunk(c: ListenChunk, wait = false): Promise<ListenReply> {
     const info = parseWav(c.wav);
     if (!info.ok) throw new ListenError(400, `audio: ${info.reason}`);
+    // A chunk a live microphone in this session could not have sent is refused before anything hears it, so the voice match never decides a replay.
+    const g = this.guard.check({ owner: c.owner, session_id: c.session_id, seq: c.seq, wav: c.wav, audio_ms: info.durationMs, speech: hasSpeech(c.wav), arrived_at: c.arrived_at ?? this.now(), captured_at: c.captured_at, marker: c.presence });
+    if (g.refused) throw new ListenError(409, `replayed audio refused: ${g.refused}`);
     return this.queue(c, info.durationMs, (sess) => this.hear(sess, c), wait);
   }
 
@@ -363,7 +374,7 @@ export class ListenSessions {
     let heard: FinalTranscript;
     let dropped = false;
     // The voiceprint is worked out while the words are transcribed, so attribution adds no time to the line.
-    const print = this.o.embed ? this.o.embed(joined).catch(() => null) : Promise.resolve(null);
+    const print = this.o.embed && this.guard.lineOf(sessionId, seqs).live !== false ? this.o.embed(joined).catch(() => null) : Promise.resolve(null);
     try {
       heard = await this.o.transcribe(joined, keywords, asrId);
     } catch (e) {
@@ -382,11 +393,14 @@ export class ListenSessions {
   private async deliver(s: Session, sessionId: string, h: Heard, why: ListenOutcome["why"]): Promise<ListenUtterance> {
     // A joined line that waited again and went on alone still says it was joined.
     const finished = h.joined && why === "number_alone" ? "joined_across_cut" : why;
+    // A line said while the person was not at the screen keeps its words but never reaches the voice match.
+    const present = this.guard.lineOf(sessionId, h.seqs);
+    const absent = present.live === false ? { voiceprint: null, unverified_reason: `not_present:${present.reason}` } : null;
     const r = await this.rt.say({
       owner: s.owner, target: { admission_id: s.ctx.admission_id }, text: h.text, source: "audio", spoken_at: new Date(h.arrived - h.audio_ms).toISOString(),
       audio: { audio_ms: h.audio_ms, cost_usd: h.cost_usd, session_id: sessionId },
       ambient: { session_id: sessionId, seqs: h.seqs, raw_text: h.raw.slice(0, 2000), ended_at: new Date(h.arrived - h.trailing_ms).toISOString(), final_at: new Date(h.arrived).toISOString(), trailing_silence_ms: h.trailing_ms, finished_by: finished },
-      context: s.ctx, clip: encodeWav(concat(h.samples), h.rate), rewrites: h.rewrites, heard_at: h.heard_at, ...(this.o.embed ? { voiceprint: h.voiceprint } : {})
+      context: s.ctx, clip: encodeWav(concat(h.samples), h.rate), rewrites: h.rewrites, heard_at: h.heard_at, ...(this.o.embed ? absent ?? { voiceprint: h.voiceprint } : {})
     });
     const u: ListenUtterance = { id: r.line_id, line_id: r.line_id, task_id: r.task_id, text: h.text, seqs: h.seqs, class: null, classes: [] };
     s.unreported.push(u);

@@ -115,3 +115,25 @@ Owner rule on the voice, owner template only (no colleague was enrolled): set on
 All five lost values are the normaliser, not the ear: "one thirty over eighty five", "one sixty over hundred" and "one fifty" lose the hundred, and "hundred and twelve" becomes 12. The word error is a floor, since the reference leans on the same two transcribers. Two runs of Voice Transcribe on the same clips gave different words in 53 of 70 clips and different values in 3.
 
 Run it: `real.transcribe.run.ts`, `real_cut.py`, `embed.py`, `real_voices.py`, `real_parakeet.py`, `real.manifest.run.ts`, `readers.run.ts --gate-only --manifest packages/voice/research/real-set.json`, then `real.assemble.run.ts`; the scores are in `evaluation/results/attribution-real.json`.
+
+## Attribution v2: identity, addressee and intent scored apart (30 Oct 2026)
+
+Thresholds are configuration with a source and a date (`evaluation/commitments/attribution-thresholds.json`). A change is a new revision with a reason. Revision 3 is in force: the owner rule from the real recordings (cosine at least 0.41, best match), the colleague placeholder 0.43, and the replay defence's limits, frozen before the v2 set was built.
+
+Each clip is scored on four separate axes: who spoke (the voice), whether the line was for the agent, whether it was an instruction or a yes, and whether the session and presence checks passed. Authority needs all four, and a yes must match the patient and batch on screen. Every count has a one-sided 95% upper bound (Clopper-Pearson; for zero errors 1 - 0.05^(1/n)), and false authority is counted per person, because lines from one person are not independent.
+
+The set held now: R1's synthetic clips, a synthetic colleague with the owner's sex and accent, overlaps mixed at offsets, short answers, changed patient and batch, and the owner's real recordings with the one real other person so far (four held-out clips). Replays are the owner's held-out instructions sent again as the same chunks, and played through a simulated phone speaker with the owner away or at the screen.
+
+| Held-out, voice and presence only | Synthetic | Real |
+| --- | --- | --- |
+| Identity right | 113 of 120 | 56 of 58 |
+| Other people's lines the voice and presence would pass | 1 of 72 (an overlap where the owner talks over the patient) | 0 of 4, bound 53% |
+| Similar colleague passed as the owner | 0 of 15, bound 18% | not recorded yet |
+| Replays the voice calls the owner | 33 of 33 | 22 of 24 |
+| Same chunks sent again, refused by the session check | 11 of 11 | 8 of 8 |
+| Played with the owner away, held by presence | 11 of 11 | 8 of 8 |
+| Played with the owner at the screen, acted on | 10 of 11 | 6 of 8 |
+
+The last row is the residual: session and presence cannot see a recording played while the owner is at the screen, so the countersign window remains the check. Gate readings for the new clips wait for the gate's own model route; a fallback reading is never counted. Full tables are in `evaluation/results/attribution-v2.json`; the labelled recording script is `v2.lines.ts`.
+
+Run it: `v2.build.run.ts --synth <say clips> --real <owner recordings> --model <TitaNet-small onnx> --sherpa <sherpa-onnx-node folder> --live` (add `--gate` once the route is back), then `v2.assemble.run.ts`.
