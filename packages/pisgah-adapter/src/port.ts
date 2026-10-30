@@ -32,7 +32,31 @@ export type PisgahPortOptions = {
   // Finds the care episode of an admission the profile does not list; the door has no read that returns it.
   episodeFor?: (admissionId: string) => Promise<string | null>;
   now?: () => Date;
+  // The door's request budget for one agent session: a burst and a steady rate per second; reads wait behind a reserve kept for writes.
+  budget?: DoorBudget | null;
 };
+export type DoorBudget = { capacity: number; perSecond: number; writeReserve: number; readWaitMs: number };
+// Pisgah's door gives an agent session 60 requests at once and one a second after that (rate-limit.ts).
+export const PISGAH_AGENT_BUDGET: DoorBudget = { capacity: 60, perSecond: 1, writeReserve: 15, readWaitMs: 15_000 };
+
+// One owner's share of the door budget: a write always goes and spends a token, a read waits for a token above the write reserve and gives up after its wait.
+export class DoorPacer {
+  private tokens: number;
+  private at: number;
+  constructor(private readonly b: DoorBudget, private readonly clock: () => number = Date.now) { this.tokens = b.capacity; this.at = clock(); }
+  private refill(): void { const now = this.clock(); this.tokens = Math.min(this.b.capacity, this.tokens + ((now - this.at) / 1000) * this.b.perSecond); this.at = now; }
+  write(): void { this.refill(); this.tokens = Math.max(0, this.tokens - 1); }
+  async read(sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms))): Promise<boolean> {
+    const end = this.clock() + this.b.readWaitMs;
+    for (;;) {
+      this.refill();
+      if (this.tokens >= this.b.writeReserve + 1) { this.tokens -= 1; return true; }
+      if (this.clock() >= end) return false;
+      // A read never sleeps past its own wait, so a token that would come later is not taken.
+      await sleep(Math.min(end - this.clock(), Math.ceil(((this.b.writeReserve + 1 - this.tokens) / this.b.perSecond) * 1000) + 20));
+    }
+  }
+}
 
 const same = (a: unknown, b: unknown): boolean => {
   if (a === undefined || a === null) return false;
@@ -202,6 +226,8 @@ export class PisgahPort implements EmrPort {
     return delegationOf(await this.read(spec.one, { delegation_id: id }, prov));
   }
 
+  private readonly pacers = new Map<string, DoorPacer>();
+  private pacerOf(owner: string): DoorPacer { let p = this.pacers.get(owner); if (!p) { p = new DoorPacer(this.o.budget ?? PISGAH_AGENT_BUDGET); this.pacers.set(owner, p); } return p; }
   refusedCount(): number { return this.refusals.length; }
   private now(): Date { return this.o.now?.() ?? new Date(); }
 
@@ -235,6 +261,10 @@ export class PisgahPort implements EmrPort {
       ...(h.authorisation_batch && batch?.length && prov.voice?.authorisation ? { [h.authorisation_batch]: [...new Set(batch)].sort().join(",") } : {}),
       ...(init.idempotencyKey ? { [h.idempotency]: init.idempotencyKey } : {}), ...(init.body !== undefined ? { "content-type": "application/json" } : {}), accept: "application/json"
     };
+    // The door's own budget is kept here, so a busy watcher never starves the writes it exists for.
+    const pacer = this.o.budget === null ? null : this.pacerOf(prov.owner);
+    if (pacer && method === "POST") pacer.write();
+    if (pacer && method === "GET" && !(await pacer.read())) { this.o.onRequest?.({ at: this.now().toISOString(), method, path: clean, status: null, ms: 0, replayed: false, headers: {}, body: null, outcome: "network_error", reason: "paced" }); return { kind: "network_error", reason: "paced" }; }
     const t0 = performance.now();
     const at = this.now().toISOString();
     const log = (status: number | null, replayed: boolean, outcome: DoorLog["outcome"], reason?: string) =>

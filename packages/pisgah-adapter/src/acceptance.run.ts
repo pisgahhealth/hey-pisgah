@@ -3,8 +3,9 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
+import { createServer, request as httpRequest } from "node:http";
 import type { EmrTaskView } from "@hey-pisgah/agent";
-import { parseWav } from "@hey-pisgah/voice";
+import { decodeWav, encodeWav, parseWav } from "@hey-pisgah/voice";
 import { loadProfile } from "./profile.js";
 import { personCaller } from "./journey.sandbox.js";
 import type { DoorLog } from "./port.js";
@@ -14,9 +15,9 @@ import { completion, didBy, loadScript, speedTable, stepStatus, writeAccResults,
 
 // Runs the acceptance script against a serve on the loopback sandbox: says or plays each line, waits for the record after it, injects the faults, and writes the result files.
 const env = (k: string, d?: string): string => { const v = process.env[k] ?? d; if (v === undefined) throw new Error(`set ${k}`); return v; };
-const DRIVER = env("ACC_DRIVER", "say") as "human" | "say" | "post" | "text";
+const DRIVER = env("ACC_DRIVER", "say") as "human" | "say" | "post" | "text" | "fake";
 const KIND = env("ACC_KIND", "rehearsal") as "rehearsal" | "final";
-const BROWSER = env("ACC_BROWSER", DRIVER === "say" || DRIVER === "human" ? "launch" : "none") as "launch" | "none";
+const BROWSER = env("ACC_BROWSER", DRIVER === "say" || DRIVER === "human" || DRIVER === "fake" ? "launch" : "none") as "launch" | "none";
 const SERVE_PORT = Number(env("ACC_SERVE_PORT", "4131"));
 const SERVE = `http://127.0.0.1:${SERVE_PORT}`;
 const OUT = env("ACC_OUT");
@@ -90,6 +91,25 @@ const resolveVar = (v: string): string => v.replace(/\$(A|B)\.(patient|visit|adm
 const ofPatient = (ref: "A" | "B" | null, owner?: string) => allActions(owner).filter((a) => !ref || (bound[ref] && (a.patient_id === bound[ref]!.patient || bound[ref]!.tasks.has(a.task_id))));
 const doctorTasks = (ref: "A" | "B" | null) => (views.get(DOCTOR) ?? []).filter((t) => !ref || (bound[ref] && (t.patient_id === bound[ref]!.patient || bound[ref]!.tasks.has(t.task_id))));
 
+// The door as the serve sees it, through a proxy that can drop one write's reply after the hospital has done the write.
+const PROXY_PORT = process.env["ACC_DOOR_PROXY_PORT"] ? Number(process.env["ACC_DOOR_PROXY_PORT"]) : null;
+let dropNext: { path: string; hit: string | null } | null = null;
+if (PROXY_PORT) {
+  const upstream = new URL(env("ACC_DOOR_UPSTREAM", "http://localhost:3311"));
+  createServer((req, res) => {
+    const drop = dropNext && !dropNext.hit && req.method === "POST" && (req.url ?? "").includes(dropNext.path) ? dropNext : null;
+    if (drop) drop.hit = `${req.method} ${req.url}`;
+    const up = httpRequest({ host: upstream.hostname, port: upstream.port, method: req.method, path: req.url, headers: { ...req.headers, host: upstream.host } }, (r) => {
+      // The hospital answered and has done the write; the serve never hears it.
+      if (drop) { r.resume(); r.on("end", () => req.socket.destroy()); log(`lost ack: dropped the ${r.statusCode} reply to ${drop.hit}`); return; }
+      res.writeHead(r.statusCode ?? 502, r.headers);
+      r.pipe(res);
+    });
+    up.on("error", () => { res.writeHead(502); res.end(); });
+    req.pipe(up);
+  }).listen(PROXY_PORT, "127.0.0.1");
+}
+
 // Serve control by port and the documented start script only.
 let restarts = 0;
 const serveLog = () => join(OUT, `serve-${restarts}.log`);
@@ -135,6 +155,45 @@ async function postChunk(owner: string, file: string, ms: number, text: string, 
   return r.json().catch(() => null);
 }
 const rl = DRIVER === "human" ? createInterface({ input: process.stdin, output: process.stdout }) : null;
+// The fake microphone: one file with every line said in the room at its own time, silence between, played by Chrome from the microphone grant on.
+const FAKE_LEAD_MS = 150_000;
+let fakeT0 = 0;
+const fakeSlots = new Map<string, { at: number; clipMs: number; end: number }>();
+const heardInRoom = (l: Line) => l.mode === "speak" || l.mode === "play";
+function slotGap(l: Line, next: Line | undefined): number {
+  if (!heardInRoom(l)) return l.mode === "wait" ? Math.min(l.timeout_s ?? 90, 180) * 1000 : l.mode === "fault" ? 45_000 : l.mode === "person" ? 30_000 : 20_000;
+  if (l.interrupt) return 60_000;
+  if (l.lose_ack || next?.confirm) return 40_000;
+  return Number(process.env["ACC_FAKE_GAP_MS"] ?? 25_000);
+}
+function buildFakeMic(): void {
+  const only = process.env["ACC_ONLY"] ? new Set(process.env["ACC_ONLY"].split(",")) : null;
+  const lines = script.lines.filter((l) => !only || only.has(l.id));
+  const rate = 16_000;
+  const parts: Float32Array[] = [new Float32Array((FAKE_LEAD_MS / 1000) * rate)];
+  let at = 0;
+  lines.forEach((l, i) => {
+    let clipMs = 0;
+    if (heardInRoom(l)) {
+      const voice = l.mode === "play" ? script.voices[l.who] ?? "Samantha" : script.voices["doctor"] ?? "Rishi";
+      const clip = decodeWav(new Uint8Array(readFileSync(render(voice, l.text!, `${l.id}-fake`).file)));
+      parts.push(clip.samples);
+      clipMs = Math.round((clip.samples.length / clip.sampleRate) * 1000);
+    }
+    const gap = slotGap(l, lines[i + 1]);
+    parts.push(new Float32Array(Math.round((gap / 1000) * rate)));
+    fakeSlots.set(l.id, { at, clipMs, end: at + clipMs + gap });
+    at += clipMs + gap;
+  });
+  parts.push(new Float32Array(20 * 60 * rate));
+  const all = new Float32Array(parts.reduce((n, p) => n + p.length, 0));
+  let o = 0;
+  for (const p of parts) { all.set(p, o); o += p.length; }
+  writeFileSync(join(OUT, "fake-mic.wav"), encodeWav(all, rate));
+  writeFileSync(join(OUT, "fake-mic.schedule.json"), `${JSON.stringify(Object.fromEntries(fakeSlots), null, 1)}\n`);
+  log(`fake microphone: ${lines.length} slots, ${Math.round(at / 60_000)} min after a ${FAKE_LEAD_MS / 1000} s lead-in`);
+}
+
 async function deliver(line: Line): Promise<{ lineEnd: string | null; note: string | null }> {
   const text = line.text!;
   if (line.mode === "type" || line.mode === "remote") {
@@ -166,6 +225,8 @@ async function deliver(line: Line): Promise<{ lineEnd: string | null; note: stri
     const r = await fetch(`${SERVE}/tasks/say`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ owner: DOCTOR, text, spokenAt: at }) });
     return { lineEnd: at, note: `typed: ${r.status} ${(await r.text()).slice(0, 160)}` };
   }
+  // Under the fake microphone the words are already in the file Chrome plays; the harness waits for them to end.
+  if (DRIVER === "fake") { const slot = fakeSlots.get(line.id); if (!slot) return { lineEnd: null, note: "no slot in the fake microphone file" }; await wait(Math.max(0, fakeT0 + FAKE_LEAD_MS + slot.at + slot.clipMs - Date.now())); return { lineEnd: now(), note: `in the fake microphone file at ${((FAKE_LEAD_MS + slot.at) / 1000).toFixed(1)} s, ${voice} ${slot.clipMs} ms` }; }
   const clip = render(voice, text, `${line.id}-${seq}`);
   if (DRIVER === "post") { const r = await postChunk(DOCTOR, clip.file, clip.ms, text, voice); return { lineEnd: now(), note: JSON.stringify(r).slice(0, 200) }; }
   execFileSync("afplay", [clip.file], { timeout: 60_000 });
@@ -180,12 +241,14 @@ let browserClose: (() => Promise<void>) | null = null;
 const STRIP = 'section[aria-label^="Agent for"]';
 async function openBrowser(): Promise<void> {
   const req = createRequire(env("ACC_PISGAH_PKG"));
-  const { chromium } = req("playwright") as { chromium: { launch: (o: unknown) => Promise<{ newContext: (o: unknown) => Promise<{ grantPermissions: (p: string[], o: unknown) => Promise<void>; addInitScript: (f: (s: string) => void, a: string) => Promise<void>; newPage: () => Promise<Page> }>; close: () => Promise<void> }> } };
-  const browser = await chromium.launch({ channel: "chrome", headless: false, ignoreDefaultArgs: ["--enable-automation"], args: ["--window-size=1400,960"] });
+  const { chromium } = req("playwright") as { chromium: { launch: (o: unknown) => Promise<{ newContext: (o: unknown) => Promise<{ setOffline: (on: boolean) => Promise<void>; grantPermissions: (p: string[], o: unknown) => Promise<void>; addInitScript: (f: (s: string) => void, a: string) => Promise<void>; newPage: () => Promise<Page> }>; close: () => Promise<void> }> } };
+  const fakeArgs = DRIVER === "fake" ? ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", `--use-file-for-fake-audio-capture=${join(OUT, "fake-mic.wav")}%noloop`] : [];
+  const browser = await chromium.launch({ channel: "chrome", headless: false, ignoreDefaultArgs: ["--enable-automation"], args: ["--window-size=1400,960", ...fakeArgs] });
   const ctx = await browser.newContext({ viewport: { width: 1380, height: 860 } });
   await ctx.grantPermissions(["microphone"], { origin: APP });
   await ctx.addInitScript((serve) => { try { window.localStorage.setItem("pisgah-agent-serve", serve); } catch { /* storage off */ } }, `http://localhost:${SERVE_PORT}`);
   page = await ctx.newPage();
+  setOffline = (on) => ctx.setOffline(on);
   browserClose = () => browser.close();
   await page.goto(`${APP}/login?next=%2Fdoctor`, { timeout: 120_000 });
   await page.fill('input[name="username"]', script.people["doctor"]!.login);
@@ -207,13 +270,18 @@ async function openBrowser(): Promise<void> {
     await rl!.question("");
   } else {
     // The first press grants the microphone and arms the wake spotter; once it says so, a second press starts listening, as F1's walks do.
+    // A press before the strip hydrates is lost, so the harness waits, presses, and presses again only if nothing changed.
+    await wait(5000);
+    const armed = () => page!.waitForFunction((st: string) => /Say hey Pisgah|Listening|Hearing you/.test(document.querySelector(`${st} header`)?.textContent ?? ""), STRIP, { timeout: 20_000 }).then(() => true, () => false);
+    fakeT0 = Date.now();
     await page.click(`${STRIP} button[aria-label="Listen"]`);
-    await page.waitForFunction((st: string) => /Say hey Pisgah/.test(document.querySelector(`${st} header`)?.textContent ?? ""), STRIP, { timeout: 90_000 }).catch(() => log("browser: the wake spotter did not say it was ready"));
+    if (!(await armed())) { log("browser: the first press did not arm the strip; pressing again"); fakeT0 = Date.now(); await page.click(`${STRIP} button[aria-label="Listen"]`); if (!(await armed())) log("browser: the wake spotter did not say it was ready"); }
     if (!(await page.locator(`${STRIP} button[aria-label="Stop listening"]`).count())) await page.click(`${STRIP} button[aria-label="Listen"]`);
     await page.waitForSelector(`${STRIP} button[aria-label="Stop listening"]`, { timeout: 30_000 }).catch(() => { log("browser: the strip did not start listening"); harnessErrors.push("browser: the strip did not start listening"); });
     log("browser: the harness pressed Listen (the one microphone grant, and a start if the strip asked for one)");
   }
 }
+let setOffline: (on: boolean) => Promise<void> = async () => undefined;
 async function touchesNow(): Promise<{ emr: number; strip: number } | null> {
   if (!page) return null;
   return page.evaluate((o) => ({ emr: Number(sessionStorage.getItem(`pisgah-agent-touches:${o}`) ?? "0"), strip: Number(sessionStorage.getItem(`pisgah-agent-strip-touches:${o}`) ?? "0") }), DOCTOR).catch(() => null);
@@ -264,6 +332,11 @@ async function check(e: Expect, line: Line, lineId: string | null, before: Set<s
   if ("obligation" in e) { const os = doctorTasks(ref).flatMap((t) => t.obligations).filter((o) => (!e.obligation.after || o.after === e.obligation.after)); const hit = os.find((o) => o.state === e.obligation.state && during(e.obligation.state === "held" ? o.held_at : o.fired_at ?? o.held_at)); return { ok: !!hit, detail: `${os.map((o) => `${o.title.slice(0, 40)}:${o.state}`).join(", ") || "none"}` }; }
   if ("tracking" in e) { await readTracking(); return { ok: trackingTarget === (bound[e.tracking]?.patient ?? "?") || (!!bound[e.tracking]?.admission && trackingTarget === bound[e.tracking]!.admission), detail: `tracking ${trackingTarget?.slice(0, 8) ?? "none"}` }; }
   if ("tasks_survive" in e) return { ok: survived, detail: survivedDetail };
+  if ("not_heard" in e) {
+    const words = (line.text ?? "").toLowerCase().replace(/[^a-z ]/g, "").split(" ").filter((w) => w.length > 4);
+    const leaked = [...views.values()].flat().flatMap((t) => t.transcript).filter((l) => l.at >= started && words.filter((w) => l.text.toLowerCase().includes(w)).length >= Math.min(3, words.length));
+    return { ok: leaked.length === 0, detail: leaked.length ? `heard while muted: ${leaked[0]!.text.slice(0, 80)}` : "nothing said while muted reached any transcript" };
+  }
   if ("wake" in e) { const rows = wakeRows(); return { ok: rows.length > 0, detail: `${rows.length} wakes measured` }; }
   if ("query" in e) {
     if (!hospital.hasQuery(e.query)) return { ok: false, detail: `query ${e.query} is not in the profile` };
@@ -294,13 +367,16 @@ const harnessErrors: string[] = [];
 const faults: Fault[] = [];
 const otherTouches: AccResult["touches"]["other_people"] = [];
 async function runLine(line: Line): Promise<void> {
+  // Under the fake microphone each line runs in its slot of the file, so the room's timing never depends on the agent.
+  const slot = DRIVER === "fake" ? fakeSlots.get(line.id) : undefined;
+  if (slot) await wait(Math.max(0, fakeT0 + FAKE_LEAD_MS + slot.at - Date.now()));
   const started = now();
   const errors: string[] = [];
   // A line whose precondition never came is failed, whatever its own checks say, since it ran on a state the script did not expect.
   let unmet = false;
   await readTracking();
   for (const a of line.after ?? []) {
-    const end = Date.now() + 180_000;
+    const end = slot ? fakeT0 + FAKE_LEAD_MS + slot.end - 1500 : Date.now() + 180_000;
     while (!nudgedOwner(a.nudged, line.patient) && Date.now() < end) await wait(500);
     if (!nudgedOwner(a.nudged, line.patient)) { errors.push(`${a.nudged} was never nudged for this patient`); unmet = true; }
   }
@@ -334,13 +410,20 @@ async function runLine(line: Line): Promise<void> {
   } else if (line.mode !== "wait") {
     if (line.mode === "type") otherTouches.push({ line: line.id, who: line.who, what: "typed stand-in line at that person's strip" });
     if (line.mode === "remote") otherTouches.push({ line: line.id, who: line.who, what: "spoken stand-in through that person's strip (no touch, listed so it is not mistaken for the doctor's)" });
+    if (line.lose_ack && PROXY_PORT) dropNext = { path: line.lose_ack.path, hit: null };
+    if (line.muted && page && DRIVER === "human") { process.stdout.write("\n  MUTE: press the strip's mute button (the crossed microphone), then press Enter here.\n"); await rl!.question(""); }
+    else if (line.muted && page) { await page.click(`${STRIP} button[aria-label="Mute the agent"]`).catch(() => harnessErrors.push(`${line.id}: no Mute button`)); await wait(800); }
+    if (line.offline_s && page) await setOffline(true);
     const d = await deliver(line).catch((e: unknown) => ({ lineEnd: null, note: `delivery failed: ${e instanceof Error ? e.message.slice(0, 160) : String(e)}` }));
     lineEnd = d.lineEnd; note = d.note;
     if (!lineEnd || /refused|delivery failed/.test(note ?? "")) harnessErrors.push(`${line.id}: ${note}`);
+    if (line.offline_s && page) { await wait(line.offline_s * 1000); await setOffline(false); log(`${line.id}: the browser was offline ${line.offline_s} s while the line was said`); }
+    if (line.muted && page && DRIVER === "human") { process.stdout.write("\n  UNMUTE: press the mute button again, then press Enter here.\n"); await rl!.question(""); }
+    else if (line.muted && page) { await wait(1500); await page.click(`${STRIP} button[aria-label="Unmute the agent"]`).catch(() => harnessErrors.push(`${line.id}: could not unmute`)); }
     if (!lineEnd) blocked = true;
   }
   // Each check is tried until it holds or the line's time runs out; nothing passes by default.
-  const limit = Date.now() + (line.timeout_s ?? 90) * 1000;
+  const limit = slot ? fakeT0 + FAKE_LEAD_MS + slot.end - 1500 : Date.now() + (line.timeout_s ?? 90) * 1000;
   let heard: ReturnType<typeof lineAfter> = null;
   let outcomes: CheckOutcome[] = [];
   for (;;) {
@@ -352,6 +435,14 @@ async function runLine(line: Line): Promise<void> {
     if (blocked || outcomes.every((c) => c.ok) || Date.now() > limit) break;
   }
   if (interruptWatch) await interruptWatch;
+  if (line.lose_ack && PROXY_PORT) {
+    const hit = dropNext?.hit ?? null;
+    const kinds = outcomes.filter((c) => "act" in c.expect);
+    faults.push({ kind: "lost_ack", line: line.id, at: started, killed_during: hit, restarted_in_ms: null, outcome: hit ? `reply to ${hit} dropped; ${kinds.map((c) => c.detail).join("; ")}` : "no matching write was seen", ok: !!hit && kinds.every((c) => c.ok) });
+    dropNext = null;
+  }
+  if (line.offline_s && page) faults.push({ kind: "offline", line: line.id, at: started, killed_during: null, restarted_in_ms: null, outcome: outcomes.map((c) => c.detail).join("; ").slice(0, 300), ok: outcomes.filter((c) => !c.optional).every((c) => c.ok) });
+  if (line.muted && page) faults.push({ kind: "mute", line: line.id, at: started, killed_during: null, restarted_in_ms: null, outcome: outcomes.map((c) => c.detail).join("; ").slice(0, 300), ok: outcomes.filter((c) => !c.optional).every((c) => c.ok) });
   const lineIds = new Set([heard?.line_id].filter(Boolean) as string[]);
   const verified = allActions().filter((a) => a.state === "completed" && (lineIds.has(a.line_id) || (seen.get(`${a.action_id}:completed`) ?? "") >= started)).map((a) => {
     const at = seen.get(`${a.action_id}:completed`) ?? null;
@@ -429,6 +520,7 @@ async function main(): Promise<void> {
   // A serve already on the port holds another run's store, so the harness starts its own unless told to reuse that one.
   if ((await healthy(2000)) && process.env["ACC_REUSE_SERVE"] !== "1") throw new Error(`a serve is already listening on ${SERVE}; stop it by its port or set ACC_REUSE_SERVE=1`);
   if (!(await healthy(2000))) { startServe(); if (!(await healthy())) throw new Error(`the serve did not come up on ${SERVE}; see ${serveLog()}`); }
+  if (DRIVER === "fake") buildFakeMic();
   if (BROWSER === "launch") await openBrowser();
   const only = process.env["ACC_ONLY"] ? new Set(process.env["ACC_ONLY"].split(",")) : null;
   for (const line of script.lines) {
@@ -487,7 +579,7 @@ async function finish(): Promise<void> {
     model: { calls, usd: Number(usd.toFixed(4)), rate_limited: rateLimited },
     harness_errors: harnessErrors, completion: { complete: false, reasons: [] }
   };
-  result.completion = completion(result, script.lines.filter((l) => l.mode === "fault" || l.interrupt).length);
+  result.completion = completion(result, script.lines.filter((l) => l.mode === "fault" || l.interrupt).length + (PROXY_PORT ? script.lines.filter((l) => l.lose_ack).length : 0) + (page ? script.lines.filter((l) => l.offline_s || l.muted).length : 0));
   void signedIds;
   const root = KIND === "final" ? env("ACC_PUBLISH_ROOT") : OUT;
   const files = writeAccResults(root, result, { previews_with_names: Number(process.env["ACC_PREVIEWS_WITH_NAMES"] ?? "0"), privilege_gained: 0 });
