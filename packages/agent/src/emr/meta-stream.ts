@@ -1,18 +1,29 @@
-import { ASR_MODEL, RealtimeSession, USD_PER_AUDIO_HOUR, VoiceError, concat, resample, type RealtimeEvent, type RealtimeMode, type RealtimeRate, type SocketFactory } from "@hey-pisgah/voice";
+import { ASR_MODEL, RealtimeSession, SILENCE_RMS, USD_PER_AUDIO_HOUR, VoiceError, concat, resample, type RealtimeEvent, type RealtimeMode, type RealtimeRate, type SocketFactory } from "@hey-pisgah/voice";
 import type { ListenSessions, ListenUtterance } from "./listen.js";
 import type { ReadingLedger } from "./local-ears.js";
 import type { EmrTarget } from "./port.js";
 import { STREAM_LIVE_SLACK_MS, StreamRefused } from "./stream-listen.js";
 
 export const META_STREAM_MODEL = `meta:${ASR_MODEL}:realtime` as const;
-// A realtime session is replaced well before Meta's 60-minute limit, between lines when it can be.
-export const META_SESSION_CAP_MS = 50 * 60_000;
-// Past the cap plus this, the session is replaced even in the middle of a line.
-export const META_SESSION_HARD_MS = 58 * 60_000;
+// Meta closes a realtime session at 60 minutes, so the next one opens at 57 and both hear the same audio until they join.
+export const META_ROLL_AT_MS = 57 * 60_000;
+// The two sessions overlap for at most a minute, as Meta advises, before the join is forced.
+export const META_OVERLAP_MS = 60_000;
+// The join waits for this much quiet audio with neither session inside a turn, so every turn belongs to exactly one session.
+export const META_JOIN_QUIET_MS = 1_000;
+// A sender this far behind the clock is padded with silence, since Meta closes a stream that arrives slower than real time.
+export const META_PAD_AFTER_MS = 250;
+// Padding brings the audio sent to within this much of the clock.
+export const META_PAD_LAG_MS = 100;
+const PAD_TICK_MS = 100;
+// After a dropped connection or a patient change at most this much recent audio is sent again, inside Meta's five seconds ahead of processing.
+export const META_RESEND_MAX_MS = 4_000;
+// A turn sharing at least this much time with a turn another session already delivered is the same speech heard twice, and is dropped.
+export const META_SAME_SPEECH_MS = 200;
 // Audio kept before and after Meta's turn edges, since those edges are processing positions, not acoustic boundaries.
 export const META_TURN_PREROLL_MS = 300;
 export const META_TURN_TAIL_MS = 300;
-// How much recent audio is kept in memory for the second ear; nothing is written to disk.
+// How much recent audio is kept in memory for the second ear and for a resend; nothing is written to disk.
 export const META_KEEP_MS = 60_000;
 // Reconnects tried after a dropped connection before the stream fails.
 export const META_RECONNECTS = 3;
@@ -20,22 +31,30 @@ export const META_RECONNECTS = 3;
 export type MetaStreamOptions = {
   key: () => string; socket?: SocketFactory; url?: string; mode?: RealtimeMode; languageBias?: readonly string[];
   ledger?: ReadingLedger; runOf?: (taskId: string) => string | null; now?: () => number;
-  refuseFasterThanLive?: boolean; capMs?: number; hardMs?: number; reconnectDelayMs?: number;
+  refuseFasterThanLive?: boolean; rollAtMs?: number; overlapMs?: number; joinQuietMs?: number; padAfterMs?: number; reconnectDelayMs?: number;
+  // Every utterance a completed turn became, as it is delivered, for a caller that reports lines while the stream is still open.
+  onHeard?: (sessionId: string, us: ListenUtterance[]) => void;
 };
 
 type Turn = { start_ms: number; end_ms: number | null };
-type Conn = { s: RealtimeSession; base_ms: number; turns: Map<number, Turn>; open: Set<number>; current: number | null; ending: boolean; opened: number };
+// A connection owns the turns that start in [from_ms, until_ms) for its own patient; until the session before it has closed, its finished turns wait in held.
+type Conn = {
+  s: RealtimeSession; base_ms: number; turns: Map<number, Turn>; open: Set<number>; current: number | null; ending: boolean; opened: number; from_ms: number; until_ms: number; processed_ms: number;
+  target: EmrTarget; listen_sid: string; after: Promise<unknown> | null; held: (() => void)[]; on_empty: (() => void) | null;
+};
 type Live = {
-  owner: string; target: EmrTarget; rate: number; send_rate: RealtimeRate; keywords: string[];
-  conn: Conn | null; draining: Promise<unknown>[]; ring: { at_ms: number; x: Float32Array }[]; fed_ms: number; fed: number;
+  owner: string; rate: number; send_rate: RealtimeRate; sids: Set<string>; delivered: { start_ms: number; end_ms: number; conn: Conn }[];
+  conn: Conn | null; next: Conn | null; closing: Conn | null; rolling: Promise<void> | null; roll_since: number; roll_retry_at: number;
+  draining: Promise<unknown>[]; ring: { at_ms: number; x: Float32Array }[]; fed_ms: number; fed: number; quiet_ms: number; padded_ms: number; resent_ms: number; last_end_ms: number;
   wall: { ms: number; at: number }[]; billed_ms: number; work: Promise<unknown>; errors: string[]; opened: number; failed: Error | null;
-  reconnecting: Promise<void> | null; dropped_ms: number; ended: boolean;
+  reconnecting: Promise<void> | null; dropped_ms: number; ended: boolean; pad: ReturnType<typeof setInterval> | null;
 };
 
 export class MetaStreamFailed extends Error { constructor(message: string, readonly code: number | null) { super(message); } }
 
 const sendRateOf = (rate: number): RealtimeRate => (rate === 24_000 ? 24_000 : 16_000);
 const centsOf = (ms: number) => Math.round((ms / 3_600_000) * USD_PER_AUDIO_HOUR * 1e6) / 1e6;
+const rms = (x: Float32Array) => { let s = 0; for (const v of x) s += v * v; return Math.sqrt(s / Math.max(1, x.length)); };
 
 // Opens one realtime session and ends it at once, so a switched-on ear that cannot connect stops the service before it serves.
 export async function probeRealtime(o: Pick<MetaStreamOptions, "key" | "socket" | "url" | "mode" | "languageBias">): Promise<string> {
@@ -51,26 +70,32 @@ export class MetaStreamListener {
 
   private now(): number { return this.o.now?.() ?? Date.now(); }
 
-  async open(c: { owner: string; target: EmrTarget; session_id: string; rate: number }): Promise<void> {
+  // Opens a stream under session_id; its lines go to listen_sid's listening session, which is session_id unless given.
+  async open(c: { owner: string; target: EmrTarget; session_id: string; rate: number; listen_sid?: string }): Promise<void> {
     if (this.live.has(c.session_id)) throw new Error("this listening session is already streaming");
-    const keywords = await this.listen.hintsFor(c.owner, c.target, c.session_id, this.now());
     const l: Live = {
-      owner: c.owner, target: c.target, rate: c.rate, send_rate: sendRateOf(c.rate), keywords, conn: null, draining: [], ring: [], fed_ms: 0, fed: 0,
-      wall: [], billed_ms: 0, work: Promise.resolve(), errors: [], opened: this.now(), failed: null, reconnecting: null, dropped_ms: 0, ended: false
+      owner: c.owner, rate: c.rate, send_rate: sendRateOf(c.rate), sids: new Set(), delivered: [], conn: null, next: null, closing: null, rolling: null, roll_since: 0, roll_retry_at: 0,
+      draining: [], ring: [], fed_ms: 0, fed: 0, quiet_ms: 0, padded_ms: 0, resent_ms: 0, last_end_ms: -Infinity,
+      wall: [], billed_ms: 0, work: Promise.resolve(), errors: [], opened: this.now(), failed: null, reconnecting: null, dropped_ms: 0, ended: false, pad: null
     };
     this.live.set(c.session_id, l);
-    try { l.conn = await this.connect(c.session_id, l); } catch (e) { this.live.delete(c.session_id); throw e; }
+    try { l.conn = await this.connect(c.session_id, l, c.target, c.listen_sid ?? c.session_id, -Infinity); } catch (e) { this.live.delete(c.session_id); throw e; }
+    if ((this.o.padAfterMs ?? META_PAD_AFTER_MS) > 0) { l.pad = setInterval(() => this.pad(c.session_id), PAD_TICK_MS); l.pad.unref?.(); }
   }
 
-  private async connect(sessionId: string, l: Live): Promise<Conn> {
-    const conn: Conn = { s: null as unknown as RealtimeSession, base_ms: l.fed_ms, turns: new Map(), open: new Set(), current: null, ending: false, opened: this.now() };
+  // Hints are fixed for a session's life, so each patient gets a session opened with that patient's words.
+  private async connect(sessionId: string, l: Live, target: EmrTarget, listenSid: string, fromMs: number): Promise<Conn> {
+    l.sids.add(listenSid);
+    const keywords = await this.listen.hintsFor(l.owner, target, listenSid, this.now());
+    const conn: Conn = { s: null as unknown as RealtimeSession, base_ms: l.fed_ms, turns: new Map(), open: new Set(), current: null, ending: false, opened: this.now(), from_ms: fromMs, until_ms: Infinity, processed_ms: 0, target, listen_sid: listenSid, after: null, held: [], on_empty: null };
     const sid = `hp-${sessionId}-${Date.now().toString(36)}`.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 64);
     conn.s = await RealtimeSession.open({
-      key: this.o.key(), rate: l.send_rate, mode: this.o.mode ?? "ENDPOINTING", keywords: l.keywords, languageBias: this.o.languageBias ?? [], sessionId: sid,
+      key: this.o.key(), rate: l.send_rate, mode: this.o.mode ?? "ENDPOINTING", keywords, languageBias: this.o.languageBias ?? [], sessionId: sid,
       ...(this.o.socket ? { socket: this.o.socket } : {}), ...(this.o.url ? { url: this.o.url } : {}),
       onEvent: (e) => this.onEvent(sessionId, l, conn, e), onClose: (code, reason) => this.onClose(sessionId, l, conn, code, reason)
     });
     conn.base_ms = l.fed_ms;
+    conn.opened = this.now();
     return conn;
   }
 
@@ -80,36 +105,119 @@ export class MetaStreamListener {
     if (!l) throw new Error("this listening session is not streaming");
     if (l.failed) throw l.failed;
     l.fed += samples.length;
+    if (this.o.refuseFasterThanLive && (l.fed / l.rate) * 1000 > this.now() - l.opened + STREAM_LIVE_SLACK_MS) throw new StreamRefused("faster_than_live");
+    this.take(sessionId, l, samples, false);
+  }
+
+  // One stretch of audio, spoken or padding, into the ring and to every connection hearing it; padding never counts as audio the sender sent.
+  private take(sessionId: string, l: Live, samples: Float32Array, padded: boolean): void {
     const now = this.now();
-    if (this.o.refuseFasterThanLive && (l.fed / l.rate) * 1000 > now - l.opened + STREAM_LIVE_SLACK_MS) throw new StreamRefused("faster_than_live");
+    const ms = (samples.length / l.rate) * 1000;
     l.ring.push({ at_ms: l.fed_ms, x: samples });
-    l.fed_ms += (samples.length / l.rate) * 1000;
+    l.fed_ms += ms;
     while (l.ring.length > 1 && l.ring[1]!.at_ms < l.fed_ms - META_KEEP_MS) l.ring.shift();
     l.wall.push({ ms: l.fed_ms, at: now });
     if (l.wall.length > 4000) l.wall.splice(0, l.wall.length - 3000);
-    if (!l.conn || l.reconnecting) { l.dropped_ms += (samples.length / l.rate) * 1000; return; }
-    l.conn.s.send(l.rate === l.send_rate ? samples : resample(samples, l.rate, l.send_rate));
-    const age = now - l.conn.opened;
-    if ((age >= (this.o.capMs ?? META_SESSION_CAP_MS) && !l.conn.open.size) || age >= (this.o.hardMs ?? META_SESSION_HARD_MS)) this.rotate(sessionId, l);
+    l.quiet_ms = padded || rms(samples) < SILENCE_RMS ? l.quiet_ms + ms : 0;
+    if (padded) l.padded_ms += ms;
+    // While the connection is down the audio waits in the ring and is sent again once it is back.
+    if (!l.conn || l.reconnecting) return;
+    const out = this.out(l, samples);
+    l.conn.s.send(out);
+    l.next?.s.send(out);
+    l.closing?.s.send(out);
+    if (!l.next && !l.rolling && now - l.conn.opened >= (this.o.rollAtMs ?? META_ROLL_AT_MS) && now >= l.roll_retry_at) this.roll(sessionId, l, now);
+    if (l.next) this.tryJoin(l, now);
   }
 
-  // A new session takes the frames from the next one on, and the old one is ended so the server can finish the turns it holds.
-  private rotate(sessionId: string, l: Live): void {
-    const old = l.conn!;
-    l.reconnecting = this.connect(sessionId, l).then((c) => { l.conn = c; old.ending = true; l.draining.push(old.s.end()); }, (e: unknown) => {
-      l.failed = new MetaStreamFailed(`the realtime ear could not open a new session: ${e instanceof Error ? e.message : String(e)}`.slice(0, 300), e instanceof VoiceError ? e.status : null);
-    }).finally(() => { l.reconnecting = null; });
+  private out(l: Live, x: Float32Array): Float32Array { return l.rate === l.send_rate ? x : resample(x, l.rate, l.send_rate); }
+
+  // A sender that has fallen behind the clock gets silence, so the endpoint never sees ingress below real time.
+  private pad(sessionId: string): void {
+    const l = this.live.get(sessionId);
+    if (!l || l.ended || l.failed || !l.conn || l.reconnecting) return;
+    const lag = this.now() - l.conn.opened - l.conn.s.sentMs;
+    if (lag <= (this.o.padAfterMs ?? META_PAD_AFTER_MS)) return;
+    this.take(sessionId, l, new Float32Array(Math.round(((lag - META_PAD_LAG_MS) * l.rate) / 1000)), true);
+  }
+
+  // The next session opens beside the current one and hears every frame from here on; until the join it owns no turn.
+  private roll(sessionId: string, l: Live, now: number): void {
+    l.roll_since = now;
+    const cur = l.conn!;
+    l.rolling = this.connect(sessionId, l, cur.target, cur.listen_sid, Infinity).then((c) => {
+      if (l.ended || l.failed || l.conn !== cur) { c.ending = true; c.s.abort(); return; }
+      l.next = c;
+    }, (e: unknown) => {
+      l.roll_retry_at = this.now() + 5000;
+      l.errors.push(`the next realtime session did not open: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200));
+    }).finally(() => { l.rolling = null; });
+  }
+
+  // The roll-over join is at a quiet point both sessions agree on; past the overlap it is forced where the audio stands.
+  private tryJoin(l: Live, now: number): void {
+    const old = l.conn!, nx = l.next!;
+    const quietMs = this.o.joinQuietMs ?? META_JOIN_QUIET_MS;
+    const quiet = l.quiet_ms >= quietMs && !old.open.size && !nx.open.size;
+    if (!quiet && now - l.roll_since < (this.o.overlapMs ?? META_OVERLAP_MS)) return;
+    // The second session heard the overlap too, and that audio is billed.
+    this.row(null, null, 0, centsOf(l.fed_ms - nx.base_ms), null);
+    l.next = null;
+    this.join(l, old, nx, quiet ? l.fed_ms - quietMs / 2 : l.fed_ms);
+  }
+
+  // Turns starting before the join are the old session's and the rest the new one's; the old one finishes any turn it is in, and the new one's turns wait until it has closed so a turn heard by both is delivered once.
+  private join(l: Live, old: Conn, nx: Conn, at: number): void {
+    old.until_ms = at;
+    nx.from_ms = at;
+    old.ending = true;
+    l.conn = nx;
+    const closed = new Promise<void>((resolve) => {
+      const finish = () => { l.draining.push(old.s.end().then(() => resolve(), () => resolve())); };
+      if (old.open.size) { l.closing = old; old.on_empty = finish; } else finish();
+    });
+    nx.after = closed;
+    void closed.then(() => { nx.after = null; for (const go of nx.held.splice(0)) go(); });
+  }
+
+  // A patient change: a new session with the new patient's hints takes the audio from the change on; the old one finishes the line it is in.
+  async retarget(sessionId: string, c: { target: EmrTarget; listen_sid: string }): Promise<void> {
+    const l = this.live.get(sessionId);
+    if (!l) throw new Error("this listening session is not streaming");
+    await l.reconnecting;
+    await l.rolling;
+    if (l.failed) throw l.failed;
+    const old = l.conn;
+    if (!old || old.listen_sid === c.listen_sid) return;
+    if (l.next) { const nx = l.next; nx.ending = true; this.row(null, null, 0, centsOf(l.fed_ms - nx.base_ms), null); nx.s.abort(); l.next = null; }
+    const at = l.fed_ms;
+    old.until_ms = at;
+    const nx = await this.connect(sessionId, l, c.target, c.listen_sid, at);
+    // The audio said while the new session opened is sent to it at once, a few hundred milliseconds ahead of the clock.
+    const again = this.slice(l, at, l.fed_ms);
+    nx.base_ms = at;
+    if (again.length) nx.s.send(this.out(l, again));
+    this.join(l, old, nx, at);
   }
 
   private abs(conn: Conn, ms: number): number { return conn.base_ms + ms; }
+  private owns(conn: Conn, startMs: number): boolean { return startMs >= conn.from_ms && startMs < conn.until_ms; }
+  // Speech another session already delivered, heard again across a join, a resend or an overlap.
+  private heardBefore(l: Live, conn: Conn, startMs: number, endMs: number): boolean {
+    return l.delivered.some((d) => d.conn !== conn && Math.min(d.end_ms, endMs) - Math.max(d.start_ms, startMs) >= META_SAME_SPEECH_MS);
+  }
 
   private onEvent(sessionId: string, l: Live, conn: Conn, e: RealtimeEvent): void {
+    if ("audioProcessedMs" in e) conn.processed_ms = Math.max(conn.processed_ms, e.audioProcessedMs);
+    // Turns may overlap, so every turn is kept by its id and none is assumed to finish in order.
     if (e.type === "speechStart") { conn.turns.set(e.turnId, { start_ms: this.abs(conn, e.audioProcessedMs), end_ms: null }); conn.open.add(e.turnId); conn.current = e.turnId; return; }
     if (e.type === "transcript") {
       if (e.final || conn.current === null || !conn.open.has(conn.current) || !e.transcript.trim()) return;
-      const said = e.transcript;
+      const t = conn.turns.get(conn.current);
+      if (t && !this.owns(conn, t.start_ms)) return;
+      const said = e.transcript, sid = conn.listen_sid;
       // The next words are looked at as they are said, after every turn before them.
-      l.work = l.work.then(() => this.listen.nextWords(sessionId, said));
+      l.work = l.work.then(() => this.listen.nextWords(sid, said));
       return;
     }
     if (e.type === "speechEnd") { const t = conn.turns.get(e.turnId); if (t) t.end_ms = this.abs(conn, e.audioProcessedMs); return; }
@@ -119,31 +227,64 @@ export class MetaStreamListener {
     const t = conn.turns.get(e.turnId) ?? { start_ms: Math.max(0, this.abs(conn, e.audioProcessedMs) - 3000), end_ms: null };
     conn.turns.delete(e.turnId);
     const end = t.end_ms ?? this.abs(conn, e.audioProcessedMs);
-    const at = this.now();
-    const samples = this.slice(l, t.start_ms - META_TURN_PREROLL_MS, end + META_TURN_TAIL_MS);
     const processed = this.abs(conn, e.audioProcessedMs);
-    const cost = centsOf(Math.max(0, processed - l.billed_ms));
-    l.billed_ms = Math.max(l.billed_ms, processed);
-    const latency = Math.max(0, at - this.wallAt(l, end));
+    const at = this.now();
     const raw = e.transcript.trim();
-    l.work = l.work.then(async () => {
-      const us: ListenUtterance[] = raw ? await this.listen.segment({ owner: l.owner, target: l.target, session_id: sessionId, samples, rate: l.rate, raw, trailing_ms: Math.max(0, l.fed_ms - end), arrived: at, heard_at: at }) : [];
-      this.row(us[0]?.task_id ?? null, us[0]?.line_id ?? null, latency, cost, null);
-    }).catch((err: unknown) => { l.errors.push(err instanceof Error ? err.message.slice(0, 200) : "segment failed"); });
+    const deliver = () => {
+      if (!this.owns(conn, t.start_ms) || this.heardBefore(l, conn, t.start_ms, end)) return;
+      l.delivered.push({ start_ms: t.start_ms, end_ms: end, conn });
+      if (l.delivered.length > 50) l.delivered.shift();
+      l.last_end_ms = Math.max(l.last_end_ms, end);
+      const samples = this.slice(l, t.start_ms - META_TURN_PREROLL_MS, end + META_TURN_TAIL_MS);
+      const cost = centsOf(Math.max(0, processed - l.billed_ms));
+      l.billed_ms = Math.max(l.billed_ms, processed);
+      const latency = Math.max(0, at - this.wallAt(l, end));
+      const sid = conn.listen_sid, target = conn.target;
+      l.work = l.work.then(async () => {
+        const us: ListenUtterance[] = raw ? await this.listen.segment({ owner: l.owner, target, session_id: sid, samples, rate: l.rate, raw, trailing_ms: Math.max(0, l.fed_ms - end), arrived: at, heard_at: at }) : [];
+        if (us.length) this.o.onHeard?.(sid, us);
+        this.row(us[0]?.task_id ?? null, us[0]?.line_id ?? null, latency, cost, null);
+      }).catch((err: unknown) => { l.errors.push(err instanceof Error ? err.message.slice(0, 200) : "segment failed"); });
+    };
+    if (conn.after) conn.held.push(deliver); else deliver();
+    if (conn === l.closing && !conn.open.size) { l.closing = null; conn.on_empty?.(); }
   }
 
   private onClose(sessionId: string, l: Live, conn: Conn, code: number, reason: string): void {
-    if (conn.ending || l.ended || l.conn !== conn) return;
-    if (conn.open.size) l.errors.push("a line was cut off when the realtime connection dropped");
-    conn.open.clear();
+    if (conn.ending || l.ended) return;
+    if (conn === l.next) { l.next = null; l.roll_retry_at = this.now() + 5000; l.errors.push(`the next realtime session closed (${code}) before the join`); return; }
+    if (l.conn !== conn) return;
     if (code === 1008) { l.failed = new MetaStreamFailed(`the realtime ear refused the stream (${reason || code})`.slice(0, 300), code); return; }
+    const open = [...conn.open].map((id) => conn.turns.get(id)?.start_ms).filter((x): x is number => typeof x === "number");
+    conn.open.clear();
+    // A session that closes while the next one is open hands over to it at once, from the turn it was cut in or the end of its last turn.
+    if (l.next) {
+      const nx = l.next;
+      nx.from_ms = open.length ? Math.min(...open) : Math.max(l.last_end_ms, nx.base_ms);
+      l.conn = nx;
+      l.next = null;
+      l.errors.push(`realtime session closed (${code}) during the overlap; the next one took over`);
+      return;
+    }
+    // Audio the endpoint may not have heard, from the turn it was cut in or its last processed position, is sent again to the new session.
+    let from = open.length ? Math.min(...open) - META_TURN_PREROLL_MS : this.abs(conn, conn.processed_ms);
+    from = Math.max(from, l.last_end_ms, l.ring[0]?.at_ms ?? 0);
     l.conn = null;
-    // A dropped or failed session is opened again with backoff; audio said while it is down is lost and counted.
     l.reconnecting = (async () => {
       for (let i = 0; i < META_RECONNECTS; i++) {
         await new Promise((r) => setTimeout(r, (this.o.reconnectDelayMs ?? 500) * 2 ** i));
         if (l.ended) return;
-        try { l.conn = await this.connect(sessionId, l); l.errors.push(`realtime connection dropped (${code}) and was opened again`); return; } catch { /* tried again below */ }
+        try {
+          const c = await this.connect(sessionId, l, conn.target, conn.listen_sid, l.last_end_ms);
+          if (l.fed_ms - from > META_RESEND_MAX_MS) { l.dropped_ms += l.fed_ms - META_RESEND_MAX_MS - from; from = l.fed_ms - META_RESEND_MAX_MS; }
+          const again = this.slice(l, from, l.fed_ms);
+          c.base_ms = from;
+          if (again.length) c.s.send(this.out(l, again));
+          l.resent_ms += (again.length / l.rate) * 1000;
+          l.conn = c;
+          l.errors.push(`realtime connection dropped (${code}) and was opened again; ${Math.round((again.length / l.rate) * 1000)} ms sent again${open.length ? ", from the start of the line it was cut in" : ""}`);
+          return;
+        } catch { /* tried again below */ }
       }
       l.failed = new MetaStreamFailed(`the realtime ear dropped (${code}) and could not reconnect`, code);
     })().finally(() => { l.reconnecting = null; });
@@ -166,11 +307,16 @@ export class MetaStreamListener {
     this.o.ledger?.(taskId ? this.o.runOf?.(taskId) ?? null : null, { provider: "meta", model: META_STREAM_MODEL, purpose: "interpret_speech", latency_ms: Math.round(latency), cost_usd: cost, task_id: taskId, line_id: lineId, error });
   }
 
-  // Ends the stream: input is closed, the server finishes every turn it holds, each is handed on, and a line waiting on a number goes alone.
-  async end(sessionId: string): Promise<{ utterances: ListenUtterance[]; errors: string[]; failed: string | null }> {
+  // Ends the stream with endStream on every open session, drained to its close, then every turn is handed on and a line waiting on a number goes alone.
+  async end(sessionId: string): Promise<{ utterances: ListenUtterance[]; errors: string[]; failed: string | null; padded_ms: number; resent_ms: number }> {
     const l = this.live.get(sessionId);
-    if (!l) return { utterances: [], errors: [], failed: null };
+    if (!l) return { utterances: [], errors: [], failed: null, padded_ms: 0, resent_ms: 0 };
+    if (l.pad) clearInterval(l.pad);
     await l.reconnecting;
+    await l.rolling;
+    // A session opened for a join that never came heard the overlap only; it owns no turn, so it is closed and its audio billed.
+    if (l.next) { const nx = l.next; nx.ending = true; this.row(null, null, 0, centsOf(l.fed_ms - nx.base_ms), null); nx.s.abort(); l.next = null; }
+    if (l.closing) { const c = l.closing; l.closing = null; c.on_empty?.(); }
     const c = l.conn;
     if (c && !l.failed) {
       c.ending = true;
@@ -181,15 +327,17 @@ export class MetaStreamListener {
     }
     l.ended = true;
     await Promise.all(l.draining);
+    await c?.after;
     this.live.delete(sessionId);
     await l.work;
-    await this.listen.flush(sessionId);
+    for (const sid of l.sids) await this.listen.flush(sid);
     // The audio after the last completed turn is billed too, so the ledger sums to the audio sent.
     const rest = Math.max(0, (c ? this.abs(c, c.s.sentMs) : l.fed_ms) - l.billed_ms);
     if (rest > 0) this.row(null, null, 0, centsOf(rest), null);
     if (l.dropped_ms > 0) l.errors.push(`${Math.round(l.dropped_ms)} ms of audio arrived while the realtime ear was reconnecting and was not heard`);
-    const r = this.listen.unreportedOf(sessionId);
-    return { utterances: r.utterances, errors: [...l.errors, ...r.errors], failed: l.failed?.message ?? null };
+    const utterances: ListenUtterance[] = [], errors = [...l.errors];
+    for (const sid of l.sids) { const r = this.listen.unreportedOf(sid); utterances.push(...r.utterances); errors.push(...r.errors); }
+    return { utterances, errors, failed: l.failed?.message ?? null, padded_ms: Math.round(l.padded_ms), resent_ms: Math.round(l.resent_ms) };
   }
 
   async drain(sessionId: string): Promise<void> { await this.live.get(sessionId)?.work; }

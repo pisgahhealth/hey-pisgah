@@ -253,36 +253,136 @@ describe("a kept realtime run", () => {
 // A stand-in for the listen chain, so the session rules are tested on their own.
 function chain() {
   const segments: string[] = [];
+  const bySession: string[] = [];
   const partials: string[] = [];
   const l = {
-    hintsFor: async () => ["pulse"], nextWords: (_s: string, p: string) => { partials.push(p); }, segment: async (c: { raw: string }) => { segments.push(c.raw); return []; },
+    hintsFor: async () => ["pulse"], nextWords: (_s: string, p: string) => { partials.push(p); }, segment: async (c: { raw: string; session_id: string }) => { segments.push(c.raw); bySession.push(`${c.session_id}: ${c.raw}`); return []; },
     flush: async () => undefined, unreportedOf: () => ({ utterances: [], errors: [] })
   } as unknown as ListenSessions;
-  return { l, segments, partials };
+  return { l, segments, bySession, partials };
 }
 const quiet = (ms: number) => new Float32Array((RATE * ms) / 1000);
+const tone = (ms: number) => { const x = new Float32Array((RATE * ms) / 1000); for (let k = 0; k < x.length; k++) x[k] = 0.3 * Math.sin((2 * Math.PI * 220 * k) / RATE); return x; };
+// Feeds speech and quiet in 50 ms blocks with the given clock moving as the audio does, as a live microphone would.
+async function play(m: MetaStreamListener, sid: string, clock: { now: number }, parts: [kind: "tone" | "quiet", ms: number][]) {
+  for (const [kind, ms] of parts) for (let t = 0; t < ms; t += 50) { clock.now += 50; m.feed(sid, kind === "tone" ? tone(50) : quiet(50)); await new Promise((r) => setImmediate(r)); }
+}
+// Meta's rule on pacing: a connection whose audio falls a second behind the clock is closed with 1008 "Ingress below real-time".
+function ingressRule(inner: SocketFactory): SocketFactory {
+  return (url, on) => {
+    let opened = 0, sent = 0, dead = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const die = (code: number, reason: string) => { if (dead) return; dead = true; if (timer) clearInterval(timer); on.close(code, reason); };
+    const sock = inner(url, {
+      ...on,
+      text: (t) => {
+        if (dead) return;
+        if (!opened && (JSON.parse(t) as Record<string, unknown>)["sessionId"] && !("type" in (JSON.parse(t) as object))) {
+          opened = Date.now();
+          timer = setInterval(() => { if (Date.now() - opened - (sent / 2 / RATE) * 1000 > 1000) { on.text(JSON.stringify({ type: "error", message: "Ingress below real-time", sessionId: "" })); die(1008, "Ingress below real-time"); } }, 50);
+        }
+        on.text(t);
+      },
+      close: (code, reason) => die(code, reason)
+    });
+    return { ...sock, sendBinary: (b) => { if (!dead) { sent += b.length; sock.sendBinary(b); } } };
+  };
+}
 
 describe("the realtime session rules", () => {
-  it("replaces the session at the cap between lines, and the old session still finishes its turn", async () => {
-    let now = 0;
-    const meta = fakeMeta([[...turn(0, 100, 600, "pulse 116")], [...turn(0, 200, 700, "pulse 120")]]);
+  it("rolls over before the limit with an overlap, joining at a quiet point, so a line both sessions heard is delivered once and none is lost", async () => {
+    const clock = { now: 0 };
+    const meta = fakeMeta([
+      [...turn(0, 100, 600, "pulse 116"), ...turn(1, 1200, 1700, "pulse 120")],
+      // The next session opens at about 1 s of audio and its positions count from there: it hears pulse 120 as well, then pulse 98 after the join.
+      [...turn(0, 150, 650, "pulse 120"), ...turn(1, 1950, 2450, "pulse 98")]
+    ]);
     const { l, segments } = chain();
-    const m = new MetaStreamListener(l, { key: () => "k", socket: meta.factory, now: () => now, capMs: 1000, hardMs: 5000 });
-    await m.open({ owner: OWNER, target: { admission_id: ADM }, session_id: "cap", rate: RATE });
-    for (let i = 0; i < 40; i++) { now += 50; m.feed("cap", quiet(50)); await new Promise((r) => setImmediate(r)); }
-    await new Promise((r) => setTimeout(r, 20));
-    for (let i = 0; i < 40; i++) { now += 50; m.feed("cap", quiet(50)); await new Promise((r) => setImmediate(r)); }
-    await m.end("cap");
-    expect(meta.conns.length).toBeGreaterThanOrEqual(2);
+    const opts = { key: () => "k", socket: meta.factory, now: () => clock.now, rollAtMs: 1000, overlapMs: 10_000, joinQuietMs: 400, padAfterMs: 0 };
+    const m = new MetaStreamListener(l, opts);
+    await m.open({ owner: OWNER, target: { admission_id: ADM }, session_id: "roll", rate: RATE });
+    await play(m, "roll", clock, [["quiet", 100], ["tone", 500], ["quiet", 600]]);
+    // One roll-over is under test: the session that takes over is not rolled again here.
+    opts.rollAtMs = 1e9;
+    await play(m, "roll", clock, [["tone", 500], ["quiet", 1300], ["tone", 500], ["quiet", 1500]]);
+    await m.end("roll");
+    expect(meta.conns).toHaveLength(2);
+    // The old session was ended with endStream and drained, never dropped.
     expect(meta.conns[0]!.ended).toBe(true);
-    expect(segments).toEqual(["pulse 116", "pulse 120"]);
+    expect(segments).toEqual(["pulse 116", "pulse 120", "pulse 98"]);
   });
 
-  it("opens the session again after a dropped connection, and says the turn it was in the middle of was lost", async () => {
+  it("forces the join after the overlap, and a line said straight through it is delivered once, whole, by the session that began it", async () => {
+    const clock = { now: 0 };
+    const meta = fakeMeta([
+      [...turn(0, 800, 2400, "pulse one hundred and sixteen respiratory rate twenty")],
+      [...turn(0, 0, 1350, "rate twenty"), ...turn(1, 2000, 2400, "pulse 98")]
+    ]);
+    const { l, segments } = chain();
+    const opts = { key: () => "k", socket: meta.factory, now: () => clock.now, rollAtMs: 1000, overlapMs: 300, joinQuietMs: 400, padAfterMs: 0 };
+    const m = new MetaStreamListener(l, opts);
+    await m.open({ owner: OWNER, target: { admission_id: ADM }, session_id: "force", rate: RATE });
+    await play(m, "force", clock, [["quiet", 800], ["tone", 400]]);
+    opts.rollAtMs = 1e9;
+    await play(m, "force", clock, [["tone", 1200], ["quiet", 600], ["tone", 500], ["quiet", 1500]]);
+    await m.end("force");
+    expect(meta.conns).toHaveLength(2);
+    expect(meta.conns[0]!.ended).toBe(true);
+    expect(segments).toEqual(["pulse one hundred and sixteen respiratory rate twenty", "pulse 98"]);
+  });
+
+  it("opens a session with the new patient's hints on a patient change, keeps the line being said with the patient it began on, and never delivers it twice", async () => {
+    const clock = { now: 0 };
+    const meta = fakeMeta([
+      [...turn(0, 100, 600, "pulse 116"), ...turn(1, 1000, 1800, "and his respiratory rate is 20")],
+      // The new patient's session hears from the change at 1.2 s: the end of that line, then a line of its own.
+      [...turn(0, 0, 600, "rate is 20"), ...turn(1, 1300, 1800, "pulse 98")]
+    ]);
+    const { l, bySession } = chain();
+    const m = new MetaStreamListener(l, { key: () => "k", socket: meta.factory, now: () => clock.now, padAfterMs: 0 });
+    await m.open({ owner: OWNER, target: { admission_id: ADM }, session_id: "pc", rate: RATE });
+    await play(m, "pc", clock, [["quiet", 100], ["tone", 500], ["quiet", 400], ["tone", 200]]);
+    await m.retarget("pc", { target: { patient_id: "99999999-8888-4777-8666-555555555555" }, listen_sid: "pc.1" });
+    await play(m, "pc", clock, [["tone", 600], ["quiet", 700], ["tone", 500], ["quiet", 1500]]);
+    await m.end("pc");
+    expect(meta.conns).toHaveLength(2);
+    expect(meta.conns[0]!.ended).toBe(true);
+    expect(bySession).toEqual(["pc: pulse 116", "pc: and his respiratory rate is 20", "pc.1: pulse 98"]);
+  });
+
+  it("pads a sender that pauses for 3 s with silence, so the endpoint never refuses it for ingress below real time", async () => {
+    const meta = fakeMeta([[...turn(0, 0, 500, "pulse 116")]]);
+    const { l, segments } = chain();
+    const m = new MetaStreamListener(l, { key: () => "k", socket: ingressRule(meta.factory) });
+    await m.open({ owner: OWNER, target: { admission_id: ADM }, session_id: "pad", rate: RATE });
+    m.feed("pad", tone(500));
+    m.feed("pad", quiet(900));
+    await new Promise((r) => setTimeout(r, 3000));
+    m.feed("pad", quiet(500));
+    const r = await m.end("pad");
+    expect(r.failed).toBeNull();
+    expect(r.padded_ms).toBeGreaterThan(1000);
+    expect(segments).toEqual(["pulse 116"]);
+  }, 10_000);
+
+  it("without padding, the same 3 s pause is refused, which is the failure padding prevents", async () => {
+    const meta = fakeMeta([[...turn(0, 0, 500, "pulse 116")]]);
+    const { l } = chain();
+    const m = new MetaStreamListener(l, { key: () => "k", socket: ingressRule(meta.factory), padAfterMs: 0 });
+    await m.open({ owner: OWNER, target: { admission_id: ADM }, session_id: "nopad", rate: RATE });
+    m.feed("nopad", tone(500));
+    m.feed("nopad", quiet(900));
+    await new Promise((r) => setTimeout(r, 3000));
+    expect(() => m.feed("nopad", quiet(500))).toThrow(/Ingress below real-time/);
+    expect((await m.end("nopad")).failed).toMatch(/Ingress below real-time/);
+  }, 10_000);
+
+  it("opens the session again after a dropped connection and sends the line it was cut in again, so its words are not lost", async () => {
     let now = 0;
+    // The second session hears the resent audio from the start of the cut line, so its positions count from there.
     const meta = fakeMeta([{ dropAt: 500, code: 1011, events: [{ at_ms: 300, ev: { type: "speechStart", turnId: 0, audioProcessedMs: 200 } }] }, [...turn(0, 100, 400, "pulse 116")]]);
     const { l, segments } = chain();
-    const m = new MetaStreamListener(l, { key: () => "k", socket: meta.factory, now: () => now, reconnectDelayMs: 1 });
+    const m = new MetaStreamListener(l, { key: () => "k", socket: meta.factory, now: () => now, reconnectDelayMs: 1, padAfterMs: 0 });
     await m.open({ owner: OWNER, target: { admission_id: ADM }, session_id: "drop", rate: RATE });
     for (let i = 0; i < 12; i++) { now += 50; m.feed("drop", quiet(50)); await new Promise((r) => setTimeout(r, 2)); }
     await new Promise((r) => setTimeout(r, 30));
@@ -290,8 +390,8 @@ describe("the realtime session rules", () => {
     const r = await m.end("drop");
     expect(meta.conns).toHaveLength(2);
     expect(segments).toEqual(["pulse 116"]);
-    expect(r.errors.join(" ")).toMatch(/cut off when the realtime connection dropped/);
-    expect(r.errors.join(" ")).toMatch(/dropped \(1011\) and was opened again/);
+    expect(r.errors.join(" ")).toMatch(/dropped \(1011\) and was opened again; \d+ ms sent again, from the start of the line it was cut in/);
+    expect(r.resent_ms).toBeGreaterThan(400);
   });
 
   it("hands each partial to the number join as it is said, before the turn completes", async () => {
