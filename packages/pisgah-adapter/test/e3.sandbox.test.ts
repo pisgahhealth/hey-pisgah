@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseEnvText } from "@hey-pisgah/model";
-import { KEPT_LEVERS, leversFrom, percentile, sherpaEmbedder, startEmrServe, type EmrRuntime, type EmrTaskView, type Provenance, type SpeakerVerdict } from "@hey-pisgah/agent";
+import { KEPT_LEVERS, leversFrom, percentile, startEmrServe, type EmrRuntime, type EmrTaskView, type Provenance, type SpeakerVerdict } from "@hey-pisgah/agent";
 import { ModelClient, ledgerRowsIn } from "@hey-pisgah/model";
 import { mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -12,7 +12,7 @@ import { PisgahPort } from "../src/port.js";
 import { loadProfile } from "../src/profile.js";
 import { personCaller } from "../src/journey.sandbox.js";
 import { SandboxBlock, mintAgentBearer, sandboxQuery } from "../src/sandbox.js";
-import { freshArrival } from "./sandbox-helpers.js";
+import { freshArrival, paceAudio, sandboxEmbedder, voiceOf } from "./sandbox-helpers.js";
 
 // Runs only with SANDBOX=1 and E3=1 against the loopback sandbox, with the speaker model files named by HEY_PISGAH_SPEAKER_MODEL and HEY_PISGAH_SHERPA_DIR.
 const RUN = process.env["SANDBOX"] === "1" && process.env["E3"] === "1";
@@ -43,7 +43,7 @@ function controlSql(sb: SandboxBlock, as: "owner" | "app", name: string, vars: R
 describe.skipIf(!RUN)("E3 voice orders, countersign and attribution on the sandbox EMR", () => {
   it("sends only owner-authorised orders without signing, holds the non-emergency lab order, countersigns exactly the read-back batch, and refuses every agent signature", async () => {
     const profile = loadProfile();
-    const embed = sherpaEmbedder({ modelPath: process.env["HEY_PISGAH_SPEAKER_MODEL"] ?? "", sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] })!;
+    const embed = sandboxEmbedder()!;
     expect(embed).not.toBeNull();
     const { patient, visit, sb } = await freshArrival(profile);
     const person = personCaller(profile, sb, new Map(), []);
@@ -53,7 +53,7 @@ describe.skipIf(!RUN)("E3 voice orders, countersign and attribution on the sandb
     const prov = (line: string): Provenance => ({ owner: mine.owner, evidence: `transcript:${line}`, spoken_at: now() });
     // Each line id and recording is new for this run, since a spoken line is bound to the first patient and order it authorises and one recording earns one token.
     const run = Date.now().toString(36);
-    const matched = async (voice: string, text: string, line: string): Promise<SpeakerVerdict> => port.speaker!(mine.owner, (await embed(speak(voice, `${text} Run ${run}.`, join(dir, `${line}.wav`))))!.vector, prov(line));
+    const matched = async (voice: string, text: string, line: string): Promise<SpeakerVerdict> => { const p = (await embed(speak(voice, `${text} Run ${run}.`, join(dir, `${line}.wav`))))!; await paceAudio(p); return port.speaker!(mine.owner, voiceOf(p), prov(line)); };
     const authorised = (line: string, v: SpeakerVerdict) => (v.speaker === "owner" ? `transcript:${line}~${v.token}` : undefined);
     const result: Record<string, unknown> = { visit_kind: "registered and paid" };
     const L = (x: string) => `${x}-${run}`;
@@ -83,7 +83,7 @@ describe.skipIf(!RUN)("E3 voice orders, countersign and attribution on the sandb
     expect(await port.commit("order_test", args, `e3-fbc-again-${visit}`, { ...prov(L("e3-own-1")), voice: { authorisation: authorised(L("e3-own-1"), own)! } })).toMatchObject({ ok: false, status: 403 });
     expect(await port.prove("order_test", args, sent as { record_id: string; record_version: number; event_ids: string[] }, prov(L("e3-own-1")))).not.toBeNull();
     const [row] = sandboxQuery(sb, "order_states_for_visit", { visit });
-    expect(row).toMatchObject({ id: fbcState, kind: "lab", requested_by: mine.agent, issued_by: mine.owner, authorised_by: mine.owner, sent_by: mine.agent, verbal: true, receiver_role: "lab_tech", countersigned_by: null, emergency: false, order_status: "AWAITING_PAYMENT" });
+    expect(row).toMatchObject({ id: fbcState, kind: "lab", requested_by: mine.agent, issued_by: mine.owner, authorised_by: mine.owner, sent_by: mine.agent, verbal: false, receiver_role: "lab_tech", countersigned_by: null, emergency: false, order_status: "AWAITING_PAYMENT" });
     expect(sandboxQuery(sb, "visit_status", { visit })[0]?.["consultation_state"]).not.toBe("completed");
     const audit = sandboxQuery(sb, "audit_for_visit", { visit }).find((a) => a["action_type"] === "visit.voice_order_sent");
     expect(audit).toMatchObject({ actor: mine.agent, agent: mine.agent, on_behalf_of: mine.owner, evidence: `transcript:${L("e3-own-1")}` });
@@ -220,7 +220,7 @@ describe.skipIf(!RUN)("E3 voice orders, countersign and attribution on the sandb
   it.skipIf(process.env["E3_LIVE"] !== "1")("times voice orders from the end of the line to the lab and pharmacy boards, and keeps other voices from ordering", async () => {
     const profile = loadProfile();
     const sb = SandboxBlock.parse(profile.sandbox);
-    const embed = sherpaEmbedder({ modelPath: process.env["HEY_PISGAH_SPEAKER_MODEL"] ?? "", sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] })!;
+    const embed = sandboxEmbedder()!;
     const person = personCaller(profile, sb, new Map(), []);
     const reg = await freshArrival(profile);
     const em = await person("unnamed_arrival", { ref: `E3S-${Date.now().toString(36)}` });
