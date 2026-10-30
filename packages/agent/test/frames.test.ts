@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ModelClient } from "@hey-pisgah/model";
-import { decodeWav, resample, type FinalTranscript } from "@hey-pisgah/voice";
+import { decodeWav, encodeWav, resample, type FinalTranscript } from "@hey-pisgah/voice";
 import { Timeline as TimelineSchema, talkChunks } from "@hey-pisgah/evaluator";
 import type { StreamAsr } from "../src/emr/local-ears.js";
 import { replayTranscriber } from "../src/emr/listen.js";
@@ -142,6 +142,25 @@ describe("the strip's frames route", () => {
     expect(again.body["kept_until"]).toBeLessThan(t0 + 2300);
     await s.runtime.settled();
     expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, pulse: 116 }]);
+    await s.close();
+  });
+
+  it("never hears a chunk again when the frames already carried its audio, so a line is not written twice", async () => {
+    const { s, port, part } = await boot({ asr: "stream", lines: ["Chart his pulse 116"], transcribe: async (_w, _k, sid) => ({ final: true, text: "Chart his pulse 116", audio_ms: 1000, session_id: sid, cost_usd: 0 }) });
+    const t0 = Date.now() - 3000;
+    const audio = pcm([["quiet", 200], ["tone", 1000], ["quiet", 1000]]);
+    expect((await part({ part: 0, t: t0, last: true }, audio)).status).toBe(202);
+    await s.runtime.settled();
+    expect(port.writes).toHaveLength(1);
+    // The strip's chunk of the same words, captured at the same moment, arrives too.
+    const form = new FormData();
+    form.append("audio", new Blob([Buffer.from(encodeWav(new Float32Array(audio.length / 2).map((_, i) => audio.readInt16LE(i * 2) / 32768), RATE))], { type: "audio/wav" }), "c0.wav");
+    form.append("owner", OWNER); form.append("admissionId", ADM); form.append("session_id", "strip-1"); form.append("seq", "0"); form.append("captured_at", String(t0));
+    const r = await fetch(`${s.url}/tasks/listen?wait=1`, { method: "POST", body: form });
+    expect(r.status).toBe(202);
+    expect(await r.json()).toMatchObject({ heard_by_frames: true });
+    await s.runtime.settled();
+    expect(port.writes).toHaveLength(1);
     await s.close();
   });
 

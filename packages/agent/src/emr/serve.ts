@@ -405,6 +405,11 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const at = b.captured_at !== undefined && b.captured_at <= arrived && b.captured_at >= arrived - 10 * 60_000 ? b.captured_at : arrived;
     const wav = audio && typeof audio !== "string" && !ended ? new Uint8Array(await audio.arrayBuffer()) : null;
     const wait = new URL(req.url ?? "/", "http://serve").searchParams.get("wait") === "1";
+    // Words this strip session's frames already carried are not heard again from its chunk, whatever the strip decided.
+    if (wav && b.captured_at !== undefined && b.hint !== "emergency") {
+      const info = parseWav(wav);
+      if (info.ok && coveredShare(b.owner, b.session_id, b.captured_at, b.captured_at + info.durationMs) >= 0.8) return [202, { session_id: b.session_id, seq: b.seq, accepted: true, utterances: [], partial: null, heard_by_frames: true }];
+    }
     const held = pending.get(b.owner);
     if (held && b.hint !== "emergency" && at >= held.since && pageKey(page) === held.page) {
       setStatus(b.owner, b.session_id, b.seq, { status: "accepted", waiting: "arrival" });
@@ -423,7 +428,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   };
 
   // One frames stream from the strip: its numbered parts, the patient it is hearing about, and the listening session that patient's lines go to.
-  type Frames = { owner: string; client: string; key: string; k: number; target: EmrTarget; sid: string; sids: string[]; next: number; rate: number; bytes: number; idle: NodeJS.Timeout | null; busy: Promise<unknown> };
+  type Frames = { owner: string; client: string; key: string; k: number; target: EmrTarget; sid: string; sids: string[]; next: number; rate: number; bytes: number; idle: NodeJS.Timeout | null; busy: Promise<unknown>; opened_at: number };
   const frames = new Map<string, Frames>();
   const frameCount = new Map<string, number>();
   const pcmOf = (bytes: Buffer): Float32Array => { const x = new Float32Array(bytes.length / 2); for (let i = 0; i < x.length; i++) x[i] = bytes.readInt16LE(i * 2) / 32768; return x; };
@@ -446,13 +451,36 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   };
   // Streams ended without the strip's last part, kept briefly so the strip's next part learns where the kept audio ended.
   const endedKept = new Map<string, number | null>();
+  // When each strip session's frames were captured and heard, so a chunk of the same words is never heard twice.
+  const frameCover = new Map<string, { from: number; to: number }[]>();
+  const coverKey = (owner: string, client: string) => `${owner}\u0000${client}`;
+  const addCover = (owner: string, client: string, from: number, to: number) => {
+    const k = coverKey(owner, client);
+    const list = frameCover.get(k) ?? [];
+    const last = list.at(-1);
+    if (last && from <= last.to + 50 && from >= last.from) last.to = Math.max(last.to, to); else list.push({ from, to });
+    if (list.length > 200) list.shift();
+    frameCover.set(k, list);
+    if (frameCover.size > 500) frameCover.delete(frameCover.keys().next().value!);
+  };
+  // A line dropped when a stream was ended for the strip was not heard, so its chunk is.
+  const trimCover = (owner: string, client: string, keptUntil: number | null, since: number) => {
+    const list = frameCover.get(coverKey(owner, client));
+    if (!list || keptUntil === null) return;
+    for (const c of list) if (c.to > keptUntil && c.to >= since) c.to = Math.max(c.from, keptUntil);
+  };
+  const coveredShare = (owner: string, client: string, from: number, to: number): number => {
+    const list = frameCover.get(coverKey(owner, client)) ?? [];
+    const got = list.reduce((n, c) => n + Math.max(0, Math.min(c.to, to) - Math.max(c.from, from)), 0);
+    return to > from ? got / (to - from) : 0;
+  };
   // A stream the strip ended is finished whole; one ended for it (a fallback, a gap, idle) drops the line still being said, which the strip sends as a chunk.
   const endFrames = async (f: Frames, dropOpen = false): Promise<{ utterances: ListenUtterance[]; errors: string[]; padded_ms?: number; resent_ms?: number; trimmed_ms?: number; failed?: string | null; kept_until: number | null }> => {
     const mapKey = `${f.owner}\u0000${f.key}`;
     if (frames.get(mapKey) === f) frames.delete(mapKey);
     if (f.idle) clearTimeout(f.idle);
     const ended = await streamer!.end(f.key, { dropOpen });
-    if (dropOpen) { endedKept.set(mapKey, ended.kept_until); if (endedKept.size > 200) endedKept.delete(endedKept.keys().next().value!); }
+    if (dropOpen) { endedKept.set(mapKey, ended.kept_until); if (endedKept.size > 200) endedKept.delete(endedKept.keys().next().value!); trimCover(f.owner, f.client, ended.kept_until, f.opened_at); }
     const later = heardOf(f);
     for (const sid of f.sids) frameHeard.delete(sid);
     return { ...ended, utterances: [...later.utterances, ...ended.utterances], errors: [...later.errors, ...ended.errors] };
@@ -479,7 +507,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       freshSession(b.owner, b.session_id, page, at);
       const target = subjectFor(b.owner, page, at);
       if (!target) return [409, { fallback: "chunks", reason: "no_patient", stream: b.stream, part: b.part }];
-      const nf: Frames = { owner: b.owner, client: b.session_id, key, k: 0, target, sid: "", sids: [], next: 0, rate: b.rate, bytes: 0, idle: null, busy: Promise.resolve() };
+      const nf: Frames = { owner: b.owner, client: b.session_id, key, k: 0, target, sid: "", sids: [], next: 0, rate: b.rate, bytes: 0, idle: null, busy: Promise.resolve(), opened_at: at };
       nf.sid = frameSid(nf, 0);
       nf.sids.push(nf.sid);
       frames.set(mapKey, nf);
@@ -511,6 +539,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       }
       cur.bytes += body.length;
       cur.next = b.part + 1;
+      if (body.length) addCover(b.owner, b.session_id, at, at + (body.length / 2 / cur.rate) * 1000);
       if (cur.idle) clearTimeout(cur.idle);
       const audioMs = Math.round((cur.bytes / 2 / cur.rate) * 1000);
       if (b.last) {
