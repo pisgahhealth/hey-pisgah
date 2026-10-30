@@ -1253,6 +1253,64 @@
         "2026-10-30T09:06:29.503Z",
         "2026-10-30T09:13:14.106Z"
       ]
+    },
+    {
+      "path": "vitals",
+      "lane": "G10",
+      "release_whole": true,
+      "timed_to": "record verified",
+      "setting": "parakeet/meta-stream",
+      "ear": "parakeet",
+      "first_ear": "meta-stream",
+      "transport": "strip frames (80 ms parts)",
+      "runs": 2,
+      "n": 16,
+      "p50_ms": 4171,
+      "p90_ms": 5680,
+      "max_ms": 7205,
+      "wall_p50_ms": 4168,
+      "wall_p90_ms": 5977,
+      "released_rows": 12,
+      "errors": {
+        "lines_not_done": 0,
+        "extra_writes": 0
+      },
+      "parts_posted": 3207,
+      "chunks_posted": 0,
+      "first_ear_model": "meta:muse-voice-transcribe-1.0:realtime",
+      "runs_files": [
+        "ms-3",
+        "ms-4"
+      ]
+    },
+    {
+      "path": "vitals",
+      "lane": "G10",
+      "release_whole": true,
+      "timed_to": "record verified",
+      "setting": "parakeet/stream",
+      "ear": "parakeet",
+      "first_ear": "stream",
+      "transport": "strip frames (80 ms parts)",
+      "runs": 2,
+      "n": 16,
+      "p50_ms": 4193,
+      "p90_ms": 5545,
+      "max_ms": 6282,
+      "wall_p50_ms": 4267,
+      "wall_p90_ms": 5459,
+      "released_rows": 12,
+      "errors": {
+        "lines_not_done": 0,
+        "extra_writes": 0
+      },
+      "parts_posted": 3276,
+      "chunks_posted": 0,
+      "first_ear_model": "local:streaming-zipformer-en-kroko-2025-08-06",
+      "runs_files": [
+        "st-3",
+        "st-4"
+      ]
     }
   ],
   "stages": [
@@ -1382,5 +1440,12 @@
       },
       "cost_usd": 0.0024110000000000004
     }
-  ]
+  ],
+  "strip_meta_vitals_p50_ms": 4171,
+  "strip_meta_vitals_p90_ms": 5680,
+  "strip_meta_vitals_errors": 0,
+  "strip_local_vitals_p50_ms": 4193,
+  "strip_local_vitals_p90_ms": 5545,
+  "strip_local_vitals_errors": 0,
+  "strip_note": "G10: the real strip in Chrome (headless, fake microphone playing the eight vitals lines at G6's 2.5 s spacing) sends 80 ms frames as numbered parts to the serve; timed by the serve from the captured end of the line to the verified record (p50_ms) and by the wall clock from the line's end in the microphone file (wall_p50_ms). Both local ears' second reading is Parakeet; D17's whole-number release is on, as in the serve."
 }
