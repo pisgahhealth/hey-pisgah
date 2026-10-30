@@ -47,6 +47,19 @@ describe("discharge by voice behind the confirmation word", () => {
     expect(CONFIRM_KINDS.has("release_home")).toBe(true);
   });
 
+  it("no longer tells the model that sending the patient home stays with staff once release_home is permitted, in the order and the plain branch alike", () => {
+    const names = { page_targets: {}, clinics: {}, wards: {}, tests: {}, drugs: {} };
+    for (const kinds of [KINDS, ["record_observation", "record_clerking", "release_home"], ["record_observation", "record_clerking", "order_test", "prescribe", "release_home"]]) {
+      const p = gatePrompt(kinds, names);
+      expect(p).not.toMatch(/sending the patient home[^.]*stay with staff/);
+      expect(p).toMatch(/Sending the patient home is release_home/);
+    }
+    // Without the kind both branches still leave it with staff.
+    for (const kinds of [["record_observation", "record_note"], ["record_observation", "record_clerking", "order_test", "prescribe"]]) {
+      expect(gatePrompt(kinds, names)).toMatch(/sending the patient home[^.]*stay with staff/);
+    }
+  });
+
   it("reads the paperwork back, writes nothing on the instruction, and discharges only on the owner's matched confirm", async () => {
     const { rt, port } = boot();
     const a = await say(rt, "She can go home today, rest and drink water.", OWNER);
