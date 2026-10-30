@@ -9,8 +9,8 @@ import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerkin
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
 import { BATCH_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
-import { cleanTranscript, measuresIn, type Measure, type Rewrite } from "@hey-pisgah/voice";
-import { answerChoice, compareAll, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
+import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite } from "@hey-pisgah/voice";
+import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
 import { DOCUMENTATION_KINDS, ORDER_KINDS, recordOf, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
 import { EMERGENCY_KIND, EMERGENCY_LINE, RULE_ONLY_KINDS, emergencyReason, identityFrom, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
@@ -44,7 +44,8 @@ export type EmrAction = {
   read_back: PaperworkReadBack | null;
 };
 // Where an ambient line came from: its listening session, the chunks that made it, and when the speech ended.
-export type AmbientMeta = { session_id: string; seqs: number[]; raw_text: string; ended_at: string; final_at: string; trailing_silence_ms: number; finished_by: string };
+// `released` marks a whole-number line delivered without the continuation wait (D17); `continues` names the released line it carries on.
+export type AmbientMeta = { session_id: string; seqs: number[]; raw_text: string; ended_at: string; final_at: string; trailing_silence_ms: number; finished_by: string; released?: boolean; continues?: string };
 // kept is false while an ambient line's words live only in memory; they are stored only once an action or a question rests on them.
 export type EmrLine = { id: string; text: string; at: string; source: "text" | "audio"; decided: boolean; ambient: AmbientMeta | null; classes: SpeechClass[]; kept: boolean; words: number; speaker: SpeakerRecord | null };
 export type EmrRefusal = { line_id: string; kind: string | null; asked_for: string; at: string };
@@ -72,7 +73,7 @@ export type EmrObligation = {
 };
 export type ResultCondition = { order_actions: string[]; orders: string[]; tests: string[]; states: string[]; unbound_noted?: boolean };
 // One verified action timed from the end of the words that asked for it; parts are the milestones on the way.
-export type SpeedRow = { action_id: string; kind: string; line_id: string; from: string; verified_at: string; ms: number; parts: Record<string, number | null>; gate?: string | null; levers?: number[]; from_record?: true };
+export type SpeedRow = { action_id: string; kind: string; line_id: string; from: string; verified_at: string; ms: number; parts: Record<string, number | null>; gate?: string | null; levers?: number[]; from_record?: true; released?: true; amends?: string };
 export type EmrTask = {
   task_id: string; owner: string; admission_id: string; patient_id: string | null; visit_id: string | null; run_id: string; goal: string;
   state: TaskState; reason: string | null; actions: Map<string, EmrAction>; order: string[];
@@ -118,7 +119,7 @@ export type EmrTaskView = {
   version: EmrVersionView | null;
   // Held work with its time or condition, and the speed of every verified action with the errors beside it.
   obligations: EmrObligation[];
-  speed: { rows: SpeedRow[]; p50_ms: number | null; p90_ms: number | null; by_kind: Record<string, { n: number; p50_ms: number | null; p90_ms: number | null }>; errors: { failed: number; refused: number; unverified: number } };
+  speed: { rows: SpeedRow[]; p50_ms: number | null; p90_ms: number | null; by_kind: Record<string, { n: number; p50_ms: number | null; p90_ms: number | null }>; errors: { failed: number; refused: number; unverified: number }; corrections: number };
   identities: EmrIdentityHold[]; unidentified: boolean;
   delegations: EmrDelegation[];
   // Every preference applied in this task and every one withheld, each with its source and scope.
@@ -140,6 +141,10 @@ export type EmrRuntimeOptions = {
   watchMs?: number;
   // The second ear for vitals heard from audio; without it no agreement step runs.
   secondEar?: SecondEar;
+  // On readings_differ, a value the second ear shares with another first-ear reading of the same audio is written; off by default.
+  secondOpinion?: boolean;
+  // D17: an observation from a released whole-number line in range is written without the hold; off unless set, so recorded runs replay as made.
+  releaseWhole?: boolean;
   // Keeps every heard line's words in the store, for synthetic evaluation runs only; by default an ambient line's words are stored only when something rests on them.
   keepHeard?: boolean;
   // How long after a question a short spoken answer may settle it by rule.
@@ -251,6 +256,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
     case "action.written": if (act) { act.state = "acknowledged"; act.written = x["written"] as EmrAction["written"]; act.written_at = e.wall_at; } break;
     case "action.completed": if (act) { act.state = "completed"; act.proof = x["proof"] as EmrProof; act.completed_at = e.wall_at; } break;
     case "action.cancelled": if (act) { act.state = "cancelled"; act.reason = String(x["reason"]); } break;
+    case "action.amended": if (act && act.state === "proposed") { act.args = x["args"] as WorkArgs; act.summary = String(x["summary"]); } break;
     case "action.refused": if (act) { act.state = "refused"; act.reason = String(x["reason"]); } break;
     case "action.failed": if (act) { act.state = "failed"; act.reason = String(x["reason"]); } break;
     case "action.unverified": if (act) { act.unverified = true; act.reason = String(x["reason"]); } break;
@@ -357,7 +363,9 @@ export function speedSummary(t: EmrTask): EmrTaskView["speed"] {
   return {
     rows: t.speed, p50_ms: percentile(t.speed.map((r) => r.ms), 50), p90_ms: percentile(t.speed.map((r) => r.ms), 90),
     by_kind: Object.fromEntries(kinds.map((k) => { const ms = t.speed.filter((r) => r.kind === k).map((r) => r.ms); return [k, { n: ms.length, p50_ms: percentile(ms, 50), p90_ms: percentile(ms, 90) }]; })),
-    errors: { failed: acts.filter((a) => a.state === "failed").length, refused: acts.filter((a) => a.state === "refused").length, unverified: acts.filter((a) => a.unverified).length }
+    errors: { failed: acts.filter((a) => a.state === "failed").length, refused: acts.filter((a) => a.state === "refused").length, unverified: acts.filter((a) => a.unverified).length },
+    // A released number that a continuation then amended counts here, never as a silent change.
+    corrections: t.speed.filter((r) => r.amends).length
   };
 }
 
@@ -426,6 +434,13 @@ export function oneUnclear(clauses: readonly AnyClause[]): AnyClause[] {
 }
 
 // A plain line for the strip, built from the arguments rather than from model text.
+// D17's rule on the values about to be written: whole numbers in their ward ranges, and no temperature.
+export function releasable(a: ObservationArgs): boolean {
+  if (a.temp_c !== undefined) return false;
+  const text = [a.pulse !== undefined ? `pulse ${a.pulse}` : "", a.resp_rate !== undefined ? `resp rate ${a.resp_rate}` : "", a.bp ? `bp ${a.bp.replace("/", " over ")}` : ""].filter(Boolean).join(" ");
+  return !!text && wholeInRange(text);
+}
+
 export function summarise(a: ObservationArgs, correctsActionId: string | null): string {
   const parts = [
     a.temp_c !== undefined ? `temperature ${a.temp_c} C` : null, a.pulse !== undefined ? `pulse ${a.pulse}` : null,
@@ -484,6 +499,8 @@ export type SayInput = {
   clip?: Uint8Array;
   // Words the vitals vocabulary pass rewrote; a guessed measure word must be confirmed by the second ear.
   rewrites?: readonly Rewrite[];
+  // Other first-ear readings of the same audio, taken at the same time, held in memory only until the line is decided.
+  alternates?: readonly string[];
   // When the words came back from speech recognition, for the speed rows; never stored.
   heard_at?: number;
   // The segment's voiceprint from the local speaker model, matched by the hospital while the gate reads the words.
@@ -491,7 +508,8 @@ export type SayInput = {
   // Why a heard line has no voiceprint to match, such as the person not being at the screen.
   unverified_reason?: string;
 };
-type EarsOutcome = { check: EarsCheck; reading: EarReading | null; error: string | null };
+// `alternates` and `guessed` travel with the check, since the line's clip is let go once the line is decided.
+type EarsOutcome = { check: EarsCheck; reading: EarReading | null; error: string | null; alternates?: readonly string[]; guessed?: ReadonlySet<Measure> };
 
 // The EMR agent runtime: one task per owner and admission, journaled intents before every write, proofs by fresh read, and no model call unless the task is running.
 export class EmrRuntime {
@@ -504,7 +522,7 @@ export class EmrRuntime {
   private poller: NodeJS.Timeout | null = null;
   private polling = false;
   // Audio and guessed measures per line, and the second reading per action, in memory only.
-  private readonly clips = new Map<string, { wav: Uint8Array; guessed: Set<Measure> }>();
+  private readonly clips = new Map<string, { wav: Uint8Array; guessed: Set<Measure>; alternates: readonly string[] }>();
   private readonly checks = new Map<string, Promise<EarsOutcome>>();
   // The runtime's own clock for held work, and the obligations already queued to fire.
   private obTick: NodeJS.Timeout | null = null;
@@ -730,7 +748,7 @@ export class EmrRuntime {
     const stored = withhold ? { text: "", withheld: true, words: text.split(/\s+/).filter(Boolean).length, ambient: { ...s.ambient!, raw_text: "" } } : { text, ...(s.ambient ? { ambient: s.ambient } : {}) };
     this.append(live, "utterance.heard", { line_id: lineId, ...stored, source: s.source ?? "text", spoken_at: spokenAt, ...(s.audio ? { audio: s.audio } : {}), ...(viaGate && !s.ambient ? { via: "gate" } : {}) });
     if (withhold) { const ln = live.task.lines.find((x) => x.id === lineId)!; ln.text = text; ln.ambient = { ...s.ambient! }; }
-    if (s.clip && this.o.secondEar) this.clips.set(lineId, { wav: s.clip, guessed: new Set((s.rewrites ?? []).filter((r) => r.guessed && r.measure).map((r) => r.measure!)) });
+    if (s.clip && this.o.secondEar) this.clips.set(lineId, { wav: s.clip, guessed: new Set((s.rewrites ?? []).filter((r) => r.guessed && r.measure).map((r) => r.measure!)), alternates: s.alternates ?? [] });
     const spec = s.ambient ? this.takeSpeculation(live, s.ambient.session_id, text, lineId) : false;
     const tm = this.timesOf(lineId);
     tm.delivered = Date.now();
@@ -1857,6 +1875,9 @@ export class EmrRuntime {
       return this.settle(l, "nothing_to_cancel");
     }
     let corrects: EmrAction | null = null;
+    // A line that carries on a released number amends the observation that number wrote, through the same correction path.
+    const carried = t.lines.find((x) => x.id === lineId)?.ambient?.continues;
+    if (!d.corrects_action_id && carried) corrects = [...t.actions.values()].reverse().find((x) => x.line_id === carried && x.kind === OBSERVATION_KIND && x.state !== "cancelled" && x.state !== "refused") ?? null;
     if (d.corrects_action_id) {
       // The model may name the action or the record it wrote; both identify one earlier action.
       corrects = t.actions.get(d.corrects_action_id) ?? [...t.actions.values()].find((x) => x.written?.record_id === d.corrects_action_id) ?? null;
@@ -1902,10 +1923,12 @@ export class EmrRuntime {
     const actionId = `a-${shortHash(t.task_id, lineId, t.order.length + 1)}`;
     const ears = this.startCheck(l, actionId, lineId, own);
     const anchor = this.anchorOf(t, lineId);
-    this.append(l, "action.proposed", { action_id: actionId, kind: OBSERVATION_KIND, args, summary: summarise(args, correctsId), line_id: lineId, corrects_action_id: correctsId, hold_ms: this.o.holdMs ?? 0, ...this.holdUntil(anchor), ...(ears ? { ears: true } : {}) });
+    // D17: a released whole number in range goes to its write at once; the second reading must still agree before it is written.
+    const holdMs = this.o.releaseWhole && t.lines.find((x) => x.id === lineId)?.ambient?.released && releasable(args) ? 0 : this.o.holdMs ?? 0;
+    this.append(l, "action.proposed", { action_id: actionId, kind: OBSERVATION_KIND, args, summary: summarise(args, correctsId), line_id: lineId, corrects_action_id: correctsId, hold_ms: holdMs, ...this.holdUntil(anchor, holdMs), ...(ears ? { ears: true } : {}), ...(holdMs === 0 && (this.o.holdMs ?? 0) > 0 ? { released: true } : {}) });
     this.settle(l, "proposed");
-    this.noteHold(actionId, anchor);
-    this.hold(l, actionId, anchor);
+    this.noteHold(actionId, anchor, holdMs);
+    this.hold(l, actionId, anchor, holdMs);
   }
 
   // Starts the second reading of a line's audio for the values said in it; nothing starts without audio, a second ear or a value.
@@ -1924,13 +1947,13 @@ export class EmrRuntime {
       const first = early.uses === 0;
       early.uses += 1;
       this.checks.set(actionId, early.p.then(({ reading, error }) => reading
-        ? { check: compareAll(vals, reading, clip.guessed), reading: first ? reading : { ...reading, cost_usd: 0, calls: 0 }, error: null }
+        ? { check: compareAll(vals, reading, clip.guessed), reading: first ? reading : { ...reading, cost_usd: 0, calls: 0 }, error: null, alternates: clip.alternates, guessed: clip.guessed }
         : failed(error ?? "ear_failed")));
       return true;
     }
     const tm = this.timesOf(lineId);
     const p = this.o.secondEar(clip.wav, { run_id: t.run_id, task_id: t.task_id, line_id: lineId })
-      .then((reading): EarsOutcome => ({ check: compareAll(vals, reading, clip.guessed), reading, error: null }))
+      .then((reading): EarsOutcome => ({ check: compareAll(vals, reading, clip.guessed), reading, error: null, alternates: clip.alternates, guessed: clip.guessed }))
       .catch((e: unknown): EarsOutcome => failed(e instanceof ModelError ? e.code : "ear_failed"))
       .finally(() => { tm.ear_done = Date.now(); });
     this.checks.set(actionId, p);
@@ -1968,6 +1991,23 @@ export class EmrRuntime {
     return false;
   }
 
+  // With the switch on, a value the other-family ear heard is written only when another first-ear reading of the same audio heard it too; two first-ear readings never outvote the other ear.
+  private secondOpinion(l: Live, a: EmrAction, r: EarsOutcome): boolean {
+    const reading = r.reading!, alternates = r.alternates ?? [];
+    if (!this.o.secondOpinion || !alternates.length || reading.also?.length || a.kind !== OBSERVATION_KIND) return false;
+    const off = r.check.measures.filter((x) => !x.agree);
+    if (!off.length || off.some((x) => x.second === null)) return false;
+    const backed = off.every((x) => alternates.some((alt) => compareReadings({ [x.measure]: x.second }, alt, r.guessed).agree));
+    if (!backed) return false;
+    const args: Record<string, unknown> = { ...a.args };
+    for (const x of off) args[x.measure] = x.measure === "bp" || x.measure === "temp_c" ? x.second : Number(x.second);
+    const parsed = ObservationArgs.safeParse({ ...args, admission_id: l.task.admission_id });
+    if (!parsed.success) return false;
+    this.append(l, "action.amended", { action_id: a.action_id, args, summary: summarise(parsed.data, a.corrects_action_id), reason: "second_ear_matches_another_reading", from: Object.fromEntries(off.map((x) => [x.measure, x.first])), to: Object.fromEntries(off.map((x) => [x.measure, x.second])), readings: 1 + alternates.length });
+    this.append(l, "ears.compared", { action_id: a.action_id, line_id: a.line_id, session_id: null, agree: true, measures: off.map((x) => ({ ...x, first: x.second!, agree: true })), error: null, provider: reading.provider, model: reading.model, response_id: null, cost_usd: 0, calls: 0, fallback_reason: null, resolved_by: "another_first_reading" });
+    return true;
+  }
+
   // Waits for the second reading before the write; when the readings differ the action is stopped and a one-word question shows both.
   private async earsAgree(l: Live, a: EmrAction): Promise<boolean> {
     const t = l.task;
@@ -1989,6 +2029,7 @@ export class EmrRuntime {
     });
     if (r.check.agree) return a.state === "proposed" && t.state === "running";
     if (a.state !== "proposed") return false;
+    if (r.reading && this.secondOpinion(l, a, r)) return t.state === "running";
     this.append(l, "action.cancelled", { action_id: a.action_id, reason: "readings_differ" });
     const q = disagreementQuestion(r.check);
     const base = Object.fromEntries(Object.entries(a.args).filter(([k]) => k !== "admission_id" && !q.choice.measures.includes(k as Measure)));
@@ -2081,15 +2122,15 @@ export class EmrRuntime {
     const at = Date.parse(line?.ambient?.ended_at ?? line?.at ?? "");
     return Number.isFinite(at) ? at : null;
   }
-  private holdUntil(anchor: number | null): Record<string, string> {
-    return anchor === null ? {} : { hold_until: new Date(anchor + (this.o.holdMs ?? 0)).toISOString() };
+  private holdUntil(anchor: number | null, holdMs = this.o.holdMs ?? 0): Record<string, string> {
+    return anchor === null ? {} : { hold_until: new Date(anchor + holdMs).toISOString() };
   }
-  private noteHold(actionId: string, anchor: number | null): void {
-    if (anchor !== null) this.holdEnds.set(actionId, new Date(anchor + (this.o.holdMs ?? 0)).toISOString());
+  private noteHold(actionId: string, anchor: number | null, holdMs = this.o.holdMs ?? 0): void {
+    if (anchor !== null) this.holdEnds.set(actionId, new Date(anchor + holdMs).toISOString());
   }
 
-  private hold(l: Live, actionId: string, anchor: number | null = null): void {
-    const timer = setTimeout(() => { this.timers.delete(timer); if (!this.stopped) this.enqueueExec(l, () => this.execute(l, actionId)); }, holdLeftMs(this.o.holdMs ?? 0, anchor, this.wall().getTime()));
+  private hold(l: Live, actionId: string, anchor: number | null = null, holdMs = this.o.holdMs ?? 0): void {
+    const timer = setTimeout(() => { this.timers.delete(timer); if (!this.stopped) this.enqueueExec(l, () => this.execute(l, actionId)); }, holdLeftMs(holdMs, anchor, this.wall().getTime()));
     this.timers.add(timer);
   }
 
@@ -2345,7 +2386,8 @@ export class EmrRuntime {
         heard: fired || byRecord ? null : d(line?.ambient?.final_at), asr: n(tm.asr_at), delivered: n(tm.delivered), gate_start: n(tm.gate_start), gate_end: n(tm.gate_end), ear_done: n(tm.ear_done),
         proposed: d(a.proposed_at), hold_until: this.holdEnds.has(a.action_id) ? d(this.holdEnds.get(a.action_id)) : null, written: d(a.written_at), verified: d(verified), verify_ms: verifyMs, hold_ms: this.o.holdMs ?? 0
       },
-      gate: fired || byRecord ? null : gate, levers: leverList(this.lv), ...(byRecord ? { from_record: true } : {})
+      gate: fired || byRecord ? null : gate, levers: leverList(this.lv), ...(byRecord ? { from_record: true } : {}),
+      ...(line?.ambient?.released && a.kind === OBSERVATION_KIND ? { released: true as const } : {}), ...(line?.ambient?.continues && a.corrects_action_id ? { amends: a.corrects_action_id } : {})
     };
   }
 

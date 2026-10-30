@@ -9,7 +9,7 @@ import { allEars, parakeetEar, sherpaStreamAsr, transcriberEar, type ReadingLedg
 import { StreamListener, StreamRefused } from "./stream-listen.js";
 import { META_STREAM_MODEL, MetaStreamFailed, MetaStreamListener, probeRealtime } from "./meta-stream.js";
 import { EmrRuntime, type EmrRuntimeOptions } from "./runtime.js";
-import { ListenError, ListenSessions, type ListenOptions, type Transcriber } from "./listen.js";
+import { ListenError, ListenSessions, parallelReadings, type ListenOptions, type Transcriber } from "./listen.js";
 import { parseWav } from "@hey-pisgah/voice";
 import type { Embedder, LivenessMarker } from "./speaker.js";
 import { EmrId, EmrPortError, type EmrPort, type EmrTarget } from "./port.js";
@@ -45,6 +45,10 @@ export type EmrServeOptions = {
   languageBias?: readonly string[];
   // Staff names for the recognition hints.
   staffHints?: readonly string[];
+  // How many Voice Transcribe readings of each chunk are taken at once; above one, the second-opinion rule is on too.
+  vtReadings?: number;
+  // D17: a whole-number vital in range is written without the continuation wait or the hold, and a continuation amends it.
+  releaseWhole?: boolean;
   // Where the local models and the sherpa-onnx library live, for the parakeet and stream switches.
   local?: { parakeetDir?: string; streamDir?: string; sherpaDir?: string | undefined; threads?: number };
   // A streaming recogniser given by a test, used in place of loading one.
@@ -225,14 +229,15 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   };
   const onArrivalFailed = (owner: string, taskId: string, reason: string) => { if (pending.get(owner)?.task_id === taskId) void release(owner, null, reason); };
   const prefs = o.preferences === false ? null : o.runtime?.preferences ?? new PreferenceMemory(o.storeRoot);
-  const rt = new EmrRuntime({ ...(o.runtime ?? {}), storeRoot: o.storeRoot, client, port: o.port, ...(secondEar ? { secondEar } : {}), ...(o.log ? { log: o.log } : {}), onSubject, onArrivalFailed, ...(o.emergencyClinicId ? { emergencyClinicId: o.emergencyClinicId } : {}), ...(prefs ? { preferences: prefs } : {}) });
+  const several = !streamAsr && (o.vtReadings ?? 1) > 1;
+  const rt = new EmrRuntime({ ...(o.runtime ?? {}), storeRoot: o.storeRoot, client, port: o.port, ...(secondEar ? { secondEar } : {}), ...(several ? { secondOpinion: true } : {}), ...(o.releaseWhole ? { releaseWhole: true } : {}), ...(o.log ? { log: o.log } : {}), onSubject, onArrivalFailed, ...(o.emergencyClinicId ? { emergencyClinicId: o.emergencyClinicId } : {}), ...(prefs ? { preferences: prefs } : {}) });
   runtime = rt;
   rt.start();
-  const transcribe = streamAsr ? streamAsr.transcribe : metaAsr;
+  const transcribe = streamAsr ? streamAsr.transcribe : several ? parallelReadings(metaAsr, o.vtReadings!) : metaAsr;
   const origin = o.allowOrigin ?? "http://localhost:3311";
   // Each patient's listening session reports its utterances' statuses under the strip's own session id.
   const clientOf = new Map<string, string>();
-  const listening = new ListenSessions(rt, { ...(o.listen ?? {}), transcribe, ...(o.staffHints?.length ? { staff: o.staffHints } : {}), ...(o.embed ? { embed: o.embed } : {}), onStatus: (owner, sid, seq, st) => setStatus(owner, clientOf.get(sid) ?? sid, seq, st) });
+  const listening = new ListenSessions(rt, { ...(o.listen ?? {}), transcribe, ...(o.releaseWhole ? { releaseWhole: true } : {}), ...(o.staffHints?.length ? { staff: o.staffHints } : {}), ...(o.embed ? { embed: o.embed } : {}), onStatus: (owner, sid, seq, st) => setStatus(owner, clientOf.get(sid) ?? sid, seq, st) });
   const streamer = streamAsr ? new StreamListener(listening, streamAsr, { refuseFasterThanLive: o.listen?.replay === "refuse" })
     : o.asr === "meta-stream" ? new MetaStreamListener(listening, { key: realtimeKey, ...(o.realtimeSocket ? { socket: o.realtimeSocket } : {}), languageBias: o.languageBias ?? [], ledger, runOf: (id) => rt.task(id)?.run_id ?? null, refuseFasterThanLive: o.listen?.replay === "refuse" })
     : null;

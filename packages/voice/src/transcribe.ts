@@ -5,7 +5,8 @@ export const ASR_MODEL = "muse-voice-transcribe-1.0";
 export const USD_PER_AUDIO_HOUR = 0.18;
 
 // The only shape this package hands on: a finished transcript, never a partial one.
-export type FinalTranscript = { final: true; text: string; audio_ms: number; session_id: string; cost_usd: number };
+// `alternates` holds other readings of the same audio taken at the same time, when the caller asked for several.
+export type FinalTranscript = { final: true; text: string; audio_ms: number; session_id: string; cost_usd: number; alternates?: string[] };
 export type VoiceErrorCode = "bad_wav" | "no_key" | "upstream" | "bad_reply" | "timeout";
 
 export class VoiceError extends Error {

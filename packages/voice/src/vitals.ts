@@ -100,3 +100,22 @@ export function continuesNumber(text: string): boolean {
   const first = vitalsTokens(text).filter((x) => !FILLER.test(x))[0] ?? "";
   return NUMBER.test(first) || /^(?:point|over|degrees|celsius|percent|per|bpm|zero|oh|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)$/.test(first);
 }
+
+// The ward ranges a whole-number value must read inside to be written without the continuation wait (D17); outside them the wait stays.
+export const RELEASE_RANGES: Partial<Record<Measure, [number, number]>> = { pulse: [30, 220], resp_rate: [6, 60], spo2: [50, 100] };
+const BP_RELEASE: { sys: [number, number]; dia: [number, number] } = { sys: [60, 250], dia: [30, 150] };
+const within = (v: number, [lo, hi]: [number, number]) => Number.isInteger(v) && v >= lo && v <= hi;
+
+// True when every value a line says is a whole number in its ward range and none is a temperature, so the line need not wait for a continuation.
+export function wholeInRange(raw: string): boolean {
+  const text = vitalsVocabulary(raw, { guesses: false }).text;
+  const r = readVitals(text);
+  const ms = Object.keys(r) as Measure[];
+  if (!ms.length || r.temp_c?.length) return false;
+  if (vitalsTokens(text).some((x) => /\./.test(x) && NUMBER.test(x))) return false;
+  return ms.every((m) => (r[m] ?? []).length > 0 && (r[m] ?? []).every((v) => {
+    if (m === "bp") { const [s, d] = v.split("/").map(Number); return within(s!, BP_RELEASE.sys) && within(d!, BP_RELEASE.dia); }
+    const range = RELEASE_RANGES[m];
+    return !!range && within(Number(v), range);
+  }));
+}
