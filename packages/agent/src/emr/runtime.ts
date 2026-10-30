@@ -2636,9 +2636,15 @@ export class EmrRuntime {
     const atHand = waiting.filter((x) => target && ((target.admission_id && x.l.task.admission_id === target.admission_id) || (target.patient_id && x.l.task.patient_id === target.patient_id)));
     const acc = acceptedTask(text, atHand.length ? atHand : waiting);
     if (acc) {
-      const home = "hit" in acc ? acc.hit.l : open.at(-1)!.l;
+      const home = "hit" in acc ? acc.hit.l : "ambiguous" in acc && acc.ambiguous.length ? acc.ambiguous[0]!.l : open.at(-1)!.l;
       const lineId = this.ruledLine(home, owner, text, spokenAt, source, "accept", vp, unverifiedReason);
       if ("hit" in acc) { const hit = acc.hit; this.whenAttributed(home, lineId, () => { this.ruleAct(home, lineId, ACK_KIND, { delegation_id: hit.d.delegation_id, title: hit.d.title, evidence: `transcript:${lineId}` }); this.settle(home, "accept_line"); }); }
+      // Several tasks with the same name for the same patient (three tests from one line) are one piece of work to accept, so the words take them all.
+      else if ("ambiguous" in acc && new Set(acc.ambiguous.map((x) => x.title)).size === 1 && new Set(acc.ambiguous.map((x) => x.l.task.task_id)).size === 1) {
+        const same = acc.ambiguous;
+        const at = same[0]!.l;
+        this.whenAttributed(home, lineId, () => { for (const x of same) this.ruleAct(at, lineId, ACK_KIND, { delegation_id: x.d.delegation_id, title: x.d.title, evidence: `transcript:${lineId}` }); this.settle(at, "accept_line"); });
+      }
       else if ("ambiguous" in acc) this.ask(home, lineId, `Which task do you accept? ${acc.ambiguous.map((x) => x.title).join("; ")}. Say accepted and its name.`);
       else this.note(home, `No task waiting for you matches that. Waiting: ${waiting.map((x) => x.title).join("; ") || "none"}.`);
       this.settle(home, "accept_line");

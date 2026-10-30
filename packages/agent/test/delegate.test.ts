@@ -285,6 +285,26 @@ describe("delegation by rule between agents", () => {
     await a.rt.stop();
   });
 
+  // Acceptance rehearsal, 30 Oct: three tests on one line made three same-named tasks for one patient, and "accepted receive the lab order" took none of them.
+  it("takes one acceptance as every same-named task handed for the same patient", async () => {
+    const port = new DelegationFake();
+    port.admitted = true;
+    port.handoffs = { add_care_plan_item: { team: "pharmacy", subject_table: "prescriptions" } };
+    const a = boot(() => [
+      ins("add_care_plan_item", { title: "IV paracetamol one gram", item_kind: "medication", cadence: "q6h" }),
+      ins("add_care_plan_item", { title: "IV fluids one litre", item_kind: "medication", cadence: "q8h" })
+    ], port);
+    await a.rt.say({ owner: DOC, target: { admission_id: ADMIT }, text: "IV paracetamol one gram six hourly, and a litre of fluids eight hourly." });
+    await a.rt.settled();
+    expect(port.writes.filter((w) => w.kind === DELEGATE_KIND)).toHaveLength(2);
+    await a.rt.pollOnce();
+    await a.rt.settled();
+    await a.rt.say({ owner: PHARM, target: { admission_id: ADMIT }, text: "Accepted the voice order." });
+    await a.rt.settled();
+    expect(port.kindsWritten(PHARM).filter((k) => k === ACK_KIND)).toHaveLength(2);
+    await a.rt.stop();
+  });
+
   it("reads what the pharmacist asks for a sent order from the words, never from a model", () => {
     expect(orderAsked("Prepare and dispense it.")).toBe("dispense");
     expect(orderAsked("prepare the paracetamol")).toBe("prepare");
