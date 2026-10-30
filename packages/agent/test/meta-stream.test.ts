@@ -87,8 +87,11 @@ async function boot(scripts: Parameters<typeof fakeMeta>[0], o: { gate?: (said: 
     listen: { numberJoinWaitMs: o.numberMs ?? 5000, strongJoinWaitMs: 5000 }
   });
   rt = s.runtime;
-  const stream = async (body: Buffer, session = "ms1") => {
-    const r = await fetch(`${s.url}/tasks/listen/stream?owner=${OWNER}&admissionId=${ADM}&session_id=${session}&rate=${RATE}`, { method: "POST", headers: { "content-type": "audio/pcm", origin: STRIP }, body: new Uint8Array(body) });
+  const stream = async (body: Buffer, session = "ms1", splitMs = 0) => {
+    // With splitMs the body arrives in two parts a second and a half apart, as a congested upload would deliver it.
+    const at = Math.round((splitMs * RATE) / 1000) * 2;
+    const payload = splitMs ? new ReadableStream<Uint8Array>({ async start(c) { c.enqueue(new Uint8Array(body.subarray(0, at))); await new Promise((r) => setTimeout(r, 1500)); c.enqueue(new Uint8Array(body.subarray(at))); c.close(); } }) : new Uint8Array(body);
+    const r = await fetch(`${s.url}/tasks/listen/stream?owner=${OWNER}&admissionId=${ADM}&session_id=${session}&rate=${RATE}`, { method: "POST", headers: { "content-type": "audio/pcm", origin: STRIP }, body: payload, ...(splitMs ? { duplex: "half" } : {}) } as RequestInit);
     return { status: r.status, body: (await r.json()) as Record<string, any> };
   };
   const ledger = () => readdirSync(join(root, "ledger")).filter((f) => f.endsWith(".jsonl")).flatMap((f) => readStream(root, `ledger/${f.replace(/\.jsonl$/, "")}`)).filter((e) => e.record_type === "reading.call").map((e) => e.payload as Record<string, any>);
@@ -201,9 +204,16 @@ describe("the Meta realtime first ear", () => {
 
   it("with D17 and the serve's kept levers, settles three turns of pulse, temperature and pulse", async () => {
     const { s, port, stream } = await boot([[], [...turn(0, 400, 1900, "Chart his pulse 116."), ...turn(1, 4400, 5900, "Chart his temperature 37.6."), ...turn(2, 8400, 9900, "Chart his pulse 112.")]], { release: true, holdMs: 4000, levers: true, heard: "pulse 116 temperature 37.6 pulse 112", gate: (said) => { const p = /pulse (\d+)/.exec(said); return p ? obs(said, { pulse: Number(p[1]) }) : said.includes("37.6") ? obs(said, { temp_c: "37.6" }) : [{ class: "aside" as const }]; } });
-    expect((await stream(pcm([["quiet", 400], ["tone", 1500], ["quiet", 2500], ["tone", 1500], ["quiet", 2500], ["tone", 1500], ["quiet", 2500]]))).status).toBe(202);
+    expect((await stream(pcm([["quiet", 400], ["tone", 1500], ["quiet", 2500], ["tone", 1500], ["quiet", 2500], ["tone", 1500], ["quiet", 2500]]), "ms1", 7000)).status).toBe(202);
     await s.runtime.settled(20_000);
-    expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, pulse: 116 }, { admission_id: ADM, temp_c: "37.6" }, { admission_id: ADM, pulse: 112 }]);
+    // D17 writes a released pulse at once and holds the temperature, so the later pulse can land before the earlier temperature; each value is written once, in whichever order.
+    const key = (x: Record<string, unknown>) => JSON.stringify(x);
+    expect(port.writes.map((w) => key(w.args)).sort()).toEqual([{ admission_id: ADM, pulse: 116 }, { admission_id: ADM, temp_c: "37.6" }, { admission_id: ADM, pulse: 112 }].map(key).sort());
+    // The two pulses went out released and the temperature waited for its hold.
+    const v = s.runtime.views(OWNER)[0]!;
+    const released = (arg: string) => v.speed.rows.find((r) => r.action_id === v.actions.find((x) => arg in x.args)!.action_id)?.released ?? false;
+    expect([released("pulse"), released("temp_c")]).toEqual([true, false]);
+    expect(v.speed.rows.filter((r) => r.released)).toHaveLength(2);
     await s.close();
   }, 40_000);
 
