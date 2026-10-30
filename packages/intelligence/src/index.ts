@@ -24,3 +24,4 @@ export { INTELLIGENCE_RECORDINGS_DIR, checkDiscoveryCommand, discoverCommand, ty
 export { adoptionClaims, citedEventCount, cycle2Result, discoveryClaims } from "./claims-results.js";
 export { runRecord, publishRuns } from "./publish.js";
 export { searchBaseline, longestWaitCases, type BaselineResult } from "./baseline.js";
+export * as nightly from "./nightly/index.js";
