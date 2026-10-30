@@ -31,10 +31,14 @@ function main(): void {
   const dir = dirs[0]!;
   const out = process.env["G6_SPEED_OUT"] ?? join(process.cwd(), "evaluation", "results", "speed.json");
   const runs = dirs.flatMap((d) => readdirSync(d).filter((f) => /^g6-.*\.json$/.test(f)).map((f) => JSON.parse(readFileSync(join(d, f), "utf8")) as Run)).filter((r) => r.rows || r.path === "orders");
+  // A stream the realtime endpoint refused mid-run leaves a partial file named refused-*; it counts against its setting as every line said in it.
+  const refused = dirs.flatMap((d) => readdirSync(d).filter((f) => /^refused-g6-.*\.json$/.test(f)).map((f) => JSON.parse(readFileSync(join(d, f), "utf8")) as Run));
+  const keyOf = (r: Run) => `${r.path}|${r.ear}/${r.asr}|${r.transport}|${laneOf(r)}|${r.release_whole ? "release" : "hold"}`;
   const groups = new Map<string, Run[]>();
-  for (const r of runs) { const k = `${r.path}|${r.ear}/${r.asr}|${r.transport}|${laneOf(r)}|${r.release_whole ? "release" : "hold"}`; groups.set(k, [...(groups.get(k) ?? []), r]); }
+  for (const r of runs) { const k = keyOf(r); groups.set(k, [...(groups.get(k) ?? []), r]); }
   const configs = [...groups.entries()].map(([k, rs]) => {
     const [path, setting, transport, lane, release] = k.split("|") as [string, string, string, string, string];
+    const lost = refused.filter((r) => keyOf(r) === k).length;
     const board = rs.flatMap((r) => ((r as unknown as { rows?: OrderRow[] }).rows ?? []).map((x) => x.board_ms).filter((x): x is number => typeof x === "number"));
     // A vitals line is timed to the verified record; an order is timed to its decision, the step the ears change.
     const ms = path === "orders" ? rs.flatMap((r) => r.decided?.ms ?? []) : rs.flatMap((r) => (r.rows ?? []).map((x) => x.ms));
@@ -43,13 +47,15 @@ function main(): void {
       path, lane, release_whole: release === "release", timed_to: path === "orders" ? "order decided" : "record verified", setting, ear: setting.split("/")[0], first_ear: setting.split("/")[1], transport, runs: rs.length, n: ms.length,
       p50_ms: percentile(ms, 50), p90_ms: percentile(ms, 90), max_ms: ms.length ? Math.max(...ms) : null,
       errors: {
-        lines_not_done: rs.reduce((n, r) => n + (path === "orders" ? r.lines_not_decided ?? 0 : r.lines_not_written ?? 0), 0),
+        lines_not_done: rs.reduce((n, r) => n + Math.max(0, path === "orders" ? r.lines_not_decided ?? 0 : r.lines_not_written ?? 0), 0) + lost * (path === "vitals" ? 8 : 3),
+        streams_refused: lost,
         wrong_values: rs.reduce((n, r) => n + (r.values?.wrong ?? 0), 0),
         readings_differ: rs.reduce((n, r) => n + (r.actions ?? []).filter((a) => a.reason === "readings_differ").length, 0),
         // The runtime's own counts of failed, refused and unverified writes.
         runtime: rs.reduce((n, r) => n + [r.errors ?? []].flat().reduce((m, e) => m + Object.values(e).reduce((a, b) => a + b, 0), 0), 0)
       },
-      lines_said: rs.length * (path === "vitals" ? 8 : 3),
+      lines_said: (rs.length + lost) * (path === "vitals" ? 8 : 3), runs_refused: lost,
+      corrections: rs.reduce((n, r) => n + (r.speed_corrections ?? 0), 0),
       parts_p50: path === "vitals" ? rs.map((r) => r.parts_p50 ?? null) : undefined,
       board_p50_ms: path === "orders" ? rs.map((r) => r.board?.p50_ms ?? null) : undefined,
       // From the end of the line to the order on the lab board, pooled over the runs; only orders that reached the board are timed.
@@ -74,14 +80,14 @@ function main(): void {
     .map((x) => ({ started: x.started_at, voice: x.voice, load_avg_1m: x.load_start[0] ?? null, turns: x.turns, values_heard: x.values_heard, after_speech: x.after_speech, cost_usd: x.cost_usd }));
   // The acceptance run's own fields are left out on purpose, so C-21 stays not measured until that run writes them.
   const result = {
-    source: "Lane G6 integration runs on the sandbox EMR with synthetic voices; these are not the microphone-driven acceptance run.",
+    source: "Lane G6 and G9 integration runs on the sandbox EMR with synthetic voices; these are not the microphone-driven acceptance run.",
     measured_at: runs.map((r) => r.started_at).sort().at(-1) ?? null,
     floor_vitals_p50_ms: d?.p50_ms ?? null, floor_vitals_p90_ms: d?.p90_ms ?? null, floor_vitals_errors: errs(d),
     local_vitals_p50_ms: both?.p50_ms ?? null, local_vitals_p90_ms: both?.p90_ms ?? null, local_vitals_errors: errs(both),
     meta_vitals_p50_ms: pick("vitals", "spark/meta-stream", "G9")?.p50_ms ?? null, meta_vitals_p90_ms: pick("vitals", "spark/meta-stream", "G9")?.p90_ms ?? null, meta_vitals_errors: errs(pick("vitals", "spark/meta-stream", "G9")),
     meta_parakeet_vitals_p50_ms: pick("vitals", "parakeet/meta-stream", "G9")?.p50_ms ?? null, meta_parakeet_vitals_p90_ms: pick("vitals", "parakeet/meta-stream", "G9")?.p90_ms ?? null, meta_parakeet_vitals_errors: errs(pick("vitals", "parakeet/meta-stream", "G9")),
     floor_order_decided_p50_ms: od?.p50_ms ?? null, floor_order_decided_p90_ms: od?.p90_ms ?? null, local_order_decided_p50_ms: os?.p50_ms ?? null, local_order_decided_p90_ms: os?.p90_ms ?? null,
-    orders_note: "The order lines are timed from the end of the line to the order being decided. The hospital's voice match changed its token format during these runs, so every order was held for the owner's yes and none reached the lab board; board times wait for that change to land.",
+    orders_note: "Order lines are timed from the end of the line to the order being decided, and to the order on the lab board where it got there. G6's order runs predate G1's v2 voice tokens, so none of them reached the board; G9 reran every order setting after G1 merged, and those rows carry the board times.",
     switches: { HEY_PISGAH_EAR: "spark (default) or parakeet", HEY_PISGAH_ASR: "rest (default), stream or meta-stream", HEY_PISGAH_LANGUAGE_BIAS: "off (default) or 1", HEY_PISGAH_VT_READINGS: "1 (default) or more" },
     configs,
     stages,
