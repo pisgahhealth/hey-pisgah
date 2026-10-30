@@ -159,4 +159,26 @@ describe("profile helpers", () => {
     expect(pathPattern("ward/{admission_id}").test(`ward/${ADM}`)).toBe(true);
     expect(pathPattern("ward/{admission_id}").test("ward/x")).toBe(false);
   });
+
+  it("reads each order's result state by its record id and maps the hospital's test name to the spoken test", async () => {
+    const VISIT = "66666666-7777-4888-8999-000000000000";
+    const FBC = "77777777-8888-4999-8aaa-111111111111", MP = "77777777-8888-4999-8aaa-222222222222";
+    const asked: string[] = [];
+    const server = createServer((req, res) => {
+      asked.push(req.url ?? "");
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ orders: [{ stateId: FBC, label: "Full Blood Count", status: "resulted" }, { stateId: MP, label: "Malaria Parasite", status: "SENT" }, { stateId: "not-an-id", label: "x", status: "SENT" }] }));
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/door/v9`;
+    const p = DoorProfile.parse({ ...profile(base), orders: { tests: { fbc: { words: ["blood count"], name: "Full Blood Count" }, malaria: { words: ["malaria"], name: "Malaria Parasite" } } }, result_orders: { path: "visit/orders", query: { visitId: "$visit_id" }, list: "orders", id: "stateId", test: "label", state: "status", states: ["resulted"] } });
+    const port = new PisgahPort(p, { bearers: { [OWNER]: "agent-token-1" } });
+    expect(port.resultStates()).toEqual(["resulted"]);
+    expect(await port.orderResults!(OWNER, { patient_id: PAT, visit_id: VISIT }, PROV)).toEqual([{ id: FBC, test: "fbc", state: "resulted" }, { id: MP, test: "malaria", state: "SENT" }]);
+    expect(asked).toEqual([`/door/v9/visit/orders?visitId=${VISIT}`]);
+    // Without a visit there is nothing to read, and a profile without the read offers no result conditions.
+    expect(await port.orderResults!(OWNER, { patient_id: PAT }, PROV)).toEqual([]);
+    expect(new PisgahPort(profile(base), { bearers: {} }).orderResults).toBeUndefined();
+    await new Promise<void>((r) => server.close(() => r()));
+  });
 });

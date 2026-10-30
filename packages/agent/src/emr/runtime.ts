@@ -7,7 +7,7 @@ import { DEFAULT_INTENT_ROUTE, FALLBACK_INTENT_ROUTE, decideIntent, tempText, ty
 import { primaryClass } from "./classes.js";
 import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
-import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
+import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
 import { READ_ONLY_KINDS, WORK_ARGS, afterSaid, cadenceSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareReadings, disagreementQuestion, normValue, quotedQuestion, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
@@ -67,7 +67,10 @@ export type EmrObligation = {
   obligation_id: string; line_id: string; kind: string; clause: Record<string, unknown>; title: string;
   due_at: string | null; after: "admission" | "result" | null; state: "held" | "fired" | "done" | "cancelled";
   held_at: string; fired_at: string | null; fired_by: string | null; action_id: string | null; anchor_action_id: string | null; reason: string;
+  // Work held for a result names the orders it waits on (by action until written, then by record id) and the states that mean the result is back.
+  condition?: ResultCondition | null;
 };
+export type ResultCondition = { order_actions: string[]; orders: string[]; tests: string[]; states: string[]; unbound_noted?: boolean };
 // One verified action timed from the end of the words that asked for it; parts are the milestones on the way.
 export type SpeedRow = { action_id: string; kind: string; line_id: string; from: string; verified_at: string; ms: number; parts: Record<string, number | null>; gate?: string | null; levers?: number[]; from_record?: true };
 export type EmrTask = {
@@ -161,6 +164,8 @@ export type EmrRuntimeOptions = {
 
 const OPEN_ACTION: ReadonlySet<EmrActionState> = new Set(["proposed", "sent", "acknowledged"]);
 const CLOSED_TASK: ReadonlySet<TaskState> = new Set(["cancelled", "failed"]);
+// An action that will never write: its order is not one a held result waits on.
+const DEAD_STATES: ReadonlySet<EmrActionState> = new Set(["refused", "cancelled", "failed"]);
 // The waits between verification reads of a saved write; a restart reads it again after the last.
 export const RECONCILE_MS: readonly number[] = [1000, 3000, 10_000, 30_000, 60_000];
 const RESUME_WINDOW_MS = 10 * 60_000;
@@ -275,9 +280,15 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       t.obligations.push({
         obligation_id: String(x["obligation_id"]), line_id: String(x["line_id"]), kind: String(x["kind"]), clause: (x["clause"] as Record<string, unknown>) ?? {}, title: String(x["title"] ?? ""),
         due_at: (x["due_at"] as string | null) ?? null, after: (x["after"] as EmrObligation["after"]) ?? null, state: "held", held_at: e.wall_at,
-        fired_at: null, fired_by: null, action_id: null, anchor_action_id: null, reason: String(x["reason"] ?? "")
+        fired_at: null, fired_by: null, action_id: null, anchor_action_id: null, reason: String(x["reason"] ?? ""),
+        ...(x["condition"] ? { condition: { ...(x["condition"] as ResultCondition) } } : {})
       });
       break;
+    case "obligation.bound": {
+      const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]);
+      if (o?.condition) { o.condition.orders = [...new Set([...o.condition.orders, ...((x["orders"] as string[] | undefined) ?? [])])]; if (x["unbound_noted"]) o.condition.unbound_noted = true; }
+      break;
+    }
     case "obligation.anchored": { const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]); if (o) o.anchor_action_id = String(x["action_id"]); break; }
     case "obligation.fired": { const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]); if (o) { o.state = "fired"; o.fired_at = e.wall_at; o.fired_by = String(x["by"]); } break; }
     case "obligation.done": { const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]); if (o) { o.state = "done"; o.action_id = (x["action_id"] as string | null) ?? null; } break; }
@@ -492,6 +503,8 @@ export class EmrRuntime {
   // The runtime's own clock for held work, and the obligations already queued to fire.
   private obTick: NodeJS.Timeout | null = null;
   private readonly firing = new Set<string>();
+  // The latest result state of each order a task waits on, by record id, as the last read showed it.
+  private readonly results = new Map<string, Map<string, OrderResult>>();
   // The levers in force, the line whose clauses are being applied now, second readings started with the gate, timings, and side work to wait for.
   private readonly lv: SpeedLevers;
   private fresh: string | null = null;
@@ -575,7 +588,7 @@ export class EmrRuntime {
         this.settle(l, "restarted_before_decision");
       }
     }
-    if (this.o.watchMs && this.o.watchMs > 0 && (this.o.port.watch || this.o.port.inbox || this.o.port.delegations) && !this.poller) {
+    if (this.o.watchMs && this.o.watchMs > 0 && (this.o.port.watch || this.o.port.inbox || this.o.port.delegations || this.o.port.orderResults) && !this.poller) {
       this.poller = setInterval(() => { void this.pollOnce(); }, this.o.watchMs);
     }
     this.sweepObligations();
@@ -1495,11 +1508,65 @@ export class EmrRuntime {
     const title = (c.title ?? c.text ?? words).trim().slice(0, 200);
     if (t.obligations.some((o) => o.line_id === lineId && o.kind === kind && o.state === "held")) return;
     const obligation_id = `o-${shortHash(t.task_id, lineId, kind, t.obligations.length + 1)}`;
-    this.append(l, "obligation.held", { obligation_id, line_id: lineId, kind, clause, title, due_at: w.due_at, after: w.after, reason: w.reason });
+    const condition = w.after === "result" ? this.resultCondition(t, lineId) : null;
+    this.append(l, "obligation.held", { obligation_id, line_id: lineId, kind, clause, title, due_at: w.due_at, after: w.after, reason: w.reason, ...(condition ? { condition } : {}) });
     const when = [w.due_at ? `at ${w.due_at.slice(11, 16)} UTC` : null, w.after === "admission" ? "once the patient is admitted" : w.after === "result" ? "when the result is back" : null].filter(Boolean).join(", ");
     this.note(l, `Held ${when}: ${kind === "schedule_review" ? `review, ${title}` : summariseWork(kind, clause)}. I will do it then without being asked again.`);
     this.anchorReviews(l);
     if (kind === "schedule_review") this.delegateReview(l, lineId, `${title} ${String(c.words ?? "")}`, w.due_at);
+  }
+
+  // The orders "when the result is back" waits on: this task's sent tests the line names, or all of them when it names none, and the states that mean a result.
+  private resultCondition(t: EmrTask, lineId: string): ResultCondition {
+    const line = t.lines.find((x) => x.id === lineId)?.text ?? "";
+    const tests = Object.entries(this.o.port.orderables?.().tests ?? {}).filter(([, ws]) => ws.some((w) => wordSaid(w, line))).map(([k]) => k);
+    const acts = t.order.map((id) => t.actions.get(id)!).filter((a) => a.kind === "order_test" && !DEAD_STATES.has(a.state) && (!tests.length || tests.includes(String(a.args["test"]))));
+    return { order_actions: acts.map((a) => a.action_id), orders: acts.flatMap((a) => (a.written?.record_id ? [a.written.record_id] : [])), tests, states: [...(this.o.port.resultStates?.(t.owner) ?? [])] };
+  }
+
+  // True only when every order the work waits on has been sent and its result state is one the hospital counts as back; a general list change never counts.
+  private resultBack(t: EmrTask, o: EmrObligation): boolean {
+    const c = o.condition;
+    const seen = this.results.get(t.task_id);
+    if (!c || !c.states.length || !seen) return false;
+    const acts = c.order_actions.map((id) => t.actions.get(id)).filter((a): a is EmrAction => !!a && !DEAD_STATES.has(a.state));
+    if (acts.some((a) => !a.written?.record_id)) return false;
+    const ids = [...new Set([...c.orders, ...acts.map((a) => a.written!.record_id)])];
+    return ids.length > 0 && ids.every((id) => { const r = seen.get(id); return !!r?.state && c.states.includes(r.state); });
+  }
+
+  // Reads the result state of the orders each held result waits on, and binds work that named no sent order to the matching orders still waiting on the visit.
+  private async pollResults(at: string): Promise<void> {
+    const port = this.o.port;
+    if (!port.orderResults) return;
+    for (const l of [...this.live.values()]) {
+      const t = l.task;
+      const held = t.obligations.filter((o) => o.state === "held" && o.after === "result" && o.condition);
+      if (CLOSED_TASK.has(t.state) || !held.length || this.stopped) continue;
+      let rows: OrderResult[];
+      try { rows = await port.orderResults(t.owner, { ...this.subjectOf(t), visit_id: t.visit_id }, { owner: t.owner, evidence: `watch:${t.task_id}`, spoken_at: at }); } catch (e) { this.log(`results ${t.task_id}: ${e instanceof Error ? e.message : String(e)}`); continue; }
+      this.results.set(t.task_id, new Map(rows.filter((r) => EmrId.safeParse(r.id).success).map((r) => [r.id, r])));
+      for (const o of held) {
+        const c = o.condition!;
+        const written = c.order_actions.map((id) => t.actions.get(id)?.written?.record_id).filter((x): x is string => !!x && !c.orders.includes(x));
+        if (written.length) { this.append(l, "obligation.bound", { obligation_id: o.obligation_id, orders: written }); continue; }
+        if (c.order_actions.length || c.orders.length) continue;
+        const waiting = rows.filter((r) => EmrId.safeParse(r.id).success && (!c.tests.length || (r.test !== null && c.tests.includes(r.test))) && !(r.state && c.states.includes(r.state))).map((r) => r.id);
+        if (waiting.length) { this.append(l, "obligation.bound", { obligation_id: o.obligation_id, orders: waiting }); continue; }
+        if (c.unbound_noted) continue;
+        const named = c.tests.length ? this.testWords(t, o.line_id, c.tests) : "test";
+        this.append(l, "obligation.bound", { obligation_id: o.obligation_id, orders: [], unbound_noted: true });
+        this.note(l, `No ${named} sent here is waiting for a result, so this waits until one is sent: ${summariseWork(o.kind, o.clause)}.`);
+        this.settle(l, "result_unbound");
+      }
+    }
+  }
+
+  // The words the line used for the tests it named, for a note in the clinician's own terms.
+  private testWords(t: EmrTask, lineId: string, tests: readonly string[]): string {
+    const line = t.lines.find((x) => x.id === lineId)?.text ?? "";
+    const all = this.o.port.orderables?.().tests ?? {};
+    return tests.map((k) => (all[k] ?? []).find((w) => wordSaid(w, line)) ?? k.replace(/_/g, " ")).join(" or ");
   }
 
   // Puts each held review on the ward board as a STAT item at its due time, once there is an admission to hang it on.
@@ -1532,11 +1599,10 @@ export class EmrRuntime {
           }
         });
       }
-      const results = this.o.port.resultFacts?.(t.owner) ?? [];
       for (const o of t.obligations) {
         if (o.state !== "held" || this.firing.has(o.obligation_id)) continue;
         const timeCame = o.due_at !== null && Date.parse(o.due_at) <= now;
-        const condition = o.after === "admission" ? !!t.admission_id : o.after === "result" ? t.changes.some((c) => results.includes(c.fact) && c.at >= o.held_at) : false;
+        const condition = o.after === "admission" ? !!t.admission_id : o.after === "result" ? this.resultBack(t, o) : false;
         // A held time and a condition both have to be met when both were said.
         const ready = o.due_at !== null && o.after !== null ? timeCame && condition : timeCame || condition;
         if (!ready) continue;
@@ -1946,6 +2012,7 @@ export class EmrRuntime {
           }
         }
       }
+      await this.pollResults(at);
       await this.pollDelegations(at);
     } finally {
       this.polling = false;
@@ -2309,13 +2376,14 @@ export class EmrRuntime {
     const h = this.o.port.delegationHandoffs?.(t.owner)[a.kind];
     if (!h || !t.patient_id || !EmrId.safeParse(recordId).success || !this.kinds(t.owner).includes(DELEGATE_KIND)) return;
     const spec = (this.o.port.delegationTeams?.(t.owner) ?? {})[h.team];
-    if (!spec || t.delegations.some((d) => d.side === "delegator" && d.line_id === a.line_id && d.team === h.team)) return;
+    // One hand-off per source action and record, so several orders said in one line each reach the team once.
+    if (!spec || t.delegations.some((d) => d.side === "delegator" && d.team === h.team && (d.source_action_id === a.action_id || d.subject_id === recordId))) return;
     const id = this.ruleAct(l, a.line_id, DELEGATE_KIND, {
       task_kind: spec.task_kind, team: h.team, patient_id: t.patient_id, ...(t.admission_id ? { admission_id: t.admission_id } : {}), ...(t.visit_id ? { visit_id: t.visit_id } : {}),
       subject_table: h.subject_table, subject_id: recordId, title: spec.title, instruction: `${a.summary}`.slice(0, 2000),
       ...(spec.escalate_after_minutes !== undefined ? { escalate_after_minutes: spec.escalate_after_minutes } : {}), evidence: `transcript:${a.line_id}`
     });
-    if (id) this.append(l, "delegation.made", { delegation: this.newDelegation(id, a.line_id, spec.task_kind, spec.title, h.team, null, "none") });
+    if (id) this.append(l, "delegation.made", { delegation: this.newDelegation(id, a.line_id, spec.task_kind, spec.title, h.team, null, "none", { subject_id: recordId, source_action_id: a.action_id }) });
   }
 
   private onBed(t: EmrTask): boolean {

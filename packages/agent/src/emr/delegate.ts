@@ -70,6 +70,8 @@ export type EmrDelegation = {
   obligation_id: string | null;
   // The record the task is about, what its holder asked the agent to do with it and on which line, and what it waits on.
   subject_id?: string | null; asked?: "prepare" | "dispense" | null; asked_line?: string | null; waiting?: string | null; prepared_seen?: boolean;
+  // The verified write a hand-off came from, so each order said in one line is handed on once.
+  source_action_id?: string | null;
 };
 
 export function delegationSummary(kind: string, a: Record<string, unknown>): string | null {

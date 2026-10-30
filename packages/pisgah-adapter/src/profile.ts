@@ -124,6 +124,8 @@ export const DoorProfile = z.strictObject({
   clerking: z.strictObject({ sections: z.record(z.string(), z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,60}$/)) }).optional(),
   // Watched facts whose change means a result came back, per owner id.
   result_facts: z.record(z.string(), z.array(z.string().min(1).max(80))).default({}),
+  // The orders on a visit by record id, with the test's name and its state, and the states that mean the result is back.
+  result_orders: ReadSpec.extend({ list: Dotted, id: Dotted, test: Dotted, state: Dotted, states: z.array(z.string().regex(/^[A-Za-z_]{1,40}$/)).min(1).max(20) }).optional(),
   targets: z.strictObject({ admission_by_patient: z.record(EmrId, EmrId), episode_by_admission: z.record(EmrId, EmrId) }),
   vocabulary: z.array(z.string().min(1).max(60)).max(60).default([]),
   // Only the sandbox integration test reads this block.
