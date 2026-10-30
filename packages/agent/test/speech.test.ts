@@ -26,22 +26,22 @@ const last = (xs: St[], seq: number) => [...xs].reverse().find((x) => x.seq === 
 
 describe("every utterance finishes", () => {
   it("finishes a sentence held at the 6 s cap when the strip says the utterance ended", async () => {
-    const { rt, listen, seen } = boot(earOf({ 6000: "Chart his pulse as ninety six, he is settling now" }));
+    const { rt, listen, seen } = boot(earOf({ 6000: "Okay chart his pulse, em, ninety six, he's settling now" }));
     const held = await chunk(listen, 0, chunkWav(6000, 0));
     expect(held.outcome).toMatchObject({ final: false, why: "held_for_join" });
     const end = await listen.end({ owner: OWNER, target: { admission_id: ADM }, session_id: "s1", seq: 1 }, true);
     expect(end.outcome).toMatchObject({ final: true, why: "end_marker", utterance: { seqs: [0] } });
     await rt.settled();
-    expect(seen).toEqual(["Chart his pulse as 96, he is settling now"]);
+    expect(seen).toEqual(["Okay chart his pulse, em, 96, he's settling now"]);
     listen.close();
     await rt.stop();
   });
 
   it("finishes held audio on a timer when no next chunk and no marker ever come", async () => {
-    const { rt, listen, seen } = boot(earOf({ 6000: "He is settling now and comfortable" }), { heldEndWaitMs: 60 });
+    const { rt, listen, seen } = boot(earOf({ 6000: "He don settle small, he's comfortable now" }), { heldEndWaitMs: 60 });
     await chunk(listen, 0, chunkWav(6000, 0));
     await until(() => seen.length === 1, 3000);
-    expect(seen).toEqual(["He is settling now and comfortable"]);
+    expect(seen).toEqual(["He don settle small, he's comfortable now"]);
     expect(rt.views(OWNER)[0]!.transcript[0]!.ambient).toMatchObject({ seqs: [0], finished_by: "held_timeout" });
     listen.close();
     await rt.stop();
@@ -51,7 +51,7 @@ describe("every utterance finishes", () => {
     let fail = true;
     const ear: Transcriber = async (wav, _k, sessionId) => {
       if (fail) throw new VoiceError("upstream", "Voice Transcribe answered 502", 502);
-      return { final: true, text: "She is comfortable", audio_ms: 1700, session_id: sessionId, cost_usd: 0 };
+      return { final: true, text: "She dey comfortable, no wahala", audio_ms: 1700, session_id: sessionId, cost_usd: 0 };
     };
     const { rt, listen, statuses } = boot(ear);
     const bad = await chunk(listen, 0, chunkWav(1000, 700));
@@ -77,10 +77,10 @@ describe("the words after the wake phrase", () => {
   });
 
   it("delivers the opening words carried across the wake without the phrase", async () => {
-    const { rt, listen, seen } = boot(earOf({ 1700: "Hey Pisgah, she has had chest pain since this morning." }));
+    const { rt, listen, seen } = boot(earOf({ 1700: "Hey Pisgah, she's had, em, chest pain since morning time." }));
     await chunk(listen, 0, chunkWav(1000, 700));
     await rt.settled();
-    expect(seen).toEqual(["she has had chest pain since this morning."]);
+    expect(seen).toEqual(["she's had, em, chest pain since morning time."]);
     listen.close();
     await rt.stop();
   });
@@ -110,7 +110,7 @@ describe("speech status through serve", () => {
   it("finishes a capped line on the strip's end marker, and opens no arrival when 'emergency' is only heard in passing", async () => {
     const root = emrRoot();
     const port = new FakeEmr();
-    const heard = ["She has been vomiting since the morning and cannot keep fluids down", "this is not an emergency, she can wait"];
+    const heard = ["She's been vomiting since morning, can't keep anything down, even water", "Ah no, this one is not an emergency, she can wait small"];
     const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater(() => [{ class: "aside" }]) });
     const s = await startEmrServe({ storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 }, ears: "off", transcribe: async (_w, _k, id) => ({ final: true, text: heard.shift() ?? "", audio_ms: 6000, session_id: id, cost_usd: 0 }) });
     const form = (seq: number, o: { wav?: Uint8Array; end?: boolean; hint?: string }) => {

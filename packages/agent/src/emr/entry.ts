@@ -51,27 +51,24 @@ export function unidentifiedRef(at: Date, timeZone = "Africa/Lagos"): string {
 }
 
 export type SpokenIdentity = { name: string; phone: string | null; words: string };
-const NAME = "([A-Z][a-z'-]+(?:\\s+[A-Z][a-z'-]+){1,3})";
-const IDENTITY = [
-  new RegExp(`\\b(?:[Hh]er|[Hh]is|[Tt]heir|[Tt]he patient'?s|[Pp]atient'?s)\\s+name\\s+is\\s+${NAME}`),
-  new RegExp(`\\b(?:[Ss]he|[Hh]e)\\s+(?:is called|says (?:she|he) is|says (?:her|his) name is|is named)\\s+${NAME}`),
-  new RegExp(`\\b[Tt]he patient is\\s+(?:called\\s+)?${NAME}`)
-];
+// The words that introduce a name, as people say them, Nigerian English included ("her name na").
+const NAMING = /\b(?:(?:her|his|their|the patient'?s|patient'?s)\s+name\s+(?:is|na)|(?:she|he)\s+(?:is called|is named|says (?:she|he) is|says (?:her|his) name is)|(?:she|he)'s called|(?:they|people) call (?:her|him)|the patient is(?:\s+called)?)\b/i;
+const NAME_RUN = /[A-Z][a-z'-]+(?:\s+[A-Z][a-z'-]+){1,3}/g;
+const NOT_NAME = /^(?:And|Phone|Her|His|She|He|The|Number|Em|Eh|Er|Um|Uh)$/;
 const PHONE = /(?:\+?234|0)\s*[789]\s*[01](?:[\s-]*\d){8}/;
 
-// The name, and the phone when said, from a line that names the patient; the name must be two to four capitalised words as transcribed.
+// The name, and the phone when said, from a line that names the patient: the longest run of two to four capitalised words after the naming words, so "Grace, Grace Okafor" reads as Grace Okafor.
 export function identityFrom(line: string): SpokenIdentity | null {
-  for (const re of IDENTITY) {
-    const m = re.exec(line);
-    if (!m) continue;
-    const name = m[1]!.replace(/\s+(?:And|Phone|Her|His|She|He|The)$/, "").trim();
-    if (name.split(/\s+/).length < 2) continue;
-    const p = PHONE.exec(digitsSpoken(line));
-    const digits = p ? p[0].replace(/\D/g, "") : null;
-    const phone = digits ? (digits.startsWith("234") ? `0${digits.slice(3)}` : digits) : null;
-    return { name, phone: phone && /^0[789][01]\d{8}$/.test(phone) ? phone : null, words: m[0] };
-  }
-  return null;
+  const m = NAMING.exec(line);
+  if (!m) return null;
+  const rest = line.slice(m.index + m[0].length).replace(/\.{2,}|…/g, ",").split(/[.!?;]\s|\bnumber\b|\bphone\b/i)[0]!;
+  const runs = [...rest.matchAll(NAME_RUN)].map((r) => r[0].split(/\s+/).filter((w) => !NOT_NAME.test(w)).join(" ")).filter((n) => n.split(" ").length >= 2);
+  const name = runs.sort((x, y) => y.length - x.length)[0];
+  if (!name) return null;
+  const p = PHONE.exec(digitsSpoken(line));
+  const digits = p ? p[0].replace(/\D/g, "") : null;
+  const phone = digits ? (digits.startsWith("234") ? `0${digits.slice(3)}` : digits) : null;
+  return { name, phone: phone && /^0[789][01]\d{8}$/.test(phone) ? phone : null, words: `${m[0]} ${name}` };
 }
 
 const DIGIT_WORDS: Record<string, string> = { zero: "0", oh: "0", o: "0", one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9" };

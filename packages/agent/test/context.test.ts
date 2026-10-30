@@ -71,7 +71,7 @@ const lineIn = (s: Awaited<ReturnType<typeof boot>>["s"], taskId: string, text: 
 
 describe("the patient the clinician is with", () => {
   it("keeps a patient created by voice when a new listening session's first upload has no page patient", async () => {
-    const { s } = await boot(["she is breathing comfortably now."]);
+    const { s } = await boot(["Okay she's, em, she's breathing better now, the pain has eased small."]);
     const arrival = await post(`${s.url}/tasks/emergency`, { owner: OWNER, spokenAt: new Date().toISOString() });
     await s.runtime.settled();
     expect(await tracking(s.url)).toEqual({ patient_id: ARRIVAL });
@@ -84,7 +84,7 @@ describe("the patient the clinician is with", () => {
   });
 
   it("starts a new session with no patient when the one the agent is with was chosen long ago", async () => {
-    const { s } = await boot(["she is breathing comfortably now."]);
+    const { s } = await boot(["Okay she's, em, she's breathing better now, the pain has eased small."]);
     await post(`${s.url}/tasks/emergency`, { owner: OWNER, spokenAt: new Date(Date.now() - 40 * 60_000).toISOString() });
     await s.runtime.settled();
     expect(await tracking(s.url)).toEqual({ patient_id: ARRIVAL });
@@ -95,7 +95,7 @@ describe("the patient the clinician is with", () => {
   });
 
   it("never moves the active patient when a task for another patient is handed to this owner", async () => {
-    const { s, port } = await boot(["first words on A.", "second words on A."]);
+    const { s, port } = await boot(["Mama, how are you feeling this morning?", "Okay, the pain don reduce, good."]);
     const a = await listen(s.url, { session: "s-1", seq: 0, patientId: PAGE_A });
     expect(a.tracking).toEqual({ patient_id: PAGE_A });
     port.handed = [{
@@ -111,7 +111,7 @@ describe("the patient the clinician is with", () => {
   });
 
   it("binds a delayed upload to the patient it was captured with, not one chosen after it was said", async () => {
-    const { s } = await boot(["words said before the emergency."]);
+    const { s } = await boot(["Abeg who moved the BP machine?"]);
     const before = Date.now() - 2000;
     await post(`${s.url}/tasks/emergency`, { owner: OWNER, spokenAt: new Date(before + 1000).toISOString() });
     await s.runtime.settled();
@@ -121,7 +121,7 @@ describe("the patient the clinician is with", () => {
     expect(late.tracking).toBeUndefined();
     expect(late.no_patient).toBe(true);
     // Captured on page A, uploaded after the agent moved to the arrival: it stays page A's.
-    const { s: s2 } = await boot(["said on A.", "said on A again."]);
+    const { s: s2 } = await boot(["Oya let me see the chest, breathe in.", "Fine, fine, breathe out."]);
     const first = await listen(s2.url, { session: "s-3", seq: 0, patientId: PAGE_A, capturedAt: Date.now() - 3000 });
     expect(first.tracking).toEqual({ patient_id: PAGE_A });
     await post(`${s2.url}/tasks/emergency`, { owner: OWNER, spokenAt: new Date(Date.now() - 1000).toISOString() });
@@ -133,20 +133,20 @@ describe("the patient the clinician is with", () => {
   });
 
   it("buffers speech after the emergency phrase until the arrival is confirmed, then binds it to the arrival", async () => {
-    const { s, port } = await boot(["Her name is Grace Okafor, phone 0803 123 4567"]);
+    const { s, port } = await boot(["Her name is Grace, Grace Okafor, the number is oh-eight-oh-three, one two three, four five six seven"]);
     let open!: () => void;
     port.gate = new Promise((r) => { open = r; });
     const arrival = await post(`${s.url}/tasks/emergency`, { owner: OWNER, spokenAt: new Date(Date.now() - 500).toISOString() });
     const heard = await listen(s.url, { session: "s-4", seq: 0, capturedAt: Date.now() });
     expect(heard.pending).toBe(true);
-    const typed = await post(`${s.url}/tasks/say`, { owner: OWNER, text: "Male, about forty, found at the roadside." });
+    const typed = await post(`${s.url}/tasks/say`, { owner: OWNER, text: "He's about forty, em, they found him by the roadside, no ID on him." });
     expect(typed.status).toBe(202);
     expect(typed.body.pending).toBe(true);
     // A second phrase while the first arrival is pending opens nothing more.
     const again = await post(`${s.url}/tasks/emergency`, { owner: OWNER, spokenAt: new Date().toISOString() });
     expect(again.body.task_id).toBe(arrival.body.task_id);
     open();
-    await until(() => s.runtime.view(arrival.body.task_id)!.identities.length === 1 && lineIn(s, arrival.body.task_id, "Male, about forty, found at the roadside."));
+    await until(() => s.runtime.view(arrival.body.task_id)!.identities.length === 1 && lineIn(s, arrival.body.task_id, "He's about forty, em, they found him by the roadside, no ID on him."));
     await s.runtime.settled();
     expect(port.writes).toHaveLength(1);
     expect(s.runtime.view(arrival.body.task_id)!.identities[0]).toMatchObject({ name: "Grace Okafor", encounter: { patient_id: ARRIVAL } });
@@ -154,7 +154,7 @@ describe("the patient the clinician is with", () => {
   });
 
   it("drops the buffered speech and says so when the arrival is refused", async () => {
-    const { s, port } = await boot(["Her name is Grace Okafor"]);
+    const { s, port } = await boot(["Her name is Grace, Grace Okafor, the number is oh-eight-oh-three, one two three, four five six seven"]);
     let open!: () => void;
     port.gate = new Promise((r) => { open = r; });
     port.refuse = true;
@@ -188,7 +188,7 @@ describe("the patient the clinician is with", () => {
   });
 
   it("opens the same pending arrival from the Emergency press, binds the words said after it, and one arrival per press", async () => {
-    const { s, port } = await boot(["Her name is Grace Okafor, phone 0803 123 4567"]);
+    const { s, port } = await boot(["Her name is Grace, Grace Okafor, the number is oh-eight-oh-three, one two three, four five six seven"]);
     let open!: () => void;
     port.gate = new Promise((r) => { open = r; });
     const pressed = await post(`${s.url}/tasks/emergency`, { owner: OWNER, press: true, spokenAt: new Date().toISOString() });
