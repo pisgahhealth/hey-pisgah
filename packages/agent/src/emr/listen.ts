@@ -61,6 +61,8 @@ export type ListenOptions = {
   // The replay defence: refuse copies and faster-than-live audio (the deployed serve turns this on; scripted feeds leave it off), whether a chunk must carry the strip's liveness marker, and the frozen rule.
   replay?: "refuse" | "off"; presence?: PresenceMode; presenceRule?: PresenceRule;
   heldEndWaitMs?: number;
+  // Staff names sent in the recognition hints after the patient's own words; empty unless the serve is given them.
+  staff?: readonly string[];
   onStatus?: (owner: string, sessionId: string, seq: number, st: UtteranceStatus) => void;
 };
 
@@ -123,6 +125,15 @@ export class ListenSessions {
       this.sessions.set(sessionId, s);
     }
     return s;
+  }
+
+  // The recognition hints a session sends: vitals words first, then the patient's own words and the staff names.
+  async hintsFor(owner: string, target: EmrTarget, sessionId: string, at: number): Promise<string[]> {
+    return this.keywordsOf(await this.sessionFor(owner, target, sessionId, at));
+  }
+
+  private keywordsOf(s: Session): string[] {
+    return buildKeywords({ vitals: VITALS_KEYWORDS, wards: [], documents: s.ctx.keywords, staff: this.o.staff ?? [], beds: [] });
   }
 
   // One finished stretch from the streaming ear: its words are already heard, so only the join and delivery rules run; a number wait counts the quiet already heard.
@@ -369,7 +380,7 @@ export class ListenSessions {
   // Transcribes one stretch of audio with vitals words first in the hints, then cleans it and applies the vitals vocabulary.
   private async ear(s: Session, sessionId: string, parts: Float32Array[], seqs: number[], rate: number, silence: number, arrived: number): Promise<Heard> {
     const joined = encodeWav(concat(parts), rate);
-    const keywords = buildKeywords({ vitals: VITALS_KEYWORDS, wards: [], documents: s.ctx.keywords, staff: [], beds: [] });
+    const keywords = this.keywordsOf(s);
     const asrId = `${sessionId}-${seqs.length > 1 ? `${seqs[0]}.` : ""}${seqs.at(-1)}`.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 64);
     let heard: FinalTranscript;
     let dropped = false;

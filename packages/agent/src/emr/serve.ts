@@ -3,10 +3,11 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { loadKeys, ModelClient, type Mode } from "@hey-pisgah/model";
-import { VITALS_KEYWORDS, VoiceError, buildKeywords, cleanTranscript, transcribeWav, vitalsVocabulary, type FinalTranscript } from "@hey-pisgah/voice";
+import { VITALS_KEYWORDS, VoiceError, buildKeywords, cleanTranscript, transcribeWav, vitalsVocabulary, type FinalTranscript, type SocketFactory } from "@hey-pisgah/voice";
 import { sparkEar, type SecondEar } from "./ears.js";
 import { allEars, parakeetEar, sherpaStreamAsr, transcriberEar, type ReadingLedger, type StreamAsr } from "./local-ears.js";
 import { StreamListener, StreamRefused } from "./stream-listen.js";
+import { META_STREAM_MODEL, MetaStreamFailed, MetaStreamListener, probeRealtime } from "./meta-stream.js";
 import { EmrRuntime, type EmrRuntimeOptions } from "./runtime.js";
 import { ListenError, ListenSessions, type ListenOptions, type Transcriber } from "./listen.js";
 import { parseWav } from "@hey-pisgah/voice";
@@ -23,6 +24,9 @@ export const EMR_SERVE_PORT = 4100;
 // The default ear: Voice Transcribe REST with the key from the keys file, read only when audio arrives.
 export const voiceTranscriber: Transcriber = (wav, keywords, sessionId) =>
   transcribeWav({ wav, keywords, key: loadKeys()["MODEL_API_KEY"] ?? "", sessionId });
+// The same ear with a language hint in every request.
+export const biasedTranscriber = (languageBias: readonly string[]): Transcriber => (wav, keywords, sessionId) =>
+  transcribeWav({ wav, keywords, key: loadKeys()["MODEL_API_KEY"] ?? "", sessionId, languageBias });
 
 export type EmrServeOptions = {
   storeRoot: string; port: EmrPort;
@@ -31,8 +35,16 @@ export type EmrServeOptions = {
   recordModel?: boolean;
   // The second ear for vitals from audio: Spark audio input, Parakeet on this machine, off, or one given by a test.
   ears?: "spark" | "parakeet" | "off" | SecondEar;
-  // The first ear: Voice Transcribe REST by default, or the local streaming model, which keeps Voice Transcribe as a further reading of every line that writes a number.
-  asr?: "rest" | "stream";
+  // The first ear: Voice Transcribe REST by default, the local streaming model (Voice Transcribe kept as a further reading of number lines), or Meta's realtime socket on the frames route.
+  asr?: "rest" | "stream" | "meta-stream";
+  // The realtime socket for meta-stream, given by a test or wrapped by the recorder; the network socket otherwise.
+  realtimeSocket?: SocketFactory;
+  // The realtime credential, read from the keys file unless given.
+  realtimeKey?: () => string;
+  // Languages both Voice Transcribe ears are steered toward; none unless switched on.
+  languageBias?: readonly string[];
+  // Staff names for the recognition hints.
+  staffHints?: readonly string[];
   // Where the local models and the sherpa-onnx library live, for the parakeet and stream switches.
   local?: { parakeetDir?: string; streamDir?: string; sherpaDir?: string | undefined; threads?: number };
   // A streaming recogniser given by a test, used in place of loading one.
@@ -139,7 +151,13 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   const client = o.client ?? new ModelClient({ storeRoot: o.storeRoot, ...(o.mode ? { mode: o.mode } : {}), ...(o.recordingsDir ? { recordingsDir: o.recordingsDir } : {}), ...(o.recordModel === false ? { record: false } : {}), taskStateOf: (id) => runtime?.stateOf(id) ?? null });
   // Readings that are not Spark calls go on the run's ledger as their own rows, each naming its model and purpose.
   const ledger: ReadingLedger = (runId, row) => { try { client.appendRecord(runId, "reading.call", row); } catch { /* the ledger is closed */ } };
-  const metaAsr = o.transcribe ?? voiceTranscriber;
+  const metaAsr = o.transcribe ?? (o.languageBias?.length ? biasedTranscriber(o.languageBias) : voiceTranscriber);
+  // A switched-on realtime ear that cannot open a session stops the service, so no run claims an ear it did not use.
+  const realtimeKey = o.realtimeKey ?? (() => loadKeys()["MODEL_API_KEY"] ?? "");
+  if (o.asr === "meta-stream") {
+    try { await probeRealtime({ key: realtimeKey, ...(o.realtimeSocket ? { socket: o.realtimeSocket } : {}), languageBias: o.languageBias ?? [] }); }
+    catch (e) { throw new Error(`the Meta realtime ear was switched on but could not connect: ${e instanceof Error ? e.message : String(e)}`); }
+  }
   const streamAsr = o.asr === "stream" ? o.streamAsr ?? sherpaStreamAsr({ modelDir: o.local?.streamDir ?? "", sherpaDir: o.local?.sherpaDir, ...(o.local?.threads ? { threads: o.local.threads } : {}) }) : null;
   // A switch that was asked for and cannot load stops the service, so a run never claims a local ear it did not use.
   if (o.asr === "stream" && !streamAsr) throw new Error("the streaming ear was switched on but its model or library did not load");
@@ -151,7 +169,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   } else base = o.ears === "off" ? undefined : typeof o.ears === "function" ? o.ears : o.ears === "spark" ? sparkEar(client) : o.runtime?.secondEar;
   // With a local first ear, Voice Transcribe reads every line that writes a number as well, so Meta still reads each number before it is written.
   const secondEar = base && streamAsr ? allEars([base, transcriberEar(metaAsr, { ledger })]) : base;
-  const footprint = { first_ear: streamAsr ? streamAsr.model : "meta:muse-voice-transcribe-1.0", second_ear: typeof o.ears === "string" ? o.ears : base ? "given" : "off", meta_reading_on_numbers: !!(base && streamAsr) };
+  const footprint = { first_ear: streamAsr ? streamAsr.model : o.asr === "meta-stream" ? META_STREAM_MODEL : "meta:muse-voice-transcribe-1.0", second_ear: typeof o.ears === "string" ? o.ears : base ? "given" : "off", meta_reading_on_numbers: !!(base && streamAsr) };
   // The patient each owner's agent is with over time: the page's patient when it changes, a spoken name, or an arrival it opened, ordered by when it was asked for.
   const tracked = new Map<string, Track>();
   const trackOf = (owner: string): Track => { let t = tracked.get(owner); if (!t) { t = { page: "", history: [] }; tracked.set(owner, t); } return t; };
@@ -214,8 +232,10 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   const origin = o.allowOrigin ?? "http://localhost:3311";
   // Each patient's listening session reports its utterances' statuses under the strip's own session id.
   const clientOf = new Map<string, string>();
-  const listening = new ListenSessions(rt, { ...(o.listen ?? {}), transcribe, ...(o.embed ? { embed: o.embed } : {}), onStatus: (owner, sid, seq, st) => setStatus(owner, clientOf.get(sid) ?? sid, seq, st) });
-  const streamer = streamAsr ? new StreamListener(listening, streamAsr, { refuseFasterThanLive: o.listen?.replay === "refuse" }) : null;
+  const listening = new ListenSessions(rt, { ...(o.listen ?? {}), transcribe, ...(o.staffHints?.length ? { staff: o.staffHints } : {}), ...(o.embed ? { embed: o.embed } : {}), onStatus: (owner, sid, seq, st) => setStatus(owner, clientOf.get(sid) ?? sid, seq, st) });
+  const streamer = streamAsr ? new StreamListener(listening, streamAsr, { refuseFasterThanLive: o.listen?.replay === "refuse" })
+    : o.asr === "meta-stream" ? new MetaStreamListener(listening, { key: realtimeKey, ...(o.realtimeSocket ? { socket: o.realtimeSocket } : {}), languageBias: o.languageBias ?? [], ledger, runOf: (id) => rt.task(id)?.run_id ?? null, refuseFasterThanLive: o.listen?.replay === "refuse" })
+    : null;
   const wakeLog = join(o.storeRoot, "..", "wake.jsonl");
   // The patient each listening session started with keeps the session's own id, so a session that never moves reads as before.
   const firstSubject = new Map<string, string>();
@@ -392,7 +412,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     freshSession(b.owner, b.session_id, page, opened);
     const target = subjectFor(b.owner, page, opened);
     if (!target) throw new HttpError(400, "the streaming ear needs a patient open");
-    try { streamer.open({ owner: b.owner, target, session_id: b.session_id, rate: b.rate }); } catch (e) { throw new HttpError(409, e instanceof Error ? e.message : "already streaming"); }
+    try { await streamer.open({ owner: b.owner, target, session_id: b.session_id, rate: b.rate }); } catch (e) { throw e instanceof VoiceError ? new HttpError(502, e.message) : new HttpError(409, e instanceof Error ? e.message : "already streaming"); }
     let n = 0;
     let odd: number | null = null;
     let failed: unknown = null;
@@ -410,11 +430,13 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
         const x = new Float32Array(whole / 2);
         for (let i = 0; i < x.length; i++) x[i] = bytes.readInt16LE(i * 2) / 32768;
         streamer.feed(b.session_id, x);
-      } catch (e) { failed = e instanceof StreamRefused ? new HttpError(409, e.message) : e; }
+      } catch (e) { failed = e instanceof StreamRefused ? new HttpError(409, e.message) : e instanceof MetaStreamFailed ? new HttpError(502, e.message) : e; }
     }
     // The stream always closes, so what was heard before a failure is still handed on and the session can open again.
     const ended = await streamer.end(b.session_id);
     if (failed) throw failed;
+    // A realtime session the endpoint refused mid-way fails the request, so a stream it stopped hearing is never answered as heard.
+    if ("failed" in ended && typeof ended.failed === "string") throw new HttpError(502, ended.failed);
     return [202, { session_id: b.session_id, accepted: true, tracking: target, audio_ms: Math.round((n / 2 / b.rate) * 1000), ...ended }];
   };
 
@@ -431,7 +453,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const target = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
     const ctx = await rt.port.resolve(target, { owner: b.owner, evidence: "transcript:audio-context", spoken_at: new Date(arrived).toISOString() });
     const wav = new Uint8Array(await audio.arrayBuffer());
-    const keywords = buildKeywords({ vitals: VITALS_KEYWORDS, wards: [], documents: ctx.keywords, staff: [], beds: [] });
+    const keywords = buildKeywords({ vitals: VITALS_KEYWORDS, wards: [], documents: ctx.keywords, staff: o.staffHints ?? [], beds: [] });
     let heard: FinalTranscript;
     let keywordsDropped = false;
     try {

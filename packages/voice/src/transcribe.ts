@@ -18,21 +18,32 @@ export class VoiceError extends Error {
 export type TranscribeOptions = {
   wav: Uint8Array; keywords: readonly string[]; key: string; sessionId: string;
   fetch?: typeof fetch; timeoutMs?: number; url?: string;
+  // Languages to steer recognition toward; omitted from the request when empty, so the default request is unchanged.
+  languageBias?: readonly string[];
 };
 
+// The language hint switch: HEY_PISGAH_LANGUAGE_BIAS=1 steers both the REST and the realtime ear toward English, off by default until measured.
+export const languageBiasFrom = (v: string | undefined): string[] => (v?.trim() === "1" ? ["English"] : []);
+
 // The `request` part of the multipart body, as the REST reference names it.
-export function requestPart(keywords: readonly string[]): { model: string; audioEncoding: "WAV"; mode: "PUSH_TO_TALK"; keywords: string[] } {
-  return { model: ASR_MODEL, audioEncoding: "WAV", mode: "PUSH_TO_TALK", keywords: [...keywords] };
+export function requestPart(keywords: readonly string[], languageBias: readonly string[] = []): { model: string; audioEncoding: "WAV"; mode: "PUSH_TO_TALK"; keywords: string[]; languageBias?: string[] } {
+  return { model: ASR_MODEL, audioEncoding: "WAV", mode: "PUSH_TO_TALK", keywords: [...keywords], ...(languageBias.length ? { languageBias: [...languageBias] } : {}) };
 }
 
 // Sends one push-to-talk WAV to Voice Transcribe REST and returns its buffered, finished transcript.
 export async function transcribeWav(o: TranscribeOptions): Promise<FinalTranscript> {
+  const { turns: _turns, ...r } = await transcribeWithTurns(o);
+  return r;
+}
+
+// The same call, keeping the reply's turns array for research that compares whole replies.
+export async function transcribeWithTurns(o: TranscribeOptions): Promise<FinalTranscript & { turns: unknown[] }> {
   const info = parseWav(o.wav);
   if (!info.ok) throw new VoiceError("bad_wav", info.reason);
   if (!o.key) throw new VoiceError("no_key", "no Voice Transcribe key");
   if (!/^[A-Za-z0-9._-]{1,64}$/.test(o.sessionId)) throw new RangeError("session ids are 1 to 64 letters, digits, dots, dashes or underscores");
   const form = new FormData();
-  form.append("request", new Blob([JSON.stringify(requestPart(o.keywords))], { type: "application/json" }));
+  form.append("request", new Blob([JSON.stringify(requestPart(o.keywords, o.languageBias))], { type: "application/json" }));
   form.append("audio", new Blob([new Uint8Array(o.wav)], { type: "audio/wav" }), "goal.wav");
   const url = `${o.url ?? ASR_URL}?sessionId=${encodeURIComponent(o.sessionId)}`;
   let res: Response;
@@ -56,7 +67,7 @@ export async function transcribeWav(o: TranscribeOptions): Promise<FinalTranscri
     throw new VoiceError("bad_reply", "Voice Transcribe replied with an unexpected shape", res.status);
   }
   const ms = r["audioDurationMs"];
-  return { final: true, text: r["transcript"].trim(), audio_ms: ms, session_id: r["sessionId"], cost_usd: Math.round((ms / 3_600_000) * USD_PER_AUDIO_HOUR * 1e6) / 1e6 };
+  return { final: true, text: r["transcript"].trim(), audio_ms: ms, session_id: r["sessionId"], cost_usd: Math.round((ms / 3_600_000) * USD_PER_AUDIO_HOUR * 1e6) / 1e6, turns: r["turns"] as unknown[] };
 }
 
 function errorType(body: unknown): string | null {
