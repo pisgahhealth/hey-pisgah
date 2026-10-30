@@ -10,7 +10,7 @@ import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWrit
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
 import { READ_ONLY_KINDS, WORK_ARGS, afterSaid, cadenceSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, type Measure, type Rewrite } from "@hey-pisgah/voice";
-import { answerChoice, compareReadings, disagreementQuestion, normValue, quotedQuestion, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
+import { answerChoice, compareAll, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
 import { DOCUMENTATION_KINDS, ORDER_KINDS, recordOf, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
 import { EMERGENCY_KIND, EMERGENCY_LINE, RULE_ONLY_KINDS, emergencyReason, identityFrom, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
@@ -1814,13 +1814,13 @@ export class EmrRuntime {
       const first = early.uses === 0;
       early.uses += 1;
       this.checks.set(actionId, early.p.then(({ reading, error }) => reading
-        ? { check: compareReadings(vals, reading.text, clip.guessed), reading: first ? reading : { ...reading, cost_usd: 0, calls: 0 }, error: null }
+        ? { check: compareAll(vals, reading, clip.guessed), reading: first ? reading : { ...reading, cost_usd: 0, calls: 0 }, error: null }
         : failed(error ?? "ear_failed")));
       return true;
     }
     const tm = this.timesOf(lineId);
     const p = this.o.secondEar(clip.wav, { run_id: t.run_id, task_id: t.task_id, line_id: lineId })
-      .then((reading): EarsOutcome => ({ check: compareReadings(vals, reading.text, clip.guessed), reading, error: null }))
+      .then((reading): EarsOutcome => ({ check: compareAll(vals, reading, clip.guessed), reading, error: null }))
       .catch((e: unknown): EarsOutcome => failed(e instanceof ModelError ? e.code : "ear_failed"))
       .finally(() => { tm.ear_done = Date.now(); });
     this.checks.set(actionId, p);
@@ -1837,9 +1837,12 @@ export class EmrRuntime {
     const read = () => this.o.secondEar!(clip!.wav, { run_id: t.run_id, task_id: t.task_id, line_id: lineId }).then((reading) => ({ reading, error: null }), (e: unknown) => ({ reading: null as EarReading | null, error: e instanceof ModelError ? e.code : "ear_failed" }));
     // A second reading that failed or heard no dose at all is read once more, as the vitals path does; one that heard a different dose is never read again.
     const ear = (early ?? read()).then((r) => (clip && this.o.secondEar && (!r.reading || !dosesIn(cleanTranscript(r.reading.text)).length) ? read() : r));
-    this.doseChecks.set(actionId, ear.then(({ reading, error }) => reading
-      ? { agree: doseAgrees(dose, cleanTranscript(reading.text)), heard: reading.text.slice(0, 200), error: null, reading }
-      : { agree: false, heard: null, error: error ?? "ear_failed", reading: null }));
+    // Every reading must hear the dose, and the one shown is the first that did not.
+    this.doseChecks.set(actionId, ear.then(({ reading, error }) => {
+      if (!reading) return { agree: false, heard: null, error: error ?? "ear_failed", reading: null };
+      const off = readingsOf(reading).find((x) => !doseAgrees(dose, cleanTranscript(x.text)));
+      return { agree: !off, heard: (off ?? reading).text.slice(0, 200), error: null, reading };
+    }));
   }
   private async doseAgreed(l: Live, a: EmrAction): Promise<boolean> {
     const p = this.doseChecks.get(a.action_id);
@@ -1871,7 +1874,8 @@ export class EmrRuntime {
     const line = t.lines.find((x) => x.id === a.line_id);
     this.append(l, "ears.compared", {
       action_id: a.action_id, line_id: a.line_id, session_id: line?.ambient?.session_id ?? null, agree: r.check.agree, measures: r.check.measures, error: r.error,
-      provider: r.reading?.provider ?? null, model: r.reading?.model ?? null, response_id: r.reading?.response_id ?? null, cost_usd: r.reading?.cost_usd ?? 0, calls: r.reading ? r.reading.calls ?? 1 : 0, fallback_reason: r.reading?.fallback_reason ?? null
+      provider: r.reading?.provider ?? null, model: r.reading?.model ?? null, response_id: r.reading?.response_id ?? null, cost_usd: r.reading?.cost_usd ?? 0, calls: r.reading ? r.reading.calls ?? 1 : 0, fallback_reason: r.reading?.fallback_reason ?? null,
+      ...(r.reading?.also?.length ? { readings: readingsOf(r.reading).map((x) => ({ provider: x.provider, model: x.model, cost_usd: x.cost_usd })) } : {})
     });
     if (r.check.agree) return a.state === "proposed" && t.state === "running";
     if (a.state !== "proposed") return false;

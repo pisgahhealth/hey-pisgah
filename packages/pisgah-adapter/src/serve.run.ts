@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { KEPT_LEVERS, keepingContext, leversFrom, recordingTranscriber, sherpaEmbedder, startEmrServe, voiceTranscriber } from "@hey-pisgah/agent";
+import { KEPT_LEVERS, asrSwitch, earSwitch, keepingContext, leversFrom, localDirs, recordingTranscriber, sherpaEmbedder, startEmrServe, voiceTranscriber } from "@hey-pisgah/agent";
 import { loadProfile } from "./profile.js";
 import { PisgahPort } from "./port.js";
 import { SandboxBlock, mintAgentBearer, sandboxQuery } from "./sandbox.js";
@@ -39,7 +39,9 @@ async function main(): Promise<void> {
     storeRoot: store, port: rec ? keepingContext(port, join(rec, "context.json")) : port, recordingsDir: rec ? join(rec, "model") : join(store, "..", "emr-recordings"), hosts: ["127.0.0.1", "::1"],
     ...(rec ? { transcribe: recordingTranscriber(voiceTranscriber, join(rec, "transcripts.json")) } : {}),
     // Without a recordings folder no model request is kept, since gate requests carry heard words; the second ear is on unless turned off.
-    recordModel: !!rec || process.env["HEY_PISGAH_RECORD_MODEL"] === "1", ears: process.env["HEY_PISGAH_SECOND_EAR"] === "off" ? "off" : "spark",
+    recordModel: !!rec || process.env["HEY_PISGAH_RECORD_MODEL"] === "1", ears: process.env["HEY_PISGAH_SECOND_EAR"] === "off" ? "off" : earSwitch(process.env["HEY_PISGAH_EAR"]),
+    // Both local ears are off unless switched on: HEY_PISGAH_EAR=parakeet and HEY_PISGAH_ASR=stream, with the models under HEY_PISGAH_ASR_DIR.
+    asr: asrSwitch(process.env["HEY_PISGAH_ASR"]), local: { ...localDirs(process.env["HEY_PISGAH_ASR_DIR"] ?? join(process.cwd(), ".hey-pisgah", "asr")), sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] },
     ...(embed ? { embed } : {}),
     listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4100),
     // The wake-phrase spotter's files for the strip, and the A&E clinic an emergency opened by voice lands on.
@@ -47,7 +49,7 @@ async function main(): Promise<void> {
     ...(process.env["HEY_PISGAH_EMERGENCY_CLINIC"] ? { emergencyClinicId: process.env["HEY_PISGAH_EMERGENCY_CLINIC"] } : {}), runtime: { holdMs: Number(process.env["HEY_PISGAH_HOLD_MS"] ?? 4000), speed: leversFrom(process.env["HEY_PISGAH_SPEED"] ?? KEPT_LEVERS), keepHeard: process.env["HEY_PISGAH_KEEP_HEARD"] === "1", ...(profile.owners.length ? { watchMs: Number(process.env["HEY_PISGAH_WATCH_MS"] ?? 5000) } : {}) },
     log: (l) => process.stderr.write(`${l}\n`)
   });
-  process.stdout.write(`emr serve on ${s.urls.join(" ")} (mode ${s.client.mode}, ${Object.keys(bearers).length} owner${Object.keys(bearers).length > 1 ? "s" : ""}, speaker model ${embed ? "on" : "off"})\n`);
+  process.stdout.write(`emr serve on ${s.urls.join(" ")} (mode ${s.client.mode}, ${Object.keys(bearers).length} owner${Object.keys(bearers).length > 1 ? "s" : ""}, speaker model ${embed ? "on" : "off"}, ears ${earSwitch(process.env["HEY_PISGAH_EAR"])}/${asrSwitch(process.env["HEY_PISGAH_ASR"])})\n`);
   const stop = () => { void s.close().then(() => process.exit(0)); };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);

@@ -5,6 +5,8 @@ import { z } from "zod";
 import { loadKeys, ModelClient, type Mode } from "@hey-pisgah/model";
 import { VITALS_KEYWORDS, VoiceError, buildKeywords, cleanTranscript, transcribeWav, vitalsVocabulary, type FinalTranscript } from "@hey-pisgah/voice";
 import { sparkEar, type SecondEar } from "./ears.js";
+import { allEars, parakeetEar, sherpaStreamAsr, transcriberEar, type ReadingLedger, type StreamAsr } from "./local-ears.js";
+import { StreamListener } from "./stream-listen.js";
 import { EmrRuntime, type EmrRuntimeOptions } from "./runtime.js";
 import { ListenError, ListenSessions, type ListenOptions, type Transcriber } from "./listen.js";
 import { parseWav } from "@hey-pisgah/voice";
@@ -25,8 +27,14 @@ export type EmrServeOptions = {
   client?: ModelClient; mode?: Mode; recordingsDir?: string;
   // False keeps model requests and replies out of the recordings folder, so no heard words are written there.
   recordModel?: boolean;
-  // The second ear for vitals from audio: Spark audio input by default, off, or one given by a test.
-  ears?: "spark" | "off" | SecondEar;
+  // The second ear for vitals from audio: Spark audio input, Parakeet on this machine, off, or one given by a test.
+  ears?: "spark" | "parakeet" | "off" | SecondEar;
+  // The first ear: Voice Transcribe REST by default, or the local streaming model, which keeps Voice Transcribe as a further reading of every line that writes a number.
+  asr?: "rest" | "stream";
+  // Where the local models and the sherpa-onnx library live, for the parakeet and stream switches.
+  local?: { parakeetDir?: string; streamDir?: string; sherpaDir?: string | undefined; threads?: number };
+  // A streaming recogniser given by a test, used in place of loading one.
+  streamAsr?: StreamAsr;
   listenPort?: number; hosts?: readonly string[];
   // The one browser origin allowed to call serve, the EMR page that hosts the strip.
   allowOrigin?: string;
@@ -69,6 +77,9 @@ const Interrupt = z.strictObject({ owner: Owner.optional(), task_id: z.string().
 const Scope = z.strictObject({ owner: Owner, scope: z.enum([...SCOPE_KINDS, "no"]) });
 // A hospital rule given as text by a person, under the scope they name; a patient scope comes only from a correction or a spoken rule.
 const External = z.strictObject({ owner: Owner, text: z.string().min(3).max(600), scope: z.enum(["me", "ward", "everyone"]), ward: z.string().min(1).max(120).optional() });
+const StreamMeta = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional(), session_id: z.string().min(1).max(80).regex(/^[A-Za-z0-9_.:-]+$/), rate: z.coerce.number().int().refine((r) => r === 16_000 || r === 24_000, "rate is 16000 or 24000") });
+// One hour of 24 kHz audio.
+const STREAM_LIMIT = 24_000 * 2 * 3600;
 const JSON_LIMIT = 64 * 1024;
 const AUDIO_LIMIT = 8 * 1024 * 1024;
 
@@ -100,7 +111,21 @@ const field = (f: FormData, k: string): string | undefined => { const v = f.get(
 export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   let runtime: EmrRuntime | null = null;
   const client = o.client ?? new ModelClient({ storeRoot: o.storeRoot, ...(o.mode ? { mode: o.mode } : {}), ...(o.recordingsDir ? { recordingsDir: o.recordingsDir } : {}), ...(o.recordModel === false ? { record: false } : {}), taskStateOf: (id) => runtime?.stateOf(id) ?? null });
-  const secondEar = o.ears === "off" ? undefined : typeof o.ears === "function" ? o.ears : o.ears === "spark" ? sparkEar(client) : o.runtime?.secondEar;
+  // Readings that are not Spark calls go on the run's ledger as their own rows, each naming its model and purpose.
+  const ledger: ReadingLedger = (runId, row) => { try { client.appendRecord(runId, "reading.call", row); } catch { /* the ledger is closed */ } };
+  const metaAsr = o.transcribe ?? voiceTranscriber;
+  const streamAsr = o.asr === "stream" ? o.streamAsr ?? sherpaStreamAsr({ modelDir: o.local?.streamDir ?? "", sherpaDir: o.local?.sherpaDir, ...(o.local?.threads ? { threads: o.local.threads } : {}) }) : null;
+  // A switch that was asked for and cannot load stops the service, so a run never claims a local ear it did not use.
+  if (o.asr === "stream" && !streamAsr) throw new Error("the streaming ear was switched on but its model or library did not load");
+  let base: SecondEar | undefined;
+  if (o.ears === "parakeet") {
+    const p = parakeetEar({ modelDir: o.local?.parakeetDir ?? "", sherpaDir: o.local?.sherpaDir, ledger, ...(o.local?.threads ? { threads: o.local.threads } : {}) });
+    if (!p) throw new Error("the Parakeet second ear was switched on but its model or library did not load");
+    base = p;
+  } else base = o.ears === "off" ? undefined : typeof o.ears === "function" ? o.ears : o.ears === "spark" ? sparkEar(client) : o.runtime?.secondEar;
+  // With a local first ear, Voice Transcribe reads every line that writes a number as well, so Meta still reads each number before it is written.
+  const secondEar = base && streamAsr ? allEars([base, transcriberEar(metaAsr, { ledger })]) : base;
+  const footprint = { first_ear: streamAsr ? streamAsr.model : "meta:muse-voice-transcribe-1.0", second_ear: typeof o.ears === "string" ? o.ears : base ? "given" : "off", meta_reading_on_numbers: !!(base && streamAsr) };
   // The patient each owner's agent is with: the page's patient when it changes, a spoken name, or an arrival it opened, the latest winning.
   const tracked = new Map<string, { target: EmrTarget | null; page: string }>();
   const onSubject = (owner: string, target: EmrTarget) => { tracked.set(owner, { target, page: tracked.get(owner)?.page ?? "" }); };
@@ -108,9 +133,10 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   const rt = new EmrRuntime({ ...(o.runtime ?? {}), storeRoot: o.storeRoot, client, port: o.port, ...(secondEar ? { secondEar } : {}), ...(o.log ? { log: o.log } : {}), onSubject, ...(o.emergencyClinicId ? { emergencyClinicId: o.emergencyClinicId } : {}), ...(prefs ? { preferences: prefs } : {}) });
   runtime = rt;
   rt.start();
-  const transcribe = o.transcribe ?? voiceTranscriber;
+  const transcribe = streamAsr ? streamAsr.transcribe : metaAsr;
   const origin = o.allowOrigin ?? "http://localhost:3311";
   const listening = new ListenSessions(rt, { ...(o.listen ?? {}), transcribe, ...(o.embed ? { embed: o.embed } : {}) });
+  const streamer = streamAsr ? new StreamListener(listening, streamAsr) : null;
   const wakeLog = join(o.storeRoot, "..", "wake.jsonl");
   // The patient each listening session started with keeps the session's own id, so a session that never moves reads as before.
   const firstSubject = new Map<string, string>();
@@ -192,6 +218,39 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     }
   };
 
+  // Audio frames as they are spoken, 16-bit mono PCM in the request body, read while it arrives; the answer lists the lines once the body ends.
+  const listenStream = async (req: IncomingMessage): Promise<[number, unknown]> => {
+    if (!streamer) throw new HttpError(404, "the streaming ear is off on this agent service");
+    const type = req.headers["content-type"] ?? "";
+    if (!type.startsWith("audio/pcm")) throw new HttpError(415, "send audio/pcm, 16-bit little-endian mono");
+    const q = new URL(req.url ?? "/", "http://serve").searchParams;
+    const b = parse(StreamMeta, { owner: q.get("owner") ?? undefined, session_id: q.get("session_id") ?? undefined, rate: q.get("rate") ?? undefined, ...(q.get("admissionId") ? { admissionId: q.get("admissionId") } : {}), ...(q.get("patientId") ? { patientId: q.get("patientId") } : {}) });
+    const page = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
+    const target = subjectFor(b.owner, page, b.session_id);
+    if (!target) throw new HttpError(400, "the streaming ear needs a patient open");
+    try { streamer.open({ owner: b.owner, target, session_id: b.session_id, rate: b.rate }); } catch (e) { throw new HttpError(409, e instanceof Error ? e.message : "already streaming"); }
+    let n = 0;
+    let odd: number | null = null;
+    let failed: unknown = null;
+    try {
+      for await (const c of req) {
+        const buf = c as Buffer;
+        n += buf.length;
+        if (n > STREAM_LIMIT) throw new HttpError(413, "the stream ran past its limit");
+        const bytes: Buffer = odd === null ? buf : Buffer.concat([Buffer.from([odd]), buf]);
+        const whole: number = bytes.length - (bytes.length % 2);
+        odd = whole < bytes.length ? bytes[bytes.length - 1]! : null;
+        const x = new Float32Array(whole / 2);
+        for (let i = 0; i < x.length; i++) x[i] = bytes.readInt16LE(i * 2) / 32768;
+        streamer.feed(b.session_id, x);
+      }
+    } catch (e) { failed = e; }
+    // The stream always closes, so what was heard before a failure is still handed on and the session can open again.
+    const ended = await streamer.end(b.session_id);
+    if (failed) throw failed;
+    return [202, { session_id: b.session_id, accepted: true, tracking: target, audio_ms: Math.round((n / 2 / b.rate) * 1000), ...ended }];
+  };
+
   const sayAudio = async (req: IncomingMessage): Promise<[number, unknown]> => {
     const type = req.headers["content-type"] ?? "";
     if (!type.startsWith("multipart/form-data")) throw new HttpError(415, "send multipart/form-data with an audio part");
@@ -229,7 +288,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const url = new URL(req.url ?? "/", "http://serve");
     const parts = url.pathname.split("/").filter(Boolean);
     const m = req.method ?? "GET";
-    if (m === "GET" && url.pathname === "/health") return [200, { ok: true, mode: client.mode, tasks: rt.taskIds().length, refused: rt.port.refusedCount(), kws: !!o.kwsDir, speaker_model: !!o.embed }];
+    if (m === "GET" && url.pathname === "/health") return [200, { ok: true, mode: client.mode, tasks: rt.taskIds().length, refused: rt.port.refusedCount(), kws: !!o.kwsDir, speaker_model: !!o.embed, ears: footprint }];
     if (m === "POST" && url.pathname === "/wake") {
       const b = parse(Wake, await json(req));
       mkdirSync(dirname(wakeLog), { recursive: true });
@@ -292,6 +351,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       return [200, { owner, target: tracked.get(owner)?.target ?? null }];
     }
     if (parts.length === 2 && parts[1] === "listen" && m === "POST") return listen(req);
+    if (parts.length === 3 && parts[1] === "listen" && parts[2] === "stream" && m === "POST") return listenStream(req);
     const id = parts[1] ?? "";
     const task = rt.task(id);
     if (parts.length === 2 && m === "GET") { if (!task) throw new HttpError(404, "unknown task"); return [200, rt.view(id)]; }

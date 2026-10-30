@@ -2,8 +2,8 @@ import { ModelError, type ChatMessage, type ModelClient, type ProviderId } from 
 import { cleanTranscript, measuresIn, numbersIn, readVitals, vitalsVocabulary, type Measure } from "@hey-pisgah/voice";
 import type { IntentRoute } from "./intent.js";
 
-// The second reading of one clip, from a model that hears the audio itself.
-export type EarReading = { text: string; provider: ProviderId; model: string; response_id: string | null; cost_usd: number; fallback_reason: string | null; calls?: number };
+// The second reading of one clip, from a model that hears the audio itself; `also` holds further readings that must each agree too.
+export type EarReading = { text: string; provider: ProviderId | "local"; model: string; response_id: string | null; cost_usd: number; fallback_reason: string | null; calls?: number; also?: EarReading[] };
 export type SecondEar = (wav: Uint8Array, meta: { run_id: string; task_id: string; line_id: string }) => Promise<EarReading>;
 
 // Spark Open on Modal took an audio_url data URI on 28 Oct; hosted Spark 1.3 refused audio_url and took input_audio, so it is the disclosed fallback.
@@ -81,6 +81,22 @@ export function compareReadings(values: Partial<Record<Measure, unknown>>, secon
     measures.push({ measure: m, first, second: agree ? first : said[0] ?? null, agree });
   }
   return { agree: measures.every((x) => x.agree), measures };
+}
+
+// Every reading a second ear returned, the first with its own cost and then each one in `also`; the top reading carries the sum.
+export function readingsOf(r: EarReading): EarReading[] {
+  const also = r.also ?? [];
+  if (!also.length) return [r];
+  const { also: _drop, ...first } = r;
+  const own = Math.max(0, Math.round((r.cost_usd - also.reduce((n, x) => n + x.cost_usd, 0)) * 1e9) / 1e9);
+  return [{ ...first, cost_usd: own, calls: Math.max(1, (r.calls ?? 1) - also.reduce((n, x) => n + (x.calls ?? 1), 0)) }, ...also];
+}
+
+// The rule over several readings: a value agrees only when every reading agrees on it, and the first reading that differs is the one shown.
+export function compareAll(values: Partial<Record<Measure, unknown>>, r: EarReading, guessed: ReadonlySet<Measure> = new Set()): EarsCheck {
+  const checks = readingsOf(r).map((x) => compareReadings(values, x.text, guessed));
+  const measures = checks[0]!.measures.map((m, i) => checks.find((c) => !c.measures[i]!.agree)?.measures[i] ?? m);
+  return { agree: checks.every((c) => c.agree), measures };
 }
 
 export type Choice = { measures: Measure[]; options: Record<string, string>[]; yes: boolean };
