@@ -7,7 +7,7 @@ import { UNKNOWN_ID } from "../src/unknown.js";
 import { LEARNED, LONG, SHORT, eventId, hyp, pred, session } from "./helpers.js";
 
 const two = (s: Session) => { const h1 = hyp(s); const h2 = hyp(s, { competing: [h1], if_true: pred("no_difference", 10), if_false: pred("intervention_lt_control", 30) }); return { h1, h2 }; };
-const req = (h1: string, h2: string, o: Record<string, unknown> = {}) => ({ hypothesis_id: h1, distinguishes: [h2], base: { version: 1 }, ops: LEARNED, case_ids: [...LONG, SHORT], note: "n", ...o });
+const req = (h1: string, h2: string, o: Record<string, unknown> = {}) => ({ hypothesis_id: h1, distinguishes: [h2], base: { version: 1 }, ops: LEARNED, case_ids: [...LONG, SHORT], note: "n", expected_change: { step: "st06", behaviour: "start_time" }, ...o });
 const proposal = (o: Record<string, unknown> = {}) => ({ parent_proposal_id: null, base_version: 1, ops: LEARNED, scope: { wards: "all", condition: null }, rationale: "r", evidence: { hypothesis_ids: [], experiment_ids: [], event_ids: [] }, expected_effects: [{ metric: "post_signoff_wait_min", direction: "down", subgroup_condition: null }], known_exceptions: [], ...o });
 
 describe("matched experiments", () => {
@@ -78,55 +78,78 @@ describe("matched experiments", () => {
 
   it("validates in order and locks out after three refused requests", () => {
     const s = session();
-    expect(JSON.stringify(s.runExperiment(req("h-00000000", "h-00000000", { distinguishes: [] })))).toBe(JSON.stringify(UNKNOWN_ID));
+    expect(JSON.stringify(s.runExperiment(req("h-00000000", "h-00000000")))).toBe(JSON.stringify(UNKNOWN_ID));
     expect(s.counters.invalid_requests).toBe(1);
-    const h1 = hyp(s);
-    expect(s.runExperiment(req(h1, h1, { distinguishes: [] })).ok).toBe(true);
-    expect(JSON.stringify(s.runExperiment(req(h1, h1, { distinguishes: [], case_ids: ["c-zz99zz99"] })))).toBe(JSON.stringify(UNKNOWN_ID));
+    const { h1, h2 } = two(s);
+    expect(s.runExperiment(req(h1, h2)).ok).toBe(true);
+    expect(JSON.stringify(s.runExperiment(req(h1, h2, { case_ids: ["c-zz99zz99"] })))).toBe(JSON.stringify(UNKNOWN_ID));
     expect(s.counters.invalid_requests).toBe(2);
-    const fence = s.runExperiment(req(h1, h1, { distinguishes: [], ops: [{ op: "remove_soft_edge", edge_id: "e19" }], no_pair_reason: "only one reading so far" }));
+    const fence = s.runExperiment(req(h1, h2, { ops: [{ op: "remove_soft_edge", edge_id: "e19" }] }));
     expect(fence.error).toBe("invalid_request");
     expect(fence.stage).toBe("static");
     expect(s.locked).toBe(true);
     expect(s.stop?.reason).toBe("lockout");
-    expect(s.runExperiment(req(h1, h1, { distinguishes: [] })).error).toBe("locked_out");
+    expect(s.runExperiment(req(h1, h2)).error).toBe("locked_out");
     expect(readStream(s.o.storeRoot, STREAMS.experiments).map((e) => e.record_type)).toEqual(["experiment.invalid", "experiment.completed", "experiment.invalid", "experiment.invalid"]);
     s.close();
   });
 
-  it("refuses an experiment when no active hypothesis is registered", () => {
+  it("lints before it runs: a change the engine cannot act on, a request that tells no cited pair apart, and a repeat are refused with the reason as data", () => {
     const s = session();
-    const h1 = hyp(s);
-    expect(s.setStatus({ hypothesis_id: h1, status: "rejected", experiment_ids: [], evidence_event_ids: [eventId(SHORT, "st16")], note: "record-only rejection" }).ok).toBe(true);
-    const r = s.runExperiment(req(h1, h1, { distinguishes: [] }));
-    expect(r.error).toBe("preregistration");
-    expect(s.counters.invalid_requests).toBe(1);
-    hyp(s);
-    expect(s.runExperiment(req(h1, h1, { distinguishes: [] })).ok).toBe(true);
+    const { h1, h2 } = two(s);
+    const noop = s.runExperiment(req(h1, h2, { ops: [{ op: "remove_soft_edge", edge_id: "e04" }] }));
+    expect(noop.error).toBe("lint_refused");
+    expect(noop.reasons).toEqual(["no_op"]);
+    const rules = (noop.lint as { rules: { step: string; start_before: string; start_after: string; start_equivalent: boolean }[] }).rules;
+    expect(rules.find((r) => r.step === "st06")).toMatchObject({ start_equivalent: true });
+    expect(rules.find((r) => r.step === "st06")!.start_after).toContain("done st05");
+    const alone = s.runExperiment(req(h1, h1, { distinguishes: [] }));
+    expect(alone.reasons).toEqual(["no_discrimination"]);
+    expect(s.runExperiment(req(h1, h2)).ok).toBe(true);
+    const again = s.runExperiment(req(h1, h2));
+    expect(again.reasons).toEqual(["already_run"]);
+    expect(s.counters).toMatchObject({ lint_refusals: 3, invalid_requests: 0, experiments_used: 1 });
+    expect(readStream(s.o.storeRoot, STREAMS.experiments).filter((e) => e.record_type === "experiment.lint_refused").length).toBe(3);
+    expect(String(noop.message)).not.toMatch(/h-[0-9a-f]{8}|c-[0-9a-f]{8}/);
     s.close();
   });
 
-  it("needs a distinguishable pair or a stated reason before the second experiment, and counts each refusal apart", () => {
+  it("lints an operation on a step no operation may target, uncounted, so a find is never followed by a lockout for it", () => {
     const s = session();
-    const h1 = hyp(s);
-    expect(s.runExperiment(req(h1, h1, { distinguishes: [] })).ok).toBe(true);
-    const overlap = hyp(s, { competing: [h1], if_true: pred("intervention_lt_control", 20), if_false: pred("no_difference", 5) });
-    expect(s.distinguishablePairs()).toEqual([]);
-    const refused = s.runExperiment(req(h1, overlap));
-    expect(refused.error).toBe("no_distinguishable_pair");
-    expect(String(refused.message)).not.toMatch(/h-[0-9a-f]{8}|c-[0-9a-f]{8}/);
-    expect(s.counters).toMatchObject({ pair_refusals: 1, invalid_requests: 0, experiments_used: 1 });
-    expect(s.runExperiment(req(h1, overlap, { no_pair_reason: "  " })).error).toBe("no_distinguishable_pair");
-    expect(s.counters.pair_refusals).toBe(2);
-    const withReason = s.runExperiment(req(h1, overlap, { no_pair_reason: "both readings predict a fall in the same cases" }));
-    expect(withReason.ok).toBe(true);
-    expect(s.experiments.get(String(withReason.experiment_id))!.no_pair_reason).toBe("both readings predict a fall in the same cases");
-    const h3 = hyp(s, { competing: [h1], if_true: pred("no_difference", 10, "post_signoff_wait_min", [LONG[0]]), if_false: pred("intervention_lt_control", 30) });
-    expect(s.distinguishablePairs()).toEqual([[h1, h3], [overlap, h3]]);
-    expect(s.runExperiment(req(h1, h3)).ok).toBe(true);
-    const rows = readStream(s.o.storeRoot, STREAMS.experiments).map((e) => e.record_type);
-    expect(rows.filter((r) => r === "experiment.refused_pair").length).toBe(2);
-    expect(s.counters).toMatchObject({ pair_refusals: 2, no_pair_reasons: 1, experiments_used: 3, invalid_requests: 0 });
+    const { h1, h2 } = two(s);
+    expect(s.runExperiment(req(h1, h2)).ok).toBe(true);
+    const retrigger = [{ op: "remove_soft_edge", edge_id: "e05" }, { op: "set_prep_trigger", target: { step: "st14" }, when: { after: { step: "st08" } } }];
+    for (let i = 0; i < 4; i++) {
+      const r = s.runExperiment(req(h1, h2, { ops: retrigger, case_ids: [LONG[i % 3]!] }));
+      expect(r.error).toBe("lint_refused");
+      expect(r.reasons).toEqual(["not_preparable"]);
+      expect((r.lint as { not_preparable: { op_index: number; step: string }[] }).not_preparable).toEqual([{ op_index: 1, step: "st14" }]);
+    }
+    expect(s.counters).toMatchObject({ invalid_requests: 0, lint_refusals: 4, experiments_used: 1 });
+    expect(s.locked).toBe(false);
+    expect(s.stop).toBeNull();
+    s.close();
+  });
+
+  it("names the expected behaviour, returns a receipt, and tells a delivered change from an undelivered one", () => {
+    const s = session();
+    const { h1, h2 } = two(s);
+    const moved = s.runExperiment(req(h1, h2));
+    const r = moved.receipt as { delivered: string; outcome: string; target: { case_id: string; moved: boolean; control: { started: number }; intervention: { started: number } }[]; first_divergence: { first: unknown }[]; rules_changed: { edges_removed: string[]; triggers_changed: { step: string }[] } };
+    expect(r.rules_changed.edges_removed).toEqual(["e04 st05>st06 start soft"]);
+    expect(r.rules_changed.triggers_changed.map((t) => t.step)).toEqual(["st06"]);
+    expect(r.target.filter((t) => LONG.includes(t.case_id as never)).every((t) => t.moved && t.intervention.started < t.control.started)).toBe(true);
+    expect(r.outcome).toBe("delivered_outcome_better");
+    expect(r.first_divergence.every((d) => d.first !== null)).toBe(true);
+    const stuck = s.runExperiment(req(h1, h2, { ops: [{ op: "move_step_after", step: { step: "st06" }, after: { step: "st01" }, gate: "start" }] }));
+    const sr = stuck.receipt as { delivered: string; outcome: string };
+    expect(sr).toMatchObject({ delivered: "0 of 4 cases", outcome: "not_delivered" });
+    const stored = s.experiments.get(String(stuck.experiment_id))!;
+    expect(stored.delivered).toBe(false);
+    expect(Object.values(stored.prediction_check.after!.per_hypothesis).every((v) => v.landed === "inconclusive")).toBe(true);
+    expect(stored.prediction_check.after!.contradicted).toEqual([]);
+    expect(s.setStatus({ hypothesis_id: h1, status: "rejected", experiment_ids: [String(stuck.experiment_id)], evidence_event_ids: [], note: "no change" }).error).toBe("status_refused");
+    expect(s.counters).toMatchObject({ delivered: 1, not_delivered: 1, informative: 1 });
     s.close();
   });
 
@@ -146,7 +169,8 @@ describe("matched experiments", () => {
   it("stops at eight experiments", () => {
     const s = session();
     const { h1, h2 } = two(s);
-    for (let i = 0; i < 8; i++) expect(s.runExperiment(req(h1, h2, { case_ids: [LONG[i % 3]!] })).ok).toBe(true);
+    const sets = [[LONG[0]], [LONG[1]], [LONG[2]], [LONG[0], LONG[1]], [LONG[0], LONG[2]], [LONG[1], LONG[2]], [...LONG], [LONG[0], SHORT]];
+    for (const c of sets) expect(s.runExperiment(req(h1, h2, { case_ids: c })).ok).toBe(true);
     expect(s.runExperiment(req(h1, h2)).error).toBe("budget_exhausted");
     s.close();
   });

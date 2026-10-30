@@ -13,6 +13,8 @@ import { cleanTranscript, measuresIn, type Measure, type Rewrite } from "@hey-pi
 import { answerChoice, compareReadings, disagreementQuestion, normValue, quotedQuestion, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
 import { DOCUMENTATION_KINDS, ORDER_KINDS, recordOf, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
+import { EMERGENCY_KIND, EMERGENCY_LINE, RULE_ONLY_KINDS, emergencyReason, identityFrom, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
+import { screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
 
 export type EmrActionState = "proposed" | "sent" | "acknowledged" | "completed" | "refused" | "cancelled" | "failed";
 export type EmrAction = {
@@ -28,6 +30,8 @@ export type EmrAction = {
   ears: boolean;
   // A voice order waits for the owner's own matched voice, or for the spoken confirmation a controlled drug needs; the lines that gave them.
   awaiting: "owner_voice" | "confirm" | null; authorised_by_line: string | null; confirmed_by_line: string | null;
+  // The page that shows this work, bound to the action's encounter and command id.
+  screen: ScreenPlan | null;
 };
 // Where an ambient line came from: its listening session, the chunks that made it, and when the speech ended.
 export type AmbientMeta = { session_id: string; seqs: number[]; raw_text: string; ended_at: string; final_at: string; trailing_silence_ms: number; finished_by: string };
@@ -64,6 +68,8 @@ export type EmrTask = {
   ears: EarsRecord[];
   version: EmrVersionView | null;
   obligations: EmrObligation[]; speed: SpeedRow[];
+  // Spoken identities held for the front desk, and whether the patient is still unnamed.
+  identities: EmrIdentityHold[]; unidentified: boolean; label: string;
 };
 // The strip's view of one task.
 export type EmrTaskView = {
@@ -73,6 +79,8 @@ export type EmrTaskView = {
     line_id: string; args: Record<string, unknown>; proposed_at: string; written_at: string | null;
     proof?: { record_id: string; record_version: number; event_ids: string[] };
     report?: string; draft?: string; unverified?: true; awaiting?: "owner_voice" | "confirm"; authorised_by_line?: string;
+    // The page the strip opens and fills for this action; command_id and owner_id bind it through navigation.
+    screen?: ScreenPlan & { command_id: string; owner_id: string };
   }[];
   questions: { question_id: string; text: string; answers?: string[] }[];
   transcript: { id: string; line_id: string; text: string; at: string; source: "text" | "audio"; decided: boolean; class: SpeechClass | null; classes: SpeechClass[]; kept: boolean; ambient?: AmbientMeta; speaker?: SpeakerRecord }[];
@@ -92,6 +100,7 @@ export type EmrTaskView = {
   // Held work with its time or condition, and the speed of every verified action with the errors beside it.
   obligations: EmrObligation[];
   speed: { rows: SpeedRow[]; p50_ms: number | null; p90_ms: number | null; by_kind: Record<string, { n: number; p50_ms: number | null; p90_ms: number | null }>; errors: { failed: number; refused: number; unverified: number } };
+  identities: EmrIdentityHold[]; unidentified: boolean;
   updated_at: string;
 };
 
@@ -119,6 +128,10 @@ export type EmrRuntimeOptions = {
   speed?: Partial<SpeedLevers>;
   wallNow?: () => Date;
   log?: (line: string) => void;
+  // Called when the agent moves to the patient the clinician is with: a spoken name or an arrival it opened.
+  onSubject?: (owner: string, target: EmrTarget, by: "spoken" | "emergency") => void;
+  // The A&E clinic a spoken emergency opens its arrival on.
+  emergencyClinicId?: string;
 };
 
 const OPEN_ACTION: ReadonlySet<EmrActionState> = new Set(["proposed", "sent", "acknowledged"]);
@@ -135,7 +148,8 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       visit_id: (x["visit_id"] as string | null | undefined) ?? null,
       run_id: String(x["run_id"]), goal: "", state: "running", reason: null, actions: new Map(), order: [], lines: [], questions: [], notes: [], refusals: [],
       calls: 0, usd: 0, fallbacks: 0, created_at: e.wall_at, updated_at: e.wall_at,
-      watch: null, changes: [], offered: [], pages: [], pause: null, digests: [], ears: [], version: null, obligations: [], speed: []
+      watch: null, changes: [], offered: [], pages: [], pause: null, digests: [], ears: [], version: null, obligations: [], speed: [],
+      identities: [], unidentified: !!x["unidentified"], label: String(x["label"] ?? "")
     };
   }
   if (!t) return null;
@@ -191,7 +205,8 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
         action_id: String(x["action_id"]), kind: String(x["kind"] ?? OBSERVATION_KIND), args: x["args"] as WorkArgs, summary: String(x["summary"]), line_id: String(x["line_id"]),
         corrects_action_id: (x["corrects_action_id"] as string | null) ?? null, state: "proposed", intent_key: null, written: null, proof: null, reason: null,
         proposed_at: e.wall_at, written_at: null, completed_at: null, report: null, draft: null, unverified: false, ears: !!x["ears"],
-        awaiting: (x["awaiting"] as EmrAction["awaiting"] | undefined) ?? null, authorised_by_line: (x["authorised_by_line"] as string | null | undefined) ?? null, confirmed_by_line: null
+        awaiting: (x["awaiting"] as EmrAction["awaiting"] | undefined) ?? null, authorised_by_line: (x["authorised_by_line"] as string | null | undefined) ?? null, confirmed_by_line: null,
+        screen: (x["screen"] as ScreenPlan | undefined) ?? null
       });
       t.order.push(String(x["action_id"]));
       break;
@@ -221,6 +236,8 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       break;
     }
     case "page.received": t.pages.push(x["page"] as InboxPage); break;
+    case "task.subject": t.patient_id = (x["patient_id"] as string | null) ?? t.patient_id; t.visit_id = (x["visit_id"] as string | null) ?? t.visit_id; t.unidentified = x["unidentified"] === undefined ? t.unidentified : !!x["unidentified"]; break;
+    case "identity.held": t.identities.push(x["identity"] as EmrIdentityHold); break;
     case "obligation.held":
       t.obligations.push({
         obligation_id: String(x["obligation_id"]), line_id: String(x["line_id"]), kind: String(x["kind"]), clause: (x["clause"] as Record<string, unknown>) ?? {}, title: String(x["title"] ?? ""),
@@ -253,7 +270,8 @@ export function viewOf(t: EmrTask): EmrTaskView {
       line_id: a.line_id, args: Object.fromEntries(Object.entries(a.args).filter(([k]) => k !== "admission_id")), proposed_at: a.proposed_at, written_at: a.written_at,
       ...(a.proof ? { proof: { record_id: a.proof.record_id, record_version: a.proof.record_version, event_ids: a.proof.event_ids } } : {}),
       ...(a.report ? { report: a.report } : {}), ...(a.draft ? { draft: a.draft } : {}), ...(a.unverified ? { unverified: true as const } : {}), ...(a.awaiting ? { awaiting: a.awaiting } : {}),
-      ...(a.authorised_by_line && a.authorised_by_line !== a.line_id ? { authorised_by_line: a.authorised_by_line } : {})
+      ...(a.authorised_by_line && a.authorised_by_line !== a.line_id ? { authorised_by_line: a.authorised_by_line } : {}),
+      ...(a.screen ? { screen: { ...a.screen, encounter: { patient_id: a.screen.encounter.patient_id ?? t.patient_id, visit_id: a.screen.encounter.visit_id ?? t.visit_id, admission_id: a.screen.encounter.admission_id ?? (t.admission_id || null) }, command_id: a.action_id, owner_id: t.owner } } : {})
     })),
     questions: t.questions.filter((q) => q.answered_by === null).map((q) => ({ question_id: q.question_id, text: q.text, ...(q.choice ? { answers: answersOf(q.choice) } : {}) })),
     transcript: t.lines.map((l) => ({ id: l.id, line_id: l.id, text: l.kept ? l.text : "", at: l.at, source: l.source, decided: l.decided, class: primaryClass(l.classes) as SpeechClass | null, classes: l.classes, kept: l.kept, ...(l.ambient ? { ambient: l.kept ? l.ambient : { ...l.ambient, raw_text: "" } } : {}), ...(l.speaker ? { speaker: l.speaker } : {}) })),
@@ -263,7 +281,7 @@ export function viewOf(t: EmrTask): EmrTaskView {
     asked: t.questions.map((q) => ({ question_id: q.question_id, text: q.text, line_id: q.line_id, answered_by: q.answered_by, at: q.at })),
     refusals: t.refusals, watching: t.watch, changes: t.changes, pages: t.pages, pause: t.pause, digests: t.digests,
     calls: t.calls, usd: Math.round(t.usd * 1e6) / 1e6, version: t.version,
-    obligations: t.obligations, speed: speedSummary(t),
+    obligations: t.obligations, speed: speedSummary(t), identities: t.identities, unidentified: t.unidentified,
     updated_at: t.updated_at
   };
 }
@@ -548,11 +566,11 @@ export class EmrRuntime {
     return `u-${shortHash(owner, text, this.wall().toISOString(), this.lineCounter, process.pid)}`;
   }
 
-  private openTask(owner: string, ctx: EmrContext): Live {
+  private openTask(owner: string, ctx: EmrContext, extra: Record<string, unknown> = {}): Live {
     const n = listStreams(this.o.storeRoot, "emr").length;
-    const id = `t-${shortHash(owner, ctx.admission_id, n, this.wall().toISOString())}`;
+    const id = `t-${shortHash(owner, ctx.admission_id, n, this.wall().toISOString(), ...(extra["entry"] ? [String(extra["entry"])] : []))}`;
     const stream = openStream(this.o.storeRoot, `emr/${id}`, { writer: true });
-    stream.append("emr.task.opened", { task_id: id, owner, admission_id: ctx.admission_id, patient_id: ctx.patient_id, ...(ctx.visit_id ? { visit_id: ctx.visit_id } : {}), run_id: `run-${shortHash(id, "run")}` }, Z);
+    stream.append("emr.task.opened", { task_id: id, owner, admission_id: ctx.admission_id, patient_id: ctx.patient_id, ...(ctx.visit_id ? { visit_id: ctx.visit_id } : {}), run_id: `run-${shortHash(id, "run")}`, label: ctx.label.slice(0, 120), ...extra }, Z);
     const l: Live = this.liveOf(stream);
     this.live.set(id, l);
     return l;
@@ -594,7 +612,21 @@ export class EmrRuntime {
       if (l.task.owner !== s.owner) throw new Error("the task belongs to another owner");
       ctx = await this.o.port.resolve(this.subjectOf(l.task), prov);
     } else {
-      ctx = s.context && s.context.admission_id === s.target.admission_id ? s.context : await this.o.port.resolve(s.target, prov);
+      // "hey Pisgah, emergency" heard in a transcript opens an arrival, unless the device already did within the last ten seconds.
+      if (EMERGENCY_LINE.test(text) && this.kinds(s.owner).includes(EMERGENCY_KIND)) {
+        const recent = [...this.live.values()].some((x) => x.task.owner === s.owner && x.task.unidentified && Date.now() - Date.parse(x.task.created_at) < 10_000);
+        if (!recent) {
+          const r = await this.emergency(s.owner, { text, spoken_at: s.ambient?.ended_at ?? spokenAt, source: s.source ?? "text", args: { unidentified_ref: unidentifiedRef(new Date(spokenAt)), reason: emergencyReason(text), ...(this.o.emergencyClinicId ? { clinic_id: this.o.emergencyClinicId } : {}) } });
+          return { task_id: r.task_id, line_id: r.line_id };
+        }
+      }
+      // A line naming another of the owner's open patients moves the agent to that patient, never silently stopping.
+      const known = [...this.live.values()].map((x) => x.task).filter((t) => t.owner === s.owner && !CLOSED_TASK.has(t.state) && t.label && (t.admission_id || t.patient_id))
+        .map((t) => ({ label: t.label, target: t.admission_id ? { admission_id: t.admission_id } : { patient_id: t.patient_id! } }));
+      const moved = spokenPatient(text, known);
+      const target = moved && JSON.stringify(moved.target) !== JSON.stringify(s.target) ? moved.target : s.target;
+      if (target !== s.target) this.o.onSubject?.(s.owner, target, "spoken");
+      ctx = target === s.target && s.context && s.context.admission_id === s.target.admission_id ? s.context : await this.o.port.resolve(target, prov);
       l = this.taskFor(s.owner, ctx) ?? this.openTask(s.owner, ctx);
     }
     if (CLOSED_TASK.has(l.task.state)) throw new Error(`the task is ${l.task.state}`);
@@ -632,6 +664,15 @@ export class EmrRuntime {
     if (live.task.state === "paused" && live.task.reason === "called_away") {
       if (SPOKEN_RESUME.test(text)) this.enqueue(live, async () => { await this.resume(live, lineId, prov); this.afterLine(live, lineId, true); });
       else { this.append(live, "line.handled", { line_id: lineId, as: "heard_while_paused" }); this.afterLine(live, lineId, false); }
+      return { task_id: live.task.task_id, line_id: lineId };
+    }
+    // A spoken name for an unnamed patient is held as an obligation for the front desk, by rule and with no model call.
+    const named = live.task.unidentified ? identityFrom(text) : null;
+    // The naming line is handled whole by rule; anything else said in it waits for the next line.
+    if (named) {
+      this.holdIdentity(live, lineId, named.name, named.phone);
+      this.afterLine(live, lineId, true);
+      this.settle(live, "identity_held");
       return { task_id: live.task.task_id, line_id: lineId };
     }
     if (live.task.state !== "running") this.setState(live, "running", `heard_${lineId}`);
@@ -774,7 +815,7 @@ export class EmrRuntime {
 
   // The gate input for a line as the task stands now; a call started before its turn leaves undecided lines out of the recent words.
   private gateInput(t: EmrTask, line: { id: string; text: string }, ctx: EmrContext, early: boolean): GateInput {
-    const kinds = this.kinds(t.owner);
+    const kinds = this.kinds(t.owner).filter((k) => !RULE_ONLY_KINDS.has(k));
     const openQ = t.questions.filter((q) => q.answered_by === null).at(-1) ?? null;
     const wide = isWide(kinds);
     const names = wide ? this.o.port.names?.() : undefined;
@@ -1333,7 +1374,8 @@ export class EmrRuntime {
     const ears = this.startCheck(l, actionId, lineId, own);
     if (kind === "prescribe" && typeof args["dose"] === "string") this.startDoseCheck(l, actionId, lineId, args["dose"]);
     const anchor = awaiting ? null : this.anchorOf(t, lineId);
-    this.append(l, "action.proposed", { action_id: actionId, kind, args, summary, line_id: lineId, corrects_action_id: correctsId, hold_ms: this.o.holdMs ?? 0, ...this.holdUntil(anchor), ...(ears ? { ears: true } : {}), ...(awaiting ? { awaiting } : {}), ...(authorisedBy ? { authorised_by_line: authorisedBy } : {}) });
+    const screen = this.screenOf(t, kind, args);
+    this.append(l, "action.proposed", { action_id: actionId, kind, args, summary, line_id: lineId, corrects_action_id: correctsId, hold_ms: this.o.holdMs ?? 0, ...this.holdUntil(anchor), ...(ears ? { ears: true } : {}), ...(awaiting ? { awaiting } : {}), ...(authorisedBy ? { authorised_by_line: authorisedBy } : {}), ...(screen ? { screen } : {}) });
     if (awaiting === "owner_voice") this.ask(l, lineId, `Held: ${summary}. ${who ? "I could not match the voice to you" : "I heard no voice to match"}, so it waits until you say yes yourself.`, null, { kind: "authorise", action_id: actionId });
     if (awaiting === "confirm") this.ask(l, lineId, `${summary}. This is a controlled drug: say confirm to send it.`, null, { kind: "confirm", action_id: actionId });
     this.settle(l, "proposed");
@@ -1768,6 +1810,12 @@ export class EmrRuntime {
     }
     this.append(l, "action.completed", { action_id: actionId, proof });
     this.append(l, "speed.logged", { row: this.speedRow(t, a, verifyMs) });
+    // An unnamed arrival the agent opened becomes the task's patient and arrival, so later words reach it.
+    if (a.kind === EMERGENCY_KIND && EmrId.safeParse(w.record_id).success) {
+      const visit = w.event_ids.map((e) => /^visit:(.+)$/.exec(e)?.[1]).find((v) => v && EmrId.safeParse(v).success) ?? null;
+      this.append(l, "task.subject", { patient_id: w.record_id, visit_id: visit, unidentified: true, by: actionId });
+      this.o.onSubject?.(t.owner, { patient_id: w.record_id }, "emergency");
+    }
     // An admission the agent requested or made becomes the task's subject, so later words reach the same task and held work can resume.
     if ((a.kind === "request_admission" || a.kind === "admit_patient") && !t.admission_id && EmrId.safeParse(w.record_id).success) {
       this.append(l, "task.linked", { admission_id: w.record_id, by: actionId });
@@ -1777,6 +1825,51 @@ export class EmrRuntime {
     if (a.kind === "draft_handover" && a.draft) this.ask(l, a.line_id, `Handover draft for your review: "${a.draft.slice(0, 900)}" Say save the handover to record it, or tell me what to change.`);
     if (a.kind === "prepare_bill" && a.report) this.note(l, a.report);
     this.settle(l, "proved");
+  }
+
+  // The page that shows a kind of work for this owner, bound to the task's encounter.
+  private screenOf(t: EmrTask, kind: string, args: WorkArgs): ScreenPlan | null {
+    const page = this.o.port.screenPage?.(t.owner, kind);
+    return screenFor(kind, args, { patient_id: t.patient_id, visit_id: t.visit_id, admission_id: t.admission_id }, page && (SCREEN_PAGES as readonly string[]).includes(page) ? (page as ScreenPage) : undefined, (p) => this.o.port.pageHref?.(p));
+  }
+
+  // Holds a spoken identity on the encounter as one open obligation; completing it is the front desk's, so nothing is written to the record here.
+  private holdIdentity(l: Live, lineId: string, name: string, phone: string | null): void {
+    const t = l.task;
+    const ob: EmrIdentityHold = {
+      obligation_id: `o-${shortHash(t.task_id, lineId, "identity", t.identities.length + 1)}`, kind: "identity_pending", state: "open",
+      encounter: { patient_id: t.patient_id, visit_id: t.visit_id }, name, phone, said_by: t.owner, line_id: lineId, at: t.lines.find((x) => x.id === lineId)?.at ?? this.wall().toISOString(), completes_by: "receptionist"
+    };
+    this.append(l, "line.ruled", { line_id: lineId, classes: ["instruction"], as: "identity" });
+    this.append(l, "identity.held", { identity: ob });
+    // The obligation rests on the line, so its words are kept as the evidence now.
+    const line = t.lines.find((x) => x.id === lineId);
+    if (line && !line.kept) this.append(l, "line.kept", { line_id: lineId, text: line.text, raw_text: line.ambient?.raw_text ?? null });
+    this.note(l, `Held for the front desk to register: ${name}${phone ? `, phone ${phone}` : ", no phone yet"}.`);
+  }
+
+  // "hey Pisgah, emergency" with no patient open: one task and one unnamed arrival through the door, the spoken line its evidence, with no model call.
+  async emergency(owner: string, e: { text: string; spoken_at: string; args: EmergencyArgs; source?: "text" | "audio"; wake?: Record<string, unknown> }): Promise<{ task_id: string; line_id: string; action_id: string }> {
+    if (this.stopped) throw new Error("runtime stopped");
+    if (!this.kinds(owner).includes(EMERGENCY_KIND)) throw new Error("this owner's agent does not open arrivals");
+    const ctx: EmrContext = { admission_id: "", patient_id: null, visit_id: null, label: "Unnamed arrival", facts: {}, keywords: [] };
+    const l = this.openTask(owner, ctx, { entry: "emergency", unidentified: true });
+    const lineId = this.nextLineId(owner, e.text);
+    this.append(l, "utterance.heard", { line_id: lineId, text: e.text.slice(0, 1000), source: e.source ?? "audio", spoken_at: e.spoken_at, entry: "emergency", ...(e.wake ? { wake: e.wake } : {}) });
+    this.append(l, "line.ruled", { line_id: lineId, classes: ["instruction"], as: "emergency" });
+    const actionId = `a-${shortHash(l.task.task_id, lineId, 1)}`;
+    const screen = this.screenOf(l.task, EMERGENCY_KIND, e.args);
+    this.append(l, "action.proposed", { action_id: actionId, kind: EMERGENCY_KIND, args: e.args, summary: `Open an unnamed emergency arrival: ${e.args.unidentified_ref}`, line_id: lineId, corrects_action_id: null, hold_ms: 0, ...(screen ? { screen } : {}) });
+    this.setState(l, "running", `heard_${lineId}`);
+    this.enqueue(l, () => this.execute(l, actionId));
+    return { task_id: l.task.task_id, line_id: lineId, action_id: actionId };
+  }
+
+  // The owner's open tasks with their patients, newest first, so a spoken name can move the agent to the right one.
+  openSubjects(owner: string): { task_id: string; target: EmrTarget; unidentified: boolean; at: string }[] {
+    return [...this.live.values()].map((x) => x.task).filter((t) => t.owner === owner && !CLOSED_TASK.has(t.state) && (t.admission_id || t.patient_id))
+      .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1))
+      .map((t) => ({ task_id: t.task_id, target: t.admission_id ? { admission_id: t.admission_id } : { patient_id: t.patient_id! }, unidentified: t.unidentified, at: t.updated_at }));
   }
 
   // The note's sections from every clerking write already verified, then this one, each section's lines in the order spoken.

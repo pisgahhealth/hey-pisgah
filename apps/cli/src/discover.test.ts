@@ -13,7 +13,7 @@ describe("discover and check:discovery", () => {
   it("runs a mock adaptive discovery through the evaluator's validation pipeline", async () => {
     const store = temp();
     const lines: string[] = [];
-    const code = await discoverCommand(root, ["--arm", "adaptive", "--budget-usd", "1", "--max-calls", "20", "--store", store, "--run-id", "run-c11aaaaa"], { mode: "mock", out: (l) => lines.push(l), validate: async (s) => { await runValidationStream(s); } });
+    const code = await discoverCommand(root, ["--arm", "adaptive", "--effort", "medium", "--budget-usd", "1", "--max-calls", "20", "--store", store, "--run-id", "run-c11aaaaa"], { mode: "mock", out: (l) => lines.push(l), validate: async (s) => { await runValidationStream(s); } });
     expect(code).toBe(0);
     expect(lines[0]).toContain("stop dev_valid_proposal");
     const reports = readStream(store, STREAMS.validations).map((e) => (e.payload as { report: { status: string } }).report.status);

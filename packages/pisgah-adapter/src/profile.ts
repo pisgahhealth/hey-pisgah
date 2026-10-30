@@ -27,7 +27,9 @@ const BeforeSpec = ReadSpec.extend({ list: z.string().regex(/^[A-Za-z0-9_]+((\.|
 const WriteOp = z.strictObject({
   method: z.literal("POST"), path: PathTpl, body: z.record(z.string(), z.json()),
   // Where the record id is in the answer; store names the event; positive names a count that must be above zero.
-  ack: z.strictObject({ id_path: Dotted.optional(), writes_path: Dotted.optional(), primary_store: z.string().optional(), store: z.string().min(1), positive: Dotted.optional() }),
+  ack: z.strictObject({ id_path: Dotted.optional(), writes_path: Dotted.optional(), primary_store: z.string().optional(), store: z.string().min(1), positive: Dotted.optional(),
+    // Other records the answer names, by store, such as the arrival opened with a new patient.
+    also: z.record(z.string().regex(/^[a-z_]{1,40}$/), Dotted).optional() }),
   before: z.array(BeforeSpec).max(3).optional(),
   proof: ProofSpec.optional(),
   // Why no read can show this write; the agent then reports it sent but not verified.
@@ -41,7 +43,9 @@ export const OwnerSpec = z.strictObject({
   watches: z.array(z.string()).default([]), inbox: z.boolean().default(false),
   // The admission read this owner's role may make, when it is not the common one.
   context: ReadSpec.extend({ label: Dotted, facts: z.record(z.string(), Dotted).default({}) }).optional(),
-  offers: z.array(z.strictObject({ fact: z.string().min(1), equals: z.string().min(1), kind: z.string().min(1), ask: z.string().min(1).max(300) })).default([])
+  offers: z.array(z.strictObject({ fact: z.string().min(1), equals: z.string().min(1), kind: z.string().min(1), ask: z.string().min(1).max(300) })).default([]),
+  // The page this owner sees a kind of work on, when it is not the kind's usual page.
+  screens: z.record(z.string(), z.enum(["triage", "doctor_workspace", "admissions", "reception_identity"])).default({})
 });
 export type OwnerSpec = z.infer<typeof OwnerSpec>;
 
@@ -100,7 +104,9 @@ export const DoorProfile = z.strictObject({
   vocabulary: z.array(z.string().min(1).max(60)).max(60).default([]),
   // Only the sandbox integration test reads this block.
   sandbox: z.record(z.string(), z.json()).optional(),
-  versions: VersionsSpec.optional()
+  versions: VersionsSpec.optional(),
+  // Where each page the strip can operate lives in the EMR.
+  pages: z.partialRecord(z.enum(["triage", "doctor_workspace", "admissions", "reception_identity"]), z.string().regex(/^\/[a-z0-9/_-]*$/)).default({})
 });
 export type DoorProfile = z.infer<typeof DoorProfile>;
 

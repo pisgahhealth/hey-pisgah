@@ -289,6 +289,132 @@
         "insufficient_evidence_default": false
       },
       "hash": "72af53cf43ca899567c50b5e6a3076d72e21c1866ad3370d8bc47ec7cd13126e"
+    },
+    {
+      "revision": 9,
+      "at": "2026-10-29T22:53:38.535Z",
+      "reason": "Revision 9 (lane E6.d, from the research note on why the investigator stalls). Control structure: the adaptive arm runs as an investigation cycle owned by code (observe, construct and run, interpret); the controller offers each stage's tools only, opens every cycle with a fresh conversation, and carries forward a ledger the session fills from tool results (observations, hypotheses with predicted size, falsifying experiment and what a null result would mean, experiments with receipts, proposals); cycle 0 states and tests the prior as hypothesis one. The read budget, the hypothesis window, the pair gate and the note windows are removed. Tool interface: run_experiment names the step behaviour it expects to move and returns a receipt (rules changed, the named behaviour per case in both versions, delivered k of n, first event divergence, outcome); a deterministic pre-run lint refuses a change that leaves every step's start and completion rule equivalent, one whose cited hypotheses cannot be told apart on its cases, or a repeat, with the reason as data; get_derived_statistics gives per-step waiting, critical-path membership and the ranked critical segments; choose_question records the cycle's question. Evaluation logic: the prediction check counts an experiment only when its named behaviour moved, and only on the cases where it moved, so an undelivered change never supports or counts against a hypothesis. Effort is set per run, medium or high. Three short live probes before this revision (run-9b0be001 to run-9b0be003, 1, 16 and 20 calls, $0.74, not counted) exposed two interface defects fixed here: a choose_question refusal now lists each pair's allowed delta ranges and overlap, and a refused request no longer moves the controller out of the construct stage.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "704058ab0a77fc3307bc9f22ab5e2e81fa1ba28957edc948981def44a969ed0b",
+            "tools": "7bc2cb7496856896a7075b1ede24f5ceb3689f18bb7671d978306f966b85d3eb"
+          },
+          "a3": {
+            "prompt": "99a85b831d4a0926333e57f3398d5c4c0652f9ccc816944ffb05d1cf74d645db",
+            "tools": "7dc5b916fff8223bdec7ac38b22f1533f890e71f61631d97861214bea963a9d5"
+          },
+          "a4": {
+            "prompt": "55a3398a6533072bfc44dbe93d194fe90667d511c413f1c18884fb056f769cf3",
+            "tools": "2535fa876f2aff71eaf70f1db86b8dbb356a5392107cdb4b920583263bce3e95"
+          },
+          "prior": {
+            "prompt": "f3f1869f55cf864b9efb8aa0ca202a3aac135c7c5f358d2e1fb2d06ebb7e8712",
+            "tools": "2fd590e02488a003e8deb611346c1209fc6a604d9cb9138f4867447bb975b514"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "adaptive_controller": "cycle",
+          "adaptive_efforts": [
+            "medium",
+            "high"
+          ],
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 30000,
+          "history_chars": 70000,
+          "turn_result_chars": 20000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "49bc8a852e91f701196d61000e80fd55ce39f4fe5efaab0a57a68993ee3aed33"
+    },
+    {
+      "revision": 10,
+      "at": "2026-10-29T23:22:27.713Z",
+      "reason": "Revision 10 (lane E6.d, step 2). Tool interface only, keeping all of revision 9: run_sweep runs every legal single operation of the kinds the investigator names that touches the scope steps (both steps of the top_k critical segments, or target_steps) and every pair of them on the same cases and seeds, skipping cells the definition rules refuse and not running cells the static test calls a no-op, and returns counts, the best cells by summed wait delta and delivered cells whose wait did not move, each with a delivered flag; it treats every operation alike, takes at most 60 singles, runs at most three times a session and uses no experiment, and it is reported as an assisted system. get_precondition_table publishes the engine's start, completion and trigger rules and, per operation kind, when its edit can reach the engine; the run_experiment lint applies the same test, and a test checks the static no-op verdict against the simulator over every edge removal, trigger and move on the pool. Both join the construct stage. Evaluation logic: three simulator variants with planted answers of one, two and three operations on different steps (claim cover, discharge summary, refund voucher) and an answer-invariance test asserting that every prompt, tool description, stage text and generated table the model sees is byte-identical across them; the deny-list scan stays and now also covers the statistics, sweep, precondition, experiment and question outputs. Step 1 ran under revision 9 before this revision existed: 6 runs, 3 at medium and 3 at high.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "704058ab0a77fc3307bc9f22ab5e2e81fa1ba28957edc948981def44a969ed0b",
+            "tools": "bad02e99b1b3c70a373c9405f0c36f6d0920cb3fd276de3ebfc9091a5982c35d"
+          },
+          "a3": {
+            "prompt": "99a85b831d4a0926333e57f3398d5c4c0652f9ccc816944ffb05d1cf74d645db",
+            "tools": "7dc5b916fff8223bdec7ac38b22f1533f890e71f61631d97861214bea963a9d5"
+          },
+          "a4": {
+            "prompt": "55a3398a6533072bfc44dbe93d194fe90667d511c413f1c18884fb056f769cf3",
+            "tools": "2535fa876f2aff71eaf70f1db86b8dbb356a5392107cdb4b920583263bce3e95"
+          },
+          "prior": {
+            "prompt": "f3f1869f55cf864b9efb8aa0ca202a3aac135c7c5f358d2e1fb2d06ebb7e8712",
+            "tools": "2fd590e02488a003e8deb611346c1209fc6a604d9cb9138f4867447bb975b514"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "adaptive_controller": "cycle",
+          "adaptive_efforts": [
+            "medium",
+            "high"
+          ],
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 30000,
+          "history_chars": 70000,
+          "turn_result_chars": 20000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "dc797151472c5b10fcbfb889b8bc1c2e326967cbaacf3bc9e69129d941d14c48"
+    },
+    {
+      "revision": 11,
+      "at": "2026-10-30T00:00:46.390Z",
+      "reason": "Revision 11 (lane E6.d, after the revision 9 and 10 runs). Tool layer only, keeping all of revision 10: an experiment operation whose target step is not a non-external prepare_document step is now refused by the uncounted pre-run lint (reason not_preparable, with the operation index and step) instead of by the definition rules, where it counted toward the three-refusal lockout. Three of the twelve revision 9 and 10 runs had delivered the planted change and then locked out on exactly this request (retriggering the hand-over step after an edge removal the lint had called a no-op). The run_experiment description and the experiment sentence of the system prompt name the new lint refusal; nothing else changes. In the same commit the evaluator's dev gate gains documents_kept (not a commitment change): a proposal fails when a ward-required document whose final the base completed is not completed under it.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "22e704ab6b3ff4b5af0d95132fe6f365cfccecd378072f0794cfdd7f2d5982e7",
+            "tools": "d88bb951cc60dd5ce37cb368257d731e93e42cd2bb1c73a4329369fb7691bc47"
+          },
+          "a3": {
+            "prompt": "99a85b831d4a0926333e57f3398d5c4c0652f9ccc816944ffb05d1cf74d645db",
+            "tools": "7dc5b916fff8223bdec7ac38b22f1533f890e71f61631d97861214bea963a9d5"
+          },
+          "a4": {
+            "prompt": "55a3398a6533072bfc44dbe93d194fe90667d511c413f1c18884fb056f769cf3",
+            "tools": "2535fa876f2aff71eaf70f1db86b8dbb356a5392107cdb4b920583263bce3e95"
+          },
+          "prior": {
+            "prompt": "f3f1869f55cf864b9efb8aa0ca202a3aac135c7c5f358d2e1fb2d06ebb7e8712",
+            "tools": "2fd590e02488a003e8deb611346c1209fc6a604d9cb9138f4867447bb975b514"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "adaptive_controller": "cycle",
+          "adaptive_efforts": [
+            "medium",
+            "high"
+          ],
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 30000,
+          "history_chars": 70000,
+          "turn_result_chars": 20000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "89cff7ea206636bf1f8ee3226cacd11443cc57bbe5cc8dde28bfacc3eacb14ef"
     }
   ]
 }

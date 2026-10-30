@@ -56,8 +56,10 @@ export type CaseRow = {
   base: Arm; proposal: Arm;
   delta: { post_signoff_wait_min: number | null; bed_release_delay_min: number | null; rework_min: number | null; unnecessary_docs: number | null };
   identical_log: boolean;
+  // Documents the ward requires for this case whose final the base completed and the proposal did not.
+  documents_dropped?: string[];
 };
-export type Gate = { pass: boolean; no_regression: boolean; prohibited_attempts: number; exception_check: boolean; fences_intact: boolean };
+export type Gate = { pass: boolean; no_regression: boolean; prohibited_attempts: number; exception_check: boolean; fences_intact: boolean; documents_kept: boolean };
 export type ValidationReport = {
   proposal_id: string | null; proposal_hash: string; base_version: number;
   status: "dev_validated" | "dev_failed" | "invalid";
@@ -80,15 +82,27 @@ const diff = (a: number | null | undefined, b: number | null | undefined) => (a 
 const metrics = (r: RunResult) => (r.outcome === "ok" ? r.metrics : null);
 const arm = (r: RunResult, a: AcReport): Arm => ({ pass: a.pass, failing: a.failing, outcome: r.outcome });
 
-// The dev gate: no case passes on base and fails on the proposal, zero prohibited attempts, out-of-scope logs identical, fences intact; improvement is not required.
+// The ward-required documents whose final stage the base run completed and the proposal run did not, so a change cannot switch a required document off.
+export function droppedDocuments(base: WD, b: RunResult, q: RunResult): string[] {
+  if (b.outcome !== "ok") return [];
+  const facts = (b.final_state as { facts?: Record<string, unknown> } | null)?.facts ?? {};
+  const wr = facts["ward_requires"];
+  const required = new Set(Array.isArray(wr) ? wr.map(String) : typeof wr === "string" ? [wr] : []);
+  const finals = base.steps.filter((s) => s.action_kind === "prepare_document" && s.document_ref?.stage === "final" && required.has(s.document_ref.document_id));
+  const done = (r: RunResult, id: string) => r.outcome === "ok" && (r.step_times[id]?.completed_occ ?? null) !== null;
+  return finals.filter((s) => done(b, s.step_id) && !done(q, s.step_id)).map((s) => s.document_ref!.document_id).sort();
+}
+
+// The dev gate: no case passes on base and fails on the proposal, zero prohibited attempts, out-of-scope logs identical, fences intact, no ward-required document switched off; improvement is not required.
 export function devGate(rows: readonly CaseRow[], x: { def: WD; base: WD; aborted: boolean; prohibited: number }): Gate {
   const g = {
     no_regression: rows.every((r) => !(r.base.pass && !r.proposal.pass)),
     prohibited_attempts: x.prohibited,
     exception_check: rows.filter((r) => !r.in_scope).every((r) => r.identical_log),
-    fences_intact: fencesHash(x.def) === fencesHash(x.base) && permissionsHash(x.def) === permissionsHash(x.base) && !x.aborted
+    fences_intact: fencesHash(x.def) === fencesHash(x.base) && permissionsHash(x.def) === permissionsHash(x.base) && !x.aborted,
+    documents_kept: rows.every((r) => !(r.documents_dropped ?? []).length)
   };
-  return { ...g, pass: g.no_regression && g.prohibited_attempts === 0 && g.exception_check && g.fences_intact };
+  return { ...g, pass: g.no_regression && g.prohibited_attempts === 0 && g.exception_check && g.fences_intact && g.documents_kept };
 }
 
 // Validates one proposal on dev data: schema with repair, static rules, matched runs, acceptance checks and the dev gate.
@@ -158,7 +172,8 @@ export async function validateProposal(raw: unknown, opts: PipelineOptions = {})
         rework_min: diff(mb?.rework_min, mq?.rework_min),
         unnecessary_docs: diff(mb?.unnecessary_docs, mq?.unnecessary_docs)
       },
-      identical_log: b.outcome === "ok" && q.outcome === "ok" && eventLogHash(b.events) === eventLogHash(q.events)
+      identical_log: b.outcome === "ok" && q.outcome === "ok" && eventLogHash(b.events) === eventLogHash(q.events),
+      documents_dropped: droppedDocuments(base, b, q)
     });
   }
   if (problems.length) return { ...empty("invalid", "matched_runs", problems, repairs, p.proposal_id, built.warnings), hashes: { base: baseHash, proposal: defHash, rules: null, acceptance: accHash } };

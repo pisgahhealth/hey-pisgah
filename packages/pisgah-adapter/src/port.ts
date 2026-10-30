@@ -1,6 +1,6 @@
 import { canonical, sha256 } from "@hey-pisgah/contracts";
 import {
-  EmrId, EmrPortError, OBSERVATION_KIND, ObservationArgs, READ_ONLY_KINDS,
+  EMERGENCY_KIND, EmrId, EmrPortError, OBSERVATION_KIND, ObservationArgs, READ_ONLY_KINDS,
   type EmrCommit, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type EmrWriteKind, type InboxPage, type Orderables, type Provenance,
   type ReadBack, type SayableNames, type SpeakerVerdict, type WatchOffer, type WatchRead, type WorkArgs
 } from "@hey-pisgah/agent";
@@ -80,6 +80,8 @@ export class PisgahPort implements EmrPort {
     const w = this.profile.work[kind];
     return w && "method" in w ? w.unverifiable ?? null : null;
   }
+  screenPage(owner: string, kind: EmrWriteKind): string | undefined { return this.profile.owners.find((x) => x.id === owner)?.screens[kind]; }
+  pageHref(page: string): string | undefined { return (this.profile.pages as Record<string, string>)[page]; }
   names(): SayableNames {
     const o = this.profile.orders;
     return {
@@ -372,8 +374,15 @@ export class PisgahPort implements EmrPort {
       id = list.find((w) => w.store === op.ack.primary_store)?.id ?? id;
       events = list.map((w) => `${w.store}:${w.id}`);
     }
+    for (const [store, path] of Object.entries(op.ack.also ?? {})) { const v = str(pick(r.json, path)); if (v) events.push(`${store}:${v}`); }
     id ??= str(a["admission_id"] ?? a["visit_id"]);
     if (!id) return { ok: false, reason: "ack_without_record", status: r.status, retryable: false, counted: false };
+    // A new unnamed patient's arrival and label are learned at once, so the next words and reads reach that arrival.
+    if (kind === EMERGENCY_KIND && EmrId.safeParse(id).success) {
+      const visit = str(pick(r.json, op.ack.also?.["visit"] ?? "visitId"));
+      if (visit && EmrId.safeParse(visit).success) this.learned.visit_by_patient.set(id, visit);
+      this.learned.label.set(id, String(a["unidentified_ref"] ?? "the unnamed patient"));
+    }
     if ((kind === "request_admission" || kind === "admit_patient") && EmrId.safeParse(id).success && vars["patient_id"]) {
       this.learned.admission_by_patient.set(String(vars["patient_id"]), id);
       this.learned.patient_by_admission.set(id, String(vars["patient_id"]));

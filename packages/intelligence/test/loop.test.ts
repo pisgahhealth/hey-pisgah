@@ -8,12 +8,13 @@ import { ARGS_NOTE, DEFINITION_NOTE, DROPPED_NOTE, resultDigest } from "../src/d
 import { ELIDED, NOTES_HEADER, REPEAT_NOTE, systemPrompt } from "../src/prompts.js";
 import { ENGINE_SEMANTICS } from "../src/views.js";
 import { SETTINGS, compact, dropOldTurns, runLoop, type Digests } from "../src/loop.js";
+import { runCycleLoop } from "../src/cycle.js";
 import { scriptedInvestigator } from "../src/mock.js";
-import { DEFINITION_UNCHANGED, EXPERIMENT_BUDGET_MESSAGE, READ_BUDGET, READ_BUDGET_MESSAGE, STREAMS, Session, sessionStreamId, type Arm } from "../src/session.js";
+import { DEFINITION_UNCHANGED, STREAMS, Session, sessionStreamId, type Arm } from "../src/session.js";
 import { dispatch } from "../src/tools.js";
 import { HYPOTHESIS_SHAPES } from "../src/shapes.js";
 import { denyScan } from "../src/deny.js";
-import { LEARNED, LONG, SHORT, evidence, hyp, pool, tempRoot } from "./helpers.js";
+import { LF, LEARNED, LONG, SHORT, evidence, hyp, pool, tempRoot } from "./helpers.js";
 
 const repoRoot = join(import.meta.dirname, "..", "..", "..");
 const budget = (calls = 40) => ({ runUsd: 1, runMaxCalls: calls, weekUsd: 120, weekStopFraction: 0.8, weekSince: () => new Date(0) });
@@ -32,22 +33,23 @@ async function mockRun(arm: Arm, o: { calls?: number; mock?: MockResponder; a4?:
   const client = createModelClient({ storeRoot, mode: "mock", budget: budget(o.calls), mock: (r) => { bodies.push(r.body); return inner(r); } });
   const runId = "run-100baaaa";
   const session = new Session({ storeRoot, runId, arm, pool: pool(), validate: fakeValidate, ...(o.a4 ? { a4Order: [{ ops: LEARNED as never, case_ids: [...LONG, SHORT] }] } : {}) });
-  const out = await runLoop({ client, session, maxCalls: o.calls ?? 40, budgetUsd: 1, sleep: async () => {} });
+  const common = { client, session, maxCalls: o.calls ?? 40, budgetUsd: 1, sleep: async () => {} };
+  const out = arm === "adaptive" ? await runCycleLoop({ ...common, effort: "medium" }) : await runLoop(common);
   session.close();
   client.close();
   return { storeRoot, runId, out, bodies, session };
 }
 
 describe("discovery loop in mock mode", () => {
-  it("runs the adaptive arm to a dev-valid proposal with xhigh on every call and reads in one turn", async () => {
+  it("runs the adaptive arm through the cycle to a dev-valid proposal with the run's effort on every call", async () => {
     const r = await mockRun("adaptive");
     expect(r.out.stop).toBe("dev_valid_proposal");
     const rows = readStream(r.storeRoot, `ledger/${r.runId}`).filter((e) => e.record_type === "model.call").map((e) => e.payload as { effort: string; purpose: string });
     expect(rows.length).toBe(r.out.calls);
-    expect(rows.every((x) => x.effort === "xhigh" && x.purpose === "discovery.adaptive")).toBe(true);
-    for (const b of r.bodies) { expect(b.reasoning_effort).toBe("xhigh"); expect(b.parallel_tool_calls).toBe(true); }
+    expect(rows.every((x) => x.effort === "medium" && x.purpose === "propose_experiment")).toBe(true);
+    for (const b of r.bodies) { expect(b.reasoning_effort).toBe("medium"); expect(b.parallel_tool_calls).toBe(true); }
     const turn1 = readStream(r.storeRoot, sessionStreamId(r.runId)).find((e) => e.record_type === "model.turn")!.payload as { tool_calls: unknown[] };
-    expect(turn1.tool_calls.length).toBe(3);
+    expect(turn1.tool_calls.length).toBe(2);
     const c = checkDiscovery(r.storeRoot, r.runId);
     expect(c.pass).toBe(true);
     expect(c.summary.say_do_mismatches).toBe(0);
@@ -80,7 +82,7 @@ describe("discovery loop in mock mode", () => {
   it("stops at the call cap and when the model ends twice", async () => {
     expect((await mockRun("adaptive", { calls: 3 })).out.stop).toBe("budget_calls");
     const quiet: MockResponder = ({ body }) => ({ id: "m", object: "chat.completion", created: 0, model: String(body.model), choices: [{ index: 0, message: { role: "assistant", content: "nothing to do", refusal: null }, finish_reason: "stop", logprobs: null }], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } });
-    const r = await mockRun("adaptive", { mock: quiet });
+    const r = await mockRun("a3", { mock: quiet });
     expect(r.out.stop).toBe("model_ended");
     expect(r.out.calls).toBe(2);
     expect(checkDiscovery(r.storeRoot, r.runId).pass).toBe(false);
@@ -88,7 +90,7 @@ describe("discovery loop in mock mode", () => {
 
   it("answers a repeated identical call with a note and ends the run as stalled after three", async () => {
     const same: MockResponder = ({ body }) => ({ id: "m", object: "chat.completion", created: 0, model: String(body.model), choices: [{ index: 0, message: { role: "assistant", content: null, refusal: null, tool_calls: [{ id: "c1", type: "function", function: { name: "compute_intervals", arguments: JSON.stringify({ case_ids: [...LONG], from: { kind: "step.completed", step_id: "st05" }, to: { kind: "step.completed", step_id: "st16" }, clock: "occurred" }) } }] }, finish_reason: "tool_calls", logprobs: null }], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } });
-    const r = await mockRun("adaptive", { mock: same });
+    const r = await mockRun("a3", { mock: same });
     expect(r.out.stop).toBe("declared_negative");
     expect(r.out.detail).toBe("stalled");
     expect(r.out.calls).toBe(4);
@@ -166,7 +168,7 @@ describe("discovery loop in mock mode", () => {
       const calls = n === 1 ? [["list_cases", {}], ["get_workflow_definition", {}], ["get_ward_requirements", {}]] : [["get_case_timeline", { case_id: c, order: n % 2 ? "occurred" : "recorded", limit: 60 }], ["get_staff_activity", { case_id: c, role: "nurse" }]];
       return { id: "m", object: "chat.completion", created: 0, model: String(body.model), choices: [{ index: 0, message: { role: "assistant", content: "reading", refusal: null, tool_calls: calls.map(([name, args], i) => ({ id: `c${n}_${i}`, type: "function", function: { name: name as string, arguments: JSON.stringify(args) } })) }, finish_reason: "tool_calls", logprobs: null }], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } };
     };
-    const r = await mockRun("adaptive", { calls: 60, mock: reads });
+    const r = await mockRun("a3", { calls: 60, mock: reads });
     expect(r.out.calls).toBe(60);
     const newest = 2 * 8_200 + 1_500;
     for (const b of r.bodies) expect(JSON.stringify((b.messages as unknown[]).slice(2)).length).toBeLessThan(SETTINGS.history_chars + newest);
@@ -175,7 +177,7 @@ describe("discovery loop in mock mode", () => {
 
 describe("working notes", () => {
   it("are capped, logged, shown numbered after the kickoff on every later call, and scanned", async () => {
-    const s = new Session({ storeRoot: tempRoot(), runId: "run-0e7e0001", arm: "adaptive", pool: pool() });
+    const s = new Session({ storeRoot: tempRoot(), runId: "run-0e7e0001", arm: "a3", pool: pool() });
     expect(s.recordNote({ note: "x".repeat(601) }).error).toBe("invalid_arguments");
     expect(s.recordNote({ note: "c-491dbab0 waits 149 min after the clinical discharge" })).toMatchObject({ ok: true, note_number: 1 });
     for (let i = 2; i <= 20; i++) expect(s.recordNote({ note: `n${i}` }).ok).toBe(true);
@@ -187,13 +189,13 @@ describe("working notes", () => {
       const calls = n === 1 ? [["record_note", { note: "the wait is longest in Ward C cases" }]] : [["get_case_timeline", { case_id: LONG[n % 3], order: "occurred", limit: 60 }]];
       return { id: "m", object: "chat.completion", created: 0, model: String(body.model), choices: [{ index: 0, message: { role: "assistant", content: null, refusal: null, tool_calls: calls.map(([name, args], i) => ({ id: `c${n}_${i}`, type: "function", function: { name: name as string, arguments: JSON.stringify(args) } })) }, finish_reason: "tool_calls", logprobs: null }], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } };
     };
-    const r = await mockRun("adaptive", { calls: 30, mock: script });
+    const r = await mockRun("a3", { calls: 30, mock: script });
     expect((r.bodies[0]!.messages as unknown[]).length).toBe(2);
     for (const b of r.bodies.slice(1)) expect((b.messages as { role: string; content: string }[])[2]).toEqual({ role: "user", content: `${NOTES_HEADER}\n1. the wait is longest in Ward C cases` });
     const c = checkDiscovery(r.storeRoot, r.runId);
     expect(c.summary.notes).toBe(1);
     expect(c.lines.join("\n")).toContain("1. the wait is longest in Ward C cases");
-    const planted = await mockRun("adaptive", { calls: 2, mock: ({ body }) => ({ id: "m", object: "chat.completion", created: 0, model: String(body.model), choices: [{ index: 0, message: { role: "assistant", content: null, refusal: null, tool_calls: [{ id: "p1", type: "function", function: { name: "record_note", arguments: JSON.stringify({ note: "start it earlier" }) } }] }, finish_reason: "tool_calls", logprobs: null }], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } }) });
+    const planted = await mockRun("a3", { calls: 2, mock: ({ body }) => ({ id: "m", object: "chat.completion", created: 0, model: String(body.model), choices: [{ index: 0, message: { role: "assistant", content: null, refusal: null, tool_calls: [{ id: "p1", type: "function", function: { name: "record_note", arguments: JSON.stringify({ note: "start it earlier" }) } }] }, finish_reason: "tool_calls", logprobs: null }], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } }) });
     expect(checkDiscovery(planted.storeRoot, planted.runId).summary.deny_hits).toBe(1);
   });
 });
@@ -215,7 +217,7 @@ describe("pinned results", () => {
   it("follow the cases an active hypothesis cites", () => {
     const s = new Session({ storeRoot: tempRoot(), runId: "run-0e7e0002", arm: "adaptive", pool: pool() });
     expect(s.citedCases().size).toBe(0);
-    s.recordHypothesis({ statement: "s", mechanism: "m", subject_refs: [], competing: { none_identified_reason: "r" }, evidence: evidence(), if_true: { metric: "post_signoff_wait_min", comparison: "intervention_lt_control", tolerance_min: 30, scope: { cases: [LONG[2]] } }, if_false: { metric: "post_signoff_wait_min", comparison: "no_difference", tolerance_min: 10, scope: { cases: [LONG[2]] } }, refuted_if: "r" });
+    s.recordHypothesis({ ...LF, statement: "s", mechanism: "m", subject_refs: [], competing: { none_identified_reason: "r" }, evidence: evidence(), if_true: { metric: "post_signoff_wait_min", comparison: "intervention_lt_control", tolerance_min: 30, scope: { cases: [LONG[2]] } }, if_false: { metric: "post_signoff_wait_min", comparison: "no_difference", tolerance_min: 10, scope: { cases: [LONG[2]] } }, refuted_if: "r" });
     expect([...s.citedCases()].sort()).toEqual([LONG[0], LONG[2], SHORT].sort());
     s.close();
   });
@@ -247,50 +249,17 @@ describe("revision 7 read rules", () => {
     s.close();
   });
 
-  it("budgets reads before a hypothesis, counts refusals, and reopens on a no_hypothesis_reason note or a hypothesis", () => {
-    let calls = 0;
-    const s = new Session({ storeRoot: tempRoot(), runId: "run-0e7e0009", arm: "adaptive", pool: pool(), usage: () => ({ calls, usd: 0, max_calls: 60, max_usd: 6 }) });
-    for (let i = 0; i < READ_BUDGET.pages; i++) expect(s.timeline({ case_id: LONG[i % 3]!, order: "occurred", offset: i })).toHaveProperty("items");
-    const r = s.timeline({ case_id: LONG[0], order: "occurred" });
-    expect(r).toEqual({ ok: false, error: "reading_budget", message: READ_BUDGET_MESSAGE });
-    expect(s.record({ case_id: LONG[0], record_kind: "take_home_order" }).error).toBe("reading_budget");
-    expect(s.intervals({ case_ids: [LONG[0]], from: { kind: "step.completed", step_id: "st05" }, to: { kind: "step.completed", step_id: "st16" }, clock: "occurred" })).toHaveProperty("rows");
-    expect(s.counters).toMatchObject({ read_refusals: 2, experiments_used: 0, invalid_requests: 0 });
-    expect(s.recordNote({ note: "nothing yet", no_hypothesis_reason: "the waits differ by ward and I have not seen Ward C" })).toMatchObject({ ok: true, reading_window_reopened: true });
-    expect(s.timeline({ case_id: LONG[0], order: "occurred" })).toHaveProperty("items");
-    calls = 12;
-    expect(s.timeline({ case_id: LONG[0], order: "occurred" }).error).toBe("reading_budget");
-    hyp(s);
-    expect(s.timeline({ case_id: LONG[0], order: "occurred" })).toHaveProperty("items");
-    expect(s.counters.read_refusals).toBe(3);
-    expect(denyScan([{ label: "budget", text: READ_BUDGET_MESSAGE }, { label: "unchanged", text: DEFINITION_UNCHANGED }, { label: "def", text: DEFINITION_NOTE }])).toEqual([]);
+  it("has no reading budget: reads go on with no hypothesis recorded", () => {
+    const s = new Session({ storeRoot: tempRoot(), runId: "run-0e7e0009", arm: "adaptive", pool: pool(), usage: () => ({ calls: 50, usd: 0, max_calls: 60, max_usd: 6 }) });
+    for (let i = 0; i < 30; i++) expect(s.timeline({ case_id: LONG[i % 3]!, order: "occurred", offset: i })).toHaveProperty("items");
+    expect(denyScan([{ label: "unchanged", text: DEFINITION_UNCHANGED }, { label: "def", text: DEFINITION_NOTE }])).toEqual([]);
     s.close();
   });
 });
 
-describe("revision 8 hypothesis window", () => {
-  it("refuses record_hypothesis and case reads after three active hypotheses with no experiment, counts it, and reopens on an experiment or a no_experiment_reason note", () => {
+describe("hypothesis window and schema shapes", () => {
+  it("is gone: hypotheses and case reads go on with no experiment run", () => {
     const s = new Session({ storeRoot: tempRoot(), runId: "run-0e7e0010", arm: "adaptive", pool: pool() });
-    const h1 = hyp(s);
-    const h2 = hyp(s, { competing: [h1], if_true: { metric: "post_signoff_wait_min", comparison: "no_difference", tolerance_min: 10, scope: { cases: [...LONG] } }, if_false: { metric: "post_signoff_wait_min", comparison: "intervention_lt_control", tolerance_min: 30, scope: { cases: [...LONG] } } });
-    hyp(s);
-    const blocked = [s.recordHypothesis({}), s.timeline({ case_id: LONG[0], order: "occurred" }), s.record({ case_id: LONG[0], record_kind: "take_home_order" }), s.queue({ case_id: LONG[0], at_min: 600 }), s.staff({ case_id: LONG[0], role: "nurse" }), s.intervals({ case_ids: [LONG[0]], from: { kind: "step.completed", step_id: "st05" }, to: { kind: "step.completed", step_id: "st16" }, clock: "occurred" })];
-    for (const b of blocked) expect(b).toEqual({ ok: false, error: "experiment_budget", message: EXPERIMENT_BUDGET_MESSAGE });
-    expect(s.definition()).toHaveProperty("definition");
-    expect(s.listCases()).toHaveProperty("cases");
-    expect(s.counters).toMatchObject({ experiment_budget_refusals: 6, experiments_used: 0, invalid_requests: 0, hypothesis_schema_errors: 0 });
-    expect(s.runExperiment({ hypothesis_id: h1, distinguishes: [h2], base: { version: 1 }, ops: LEARNED, case_ids: [...LONG], note: "n" }).ok).toBe(true);
-    expect(s.timeline({ case_id: LONG[0], order: "occurred" })).toHaveProperty("items");
-    hyp(s); hyp(s); hyp(s);
-    expect(s.recordHypothesis({}).error).toBe("experiment_budget");
-    expect(s.recordNote({ note: "the three readings need one shared case first", no_experiment_reason: "no case yet separates them" })).toMatchObject({ ok: true, experiment_window_reopened: true });
-    expect(s.timeline({ case_id: LONG[0], order: "occurred" })).toHaveProperty("items");
-    expect(denyScan([{ label: "budget", text: EXPERIMENT_BUDGET_MESSAGE }])).toEqual([]);
-    s.close();
-  });
-
-  it("does not apply to the arm without experiments", () => {
-    const s = new Session({ storeRoot: tempRoot(), runId: "run-0e7e0011", arm: "a3", pool: pool() });
     hyp(s); hyp(s); hyp(s); hyp(s);
     expect(s.timeline({ case_id: LONG[0], order: "occurred" })).toHaveProperty("items");
     s.close();
@@ -298,12 +267,12 @@ describe("revision 8 hypothesis window", () => {
 
   it("shows the expected shape of each failing field on a schema error and counts it", async () => {
     const s = new Session({ storeRoot: tempRoot(), runId: "run-0e7e0012", arm: "adaptive", pool: pool() });
-    const r = await dispatch(s, "record_hypothesis", JSON.stringify({ statement: "s", mechanism: "m", subject_refs: [], competing: { none_identified_reason: "r" }, evidence: evidence(), if_true: { metric: "post_signoff_wait_min", comparison: "lower", tolerance_min: 30, scope: { cases: [...LONG] } }, if_false: { metric: "post_signoff_wait_min", comparison: "no_difference", tolerance_min: 10, scope: { cases: [...LONG] } } }));
+    const r = await dispatch(s, "record_hypothesis", JSON.stringify({ ...LF, statement: "s", mechanism: "m", subject_refs: [], competing: { none_identified_reason: "r" }, evidence: evidence(), if_true: { metric: "post_signoff_wait_min", comparison: "lower", tolerance_min: 30, scope: { cases: [...LONG] } }, if_false: { metric: "post_signoff_wait_min", comparison: "no_difference", tolerance_min: 10, scope: { cases: [...LONG] } } }));
     expect(r.error).toBe("invalid_arguments");
     const expected = r.expected as { field: string; type: string; example: unknown }[];
     expect(expected.map((e) => e.field)).toEqual(["if_true", "refuted_if"]);
     expect(expected[0]).toEqual({ field: "if_true", ...HYPOTHESIS_SHAPES.if_true });
-    const same = s.recordHypothesis({ statement: "s", mechanism: "m", subject_refs: [], competing: { none_identified_reason: "r" }, evidence: evidence(), if_true: { metric: "post_signoff_wait_min", comparison: "no_difference", tolerance_min: 10, scope: { cases: [...LONG] } }, if_false: { metric: "post_signoff_wait_min", comparison: "no_difference", tolerance_min: 5, scope: { cases: [...LONG] } }, refuted_if: "r" });
+    const same = s.recordHypothesis({ ...LF, statement: "s", mechanism: "m", subject_refs: [], competing: { none_identified_reason: "r" }, evidence: evidence(), if_true: { metric: "post_signoff_wait_min", comparison: "no_difference", tolerance_min: 10, scope: { cases: [...LONG] } }, if_false: { metric: "post_signoff_wait_min", comparison: "no_difference", tolerance_min: 5, scope: { cases: [...LONG] } }, refuted_if: "r" });
     expect((same.expected as { field: string }[]).map((e) => e.field)).toEqual(["if_true", "if_false"]);
     expect(s.counters.hypothesis_schema_errors).toBe(2);
     const text = JSON.stringify(HYPOTHESIS_SHAPES);

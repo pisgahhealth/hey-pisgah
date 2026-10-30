@@ -31,8 +31,11 @@ export const evidence = () => [
 
 export const pred = (comparison: string, tol: number, metric = "post_signoff_wait_min", cases: readonly string[] = LONG) => ({ metric, comparison, tolerance_min: tol, scope: { cases: [...cases] } });
 
+// The ledger fields the investigation cycle needs on every adaptive hypothesis.
+export const LF = { predicted_magnitude_min: 30, falsifying_experiment: "f", if_null: "n" } as const;
+
 export function hyp(s: Session, o: Record<string, unknown> = {}): string {
-  const r = s.recordHypothesis({ statement: "s", mechanism: "m", subject_refs: ["st06"], competing: { none_identified_reason: "first reading" }, evidence: evidence(), if_true: pred("intervention_lt_control", 30), if_false: pred("no_difference", 10), refuted_if: "r", revises: null, ...o });
+  const r = s.recordHypothesis({ ...LF, statement: "s", mechanism: "m", subject_refs: ["st06"], competing: { none_identified_reason: "first reading" }, evidence: evidence(), if_true: pred("intervention_lt_control", 30), if_false: pred("no_difference", 10), refuted_if: "r", revises: null, ...o });
   if (r.ok !== true) throw new Error(JSON.stringify(r));
   return String(r.hypothesis_id);
 }

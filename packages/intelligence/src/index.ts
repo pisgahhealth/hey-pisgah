@@ -10,8 +10,17 @@ export { DESCRIPTIONS, armTools, dispatch, toolDefs, type ToolName } from "./too
 export { ARMS, NUDGE, appTexts, armHashes, kickoff, systemPrompt } from "./prompts.js";
 export { SETTINGS, compact, dropOldTurns, runLoop, type Digests, type LoopOptions, type LoopOutcome } from "./loop.js";
 export { definitionDigest, resultDigest } from "./digest.js";
+export { CYCLE, STAGE_TOOLS, runCycleLoop, type CycleOptions, type Stage } from "./cycle.js";
+export { derivedStatistics, criticalPath } from "./stats.js";
+export { lintExperiment } from "./lint.js";
+export { ruleChanges, isStaticNoop, preconditionTable, PRECONDITION_TABLE } from "./preconditions.js";
+export { outcomeClass, firstDivergence, rulesChanged } from "./delivery.js";
+export { VARIANTS, VARIANT_SEED_RULE, loadVariant, variantSeed, type Variant, type VariantId, type ValidationCase } from "./variants.js";
+export { OP_KINDS, SWEEP_RULE, SWEEP_LIMITS, scopedOperations, sweep, sweepView, evaluateCell } from "./sweep.js";
 export { MOCK_CASES, scriptedInvestigator } from "./mock.js";
 export { appendCommitment, appendOnlyProblems, commitmentFor, commitmentsPath, currentContent, readCommitments, type CommitmentsFile } from "./commitments.js";
 export { checkDiscovery, type DiscoveryCheck } from "./check.js";
 export { INTELLIGENCE_RECORDINGS_DIR, checkDiscoveryCommand, discoverCommand, type DiscoverDeps } from "./cli.js";
 export { adoptionClaims, citedEventCount, cycle2Result, discoveryClaims } from "./claims-results.js";
+export { runRecord, publishRuns } from "./publish.js";
+export { searchBaseline, longestWaitCases, type BaselineResult } from "./baseline.js";
