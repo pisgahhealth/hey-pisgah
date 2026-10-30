@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
 type Row = Record<string, unknown>;
-type Run = { run_id: string; outcome: string; commitment?: { revision?: number }; needs?: { deny_list?: boolean }; proposal_shares?: { proposal_id: string; share_of_planted?: number }[]; variant?: string; effort?: string };
+type Run = { run_id: string; outcome: string; found_planted?: boolean; commitment?: { revision?: number }; needs?: { deny_list?: boolean }; proposal_shares?: { proposal_id: string; share_of_planted?: number }[]; variant?: string; effort?: string };
 
 // The answer-invariance gate exists from this commitment revision on; runs before it cannot count for the discovery claim.
 export const INVARIANCE_FROM_REVISION = 10;
@@ -44,6 +44,17 @@ export function exactInterval(k: number, n: number): { lower: number; upper: num
   return { lower, upper };
 }
 
+// The Wilson score 95% interval for k successes in n runs.
+export function wilsonInterval(k: number, n: number): { lower: number; upper: number } {
+  if (n <= 0) return { lower: 0, upper: 1 };
+  const z = 1.959964, p = k / n, d = 1 + (z * z) / n;
+  const c = (p + (z * z) / (2 * n)) / d, h = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d;
+  return { lower: Math.max(0, c - h), upper: Math.min(1, c + h) };
+}
+
+// The effort whose configuration the claim's predicate reads; other efforts at the same revision are shown beside it.
+export const CLAIM_EFFORT = "medium";
+
 const round2 = (x: number) => Math.round(x * 100) / 100;
 const worldOf = (r: Run) => r.variant ?? COMMITTED_WORLD;
 
@@ -57,8 +68,9 @@ export function configurations(runs: Run[]): Row[] {
   return [...groups.entries()].map(([key, rs]) => {
     const [revision, world, effort] = JSON.parse(key) as [number, string, string];
     const k = rs.filter((r) => r.outcome === "dev_valid_proposal").length;
-    const ci = exactInterval(k, rs.length);
-    return { revision, world, effort, runs: rs.length, dev_valid: k, rate: round2(k / rs.length), lower_95: round2(ci.lower), upper_95: round2(ci.upper), run_ids: rs.map((r) => r.run_id) };
+    const ci = exactInterval(k, rs.length), w = wilsonInterval(k, rs.length);
+    const planted = rs.filter((r) => r.found_planted === true).length, pw = wilsonInterval(planted, rs.length);
+    return { revision, world, effort, runs: rs.length, dev_valid: k, rate: round2(k / rs.length), lower_95: round2(ci.lower), upper_95: round2(ci.upper), wilson_lower_95: round2(w.lower), wilson_upper_95: round2(w.upper), planted, planted_wilson_lower_95: round2(pw.lower), planted_wilson_upper_95: round2(pw.upper), run_ids: rs.map((r) => r.run_id) };
   }).sort((a, b) => a.revision - b.revision || String(a.world).localeCompare(String(b.world)) || String(a.effort).localeCompare(String(b.effort)));
 }
 
@@ -70,7 +82,7 @@ const kOf = (cs: Row[], f: (c: Row) => boolean) => {
 // Adds the discovery claim's summary to discovery.json from the runs already in it; nothing is re-scored and the runs are untouched.
 export function discoverSummary(d: Row, o: { invariancePass: boolean; adopted: string | null; tradeOffs: { metric: string; sum_delta: number }[]; currentRevision?: number }): Row {
   const a = d["adaptive_runs"] as Row;
-  const groups = ["runs", "cycle_runs", "variant_runs", "rev11_runs", "rev12_runs"].map((k) => a[k]).filter(Boolean);
+  const groups = ["runs", "cycle_runs", "variant_runs", "rev11_runs", "rev12_runs", "rev12_low_runs"].map((k) => a[k]).filter(Boolean);
   const runs = groups.flatMap((g) => (Array.isArray(g) ? g : ((g as Row)["runs"] as Run[]) ?? [])) as Run[];
   const summaryOnly = ((a["summary_only_runs"] as Row | undefined)?.["runs"] as Run[] | undefined) ?? [];
   const history = [...summaryOnly, ...runs];
@@ -81,7 +93,10 @@ export function discoverSummary(d: Row, o: { invariancePass: boolean; adopted: s
 
   const configs = configurations(history);
   const latestRev = Math.max(...configs.filter((c) => c["world"] === COMMITTED_WORLD).map((c) => Number(c["revision"])));
-  const latest = configs.filter((c) => c["world"] === COMMITTED_WORLD && c["revision"] === latestRev).sort((x, y) => Number(y["runs"]) - Number(x["runs"]))[0]!;
+  const latest = configs.filter((c) => c["world"] === COMMITTED_WORLD && c["revision"] === latestRev).sort((x, y) => Number(y["effort"] === CLAIM_EFFORT) - Number(x["effort"] === CLAIM_EFFORT) || Number(y["runs"]) - Number(x["runs"]))[0]!;
+  const efforts = configs.filter((c) => c["world"] === COMMITTED_WORLD && c["revision"] === latestRev).sort((x, y) => Number(y === latest) - Number(x === latest));
+  const low = efforts.find((c) => c["effort"] === "low") ?? null;
+  const rowText = (c: Row) => `${String(c["effort"])} ${String(c["dev_valid"])} of ${String(c["runs"])} dev-valid (Wilson 95% ${String(c["wilson_lower_95"])} to ${String(c["wilson_upper_95"])}) and ${String(c["planted"])} of ${String(c["runs"])} the planted form (${String(c["planted_wilson_lower_95"])} to ${String(c["planted_wilson_upper_95"])})`;
   const byRevision = [...new Set(history.map((r) => r.commitment?.revision ?? 0))].sort((x, y) => x - y).map((rev) => {
     const rs = history.filter((r) => (r.commitment?.revision ?? 0) === rev);
     return { revision: rev, runs: rs.length, dev_valid: valid(rs).length, summary_only: rs.filter((r) => summaryOnly.includes(r)).length };
@@ -108,6 +123,12 @@ export function discoverSummary(d: Row, o: { invariancePass: boolean; adopted: s
     discover_config_revision: latest["revision"], discover_config_runs: latest["runs"], discover_config_dev_valid: latest["dev_valid"],
     discover_config_rate: latest["rate"], discover_config_lower: latest["lower_95"], discover_config_upper: latest["upper_95"],
     discover_config_interval: "exact two-sided 95% (Clopper-Pearson)",
+    discover_config_wilson_lower: latest["wilson_lower_95"], discover_config_wilson_upper: latest["wilson_upper_95"],
+    discover_config_planted: latest["planted"], discover_config_planted_lower: latest["planted_wilson_lower_95"], discover_config_planted_upper: latest["planted_wilson_upper_95"],
+    discover_low_runs: low?.["runs"] ?? null, discover_low_dev_valid: low?.["dev_valid"] ?? null, discover_low_wilson_lower: low?.["wilson_lower_95"] ?? null, discover_low_wilson_upper: low?.["wilson_upper_95"] ?? null,
+    discover_low_planted: low?.["planted"] ?? null, discover_low_planted_lower: low?.["planted_wilson_lower_95"] ?? null, discover_low_planted_upper: low?.["planted_wilson_upper_95"] ?? null,
+    discover_effort_rows: efforts.map((c) => ({ effort: c["effort"], runs: c["runs"], dev_valid: c["dev_valid"], wilson_95: [c["wilson_lower_95"], c["wilson_upper_95"]], planted: c["planted"], planted_wilson_95: [c["planted_wilson_lower_95"], c["planted_wilson_upper_95"]], read_by_predicate: c === latest })),
+    discover_effort_text: `revision ${String(latestRev)} on the committed world: ${efforts.map(rowText).join("; ")}; the predicate reads ${CLAIM_EFFORT}`,
     discover_findings: findings,
     discover_invariance_pass: o.invariancePass, discover_deny_clean: gated.every((r) => r.needs?.deny_list === true),
     discover_invariance_covers: INVARIANCE_COVERS, discover_invariance_excludes: INVARIANCE_EXCLUDES,

@@ -137,3 +137,7 @@ The set held now: R1's synthetic clips, a synthetic colleague with the owner's s
 The last row is the residual: session and presence cannot see a recording played while the owner is at the screen, so the countersign window remains the check. Gate readings for the new clips wait for the gate's own model route; a fallback reading is never counted. Full tables are in `evaluation/results/attribution-v2.json`; the labelled recording script is `v2.lines.ts`.
 
 Run it: `v2.build.run.ts --synth <say clips> --real <owner recordings> --model <TitaNet-small onnx> --sherpa <sherpa-onnx-node folder> --live` (add `--gate` once the route is back), then `v2.assemble.run.ts`.
+
+### The owner's own v2 recordings (30 Oct)
+
+The owner recorded his part of the v2 script. `v2.cut.run.ts` cuts it on the spoken ids by aligning an offline Parakeet reading to the script; `v2-real-set.json` lists every cut and its hash. On held-out lines the owner rule (0.41) passed 30 of 31 quiet lines but 14 of 30 with a radio playing. His phone replays were mostly too quiet to score; the 6 usable ones did not pass the voice, and presence held all 6 with the owner away. Same chunks sent again were refused 10 of 10. Voice Transcribe heard 53 of 61 values.

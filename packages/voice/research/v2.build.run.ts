@@ -77,15 +77,15 @@ const AWAY: LivenessMarker = { visible: true, mic_live: true, input_age_ms: 20 *
 const guard = new ReplayGuard("required", { ...PRESENCE_RULE }, true);
 let clock = 1_000_000_000;
 // Sends a clip through the replay defence as a session of its own, at live pace or as a burst, and returns its verdict.
-function present(session: string, wav: Uint8Array, marker: LivenessMarker | null): string {
+function present(session: string, wav: Uint8Array, marker: LivenessMarker | null, g = guard): string {
   clock += 120_000;
   const cs = chunks(wav);
   for (const [i, c] of cs.entries()) {
     clock += c.ms;
-    const v = guard.check({ owner: "owner", session_id: session, seq: i, wav: c.wav, audio_ms: c.ms, speech: true, arrived_at: clock, captured_at: clock - c.ms, marker });
+    const v = g.check({ owner: "owner", session_id: session, seq: i, wav: c.wav, audio_ms: c.ms, speech: true, arrived_at: clock, captured_at: clock - c.ms, marker });
     if (v.refused) return `refused:${v.refused}`;
   }
-  const p = guard.lineOf(session, cs.map((_, i) => i));
+  const p = g.lineOf(session, cs.map((_, i) => i));
   return p.live ? "live" : p.live === false ? `not_present:${p.reason}` : "unknown";
 }
 
@@ -219,6 +219,24 @@ for (let i = 0; i < 12; i++) {
   pending.push({ id: `real-OV${String(i + 1).padStart(2, "0")}`, source: "real", set: "held_out", person: "S", role: "owner", addressee: "agent", kind: "instruction", category: "overlap", overlap_with: "N", context: OKON, replay: null, wav: overlay(realWav[o]!, realWav[n]!, 600 + (i % 4) * 200, 0.8, `real-ov-${i}`), reading: "gate" });
 }
 
+// The owner's v2 recordings, cut on his spoken ids; lines my review found unusable are kept out, with the reason.
+const v2Dir = arg("owner-v2");
+const V2_UNUSABLE: Record<string, string> = { O083: "radio voices over the line" };
+type OwnerCut = { id: string; part: string; set: string; status: string; sha256: string };
+const ownerCuts = v2Dir ? (JSON.parse(readFileSync("packages/voice/research/v2-real-set.json", "utf8")) as { cuts: OwnerCut[] }).cuts : [];
+const v2Wav = (c: OwnerCut) => { const w = new Uint8Array(readFileSync(join(v2Dir, `${c.id}${c.part === "overlap_part" ? "-S-part" : ""}.wav`))); if (sha256Hex(w) !== c.sha256) throw new Error(`${c.id} does not match its listed hash`); return w; };
+const dbOf = (wav: Uint8Array) => { const { samples } = decodeWav(wav); let s = 0, n = 0; for (const v of samples) if (Math.abs(v) > 0.0005) { s += v * v; n++; } return Math.round(10 * Math.log10((n ? s / n : 1e-12) + 1e-12) * 10) / 10; };
+const levels: Record<string, number> = {};
+for (const c of ownerCuts.filter((x) => x.status !== "missing" && x.part !== "replay" && !V2_UNUSABLE[x.id])) {
+  const l = V2_LINES.find((x) => x.id === c.id)!;
+  const part = c.part === "overlap_part";
+  const words = part ? l.overlap!.words : l.words;
+  const kind = part ? shortKind(words) : l.kind;
+  const cat = l.block === "Y" ? "short" : l.block === "K" ? (l.kind !== "confirm" ? "plain" : l.context.read_back && l.context.read_back.patient !== l.context.patient ? "changed_patient" : l.context.batch_now !== l.context.read_back?.batch ? "changed_batch" : "bound_yes") : l.block === "V" ? "overlap_solo_part" : l.addressee === "staff" ? "owner_to_colleague" : "plain";
+  const wav = v2Wav(c);
+  levels[c.id] = dbOf(wav);
+  pending.push({ id: `v2-${c.id}${part ? "-part" : ""}`, source: "owner_v2", set: c.set as V2Row["set"], person: "S", role: "owner", addressee: part ? "agent" : l.addressee, kind, category: cat, overlap_with: null, context: part ? OKON : l.context, replay: null, wav, reading: kind === "instruction" || kind === "documentation" || (kind === "talk" && !part && l.block !== "Y") ? "gate" : "words" });
+}
 // Readings first, three at a time; each is kept by audio hash.
 const todo = pending.filter((p) => typeof p.reading === "string");
 let next = 0;
@@ -227,27 +245,42 @@ await Promise.all([0, 1, 2].map(async () => { while (next < todo.length) { const
 for (const p of pending) {
   const rd = typeof p.reading === "string" ? await read(p.id, p.wav, p.reading === "gate") : p.reading;
   const v = await vec(p.wav);
-  const ts: Record<string, number[]> = p.source === "real" ? { S: ownerT } : synthT;
+  const ts: Record<string, number[]> = p.source === "synthetic" ? synthT : { S: ownerT };
   const { wav: _wav, ...kept } = p;
   rows.push({ ...kept, sha256: sha256Hex(p.wav), audio_ms: decodeWav(p.wav).samples.length / decodeWav(p.wav).sampleRate * 1000 | 0, cos: v ? Object.fromEntries(Object.entries(ts).map(([k, t]) => [k, r4(cosine(unit(v), t))])) : null, presence: present(p.id, p.wav, AT_SCREEN), reading: rd } as V2Row);
 }
 // Replays of the owner's held-out instructions: the captured chunks posted again, and the recording played from a phone with the owner away or at the screen.
-const replayOf = rows.filter((r) => r.role === "owner" && r.set === "held_out" && r.kind === "instruction" && r.addressee === "agent" && (r.category === "plain") && !r.overlap_with).slice(0, 30);
+const replayOf = rows.filter((r) => r.source !== "owner_v2" && r.role === "owner" && r.set === "held_out" && r.kind === "instruction" && r.addressee === "agent" && (r.category === "plain") && !r.overlap_with).slice(0, 30);
 for (const o of replayOf) {
   const src = pending.find((p) => p.id === o.id)!.wav;
   const copy = loudspeaker(src, `rp-${o.id}`);
   const v = await vec(copy);
-  const ts: Record<string, number[]> = o.source === "real" ? { S: ownerT } : synthT;
+  const ts: Record<string, number[]> = o.source === "synthetic" ? synthT : { S: ownerT };
   const cos = v ? Object.fromEntries(Object.entries(ts).map(([k, t]) => [k, r4(cosine(unit(v), t))])) : null;
   const base = { ...o, category: "replay", sha256: sha256Hex(copy), cos, reading: o.reading };
   rows.push({ ...base, id: `${o.id}-copy`, replay: "digital_copy", presence: present(`${o.id}-copy`, src, AT_SCREEN), cos: o.cos, sha256: o.sha256 } as V2Row);
   rows.push({ ...base, id: `${o.id}-away`, replay: "played_owner_away", presence: present(`${o.id}-away`, copy, AWAY) } as V2Row);
   rows.push({ ...base, id: `${o.id}-here`, replay: "played_owner_present", presence: present(`${o.id}-here`, loudspeaker(src, `rp2-${o.id}`), AT_SCREEN) } as V2Row);
 }
+// The owner's own phone replays of R001 to R010: the live take's chunks posted again, and each recorded replay judged with him away and with him at the screen, each condition on a fresh guard.
+for (const c of ownerCuts.filter((x) => x.part === "replay" && x.status !== "missing")) {
+  const n = Number(c.id.slice(1)), origId = `R${String(((n - 1) % 10) + 1).padStart(3, "0")}`;
+  const o = rows.find((r) => r.id === `v2-${origId}`);
+  if (!o) continue;
+  const live = pending.find((p) => p.id === o.id)!.wav, wav = v2Wav(c), v = await vec(wav);
+  levels[c.id] = dbOf(wav);
+  const quiet = levels[c.id]! < levels[origId]! - 20;
+  const base = { ...o, id: `v2-${c.id}`, set: "held_out" as const, category: "replay", sha256: c.sha256, audio_ms: Math.round((decodeWav(wav).samples.length / 16000) * 1000), cos: v ? { S: r4(cosine(unit(v), ownerT)) } : null, reading: await read(c.id, wav, false), ...(quiet ? { usable: false, note: `${Math.round(levels[origId]! - levels[c.id]!)} dB below the live take` } : {}) };
+  const fresh = () => { const g = new ReplayGuard("required", { ...PRESENCE_RULE }, true); present(`${c.id}-live`, live, AT_SCREEN, g); return g; };
+  rows.push({ ...base, id: `${base.id}-away`, replay: "played_owner_away", presence: present(`${c.id}-away`, wav, AWAY, fresh()) } as V2Row);
+  rows.push({ ...base, id: `${base.id}-here`, replay: "played_owner_present", presence: present(`${c.id}-here`, wav, AT_SCREEN, fresh()) } as V2Row);
+  if (n <= 20) { const g = fresh(); rows.push({ ...o, id: `v2-${origId}-copy`, set: "held_out", category: "replay", replay: "digital_copy", presence: present(`${origId}-copy`, live, AT_SCREEN, g) } as V2Row); }
+}
 client?.close();
 const at = new Date().toISOString();
 writeFileSync(out, `${JSON.stringify({
   built_at: at, run_id: runId, model: "nemo_en_titanet_small (sherpa-onnx-node, 16 kHz)", templates: { synthetic: "S Rishi, B Daniel, N Tessa, C Aman (same sex and accent as the owner), mean of three enrolment clips", real: "S the owner's three R1.b enrolment clips; no other real voice is enrolled" },
+  owner_v2: v2Dir ? { unusable: V2_UNUSABLE, levels_db: levels } : null,
   real_cut_hashes_matching_r1b: `${hashOk} of ${manifest.clips.length}`, presence_rule: PRESENCE_RULE, owner_yes: OWNER_YES.source,
   rows: rows.map((r) => ({ ...r, binding_holds: r.kind === "confirm" ? bindingHolds(r.context) : null }))
 }, null, 1)}\n`);
