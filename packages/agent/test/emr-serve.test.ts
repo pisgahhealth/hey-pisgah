@@ -45,7 +45,12 @@ describe("EMR serve", () => {
     expect(port.writes).toHaveLength(0);
     expect((await j(await post(`${s.url}/tasks/${id}/say`, { task_id: id, text: "Chart pulse 90" }))).status).toBe(202);
     await s.runtime.settled();
-    const list = await j(await fetch(`${s.url}/tasks?owner=${OWNER}`, { headers: { origin: "http://evil.example" } }));
+    // Another page's request is refused before it runs, and a rebinding host name is refused too.
+    const evil = await j(await fetch(`${s.url}/tasks?owner=${OWNER}`, { headers: { origin: "http://evil.example" } }));
+    expect(evil.status).toBe(403);
+    expect((await fetch(`${s.url}/tasks/say`, { method: "POST", headers: { "content-type": "text/plain", origin: "http://evil.example" }, body: JSON.stringify({ owner: OWNER, admissionId: ADM, text: "Chart pulse 99" }) })).status).toBe(403);
+    expect((await fetch(`${s.url}/tasks/say`, { method: "POST", headers: { "content-type": "text/plain", origin: STRIP }, body: JSON.stringify({ owner: OWNER, admissionId: ADM, text: "Chart pulse 99" }) })).status).toBe(415);
+    const list = await j(await fetch(`${s.url}/tasks?owner=${OWNER}`, { headers: { origin: STRIP } }));
     expect(list.headers.get("access-control-allow-origin")).toBe(STRIP);
     expect(list.headers.get("access-control-allow-headers")).toBe("Content-Type");
     expect(list.body).toHaveLength(1);

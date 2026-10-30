@@ -5,6 +5,7 @@ import { VITALS_KEYWORDS, VoiceError, buildKeywords, cleanTranscript, concat, co
 import type { EmrRuntime } from "./runtime.js";
 import { primaryClass } from "./classes.js";
 import type { EmrContext, EmrTarget } from "./port.js";
+import type { Embedder, Voiceprint } from "./speaker.js";
 
 export type Transcriber = (wav: Uint8Array, keywords: readonly string[], sessionId: string) => Promise<FinalTranscript>;
 
@@ -33,6 +34,8 @@ type Held = { samples: Float32Array[]; seqs: number[]; audio_ms: number; rate: n
 type Heard = {
   samples: Float32Array[]; seqs: number[]; rate: number; audio_ms: number; trailing_ms: number; arrived: number;
   text: string; raw: string; cost_usd: number; keywords_dropped: boolean; rewrites: Rewrite[]; strong: boolean; joined: boolean; heard_at: number;
+  // The segment's voiceprint from the local speaker model, worked out beside the transcription; the audio itself is never kept.
+  voiceprint: Voiceprint | null;
 };
 type Session = {
   owner: string; ctx: EmrContext; next: number; held: Held | null; waiting: Heard | null; timer: NodeJS.Timeout | null; outcomes: Map<number, ListenOutcome>;
@@ -44,6 +47,8 @@ export class ListenError extends Error { constructor(readonly status: number, me
 export type ListenOptions = {
   transcribe: Transcriber; finalSilenceMs?: number; capMs?: number; maxHeldMs?: number; strongJoinWaitMs?: number; numberJoinWaitMs?: number;
   now?: () => number; classesOf?: (taskId: string, lineId: string) => string[];
+  // The local speaker model; without it no line carries a voiceprint and attribution stays off.
+  embed?: Embedder;
 };
 
 const totalMs = (parts: readonly Float32Array[], rate: number) => Math.round((parts.reduce((n, p) => n + p.length, 0) / rate) * 1000);
@@ -221,6 +226,8 @@ export class ListenSessions {
     const asrId = `${sessionId}-${seqs.length > 1 ? `${seqs[0]}.` : ""}${seqs.at(-1)}`.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 64);
     let heard: FinalTranscript;
     let dropped = false;
+    // The voiceprint is worked out while the words are transcribed, so attribution adds no time to the line.
+    const print = this.o.embed ? this.o.embed(joined).catch(() => null) : Promise.resolve(null);
     try {
       heard = await this.o.transcribe(joined, keywords, asrId);
     } catch (e) {
@@ -231,7 +238,8 @@ export class ListenSessions {
       heard = await this.o.transcribe(joined, [], `${asrId}-nk`.slice(0, 64));
     }
     const v = vitalsVocabulary(cleanTranscript(heard.text));
-    return { samples: parts, seqs, rate, audio_ms: totalMs(parts, rate), trailing_ms: silence, arrived, text: v.text, raw: heard.text, cost_usd: heard.cost_usd, keywords_dropped: dropped, rewrites: v.rewrites, strong: false, joined: false, heard_at: Date.now() };
+    const voiceprint = await print;
+    return { samples: parts, seqs, rate, audio_ms: totalMs(parts, rate), trailing_ms: silence, arrived, text: v.text, raw: heard.text, cost_usd: heard.cost_usd, keywords_dropped: dropped, rewrites: v.rewrites, strong: false, joined: false, heard_at: Date.now(), voiceprint };
   }
 
   // Hands one finished utterance to the runtime as an ambient line, with its audio kept in memory for the second ear.
@@ -242,7 +250,7 @@ export class ListenSessions {
       owner: s.owner, target: { admission_id: s.ctx.admission_id }, text: h.text, source: "audio", spoken_at: new Date(h.arrived - h.audio_ms).toISOString(),
       audio: { audio_ms: h.audio_ms, cost_usd: h.cost_usd, session_id: sessionId },
       ambient: { session_id: sessionId, seqs: h.seqs, raw_text: h.raw.slice(0, 2000), ended_at: new Date(h.arrived - h.trailing_ms).toISOString(), final_at: new Date(h.arrived).toISOString(), trailing_silence_ms: h.trailing_ms, finished_by: finished },
-      context: s.ctx, clip: encodeWav(concat(h.samples), h.rate), rewrites: h.rewrites, heard_at: h.heard_at
+      context: s.ctx, clip: encodeWav(concat(h.samples), h.rate), rewrites: h.rewrites, heard_at: h.heard_at, ...(this.o.embed ? { voiceprint: h.voiceprint } : {})
     });
     const u: ListenUtterance = { id: r.line_id, line_id: r.line_id, task_id: r.task_id, text: h.text, seqs: h.seqs, class: null, classes: [] };
     s.unreported.push(u);
