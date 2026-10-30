@@ -65,8 +65,13 @@ export class VersionDesk {
     if (prior) throw new VersionError("bad_transition", `proposal ${proposalId} is already version ${(prior.payload as { version: number }).version}; adopted versions are never rebuilt`);
     const val = readStream(this.storeRoot, VALIDATIONS_STREAM)
       .filter((e) => e.record_type === "validation.completed" && (e.payload as { proposal_ref?: { seq?: number } }).proposal_ref?.seq === sub.seq).at(-1);
-    const report = val?.payload as { report?: { status?: string; hashes?: { proposal?: string | null } } } | undefined;
+    const report = val?.payload as { report?: { status?: string; hashes?: { proposal?: string | null }; gate?: { rework_budget_min_per_case?: number; rework_max_added_min?: number; rework_within_budget?: boolean } | null } } | undefined;
     if (report?.report?.status !== "dev_validated") throw new VersionError("not_validated", `proposal ${proposalId} has no dev_validated validation`);
+    // The approver adopts the rework budget the gate assessed, so a validation from before the budget rule must be run again.
+    const g = report.report.gate;
+    if (typeof g?.rework_budget_min_per_case !== "number" || typeof g.rework_max_added_min !== "number") throw new VersionError("not_validated", `proposal ${proposalId} was validated before the rework budget; validate it again so the gate assesses its rework`);
+    if (g.rework_within_budget !== true) throw new VersionError("not_validated", `proposal ${proposalId} adds ${g.rework_max_added_min} minutes of rework on one case, over the ${g.rework_budget_min_per_case}-minute budget`);
+    const reworkBudget = { min_per_case: g.rework_budget_min_per_case, max_added_min: g.rework_max_added_min, approved_by: approver.staff_id };
     const meta = {
       author: { kind: "model_session" as const, id: proposalId }, proposal_id: proposalId,
       source_evidence: { event_ids: p.evidence.event_ids, hypothesis_ids: p.evidence.hypothesis_ids, experiment_ids: p.evidence.experiment_ids, validation_report_id: `${val!.stream_id}#${val!.seq}` },
@@ -80,7 +85,7 @@ export class VersionDesk {
     this.registry.setValidation(v, "dev_validated");
     this.log.append("version.created", { version: v, base_version: p.base_version, ops: p.ops, scope: p.scope, meta, definition_hash: built.version.definition_hash, validation_ref: { stream_id: val!.stream_id, seq: val!.seq }, proposal_ref: { stream_id: sub.stream_id, seq: sub.seq } }, { recorded_at: atMinute, occurred_at: atMinute });
     const adopted = this.registry.adopt(v, approver, at);
-    this.log.append("version.adopted", { version: v, approver, at, scope: p.scope, definition_hash: adopted.definition_hash, supersedes: adopted.metadata.supersedes }, { recorded_at: atMinute, occurred_at: atMinute });
+    this.log.append("version.adopted", { version: v, approver, at, scope: p.scope, definition_hash: adopted.definition_hash, supersedes: adopted.metadata.supersedes, rework_budget: reworkBudget }, { recorded_at: atMinute, occurred_at: atMinute });
     return adopted;
   }
 

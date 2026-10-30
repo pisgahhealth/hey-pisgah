@@ -544,6 +544,49 @@
         "insufficient_evidence_default": false
       },
       "hash": "aaa7b4bf5516a9365591c0c1e59141450d4ee1c34d85adc8d1ed0d42646b6ea7"
+    },
+    {
+      "revision": 15,
+      "at": "2026-10-30T06:53:23.232Z",
+      "reason": "Revision 15 (lane G8, from the 30 Oct wording review). The aim line in the shared system prompt now states a per-case rework budget: no ward requirement broken and at most 10 minutes of extra rework on any one case, a budget a person approves when adopting a change; added rework is still a cost a proposal states as a trade-off, and the validation gate now checks it against the budget. The figure is read from the hospital's aim configuration; the dev gate reports rework_within_budget and the version desk records the budget the approver accepted on version.adopted. Reason: revision 13 removed no extra rework but left the objective to the gate without a figure; the review asked for a budget assessed at the gate and approved at adoption instead of only stating the cost. Tools, settings and stage texts are unchanged from revision 14. Runs under revisions 1 to 14, the adopted proposal included, are not re-scored; the budget applies forward.",
+      "content": {
+        "arms": {
+          "adaptive": {
+            "prompt": "19ea3fe7cd45807a276893a8d41c285904cf71f3f592a8681df621a898f1d9ee",
+            "tools": "87265ba7404334a7710c1964b36097d966822c14988664e9dee5d5c900dab5e7"
+          },
+          "a3": {
+            "prompt": "56779d96a9979cbcb35e75eea6e4edcd7f1d59043786bd8ca56fd7904e7c2795",
+            "tools": "ebd093c38f470db76c9ed635053427d01e13fc2efb2c8a4257472defbd173085"
+          },
+          "a4": {
+            "prompt": "87deaf979e5521d9fbbe7fc02b767145a4aabb61da73dffae2715476e7fed1c2",
+            "tools": "d521daaa52592aef67c9b70682b669f3a554da08e264fc093df87c873b0ec0d4"
+          },
+          "prior": {
+            "prompt": "135c34ab4c48a3f27d454f33b26ab45ac8cc6d120d65329f1d44d4f0d9f9b58d",
+            "tools": "a69f44f1678b28a5d05fe8a6b7ce1d69df7da8c6025662abb41092d1d4399167"
+          }
+        },
+        "settings": {
+          "effort": "xhigh",
+          "adaptive_controller": "cycle",
+          "adaptive_efforts": [
+            "medium",
+            "high"
+          ],
+          "adaptive_max_calls": 80,
+          "parallel_tool_calls": true,
+          "max_completion_tokens": 32000,
+          "context_chars": 30000,
+          "history_chars": 70000,
+          "turn_result_chars": 20000,
+          "provider": "modal",
+          "model": "meta-models/Muse-Spark-Open-816B-A42B"
+        },
+        "insufficient_evidence_default": false
+      },
+      "hash": "cbca7dda1117924ab44ed3ee0001d000d28e9c24b9687751273899657823082b"
     }
   ]
 }

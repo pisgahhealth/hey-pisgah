@@ -29,6 +29,38 @@
    "insufficient_evidence": 0,
    "no_outcome": 8
   },
+  "summary_only_runs": {
+   "note": "Adaptive runs from the first discovery lane, before this file listed runs; kept as the summaries that lane recorded, not re-scored. Their event logs are not in this file, so they count only in the development history.",
+   "runs": [
+    {
+     "run_id": "run-35859e64",
+     "outcome": "no_outcome",
+     "stop": "none; the process ended when the lane session was stopped",
+     "commitment": {
+      "revision": 1,
+      "hash": "1703fa91fa4489e45a0cbb60770bc9b8349afa537d81016eeea6ef3df6209dd6"
+     },
+     "effort": "xhigh",
+     "model": "meta-models/Muse-Spark-Open-816B-A42B",
+     "calls": 15,
+     "cost_usd": 0.4318
+    },
+    {
+     "run_id": "run-0bc95e1c",
+     "outcome": "no_outcome",
+     "stop": "budget_calls",
+     "commitment": {
+      "revision": 2,
+      "hash": "b317394e616d25a961601f218fca59e5b97de1548c86bcd6943b213059bd13dd"
+     },
+     "effort": "xhigh",
+     "model": "meta-models/Muse-Spark-Open-816B-A42B",
+     "calls": 100,
+     "cost_usd": 5.7364,
+     "note": "5 hypotheses, 3 experiments, all prediction checks landed if_false; no proposal"
+    }
+   ]
+  },
   "runs": [
    {
     "run_id": "run-7b5830ad",
@@ -12715,13 +12747,297 @@
    ]
   }
  },
+ "discover_history_runs": 28,
+ "discover_history_dev_valid": 6,
+ "discover_history_by_revision": [
+  {
+   "revision": 1,
+   "runs": 1,
+   "dev_valid": 0,
+   "summary_only": 1
+  },
+  {
+   "revision": 2,
+   "runs": 2,
+   "dev_valid": 0,
+   "summary_only": 1
+  },
+  {
+   "revision": 4,
+   "runs": 1,
+   "dev_valid": 0,
+   "summary_only": 0
+  },
+  {
+   "revision": 5,
+   "runs": 2,
+   "dev_valid": 0,
+   "summary_only": 0
+  },
+  {
+   "revision": 6,
+   "runs": 2,
+   "dev_valid": 0,
+   "summary_only": 0
+  },
+  {
+   "revision": 7,
+   "runs": 1,
+   "dev_valid": 0,
+   "summary_only": 0
+  },
+  {
+   "revision": 8,
+   "runs": 1,
+   "dev_valid": 0,
+   "summary_only": 0
+  },
+  {
+   "revision": 9,
+   "runs": 6,
+   "dev_valid": 2,
+   "summary_only": 0
+  },
+  {
+   "revision": 10,
+   "runs": 6,
+   "dev_valid": 2,
+   "summary_only": 0
+  },
+  {
+   "revision": 11,
+   "runs": 3,
+   "dev_valid": 0,
+   "summary_only": 0
+  },
+  {
+   "revision": 12,
+   "runs": 3,
+   "dev_valid": 2,
+   "summary_only": 0
+  }
+ ],
  "discover_runs_listed": 26,
  "discover_dev_valid_any": 6,
  "discover_runs": 12,
  "discover_dev_valid": 4,
  "discover_invariance_from_revision": 10,
+ "discover_reconciliation": "6 of 28 is the development history across commitment revisions, not a success rate: the 26 runs listed with full records here plus the 2 earlier runs kept only as summaries (adaptive_runs.summary_only_runs, 0 dev-valid). 6 of 26 counts the same 6 dev-valid runs over the listed runs only, and 4 of 12 those at revision 10 or later, under the answer-invariance gate. The rate of the system as it stands is the latest configuration's, discover_config_*.",
+ "discover_configurations": [
+  {
+   "revision": 1,
+   "world": "pair",
+   "effort": "xhigh",
+   "runs": 1,
+   "dev_valid": 0,
+   "rate": 0,
+   "lower_95": 0,
+   "upper_95": 0.98,
+   "run_ids": [
+    "run-35859e64"
+   ]
+  },
+  {
+   "revision": 2,
+   "world": "pair",
+   "effort": "xhigh",
+   "runs": 2,
+   "dev_valid": 0,
+   "rate": 0,
+   "lower_95": 0,
+   "upper_95": 0.84,
+   "run_ids": [
+    "run-0bc95e1c",
+    "run-54ff5a29"
+   ]
+  },
+  {
+   "revision": 4,
+   "world": "pair",
+   "effort": "xhigh",
+   "runs": 1,
+   "dev_valid": 0,
+   "rate": 0,
+   "lower_95": 0,
+   "upper_95": 0.98,
+   "run_ids": [
+    "run-7b5830ad"
+   ]
+  },
+  {
+   "revision": 5,
+   "world": "pair",
+   "effort": "xhigh",
+   "runs": 2,
+   "dev_valid": 0,
+   "rate": 0,
+   "lower_95": 0,
+   "upper_95": 0.84,
+   "run_ids": [
+    "run-a8abc392",
+    "run-841b4fa7"
+   ]
+  },
+  {
+   "revision": 6,
+   "world": "pair",
+   "effort": "xhigh",
+   "runs": 2,
+   "dev_valid": 0,
+   "rate": 0,
+   "lower_95": 0,
+   "upper_95": 0.84,
+   "run_ids": [
+    "run-b41ebef2",
+    "run-22009f5a"
+   ]
+  },
+  {
+   "revision": 7,
+   "world": "pair",
+   "effort": "xhigh",
+   "runs": 1,
+   "dev_valid": 0,
+   "rate": 0,
+   "lower_95": 0,
+   "upper_95": 0.98,
+   "run_ids": [
+    "run-561dc2dd"
+   ]
+  },
+  {
+   "revision": 8,
+   "world": "pair",
+   "effort": "xhigh",
+   "runs": 1,
+   "dev_valid": 0,
+   "rate": 0,
+   "lower_95": 0,
+   "upper_95": 0.98,
+   "run_ids": [
+    "run-4b0db923"
+   ]
+  },
+  {
+   "revision": 9,
+   "world": "pair",
+   "effort": "high",
+   "runs": 3,
+   "dev_valid": 0,
+   "rate": 0,
+   "lower_95": 0,
+   "upper_95": 0.71,
+   "run_ids": [
+    "run-e6d10011",
+    "run-e6d10012",
+    "run-e6d10013"
+   ]
+  },
+  {
+   "revision": 9,
+   "world": "pair",
+   "effort": "medium",
+   "runs": 3,
+   "dev_valid": 2,
+   "rate": 0.67,
+   "lower_95": 0.09,
+   "upper_95": 0.99,
+   "run_ids": [
+    "run-e6d10001",
+    "run-e6d10002",
+    "run-e6d10003"
+   ]
+  },
+  {
+   "revision": 10,
+   "world": "pair",
+   "effort": "medium",
+   "runs": 2,
+   "dev_valid": 0,
+   "rate": 0,
+   "lower_95": 0,
+   "upper_95": 0.84,
+   "run_ids": [
+    "run-e6d20021",
+    "run-e6d20022"
+   ]
+  },
+  {
+   "revision": 10,
+   "world": "single",
+   "effort": "medium",
+   "runs": 2,
+   "dev_valid": 1,
+   "rate": 0.5,
+   "lower_95": 0.01,
+   "upper_95": 0.99,
+   "run_ids": [
+    "run-e6d20011",
+    "run-e6d20012"
+   ]
+  },
+  {
+   "revision": 10,
+   "world": "triple",
+   "effort": "medium",
+   "runs": 2,
+   "dev_valid": 1,
+   "rate": 0.5,
+   "lower_95": 0.01,
+   "upper_95": 0.99,
+   "run_ids": [
+    "run-e6d20031",
+    "run-e6d20032"
+   ]
+  },
+  {
+   "revision": 11,
+   "world": "pair",
+   "effort": "medium",
+   "runs": 3,
+   "dev_valid": 0,
+   "rate": 0,
+   "lower_95": 0,
+   "upper_95": 0.71,
+   "run_ids": [
+    "run-e6d30001",
+    "run-e6d30002",
+    "run-e6d30003"
+   ]
+  },
+  {
+   "revision": 12,
+   "world": "pair",
+   "effort": "medium",
+   "runs": 3,
+   "dev_valid": 2,
+   "rate": 0.67,
+   "lower_95": 0.09,
+   "upper_95": 0.99,
+   "run_ids": [
+    "run-e6d40001",
+    "run-e6d40002",
+    "run-e6d40003"
+   ]
+  }
+ ],
+ "discover_config": "revision 12, committed world, medium effort",
+ "discover_current_revision": 15,
+ "discover_config_revision": 12,
+ "discover_config_runs": 3,
+ "discover_config_dev_valid": 2,
+ "discover_config_rate": 0.67,
+ "discover_config_lower": 0.09,
+ "discover_config_upper": 0.99,
+ "discover_config_interval": "exact two-sided 95% (Clopper-Pearson)",
+ "discover_findings": [
+  "Effort is a finding: at revision 9 on the committed world, high effort was 0 of 3 dev-valid against medium 2 of 3, with the same tools, world and call cap.",
+  "Found on the one-operation variant (1 of 2) and the three-operation variant (1 of 2) at revision 10. The two-operation world is the committed world, found there at revision 9 (2 of 3, medium) and revision 12 (2 of 3, medium); the pair variant at revision 10 was 0 of 2."
+ ],
  "discover_invariance_pass": true,
  "discover_deny_clean": true,
+ "discover_invariance_covers": "the instructions (system prompt, opening request, stage texts, app-written texts) and the tool interface (tool definitions per stage, precondition table, registries, statistics method, sweep rule)",
+ "discover_invariance_excludes": "the evidence (case records, statistics values, experiment and sweep results) and the workflow definition (steps, edges, triggers), which vary by world",
  "discover_dev_valid_runs": [
   {
    "run_id": "run-e6d20012",
@@ -12744,9 +13060,11 @@
    "variant": "pair"
   }
  ],
+ "discover_rework_budget_from_revision": 15,
+ "discover_rework_budget_note": "From commitment revision 15 the hospital's aim allows extra rework up to a per-case budget that the dev gate assesses and the adopting person approves, where revisions 1 to 12 said no extra rework and revisions 13 and 14 left a stated cost to the gate. Runs under revisions 1 to 14, the adopted proposal included, were validated before that rule and are not re-scored.",
  "discover_adopted": "p-a563fe32",
  "discover_share": 0.56,
  "discover_rework_events": 4,
  "discover_rework_min": 4,
- "discover_note": "Counts read from the runs already in this file; a change that helps at a stated cost, not the best change. The answer-invariance test is the one in the intelligence package, run on this commit."
+ "discover_note": "Counts read from the runs already in this file; nothing is re-scored. A change that helps at a stated cost, not the best change. The answer-invariance test is the one in the intelligence package, run on this commit; it covers the instructions and tool interface, not the evidence or the workflow definition."
 }

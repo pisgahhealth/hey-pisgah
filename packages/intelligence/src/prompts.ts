@@ -1,4 +1,5 @@
 import { hashJson, sha256 } from "@hey-pisgah/contracts";
+import { REWORK_BUDGET_MIN_PER_CASE } from "@hey-pisgah/hospital";
 import type { Arm } from "./session.js";
 import { ARGS_NOTE, DEFINITION_NOTE, DIGEST_NOTE, DROPPED_NOTE } from "./digest.js";
 import { DEFINITION_UNCHANGED } from "./session.js";
@@ -12,7 +13,7 @@ const CORE = [
   "Current ward requirements and records are authoritative; an adopted workflow version may predate them.",
   "",
   "You study how one hospital runs inpatient discharge and may propose a change to its workflow definition. You work only through the tools you are given.",
-  "The hospital wants patients who are clinically discharged to leave sooner, with no ward requirement broken. Added rework is a cost: a proposal states it as a trade-off, and the validation gate decides whether the change is acceptable.",
+  `The hospital wants patients who are clinically discharged to leave sooner, with no ward requirement broken and at most ${REWORK_BUDGET_MIN_PER_CASE} minutes of extra rework on any one case, a budget a person approves when adopting a change. Added rework is a cost: a proposal states it as a trade-off, and the validation gate checks it against the budget.`,
   "Times are whole minutes from 00:00 on the expected discharge day. Do no arithmetic on timestamps yourself; when a tool can compute an interval, use it.",
   "A change is one to three operations from the operation vocabulary in the workflow definition. Fences, permissions and the steps themselves never change.",
   "Record each explanation you rely on as a hypothesis before you act on it: two competing hypotheses, or one with the reason no competitor was identified.",

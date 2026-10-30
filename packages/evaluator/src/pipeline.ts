@@ -3,7 +3,7 @@ import {
   type RunResult, type WorkflowDefinition as WD
 } from "@hey-pisgah/contracts";
 import { loadPool, type CaseFile, type Manifest } from "@hey-pisgah/cases";
-import { loadV1, worldRules } from "@hey-pisgah/hospital";
+import { hospitalAim, loadV1, worldRules } from "@hey-pisgah/hospital";
 import { effectiveParams, eventLogHash, externalSubLogHash, rulesHashFor, runDefinition, type ExternalSchedule } from "@hey-pisgah/simulator";
 import { openStream, readStream } from "@hey-pisgah/store";
 import { applyOperations, evalCondition, inScope, type Facts, type Issue } from "@hey-pisgah/workflow";
@@ -59,7 +59,11 @@ export type CaseRow = {
   // Documents the ward requires for this case whose final the base completed and the proposal did not.
   documents_dropped?: string[];
 };
-export type Gate = { pass: boolean; no_regression: boolean; prohibited_attempts: number; exception_check: boolean; fences_intact: boolean; documents_kept: boolean };
+export type Gate = {
+  pass: boolean; no_regression: boolean; prohibited_attempts: number; exception_check: boolean; fences_intact: boolean; documents_kept: boolean;
+  // The per-case rework budget the gate assessed against, the most rework the proposal added on one in-scope case, and whether that fits.
+  rework_budget_min_per_case: number; rework_max_added_min: number; rework_within_budget: boolean;
+};
 export type ValidationReport = {
   proposal_id: string | null; proposal_hash: string; base_version: number;
   status: "dev_validated" | "dev_failed" | "invalid";
@@ -73,7 +77,7 @@ export type ValidationReport = {
 export type RepairHook = (raw: unknown, issues: string[], attempt: number) => unknown | Promise<unknown>;
 // baseRuns lets a caller that validates many proposals on one base run each base case once.
 export type BaseRuns = Map<string, { run: RunResult; ac: AcReport }>;
-export type PipelineOptions = { base?: WD; cases?: ValidationCase[]; caseFacts?: readonly Facts[]; repair?: RepairHook; r2Effective?: boolean; baseRuns?: BaseRuns };
+export type PipelineOptions = { base?: WD; cases?: ValidationCase[]; caseFacts?: readonly Facts[]; repair?: RepairHook; r2Effective?: boolean; baseRuns?: BaseRuns; reworkBudgetMinPerCase?: number };
 
 // Hashes whatever arrived, after a JSON round trip, so a malformed proposal still gets a stable id.
 const rawHash = (raw: unknown): string => hashJson(JSON.parse(JSON.stringify(raw ?? null)) as unknown);
@@ -93,16 +97,20 @@ export function droppedDocuments(base: WD, b: RunResult, q: RunResult): string[]
   return finals.filter((s) => done(b, s.step_id) && !done(q, s.step_id)).map((s) => s.document_ref!.document_id).sort();
 }
 
-// The dev gate: no case passes on base and fails on the proposal, zero prohibited attempts, out-of-scope logs identical, fences intact, no ward-required document switched off; improvement is not required.
-export function devGate(rows: readonly CaseRow[], x: { def: WD; base: WD; aborted: boolean; prohibited: number }): Gate {
+// The dev gate: no case passes on base and fails on the proposal, zero prohibited attempts, out-of-scope logs identical, fences intact, no ward-required document switched off, extra rework within the per-case budget; improvement is not required.
+export function devGate(rows: readonly CaseRow[], x: { def: WD; base: WD; aborted: boolean; prohibited: number; reworkBudgetMinPerCase?: number }): Gate {
+  const budget = x.reworkBudgetMinPerCase ?? hospitalAim().rework_budget_min_per_case;
+  const added = rows.filter((r) => r.in_scope).map((r) => r.delta.rework_min ?? 0);
+  const maxAdded = Math.max(0, ...added);
   const g = {
     no_regression: rows.every((r) => !(r.base.pass && !r.proposal.pass)),
     prohibited_attempts: x.prohibited,
     exception_check: rows.filter((r) => !r.in_scope).every((r) => r.identical_log),
     fences_intact: fencesHash(x.def) === fencesHash(x.base) && permissionsHash(x.def) === permissionsHash(x.base) && !x.aborted,
-    documents_kept: rows.every((r) => !(r.documents_dropped ?? []).length)
+    documents_kept: rows.every((r) => !(r.documents_dropped ?? []).length),
+    rework_budget_min_per_case: budget, rework_max_added_min: maxAdded, rework_within_budget: maxAdded <= budget
   };
-  return { ...g, pass: g.no_regression && g.prohibited_attempts === 0 && g.exception_check && g.fences_intact && g.documents_kept };
+  return { ...g, pass: g.no_regression && g.prohibited_attempts === 0 && g.exception_check && g.fences_intact && g.documents_kept && g.rework_within_budget };
 }
 
 // Validates one proposal on dev data: schema with repair, static rules, matched runs, acceptance checks and the dev gate.
@@ -178,7 +186,7 @@ export async function validateProposal(raw: unknown, opts: PipelineOptions = {})
   }
   if (problems.length) return { ...empty("invalid", "matched_runs", problems, repairs, p.proposal_id, built.warnings), hashes: { base: baseHash, proposal: defHash, rules: null, acceptance: accHash } };
 
-  const gate = devGate(rows, { def, base, aborted, prohibited });
+  const gate = devGate(rows, { def, base, aborted, prohibited, ...(opts.reworkBudgetMinPerCase !== undefined ? { reworkBudgetMinPerCase: opts.reworkBudgetMinPerCase } : {}) });
   const waits = rows.map((r) => r.delta.post_signoff_wait_min).filter((x): x is number => x !== null);
   return {
     proposal_id: p.proposal_id, proposal_hash: rawHash(raw), base_version: base.version,

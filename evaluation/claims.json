@@ -140,12 +140,12 @@
       "acceptance": {
         "command": "npm run discover (adaptive, medium) per run, then npx tsx apps/cli/src/discover-claim.ts --invariance pass after the answer-invariance test",
         "result_path": "evaluation/results/discovery.json",
-        "predicate": "discover_dev_valid >= 1 && discover_invariance_pass == true && discover_deny_clean == true ; amber: discover_dev_valid_any >= 1",
+        "predicate": "discover_config_dev_valid >= 1 && discover_invariance_pass == true && discover_deny_clean == true ; amber: discover_dev_valid_any >= 1",
         "measured_on": "dev"
       },
       "wording": {
-        "pass": "Found a change that helps, at a stated cost: {discover_dev_valid} of {discover_runs} blind runs under the answer-invariance gate proposed a dev-valid change; the adopted one gives {discover_share} of the planted change's gain and adds {discover_rework_events} document revisions",
-        "partial": "{discover_dev_valid_any} runs proposed a dev-valid change, but none under the answer-invariance gate",
+        "pass": "Found a change that helps, at a stated cost: under the latest measured configuration ({discover_config}) {discover_config_dev_valid} of {discover_config_runs} blind runs proposed a dev-valid change (95% interval {discover_config_lower} to {discover_config_upper}); the adopted one gives {discover_share} of the planted change's gain and adds {discover_rework_events} document revisions; the invariance test holds the instructions and tool interface fixed across worlds, not the evidence or the workflow definition",
+        "partial": "{discover_dev_valid_any} of {discover_history_runs} development runs proposed a dev-valid change, but none under the latest measured configuration ({discover_config})",
         "fail": "No blind run proposed a dev-valid change",
         "not_measured": "Not measured yet"
       },
@@ -169,8 +169,8 @@
         "measured_on": "dev"
       },
       "wording": {
-        "pass": "A person adopted the change; on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes, and on {withheld_case} it was withheld by its scope",
-        "partial": "Ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes) and was withheld on {withheld_case}, adopted by the disclosed synthetic ward manager; awaiting Samuel's approval",
+        "pass": "A person adopted the change; in the simulator, on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes; on the {dev_cases} dev cases the median wait change was {dev_median_wait_delta_min} minutes, with {dev_moved} cases moved ({dev_shorter} shorter, {dev_longer} longer); on {withheld_case} it was withheld by its scope",
+        "partial": "In the simulator, ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes); on the {dev_cases} dev cases the median wait change was {dev_median_wait_delta_min} minutes, with {dev_moved} cases moved ({dev_shorter} shorter, {dev_longer} longer); withheld on {withheld_case}; adopted by the disclosed synthetic ward manager, awaiting Samuel's approval",
         "fail": "The adopted change did not run differently on the fresh case, or was not withheld where its scope says",
         "not_measured": "Not measured yet"
       },
@@ -228,7 +228,7 @@
     },
     {
       "claim_id": "C-10",
-      "question": "Did a second learning cycle run on verified outcomes and reach a result?",
+      "question": "Did a second investigation cycle run on verified outcomes and reach a result?",
       "demo_surface": {
         "step": "4",
         "component": "cycle 2 tab"
@@ -253,7 +253,7 @@
     },
     {
       "claim_id": "C-11",
-      "question": "How does the learned change compare with the baselines, including a rule that already knows the answer?",
+      "question": "How does the discovered change compare with the baselines, including a rule that already knows the answer?",
       "demo_surface": {
         "step": "results",
         "component": "ladder A-prior, A3, A2 vs A1"
@@ -635,17 +635,17 @@
       },
       "evaluation_view": {
         "tab": "Prediction checks",
-        "table": "adaptive runs per commitment revision, k of n, with the answer-invariance gate"
+        "table": "adaptive runs per commitment revision, world and effort, k of n with an exact interval, and what the answer-invariance test covers"
       },
       "acceptance": {
         "command": "npm run discover (adaptive, medium) per run, then npx tsx apps/cli/src/discover-claim.ts --invariance pass after the answer-invariance test",
         "result_path": "evaluation/results/discovery.json",
-        "predicate": "discover_dev_valid >= 1 && discover_invariance_pass == true && discover_deny_clean == true ; amber: discover_dev_valid_any >= 1",
+        "predicate": "discover_config_dev_valid >= 1 && discover_invariance_pass == true && discover_deny_clean == true ; amber: discover_dev_valid_any >= 1",
         "measured_on": "dev"
       },
       "wording": {
-        "pass": "Found a change that helps, at a stated cost: {discover_dev_valid} of {discover_runs} blind runs under the answer-invariance gate proposed a dev-valid change; the adopted one gives {discover_share} of the planted change's gain and adds {discover_rework_events} document revisions",
-        "partial": "{discover_dev_valid_any} runs proposed a dev-valid change, but none under the answer-invariance gate",
+        "pass": "Found a change that helps, at a stated cost: under the latest measured configuration ({discover_config}) {discover_config_dev_valid} of {discover_config_runs} blind runs proposed a dev-valid change (95% interval {discover_config_lower} to {discover_config_upper}); the adopted one gives {discover_share} of the planted change's gain and adds {discover_rework_events} document revisions; the invariance test holds the instructions and tool interface fixed across worlds, not the evidence or the workflow definition",
+        "partial": "{discover_dev_valid_any} of {discover_history_runs} development runs proposed a dev-valid change, but none under the latest measured configuration ({discover_config})",
         "fail": "No blind run proposed a dev-valid change",
         "not_measured": "Not measured yet"
       },
@@ -669,8 +669,8 @@
         "measured_on": "dev"
       },
       "wording": {
-        "pass": "A person adopted the change; on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes, it was withheld on {withheld_case} by its scope, and in the EMR {emr_offer_reason}",
-        "partial": "Ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes) and was withheld on {withheld_case}, adopted by the disclosed synthetic ward manager; in the EMR {emr_offer_reason}; awaiting Samuel's approval",
+        "pass": "A person adopted the change; in the simulator, on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes; on the {dev_cases} dev cases the median wait change was {dev_median_wait_delta_min} minutes, with {dev_moved} cases moved ({dev_shorter} shorter, {dev_longer} longer); it was withheld on {withheld_case} by its scope, and in the EMR {emr_offer_reason}",
+        "partial": "In the simulator, ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes); on the {dev_cases} dev cases the median wait change was {dev_median_wait_delta_min} minutes, with {dev_moved} cases moved ({dev_shorter} shorter, {dev_longer} longer); withheld on {withheld_case}, adopted by the disclosed synthetic ward manager; in the EMR {emr_offer_reason}; awaiting Samuel's approval",
         "fail": "The adopted change did not run differently on the fresh case, was not withheld where its scope says, or this EMR cannot carry it or offered it nowhere: {deployment_reason}",
         "not_measured": "Not measured yet"
       },
@@ -960,6 +960,78 @@
         }
       },
       "reason": "The reviewers asked for reversed evidence as paired runs. C-10's wording now states, from cycle2.json's reversed_pairs, what three paired second cycles under revision 14 did when the adopted change's outcome was reversed against the same cycle on the true outcomes. The predicate is unchanged: no response to reversed evidence is required, since one noisy case must not force a reversal."
-    }
+    },
+    {
+      "date": "2026-10-30",
+      "by": "G8",
+      "claims": [
+        "C-06",
+        "C-07",
+        "C-10",
+        "C-11",
+        "C-26",
+        "C-27"
+      ],
+      "previous_predicates": {
+        "C-06": "discover_dev_valid >= 1 && discover_invariance_pass == true && discover_deny_clean == true ; amber: discover_dev_valid_any >= 1",
+        "C-26": "discover_dev_valid >= 1 && discover_invariance_pass == true && discover_deny_clean == true ; amber: discover_dev_valid_any >= 1"
+      },
+      "previous_wording": {
+        "C-06": {
+          "pass": "Found a change that helps, at a stated cost: {discover_dev_valid} of {discover_runs} blind runs under the answer-invariance gate proposed a dev-valid change; the adopted one gives {discover_share} of the planted change's gain and adds {discover_rework_events} document revisions",
+          "partial": "{discover_dev_valid_any} runs proposed a dev-valid change, but none under the answer-invariance gate",
+          "fail": "No blind run proposed a dev-valid change",
+          "not_measured": "Not measured yet"
+        },
+        "C-26": {
+          "pass": "Found a change that helps, at a stated cost: {discover_dev_valid} of {discover_runs} blind runs under the answer-invariance gate proposed a dev-valid change; the adopted one gives {discover_share} of the planted change's gain and adds {discover_rework_events} document revisions",
+          "partial": "{discover_dev_valid_any} runs proposed a dev-valid change, but none under the answer-invariance gate",
+          "fail": "No blind run proposed a dev-valid change",
+          "not_measured": "Not measured yet"
+        },
+        "C-07": {
+          "pass": "A person adopted the change; on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes, and on {withheld_case} it was withheld by its scope",
+          "partial": "Ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes) and was withheld on {withheld_case}, adopted by the disclosed synthetic ward manager; awaiting Samuel's approval",
+          "fail": "The adopted change did not run differently on the fresh case, or was not withheld where its scope says",
+          "not_measured": "Not measured yet"
+        },
+        "C-27": {
+          "pass": "A person adopted the change; on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes, it was withheld on {withheld_case} by its scope, and in the EMR {emr_offer_reason}",
+          "partial": "Ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes) and was withheld on {withheld_case}, adopted by the disclosed synthetic ward manager; in the EMR {emr_offer_reason}; awaiting Samuel's approval",
+          "fail": "The adopted change did not run differently on the fresh case, was not withheld where its scope says, or this EMR cannot carry it or offered it nowhere: {deployment_reason}",
+          "not_measured": "Not measured yet"
+        }
+      },
+      "previous_questions": {
+        "C-10": "Did a second learning cycle run on verified outcomes and reach a result?",
+        "C-11": "How does the learned change compare with the baselines, including a rule that already knows the answer?"
+      },
+      "previous_tables": {
+        "C-26": "adaptive runs per commitment revision, k of n, with the answer-invariance gate"
+      },
+      "reason": "Wave G wording corrections, results unchanged and no run re-scored. C-26 and C-06 now read the per-configuration rate of the latest configuration (revision 12, committed world, medium: 2 of 3, exact 95% interval 0.09 to 0.99) instead of 4 of 12 pooled over revisions 10 to 12; discovery.json keeps the development history (6 of 28: the 26 listed runs plus 2 earlier runs kept as summaries) and the 6 of 26 over listed runs, reconciled in discover_reconciliation. Green now needs a dev-valid run under that configuration, which is stricter. The wording says the invariance test covers the instructions and tool interface, not the evidence or the workflow definition that vary by world. C-27 and C-07 say simulator and carry the dev-case distribution beside the fresh case (median wait change 0, 5 of 15 moved, 4 shorter and 1 longer); C-27 keeps F3b's EMR clauses. C-10 and C-11 questions drop learning words: the system discovers and adapts under approval until C-10 reads outcomes and a reversed-evidence run responds to the contradiction, and claims:check now refuses a learning word before then."
+    },
+    {
+      "date": "2026-10-30",
+      "by": "G8",
+      "claims": [
+        "C-06",
+        "C-26"
+      ],
+      "previous_wording": {
+        "C-06": {
+          "pass": "Found a change that helps, at a stated cost: under the latest configuration ({discover_config}) {discover_config_dev_valid} of {discover_config_runs} blind runs proposed a dev-valid change (95% interval {discover_config_lower} to {discover_config_upper}); the adopted one gives {discover_share} of the planted change's gain and adds {discover_rework_events} document revisions; the invariance test holds the instructions and tool interface fixed across worlds, not the evidence or the workflow definition",
+          "partial": "{discover_dev_valid_any} of {discover_history_runs} development runs proposed a dev-valid change, but none under the latest configuration ({discover_config})",
+          "fail": "No blind run proposed a dev-valid change",
+          "not_measured": "Not measured yet"
+        },
+        "C-26": {
+          "pass": "Found a change that helps, at a stated cost: under the latest configuration ({discover_config}) {discover_config_dev_valid} of {discover_config_runs} blind runs proposed a dev-valid change (95% interval {discover_config_lower} to {discover_config_upper}); the adopted one gives {discover_share} of the planted change's gain and adds {discover_rework_events} document revisions; the invariance test holds the instructions and tool interface fixed across worlds, not the evidence or the workflow definition",
+          "partial": "{discover_dev_valid_any} of {discover_history_runs} development runs proposed a dev-valid change, but none under the latest configuration ({discover_config})",
+          "fail": "No blind run proposed a dev-valid change",
+          "not_measured": "Not measured yet"
+        }
+      },
+      "reason": "Intelligence commitment revision 15 sets the hospital's aim to a per-case rework budget (10 minutes on any one case) that the dev gate assesses and the adopting person approves, where revision 13 had left the gate to decide on a stated cost and earlier revisions said no extra rework. Revision 15 has no discovery runs yet, so the discovery wording names the latest measured configuration (revision 12); predicates and results are unchanged, and the revision 12 runs and the adopted proposal are not re-scored under the budget."    }
   ]
 }

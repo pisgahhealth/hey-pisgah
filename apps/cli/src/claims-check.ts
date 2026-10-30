@@ -9,11 +9,35 @@ export const ClaimsRegistry = z.object({ schema_version: z.number().int(), claim
 export type ClaimsCheckOptions = { commit?: string; now?: () => string; resultsRoot?: string };
 type StatusFile = z.infer<typeof ClaimsStatusFile>;
 
+// Learning words wait for two results: the second cycle reading its own outcomes, and its latest reversed-evidence run responding to the contradiction.
+export const LEARNING_WORD = /\blearn(s|ed|ing|t)?\b/i;
+const readResult = (file: string): unknown => { try { return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : null; } catch { return null; } };
+
+// Whether the system may be said to learn, read from C-10's own result file.
+export function learningEarned(resultsRoot: string): { c10_reads_outcomes: boolean; reversed_evidence_passed: boolean } {
+  const c2 = readResult(`${resultsRoot}/evaluation/results/cycle2.json`);
+  const outcomes = fieldAt(c2, "read.outcomes");
+  const runs = fieldAt(c2, "counter_evidence.runs");
+  const last = Array.isArray(runs) ? (runs.at(-1) as { responded_to_contradiction?: unknown } | undefined) : undefined;
+  return { c10_reads_outcomes: typeof outcomes === "number" && outcomes >= 1, reversed_evidence_passed: last?.responded_to_contradiction === true };
+}
+
+// Every claim text that uses a learning word while either result is missing; the wording until then is "discovers and adapts under approval".
+export function learningWordProblems(claims: readonly Claim[], earned: ReturnType<typeof learningEarned>): string[] {
+  if (earned.c10_reads_outcomes && earned.reversed_evidence_passed) return [];
+  return claims.flatMap((c) => {
+    const texts: [string, string][] = [["question", c.question], ["component", c.demo_surface.component], ["table", c.evaluation_view.table], ...Object.entries(c.wording).map(([k, w]) => [`wording.${k}`, w] as [string, string])];
+    return texts.filter(([, t]) => LEARNING_WORD.test(t)).map(([where]) => `${c.claim_id} ${where} uses a learning word before C-10 reads outcomes and the reversed-evidence test passes`);
+  });
+}
+
 const placeholders = (wording: Record<string, string>) => [...new Set(Object.values(wording).flatMap((w) => [...w.matchAll(/\{([a-z0-9_]+)\}/g)].map((m) => m[1]!)))];
 
 // Evaluates each claim's predicate over its result file and writes evaluation/claims.status.json.
 export function claimsCheck(root: string, opts: ClaimsCheckOptions = {}): StatusFile {
   const registry = ClaimsRegistry.parse(JSON.parse(readFileSync(`${root}/evaluation/claims.json`, "utf8")));
+  const words = learningWordProblems(registry.claims, learningEarned(opts.resultsRoot ?? root));
+  if (words.length) throw new Error(`claims:check: ${words.join("; ")}`);
   const now = opts.now ?? (() => new Date().toISOString());
   const commit = opts.commit ?? execSync("git rev-parse --short HEAD", { cwd: root }).toString().trim();
   const claims = registry.claims.map((c) => {

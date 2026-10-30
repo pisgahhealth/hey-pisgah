@@ -2,7 +2,7 @@
   "name": "hey-pisgah",
   "version": "0.0.1",
   "private": true,
-  "description": "Hey Pisgah: a personal agent for hospital discharge administration that learns a better workflow from evidence, built on Meta Muse models for the Meta Global AI Developer Hackathon 2026.",
+  "description": "Hey Pisgah: a personal agent for hospital discharge administration that discovers and adapts under approval a better workflow from evidence, built on Meta Muse models for the Meta Global AI Developer Hackathon 2026.",
   "license": "MIT",
   "type": "module",
   "engines": {
