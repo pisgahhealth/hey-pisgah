@@ -74,10 +74,11 @@ export function identityFrom(line: string): SpokenIdentity | null {
   return { name, phone: phone && /^0[789][01]\d{8}$/.test(phone) ? phone : null, words: `${m[0]} ${name}` };
 }
 
-const DIGIT_WORDS: Record<string, string> = { zero: "0", oh: "0", o: "0", one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9" };
+// "over" is how the local streaming ear hears a spoken "oh" inside a phone number; it counts only inside a run of four or more digit words.
+const DIGIT_WORDS: Record<string, string> = { zero: "0", oh: "0", o: "0", over: "0", one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9" };
 // Spoken digits as digits, so "zero eight zero three" reads as 0803; "double" repeats the next digit.
 export function digitsSpoken(line: string): string {
-  return line.replace(/\b(?:(?:zero|one|two|three|four|five|six|seven|eight|nine|double|triple|oh|o)\b[\s,-]*){4,}/gi, (run) => {
+  return line.replace(/\b(?:(?:zero|one|two|three|four|five|six|seven|eight|nine|double|triple|oh|o|over)\b[\s,-]*){4,}/gi, (run) => {
     const out: string[] = [];
     let times = 1;
     for (const w of run.toLowerCase().split(/[\s,-]+/).filter(Boolean)) {
