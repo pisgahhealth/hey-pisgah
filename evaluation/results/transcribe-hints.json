@@ -1,0 +1,3112 @@
+{
+ "generated_by": "packages/voice/research/hints.publish.run.ts",
+ "model": "muse-voice-transcribe-1.0",
+ "endpoint": "REST PUSH_TO_TALK",
+ "lines": {
+  "total": 206,
+  "r1b": 70,
+  "v2": 136,
+  "with_names": [
+   "r1b-T08",
+   "r1b-T09",
+   "r1b-T12",
+   "r1b-H13",
+   "r1b-H15",
+   "r1b-H17",
+   "r1b-H18",
+   "r1b-H20",
+   "v2-O063",
+   "v2-O068",
+   "v2-O072",
+   "v2-O075",
+   "v2-O081"
+  ],
+  "with_drugs": [
+   "r1b-T13",
+   "r1b-T18",
+   "r1b-H25",
+   "r1b-H26",
+   "r1b-H34",
+   "v2-O006",
+   "v2-O007",
+   "v2-O008",
+   "v2-O017",
+   "v2-O026",
+   "v2-O061",
+   "v2-O072",
+   "v2-R006",
+   "v2-R007",
+   "v2-R008",
+   "v2-V025"
+  ]
+ },
+ "reference": "R1.b: the words said as reconstructed in real-set.json; v2: the script words (lines whose words changed are kept, which raises word error alike in every condition)",
+ "hints": {
+  "patients": [
+   "Mrs Okon",
+   "Okon",
+   "Bassey"
+  ],
+  "staff": [
+   "Emeka",
+   "Bisi",
+   "Ada",
+   "Nurse Ada",
+   "Doctor Emeka",
+   "Pisgah"
+  ],
+  "ward_drugs": [
+   "paracetamol",
+   "Panadol",
+   "ceftriaxone",
+   "metronidazole",
+   "amlodipine",
+   "penicillin",
+   "normal saline",
+   "dextrose saline",
+   "Ringer's lactate",
+   "artemether lumefantrine",
+   "artesunate",
+   "amoxicillin",
+   "Augmentin",
+   "ciprofloxacin",
+   "gentamicin",
+   "ampicillin",
+   "cloxacillin",
+   "metformin",
+   "insulin",
+   "lisinopril",
+   "nifedipine",
+   "furosemide",
+   "omeprazole",
+   "ondansetron",
+   "diclofenac",
+   "tramadol",
+   "pentazocine",
+   "hydrocortisone",
+   "salbutamol",
+   "magnesium sulphate"
+  ]
+ },
+ "runs": 2,
+ "voided_429": 0,
+ "failed": [],
+ "cost_usd": 0.57208,
+ "conditions": [
+  {
+   "id": "none",
+   "label": "no hints, no language",
+   "keywords": "none",
+   "language_bias": [],
+   "all": {
+    "readings": 412,
+    "wer": 0.4066,
+    "ref_words": 3554,
+    "errors": 1445,
+    "values": {
+     "said": 176,
+     "right": 156,
+     "rate": 0.8864
+    },
+    "names": {
+     "said": 26,
+     "heard": 3,
+     "recall": 0.1154,
+     "missed": {
+      "Emeka": 4,
+      "Okon": 9,
+      "Pisgah": 2,
+      "Bisi": 4,
+      "Ada": 2,
+      "Bassey": 2
+     }
+    },
+    "drugs": {
+     "said": 32,
+     "heard": 18,
+     "recall": 0.5625,
+     "missed": {
+      "ceftriaxone": 6,
+      "paracetamol": 4,
+      "metronidazole": 2,
+      "normal saline": 2
+     }
+    },
+    "cost_usd": 0.114416,
+    "top_misheard": [
+     {
+      "heard": "temp -> temperature",
+      "n": 12,
+      "ids": [
+       "v2-O028",
+       "v2-O036",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018",
+       "v2-O028",
+       "v2-O036",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018"
+      ]
+     },
+     {
+      "heard": "bp's -> is",
+      "n": 11,
+      "ids": [
+       "v2-O031",
+       "v2-O043",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017",
+       "v2-O031",
+       "v2-O039",
+       "v2-O043",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017"
+      ]
+     },
+     {
+      "heard": "resp -> respiratory",
+      "n": 11,
+      "ids": [
+       "v2-O033",
+       "v2-O037",
+       "v2-O041",
+       "v2-V015",
+       "v2-V019",
+       "v2-O033",
+       "v2-O037",
+       "v2-O041",
+       "v2-O049",
+       "v2-V015",
+       "v2-V019"
+      ]
+     },
+     {
+      "heard": "blood -> block",
+      "n": 9,
+      "ids": [
+       "r1b-H29",
+       "v2-O001",
+       "v2-O002",
+       "v2-R001",
+       "r1b-H29",
+       "v2-O001",
+       "v2-O016",
+       "v2-R001",
+       "v2-V024"
+      ]
+     },
+     {
+      "heard": "pulse -> pause",
+      "n": 6,
+      "ids": [
+       "r1b-T01",
+       "r1b-T23",
+       "r1b-H21",
+       "r1b-T01",
+       "r1b-T23",
+       "r1b-H21"
+      ]
+     },
+     {
+      "heard": "a -> the",
+      "n": 5,
+      "ids": [
+       "r1b-T11",
+       "v2-O001",
+       "r1b-T11",
+       "r1b-H21",
+       "v2-O001"
+      ]
+     },
+     {
+      "heard": "gram -> ground",
+      "n": 5,
+      "ids": [
+       "v2-O008",
+       "v2-V028",
+       "v2-O008",
+       "v2-O020",
+       "v2-V028"
+      ]
+     },
+     {
+      "heard": "on -> going",
+      "n": 5,
+      "ids": [
+       "v2-V005-part",
+       "v2-V012-part",
+       "v2-V005-part",
+       "v2-V011-part",
+       "v2-V012-part"
+      ]
+     }
+    ]
+   },
+   "r1b": {
+    "readings": 140,
+    "wer": 0.2524,
+    "ref_words": 2044,
+    "errors": 516,
+    "values": {
+     "said": 60,
+     "right": 54,
+     "rate": 0.9
+    },
+    "names": {
+     "said": 16,
+     "heard": 3,
+     "recall": 0.1875,
+     "missed": {
+      "Emeka": 2,
+      "Okon": 7,
+      "Pisgah": 2,
+      "Bisi": 2
+     }
+    },
+    "drugs": {
+     "said": 10,
+     "heard": 5,
+     "recall": 0.5,
+     "missed": {
+      "ceftriaxone": 2,
+      "paracetamol": 2,
+      "metronidazole": 1
+     }
+    },
+    "cost_usd": 0.06364,
+    "top_misheard": [
+     {
+      "heard": "pulse -> pause",
+      "n": 6,
+      "ids": [
+       "r1b-T01",
+       "r1b-T23",
+       "r1b-H21",
+       "r1b-T01",
+       "r1b-T23",
+       "r1b-H21"
+      ]
+     },
+     {
+      "heard": "her -> our",
+      "n": 4,
+      "ids": [
+       "r1b-H27",
+       "r1b-H32",
+       "r1b-H09",
+       "r1b-H32"
+      ]
+     },
+     {
+      "heard": "the -> a",
+      "n": 4,
+      "ids": [
+       "r1b-H11",
+       "r1b-H15",
+       "r1b-H11",
+       "r1b-H15"
+      ]
+     },
+     {
+      "heard": "a -> the",
+      "n": 3,
+      "ids": [
+       "r1b-T11",
+       "r1b-T11",
+       "r1b-H21"
+      ]
+     },
+     {
+      "heard": "heart -> hard",
+      "n": 3,
+      "ids": [
+       "r1b-H11",
+       "r1b-H11",
+       "r1b-H11"
+      ]
+     },
+     {
+      "heard": "her -> the",
+      "n": 3,
+      "ids": [
+       "r1b-H09",
+       "r1b-H28",
+       "r1b-H28"
+      ]
+     },
+     {
+      "heard": "about -> a",
+      "n": 2,
+      "ids": [
+       "r1b-H33",
+       "r1b-H33"
+      ]
+     },
+     {
+      "heard": "added -> other",
+      "n": 2,
+      "ids": [
+       "r1b-T05",
+       "r1b-T05"
+      ]
+     }
+    ]
+   },
+   "v2": {
+    "readings": 272,
+    "wer": 0.6152,
+    "ref_words": 1510,
+    "errors": 929,
+    "values": {
+     "said": 116,
+     "right": 102,
+     "rate": 0.8793
+    },
+    "names": {
+     "said": 10,
+     "heard": 0,
+     "recall": 0,
+     "missed": {
+      "Ada": 2,
+      "Bisi": 2,
+      "Emeka": 2,
+      "Okon": 2,
+      "Bassey": 2
+     }
+    },
+    "drugs": {
+     "said": 22,
+     "heard": 13,
+     "recall": 0.5909,
+     "missed": {
+      "ceftriaxone": 4,
+      "metronidazole": 1,
+      "normal saline": 2,
+      "paracetamol": 2
+     }
+    },
+    "cost_usd": 0.050776,
+    "top_misheard": [
+     {
+      "heard": "temp -> temperature",
+      "n": 12,
+      "ids": [
+       "v2-O028",
+       "v2-O036",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018",
+       "v2-O028",
+       "v2-O036",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018"
+      ]
+     },
+     {
+      "heard": "bp's -> is",
+      "n": 11,
+      "ids": [
+       "v2-O031",
+       "v2-O043",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017",
+       "v2-O031",
+       "v2-O039",
+       "v2-O043",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017"
+      ]
+     },
+     {
+      "heard": "resp -> respiratory",
+      "n": 11,
+      "ids": [
+       "v2-O033",
+       "v2-O037",
+       "v2-O041",
+       "v2-V015",
+       "v2-V019",
+       "v2-O033",
+       "v2-O037",
+       "v2-O041",
+       "v2-O049",
+       "v2-V015",
+       "v2-V019"
+      ]
+     },
+     {
+      "heard": "blood -> block",
+      "n": 7,
+      "ids": [
+       "v2-O001",
+       "v2-O002",
+       "v2-R001",
+       "v2-O001",
+       "v2-O016",
+       "v2-R001",
+       "v2-V024"
+      ]
+     },
+     {
+      "heard": "gram -> ground",
+      "n": 5,
+      "ids": [
+       "v2-O008",
+       "v2-V028",
+       "v2-O008",
+       "v2-O020",
+       "v2-V028"
+      ]
+     },
+     {
+      "heard": "on -> going",
+      "n": 5,
+      "ids": [
+       "v2-V005-part",
+       "v2-V012-part",
+       "v2-V005-part",
+       "v2-V011-part",
+       "v2-V012-part"
+      ]
+     },
+     {
+      "heard": "go -> are",
+      "n": 4,
+      "ids": [
+       "v2-V005-part",
+       "v2-V011-part",
+       "v2-V005-part",
+       "v2-V011-part"
+      ]
+     },
+     {
+      "heard": "stat -> start",
+      "n": 4,
+      "ids": [
+       "v2-O007",
+       "v2-R007",
+       "v2-O007",
+       "v2-R007"
+      ]
+     }
+    ]
+   },
+   "per_run": [
+    {
+     "run": 0,
+     "readings": 206,
+     "wer": 0.408,
+     "ref_words": 1777,
+     "errors": 725,
+     "values": {
+      "said": 88,
+      "right": 79,
+      "rate": 0.8977
+     },
+     "names": {
+      "said": 13,
+      "heard": 1,
+      "recall": 0.0769,
+      "missed": {
+       "Emeka": 2,
+       "Okon": 5,
+       "Pisgah": 1,
+       "Bisi": 2,
+       "Ada": 1,
+       "Bassey": 1
+      }
+     },
+     "drugs": {
+      "said": 16,
+      "heard": 9,
+      "recall": 0.5625,
+      "missed": {
+       "ceftriaxone": 3,
+       "paracetamol": 2,
+       "metronidazole": 1,
+       "normal saline": 1
+      }
+     },
+     "cost_usd": 0.057208,
+     "top_misheard": [
+      {
+       "heard": "temp -> temperature",
+       "n": 6,
+       "ids": [
+        "v2-O028",
+        "v2-O036",
+        "v2-O040",
+        "v2-O044",
+        "v2-V014",
+        "v2-V018"
+       ]
+      },
+      {
+       "heard": "bp's -> is",
+       "n": 5,
+       "ids": [
+        "v2-O031",
+        "v2-O043",
+        "v2-O047",
+        "v2-V013",
+        "v2-V017"
+       ]
+      },
+      {
+       "heard": "resp -> respiratory",
+       "n": 5,
+       "ids": [
+        "v2-O033",
+        "v2-O037",
+        "v2-O041",
+        "v2-V015",
+        "v2-V019"
+       ]
+      },
+      {
+       "heard": "blood -> block",
+       "n": 4,
+       "ids": [
+        "r1b-H29",
+        "v2-O001",
+        "v2-O002",
+        "v2-R001"
+       ]
+      },
+      {
+       "heard": "pulse -> pause",
+       "n": 3,
+       "ids": [
+        "r1b-T01",
+        "r1b-T23",
+        "r1b-H21"
+       ]
+      },
+      {
+       "heard": "a -> the",
+       "n": 2,
+       "ids": [
+        "r1b-T11",
+        "v2-O001"
+       ]
+      },
+      {
+       "heard": "chart -> jump",
+       "n": 2,
+       "ids": [
+        "r1b-H43",
+        "r1b-H43"
+       ]
+      },
+      {
+       "heard": "go -> are",
+       "n": 2,
+       "ids": [
+        "v2-V005-part",
+        "v2-V011-part"
+       ]
+      }
+     ]
+    },
+    {
+     "run": 1,
+     "readings": 206,
+     "wer": 0.4052,
+     "ref_words": 1777,
+     "errors": 720,
+     "values": {
+      "said": 88,
+      "right": 77,
+      "rate": 0.875
+     },
+     "names": {
+      "said": 13,
+      "heard": 2,
+      "recall": 0.1538,
+      "missed": {
+       "Emeka": 2,
+       "Pisgah": 1,
+       "Bisi": 2,
+       "Okon": 4,
+       "Ada": 1,
+       "Bassey": 1
+      }
+     },
+     "drugs": {
+      "said": 16,
+      "heard": 9,
+      "recall": 0.5625,
+      "missed": {
+       "ceftriaxone": 3,
+       "paracetamol": 2,
+       "metronidazole": 1,
+       "normal saline": 1
+      }
+     },
+     "cost_usd": 0.057208,
+     "top_misheard": [
+      {
+       "heard": "bp's -> is",
+       "n": 6,
+       "ids": [
+        "v2-O031",
+        "v2-O039",
+        "v2-O043",
+        "v2-O047",
+        "v2-V013",
+        "v2-V017"
+       ]
+      },
+      {
+       "heard": "resp -> respiratory",
+       "n": 6,
+       "ids": [
+        "v2-O033",
+        "v2-O037",
+        "v2-O041",
+        "v2-O049",
+        "v2-V015",
+        "v2-V019"
+       ]
+      },
+      {
+       "heard": "temp -> temperature",
+       "n": 6,
+       "ids": [
+        "v2-O028",
+        "v2-O036",
+        "v2-O040",
+        "v2-O044",
+        "v2-V014",
+        "v2-V018"
+       ]
+      },
+      {
+       "heard": "blood -> block",
+       "n": 5,
+       "ids": [
+        "r1b-H29",
+        "v2-O001",
+        "v2-O016",
+        "v2-R001",
+        "v2-V024"
+       ]
+      },
+      {
+       "heard": "a -> the",
+       "n": 3,
+       "ids": [
+        "r1b-T11",
+        "r1b-H21",
+        "v2-O001"
+       ]
+      },
+      {
+       "heard": "gram -> ground",
+       "n": 3,
+       "ids": [
+        "v2-O008",
+        "v2-O020",
+        "v2-V028"
+       ]
+      },
+      {
+       "heard": "on -> going",
+       "n": 3,
+       "ids": [
+        "v2-V005-part",
+        "v2-V011-part",
+        "v2-V012-part"
+       ]
+      },
+      {
+       "heard": "pulse -> pause",
+       "n": 3,
+       "ids": [
+        "r1b-T01",
+        "r1b-T23",
+        "r1b-H21"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "vitals",
+   "label": "vitals words only (as shipped)",
+   "keywords": "vitals words only",
+   "language_bias": [],
+   "all": {
+    "readings": 412,
+    "wer": 0.3379,
+    "ref_words": 3554,
+    "errors": 1201,
+    "values": {
+     "said": 176,
+     "right": 160,
+     "rate": 0.9091
+    },
+    "names": {
+     "said": 26,
+     "heard": 4,
+     "recall": 0.1538,
+     "missed": {
+      "Emeka": 5,
+      "Pisgah": 2,
+      "Bisi": 4,
+      "Okon": 8,
+      "Bassey": 2,
+      "Ada": 1
+     }
+    },
+    "drugs": {
+     "said": 32,
+     "heard": 24,
+     "recall": 0.75,
+     "missed": {
+      "paracetamol": 2,
+      "ceftriaxone": 3,
+      "normal saline": 2,
+      "amlodipine": 1
+     }
+    },
+    "cost_usd": 0.114416,
+    "top_misheard": [
+     {
+      "heard": "temp -> temperature",
+      "n": 12,
+      "ids": [
+       "v2-O028",
+       "v2-O036",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018",
+       "v2-O028",
+       "v2-O036",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018"
+      ]
+     },
+     {
+      "heard": "bp's -> is",
+      "n": 11,
+      "ids": [
+       "v2-O031",
+       "v2-O039",
+       "v2-O043",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017",
+       "v2-O031",
+       "v2-O039",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017"
+      ]
+     },
+     {
+      "heard": "resp -> respiratory",
+      "n": 11,
+      "ids": [
+       "v2-O033",
+       "v2-O037",
+       "v2-O041",
+       "v2-O049",
+       "v2-V015",
+       "v2-V019",
+       "v2-O033",
+       "v2-O041",
+       "v2-O049",
+       "v2-V015",
+       "v2-V019"
+      ]
+     },
+     {
+      "heard": "her -> our",
+      "n": 5,
+      "ids": [
+       "r1b-H27",
+       "r1b-H28",
+       "r1b-H32",
+       "r1b-H11",
+       "r1b-H32"
+      ]
+     },
+     {
+      "heard": "sugar -> she",
+      "n": 5,
+      "ids": [
+       "v2-O030",
+       "v2-V020",
+       "v2-O030",
+       "v2-O038",
+       "v2-V020"
+      ]
+     },
+     {
+      "heard": "a -> the",
+      "n": 4,
+      "ids": [
+       "r1b-T11",
+       "r1b-H21",
+       "r1b-T11",
+       "r1b-H21"
+      ]
+     },
+     {
+      "heard": "her -> a",
+      "n": 4,
+      "ids": [
+       "v2-O024",
+       "v2-R007",
+       "r1b-H25",
+       "v2-R007"
+      ]
+     },
+     {
+      "heard": "on -> going",
+      "n": 4,
+      "ids": [
+       "v2-V005-part",
+       "v2-V012-part",
+       "v2-V005-part",
+       "v2-V012-part"
+      ]
+     }
+    ]
+   },
+   "r1b": {
+    "readings": 140,
+    "wer": 0.1962,
+    "ref_words": 2044,
+    "errors": 401,
+    "values": {
+     "said": 60,
+     "right": 60,
+     "rate": 1
+    },
+    "names": {
+     "said": 16,
+     "heard": 3,
+     "recall": 0.1875,
+     "missed": {
+      "Emeka": 3,
+      "Pisgah": 2,
+      "Bisi": 2,
+      "Okon": 6
+     }
+    },
+    "drugs": {
+     "said": 10,
+     "heard": 8,
+     "recall": 0.8,
+     "missed": {
+      "paracetamol": 2
+     }
+    },
+    "cost_usd": 0.06364,
+    "top_misheard": [
+     {
+      "heard": "her -> our",
+      "n": 5,
+      "ids": [
+       "r1b-H27",
+       "r1b-H28",
+       "r1b-H32",
+       "r1b-H11",
+       "r1b-H32"
+      ]
+     },
+     {
+      "heard": "a -> the",
+      "n": 4,
+      "ids": [
+       "r1b-T11",
+       "r1b-H21",
+       "r1b-T11",
+       "r1b-H21"
+      ]
+     },
+     {
+      "heard": "her -> how",
+      "n": 3,
+      "ids": [
+       "r1b-H45",
+       "r1b-T14",
+       "r1b-H45"
+      ]
+     },
+     {
+      "heard": "a -> high",
+      "n": 2,
+      "ids": [
+       "r1b-H16",
+       "r1b-H16"
+      ]
+     },
+     {
+      "heard": "anaesthetist -> anesthetist",
+      "n": 2,
+      "ids": [
+       "r1b-H23",
+       "r1b-H23"
+      ]
+     },
+     {
+      "heard": "as -> at",
+      "n": 2,
+      "ids": [
+       "r1b-H01",
+       "r1b-H01"
+      ]
+     },
+     {
+      "heard": "at -> i",
+      "n": 2,
+      "ids": [
+       "r1b-H37",
+       "r1b-H37"
+      ]
+     },
+     {
+      "heard": "chart -> chop",
+      "n": 2,
+      "ids": [
+       "r1b-H43",
+       "r1b-H43"
+      ]
+     }
+    ]
+   },
+   "v2": {
+    "readings": 272,
+    "wer": 0.5298,
+    "ref_words": 1510,
+    "errors": 800,
+    "values": {
+     "said": 116,
+     "right": 100,
+     "rate": 0.8621
+    },
+    "names": {
+     "said": 10,
+     "heard": 1,
+     "recall": 0.1,
+     "missed": {
+      "Bisi": 2,
+      "Emeka": 2,
+      "Okon": 2,
+      "Bassey": 2,
+      "Ada": 1
+     }
+    },
+    "drugs": {
+     "said": 22,
+     "heard": 16,
+     "recall": 0.7273,
+     "missed": {
+      "ceftriaxone": 3,
+      "normal saline": 2,
+      "amlodipine": 1
+     }
+    },
+    "cost_usd": 0.050776,
+    "top_misheard": [
+     {
+      "heard": "temp -> temperature",
+      "n": 12,
+      "ids": [
+       "v2-O028",
+       "v2-O036",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018",
+       "v2-O028",
+       "v2-O036",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018"
+      ]
+     },
+     {
+      "heard": "bp's -> is",
+      "n": 11,
+      "ids": [
+       "v2-O031",
+       "v2-O039",
+       "v2-O043",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017",
+       "v2-O031",
+       "v2-O039",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017"
+      ]
+     },
+     {
+      "heard": "resp -> respiratory",
+      "n": 11,
+      "ids": [
+       "v2-O033",
+       "v2-O037",
+       "v2-O041",
+       "v2-O049",
+       "v2-V015",
+       "v2-V019",
+       "v2-O033",
+       "v2-O041",
+       "v2-O049",
+       "v2-V015",
+       "v2-V019"
+      ]
+     },
+     {
+      "heard": "sugar -> she",
+      "n": 5,
+      "ids": [
+       "v2-O030",
+       "v2-V020",
+       "v2-O030",
+       "v2-O038",
+       "v2-V020"
+      ]
+     },
+     {
+      "heard": "on -> going",
+      "n": 4,
+      "ids": [
+       "v2-V005-part",
+       "v2-V012-part",
+       "v2-V005-part",
+       "v2-V012-part"
+      ]
+     },
+     {
+      "heard": "on -> gone",
+      "n": 4,
+      "ids": [
+       "v2-Y002",
+       "v2-V002-part",
+       "v2-V011-part",
+       "v2-Y002"
+      ]
+     },
+     {
+      "heard": "stat -> start",
+      "n": 4,
+      "ids": [
+       "v2-O007",
+       "v2-R007",
+       "v2-O007",
+       "v2-R007"
+      ]
+     },
+     {
+      "heard": "her -> a",
+      "n": 3,
+      "ids": [
+       "v2-O024",
+       "v2-R007",
+       "v2-R007"
+      ]
+     }
+    ]
+   },
+   "per_run": [
+    {
+     "run": 0,
+     "readings": 206,
+     "wer": 0.3309,
+     "ref_words": 1777,
+     "errors": 588,
+     "values": {
+      "said": 88,
+      "right": 79,
+      "rate": 0.8977
+     },
+     "names": {
+      "said": 13,
+      "heard": 2,
+      "recall": 0.1538,
+      "missed": {
+       "Emeka": 3,
+       "Pisgah": 1,
+       "Bisi": 2,
+       "Okon": 4,
+       "Bassey": 1
+      }
+     },
+     "drugs": {
+      "said": 16,
+      "heard": 13,
+      "recall": 0.8125,
+      "missed": {
+       "paracetamol": 1,
+       "ceftriaxone": 1,
+       "normal saline": 1
+      }
+     },
+     "cost_usd": 0.057208,
+     "top_misheard": [
+      {
+       "heard": "bp's -> is",
+       "n": 6,
+       "ids": [
+        "v2-O031",
+        "v2-O039",
+        "v2-O043",
+        "v2-O047",
+        "v2-V013",
+        "v2-V017"
+       ]
+      },
+      {
+       "heard": "resp -> respiratory",
+       "n": 6,
+       "ids": [
+        "v2-O033",
+        "v2-O037",
+        "v2-O041",
+        "v2-O049",
+        "v2-V015",
+        "v2-V019"
+       ]
+      },
+      {
+       "heard": "temp -> temperature",
+       "n": 6,
+       "ids": [
+        "v2-O028",
+        "v2-O036",
+        "v2-O040",
+        "v2-O044",
+        "v2-V014",
+        "v2-V018"
+       ]
+      },
+      {
+       "heard": "her -> our",
+       "n": 3,
+       "ids": [
+        "r1b-H27",
+        "r1b-H28",
+        "r1b-H32"
+       ]
+      },
+      {
+       "heard": "on -> gone",
+       "n": 3,
+       "ids": [
+        "v2-Y002",
+        "v2-V002-part",
+        "v2-V011-part"
+       ]
+      },
+      {
+       "heard": "a -> the",
+       "n": 2,
+       "ids": [
+        "r1b-T11",
+        "r1b-H21"
+       ]
+      },
+      {
+       "heard": "any -> the",
+       "n": 2,
+       "ids": [
+        "v2-O082",
+        "v2-O082"
+       ]
+      },
+      {
+       "heard": "chart -> chop",
+       "n": 2,
+       "ids": [
+        "r1b-H43",
+        "r1b-H43"
+       ]
+      }
+     ]
+    },
+    {
+     "run": 1,
+     "readings": 206,
+     "wer": 0.345,
+     "ref_words": 1777,
+     "errors": 613,
+     "values": {
+      "said": 88,
+      "right": 81,
+      "rate": 0.9205
+     },
+     "names": {
+      "said": 13,
+      "heard": 2,
+      "recall": 0.1538,
+      "missed": {
+       "Emeka": 2,
+       "Pisgah": 1,
+       "Bisi": 2,
+       "Okon": 4,
+       "Ada": 1,
+       "Bassey": 1
+      }
+     },
+     "drugs": {
+      "said": 16,
+      "heard": 11,
+      "recall": 0.6875,
+      "missed": {
+       "paracetamol": 1,
+       "ceftriaxone": 2,
+       "amlodipine": 1,
+       "normal saline": 1
+      }
+     },
+     "cost_usd": 0.057208,
+     "top_misheard": [
+      {
+       "heard": "temp -> temperature",
+       "n": 6,
+       "ids": [
+        "v2-O028",
+        "v2-O036",
+        "v2-O040",
+        "v2-O044",
+        "v2-V014",
+        "v2-V018"
+       ]
+      },
+      {
+       "heard": "bp's -> is",
+       "n": 5,
+       "ids": [
+        "v2-O031",
+        "v2-O039",
+        "v2-O047",
+        "v2-V013",
+        "v2-V017"
+       ]
+      },
+      {
+       "heard": "resp -> respiratory",
+       "n": 5,
+       "ids": [
+        "v2-O033",
+        "v2-O041",
+        "v2-O049",
+        "v2-V015",
+        "v2-V019"
+       ]
+      },
+      {
+       "heard": "sugar -> she",
+       "n": 3,
+       "ids": [
+        "v2-O030",
+        "v2-O038",
+        "v2-V020"
+       ]
+      },
+      {
+       "heard": "a -> the",
+       "n": 2,
+       "ids": [
+        "r1b-T11",
+        "r1b-H21"
+       ]
+      },
+      {
+       "heard": "chart -> jump",
+       "n": 2,
+       "ids": [
+        "r1b-H43",
+        "r1b-H43"
+       ]
+      },
+      {
+       "heard": "her -> a",
+       "n": 2,
+       "ids": [
+        "r1b-H25",
+        "v2-R007"
+       ]
+      },
+      {
+       "heard": "her -> heart",
+       "n": 2,
+       "ids": [
+        "v2-O009",
+        "v2-R009"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "names",
+   "label": "vitals, patient and staff names, ward drugs",
+   "keywords": "vitals words, then patient and staff names and the ward drug list",
+   "language_bias": [],
+   "all": {
+    "readings": 412,
+    "wer": 0.2766,
+    "ref_words": 3554,
+    "errors": 983,
+    "values": {
+     "said": 176,
+     "right": 160,
+     "rate": 0.9091
+    },
+    "names": {
+     "said": 26,
+     "heard": 26,
+     "recall": 1,
+     "missed": {}
+    },
+    "drugs": {
+     "said": 32,
+     "heard": 32,
+     "recall": 1,
+     "missed": {}
+    },
+    "cost_usd": 0.114416,
+    "top_misheard": [
+     {
+      "heard": "bp's -> is",
+      "n": 12,
+      "ids": [
+       "v2-O031",
+       "v2-O039",
+       "v2-O043",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017",
+       "v2-O031",
+       "v2-O039",
+       "v2-O043",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017"
+      ]
+     },
+     {
+      "heard": "resp -> respiratory",
+      "n": 10,
+      "ids": [
+       "v2-O033",
+       "v2-O041",
+       "v2-O049",
+       "v2-V015",
+       "v2-V019",
+       "v2-O033",
+       "v2-O041",
+       "v2-O049",
+       "v2-V015",
+       "v2-V019"
+      ]
+     },
+     {
+      "heard": "temp -> temperature",
+      "n": 10,
+      "ids": [
+       "v2-O028",
+       "v2-O036",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018",
+       "v2-O028",
+       "v2-O040",
+       "v2-V014",
+       "v2-V018"
+      ]
+     },
+     {
+      "heard": "a -> the",
+      "n": 8,
+      "ids": [
+       "r1b-T11",
+       "r1b-H21",
+       "v2-O001",
+       "v2-O001",
+       "v2-R009",
+       "r1b-T11",
+       "r1b-H21",
+       "v2-O001"
+      ]
+     },
+     {
+      "heard": "chart -> check",
+      "n": 4,
+      "ids": [
+       "r1b-T22",
+       "r1b-T22",
+       "r1b-H43",
+       "r1b-H43"
+      ]
+     },
+     {
+      "heard": "litre -> liter",
+      "n": 4,
+      "ids": [
+       "v2-O006",
+       "v2-R006",
+       "v2-O006",
+       "v2-R006"
+      ]
+     },
+     {
+      "heard": "a -> over",
+      "n": 3,
+      "ids": [
+       "v2-O035",
+       "r1b-H21",
+       "v2-O035"
+      ]
+     },
+     {
+      "heard": "is -> refills",
+      "n": 3,
+      "ids": [
+       "r1b-T06",
+       "v2-O062",
+       "r1b-T06"
+      ]
+     }
+    ]
+   },
+   "r1b": {
+    "readings": 140,
+    "wer": 0.1585,
+    "ref_words": 2044,
+    "errors": 324,
+    "values": {
+     "said": 60,
+     "right": 60,
+     "rate": 1
+    },
+    "names": {
+     "said": 16,
+     "heard": 16,
+     "recall": 1,
+     "missed": {}
+    },
+    "drugs": {
+     "said": 10,
+     "heard": 10,
+     "recall": 1,
+     "missed": {}
+    },
+    "cost_usd": 0.06364,
+    "top_misheard": [
+     {
+      "heard": "a -> the",
+      "n": 4,
+      "ids": [
+       "r1b-T11",
+       "r1b-H21",
+       "r1b-T11",
+       "r1b-H21"
+      ]
+     },
+     {
+      "heard": "chart -> check",
+      "n": 4,
+      "ids": [
+       "r1b-T22",
+       "r1b-T22",
+       "r1b-H43",
+       "r1b-H43"
+      ]
+     },
+     {
+      "heard": "also -> is",
+      "n": 2,
+      "ids": [
+       "r1b-H12",
+       "r1b-H12"
+      ]
+     },
+     {
+      "heard": "anaesthetist -> anesthetist",
+      "n": 2,
+      "ids": [
+       "r1b-H23",
+       "r1b-H23"
+      ]
+     },
+     {
+      "heard": "and -> been",
+      "n": 2,
+      "ids": [
+       "r1b-H40",
+       "r1b-H40"
+      ]
+     },
+     {
+      "heard": "as -> at",
+      "n": 2,
+      "ids": [
+       "r1b-H01",
+       "r1b-H01"
+      ]
+     },
+     {
+      "heard": "electrolytes -> electrolyte",
+      "n": 2,
+      "ids": [
+       "r1b-H15",
+       "r1b-H15"
+      ]
+     },
+     {
+      "heard": "fainted -> figured",
+      "n": 2,
+      "ids": [
+       "r1b-H37",
+       "r1b-H37"
+      ]
+     }
+    ]
+   },
+   "v2": {
+    "readings": 272,
+    "wer": 0.4364,
+    "ref_words": 1510,
+    "errors": 659,
+    "values": {
+     "said": 116,
+     "right": 100,
+     "rate": 0.8621
+    },
+    "names": {
+     "said": 10,
+     "heard": 10,
+     "recall": 1,
+     "missed": {}
+    },
+    "drugs": {
+     "said": 22,
+     "heard": 22,
+     "recall": 1,
+     "missed": {}
+    },
+    "cost_usd": 0.050776,
+    "top_misheard": [
+     {
+      "heard": "bp's -> is",
+      "n": 12,
+      "ids": [
+       "v2-O031",
+       "v2-O039",
+       "v2-O043",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017",
+       "v2-O031",
+       "v2-O039",
+       "v2-O043",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017"
+      ]
+     },
+     {
+      "heard": "resp -> respiratory",
+      "n": 10,
+      "ids": [
+       "v2-O033",
+       "v2-O041",
+       "v2-O049",
+       "v2-V015",
+       "v2-V019",
+       "v2-O033",
+       "v2-O041",
+       "v2-O049",
+       "v2-V015",
+       "v2-V019"
+      ]
+     },
+     {
+      "heard": "temp -> temperature",
+      "n": 10,
+      "ids": [
+       "v2-O028",
+       "v2-O036",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018",
+       "v2-O028",
+       "v2-O040",
+       "v2-V014",
+       "v2-V018"
+      ]
+     },
+     {
+      "heard": "a -> the",
+      "n": 4,
+      "ids": [
+       "v2-O001",
+       "v2-O001",
+       "v2-R009",
+       "v2-O001"
+      ]
+     },
+     {
+      "heard": "litre -> liter",
+      "n": 4,
+      "ids": [
+       "v2-O006",
+       "v2-R006",
+       "v2-O006",
+       "v2-R006"
+      ]
+     },
+     {
+      "heard": "no -> low",
+      "n": 3,
+      "ids": [
+       "v2-O053",
+       "v2-O053",
+       "v2-O053"
+      ]
+     },
+     {
+      "heard": "okay -> okon",
+      "n": 3,
+      "ids": [
+       "v2-V014",
+       "v2-O040",
+       "v2-V014"
+      ]
+     },
+     {
+      "heard": "stat -> start",
+      "n": 3,
+      "ids": [
+       "v2-R007",
+       "v2-O007",
+       "v2-R007"
+      ]
+     }
+    ]
+   },
+   "per_run": [
+    {
+     "run": 0,
+     "readings": 206,
+     "wer": 0.2696,
+     "ref_words": 1777,
+     "errors": 479,
+     "values": {
+      "said": 88,
+      "right": 80,
+      "rate": 0.9091
+     },
+     "names": {
+      "said": 13,
+      "heard": 13,
+      "recall": 1,
+      "missed": {}
+     },
+     "drugs": {
+      "said": 16,
+      "heard": 16,
+      "recall": 1,
+      "missed": {}
+     },
+     "cost_usd": 0.057208,
+     "top_misheard": [
+      {
+       "heard": "bp's -> is",
+       "n": 6,
+       "ids": [
+        "v2-O031",
+        "v2-O039",
+        "v2-O043",
+        "v2-O047",
+        "v2-V013",
+        "v2-V017"
+       ]
+      },
+      {
+       "heard": "temp -> temperature",
+       "n": 6,
+       "ids": [
+        "v2-O028",
+        "v2-O036",
+        "v2-O040",
+        "v2-O044",
+        "v2-V014",
+        "v2-V018"
+       ]
+      },
+      {
+       "heard": "a -> the",
+       "n": 5,
+       "ids": [
+        "r1b-T11",
+        "r1b-H21",
+        "v2-O001",
+        "v2-O001",
+        "v2-R009"
+       ]
+      },
+      {
+       "heard": "resp -> respiratory",
+       "n": 5,
+       "ids": [
+        "v2-O033",
+        "v2-O041",
+        "v2-O049",
+        "v2-V015",
+        "v2-V019"
+       ]
+      },
+      {
+       "heard": "is -> refills",
+       "n": 2,
+       "ids": [
+        "r1b-T06",
+        "v2-O062"
+       ]
+      },
+      {
+       "heard": "litre -> liter",
+       "n": 2,
+       "ids": [
+        "v2-O006",
+        "v2-R006"
+       ]
+      },
+      {
+       "heard": "to -> gonna",
+       "n": 2,
+       "ids": [
+        "r1b-H20",
+        "v2-O080"
+       ]
+      },
+      {
+       "heard": "a -> over",
+       "n": 1,
+       "ids": [
+        "v2-O035"
+       ]
+      }
+     ]
+    },
+    {
+     "run": 1,
+     "readings": 206,
+     "wer": 0.2836,
+     "ref_words": 1777,
+     "errors": 504,
+     "values": {
+      "said": 88,
+      "right": 80,
+      "rate": 0.9091
+     },
+     "names": {
+      "said": 13,
+      "heard": 13,
+      "recall": 1,
+      "missed": {}
+     },
+     "drugs": {
+      "said": 16,
+      "heard": 16,
+      "recall": 1,
+      "missed": {}
+     },
+     "cost_usd": 0.057208,
+     "top_misheard": [
+      {
+       "heard": "bp's -> is",
+       "n": 6,
+       "ids": [
+        "v2-O031",
+        "v2-O039",
+        "v2-O043",
+        "v2-O047",
+        "v2-V013",
+        "v2-V017"
+       ]
+      },
+      {
+       "heard": "resp -> respiratory",
+       "n": 5,
+       "ids": [
+        "v2-O033",
+        "v2-O041",
+        "v2-O049",
+        "v2-V015",
+        "v2-V019"
+       ]
+      },
+      {
+       "heard": "temp -> temperature",
+       "n": 4,
+       "ids": [
+        "v2-O028",
+        "v2-O040",
+        "v2-V014",
+        "v2-V018"
+       ]
+      },
+      {
+       "heard": "a -> the",
+       "n": 3,
+       "ids": [
+        "r1b-T11",
+        "r1b-H21",
+        "v2-O001"
+       ]
+      },
+      {
+       "heard": "chart -> check",
+       "n": 3,
+       "ids": [
+        "r1b-T22",
+        "r1b-H43",
+        "r1b-H43"
+       ]
+      },
+      {
+       "heard": "a -> over",
+       "n": 2,
+       "ids": [
+        "r1b-H21",
+        "v2-O035"
+       ]
+      },
+      {
+       "heard": "litre -> liter",
+       "n": 2,
+       "ids": [
+        "v2-O006",
+        "v2-R006"
+       ]
+      },
+      {
+       "heard": "no -> low",
+       "n": 2,
+       "ids": [
+        "v2-O053",
+        "v2-O053"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "names_en",
+   "label": "the same, with languageBias English",
+   "keywords": "vitals words, then patient and staff names and the ward drug list",
+   "language_bias": [
+    "English"
+   ],
+   "all": {
+    "readings": 412,
+    "wer": 0.2732,
+    "ref_words": 3554,
+    "errors": 971,
+    "values": {
+     "said": 176,
+     "right": 157,
+     "rate": 0.892
+    },
+    "names": {
+     "said": 26,
+     "heard": 26,
+     "recall": 1,
+     "missed": {}
+    },
+    "drugs": {
+     "said": 32,
+     "heard": 32,
+     "recall": 1,
+     "missed": {}
+    },
+    "cost_usd": 0.114416,
+    "top_misheard": [
+     {
+      "heard": "bp's -> is",
+      "n": 12,
+      "ids": [
+       "v2-O031",
+       "v2-O035",
+       "v2-O039",
+       "v2-O043",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017",
+       "v2-O031",
+       "v2-O043",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017"
+      ]
+     },
+     {
+      "heard": "temp -> temperature",
+      "n": 11,
+      "ids": [
+       "v2-O028",
+       "v2-O036",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018",
+       "v2-O028",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018"
+      ]
+     },
+     {
+      "heard": "resp -> respiratory",
+      "n": 8,
+      "ids": [
+       "v2-O033",
+       "v2-O041",
+       "v2-V015",
+       "v2-V019",
+       "v2-O033",
+       "v2-O037",
+       "v2-V015",
+       "v2-V019"
+      ]
+     },
+     {
+      "heard": "a -> the",
+      "n": 5,
+      "ids": [
+       "r1b-T11",
+       "r1b-H21",
+       "v2-O001",
+       "r1b-T11",
+       "r1b-H21"
+      ]
+     },
+     {
+      "heard": "is -> to",
+      "n": 3,
+      "ids": [
+       "r1b-T05",
+       "v2-O026",
+       "r1b-T05"
+      ]
+     },
+     {
+      "heard": "litre -> liter",
+      "n": 3,
+      "ids": [
+       "v2-O006",
+       "v2-R006",
+       "v2-R006"
+      ]
+     },
+     {
+      "heard": "okay -> okon",
+      "n": 3,
+      "ids": [
+       "v2-V014",
+       "v2-O040",
+       "v2-V014"
+      ]
+     },
+     {
+      "heard": "resp -> rate",
+      "n": 3,
+      "ids": [
+       "v2-O049",
+       "v2-O041",
+       "v2-O049"
+      ]
+     }
+    ]
+   },
+   "r1b": {
+    "readings": 140,
+    "wer": 0.1473,
+    "ref_words": 2044,
+    "errors": 301,
+    "values": {
+     "said": 60,
+     "right": 60,
+     "rate": 1
+    },
+    "names": {
+     "said": 16,
+     "heard": 16,
+     "recall": 1,
+     "missed": {}
+    },
+    "drugs": {
+     "said": 10,
+     "heard": 10,
+     "recall": 1,
+     "missed": {}
+    },
+    "cost_usd": 0.06364,
+    "top_misheard": [
+     {
+      "heard": "a -> the",
+      "n": 4,
+      "ids": [
+       "r1b-T11",
+       "r1b-H21",
+       "r1b-T11",
+       "r1b-H21"
+      ]
+     },
+     {
+      "heard": "and -> been",
+      "n": 2,
+      "ids": [
+       "r1b-H40",
+       "r1b-H40"
+      ]
+     },
+     {
+      "heard": "as -> at",
+      "n": 2,
+      "ids": [
+       "r1b-H01",
+       "r1b-H01"
+      ]
+     },
+     {
+      "heard": "bring -> in",
+      "n": 2,
+      "ids": [
+       "r1b-T23",
+       "r1b-T23"
+      ]
+     },
+     {
+      "heard": "chart -> charge",
+      "n": 2,
+      "ids": [
+       "r1b-H43",
+       "r1b-H43"
+      ]
+     },
+     {
+      "heard": "chart -> check",
+      "n": 2,
+      "ids": [
+       "r1b-T22",
+       "r1b-T22"
+      ]
+     },
+     {
+      "heard": "chart -> chop",
+      "n": 2,
+      "ids": [
+       "r1b-H43",
+       "r1b-H43"
+      ]
+     },
+     {
+      "heard": "chest -> just",
+      "n": 2,
+      "ids": [
+       "r1b-T05",
+       "r1b-T05"
+      ]
+     }
+    ]
+   },
+   "v2": {
+    "readings": 272,
+    "wer": 0.4437,
+    "ref_words": 1510,
+    "errors": 670,
+    "values": {
+     "said": 116,
+     "right": 97,
+     "rate": 0.8362
+    },
+    "names": {
+     "said": 10,
+     "heard": 10,
+     "recall": 1,
+     "missed": {}
+    },
+    "drugs": {
+     "said": 22,
+     "heard": 22,
+     "recall": 1,
+     "missed": {}
+    },
+    "cost_usd": 0.050776,
+    "top_misheard": [
+     {
+      "heard": "bp's -> is",
+      "n": 12,
+      "ids": [
+       "v2-O031",
+       "v2-O035",
+       "v2-O039",
+       "v2-O043",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017",
+       "v2-O031",
+       "v2-O043",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017"
+      ]
+     },
+     {
+      "heard": "temp -> temperature",
+      "n": 11,
+      "ids": [
+       "v2-O028",
+       "v2-O036",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018",
+       "v2-O028",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018"
+      ]
+     },
+     {
+      "heard": "resp -> respiratory",
+      "n": 8,
+      "ids": [
+       "v2-O033",
+       "v2-O041",
+       "v2-V015",
+       "v2-V019",
+       "v2-O033",
+       "v2-O037",
+       "v2-V015",
+       "v2-V019"
+      ]
+     },
+     {
+      "heard": "litre -> liter",
+      "n": 3,
+      "ids": [
+       "v2-O006",
+       "v2-R006",
+       "v2-R006"
+      ]
+     },
+     {
+      "heard": "okay -> okon",
+      "n": 3,
+      "ids": [
+       "v2-V014",
+       "v2-O040",
+       "v2-V014"
+      ]
+     },
+     {
+      "heard": "resp -> rate",
+      "n": 3,
+      "ids": [
+       "v2-O049",
+       "v2-O041",
+       "v2-O049"
+      ]
+     },
+     {
+      "heard": "stat -> start",
+      "n": 3,
+      "ids": [
+       "v2-O007",
+       "v2-R007",
+       "v2-O007"
+      ]
+     },
+     {
+      "heard": "abeg -> beg",
+      "n": 2,
+      "ids": [
+       "v2-O071",
+       "v2-O071"
+      ]
+     }
+    ]
+   },
+   "per_run": [
+    {
+     "run": 0,
+     "readings": 206,
+     "wer": 0.2746,
+     "ref_words": 1777,
+     "errors": 488,
+     "values": {
+      "said": 88,
+      "right": 78,
+      "rate": 0.8864
+     },
+     "names": {
+      "said": 13,
+      "heard": 13,
+      "recall": 1,
+      "missed": {}
+     },
+     "drugs": {
+      "said": 16,
+      "heard": 16,
+      "recall": 1,
+      "missed": {}
+     },
+     "cost_usd": 0.057208,
+     "top_misheard": [
+      {
+       "heard": "bp's -> is",
+       "n": 7,
+       "ids": [
+        "v2-O031",
+        "v2-O035",
+        "v2-O039",
+        "v2-O043",
+        "v2-O047",
+        "v2-V013",
+        "v2-V017"
+       ]
+      },
+      {
+       "heard": "temp -> temperature",
+       "n": 6,
+       "ids": [
+        "v2-O028",
+        "v2-O036",
+        "v2-O040",
+        "v2-O044",
+        "v2-V014",
+        "v2-V018"
+       ]
+      },
+      {
+       "heard": "resp -> respiratory",
+       "n": 4,
+       "ids": [
+        "v2-O033",
+        "v2-O041",
+        "v2-V015",
+        "v2-V019"
+       ]
+      },
+      {
+       "heard": "a -> the",
+       "n": 3,
+       "ids": [
+        "r1b-T11",
+        "r1b-H21",
+        "v2-O001"
+       ]
+      },
+      {
+       "heard": "chart -> charge",
+       "n": 2,
+       "ids": [
+        "r1b-H43",
+        "r1b-H43"
+       ]
+      },
+      {
+       "heard": "is -> to",
+       "n": 2,
+       "ids": [
+        "r1b-T05",
+        "v2-O026"
+       ]
+      },
+      {
+       "heard": "litre -> liter",
+       "n": 2,
+       "ids": [
+        "v2-O006",
+        "v2-R006"
+       ]
+      },
+      {
+       "heard": "stat -> start",
+       "n": 2,
+       "ids": [
+        "v2-O007",
+        "v2-R007"
+       ]
+      }
+     ]
+    },
+    {
+     "run": 1,
+     "readings": 206,
+     "wer": 0.2718,
+     "ref_words": 1777,
+     "errors": 483,
+     "values": {
+      "said": 88,
+      "right": 79,
+      "rate": 0.8977
+     },
+     "names": {
+      "said": 13,
+      "heard": 13,
+      "recall": 1,
+      "missed": {}
+     },
+     "drugs": {
+      "said": 16,
+      "heard": 16,
+      "recall": 1,
+      "missed": {}
+     },
+     "cost_usd": 0.057208,
+     "top_misheard": [
+      {
+       "heard": "bp's -> is",
+       "n": 5,
+       "ids": [
+        "v2-O031",
+        "v2-O043",
+        "v2-O047",
+        "v2-V013",
+        "v2-V017"
+       ]
+      },
+      {
+       "heard": "temp -> temperature",
+       "n": 5,
+       "ids": [
+        "v2-O028",
+        "v2-O040",
+        "v2-O044",
+        "v2-V014",
+        "v2-V018"
+       ]
+      },
+      {
+       "heard": "resp -> respiratory",
+       "n": 4,
+       "ids": [
+        "v2-O033",
+        "v2-O037",
+        "v2-V015",
+        "v2-V019"
+       ]
+      },
+      {
+       "heard": "a -> the",
+       "n": 2,
+       "ids": [
+        "r1b-T11",
+        "r1b-H21"
+       ]
+      },
+      {
+       "heard": "chart -> chop",
+       "n": 2,
+       "ids": [
+        "r1b-H43",
+        "r1b-H43"
+       ]
+      },
+      {
+       "heard": "okay -> okon",
+       "n": 2,
+       "ids": [
+        "v2-O040",
+        "v2-V014"
+       ]
+      },
+      {
+       "heard": "resp -> rate",
+       "n": 2,
+       "ids": [
+        "v2-O041",
+        "v2-O049"
+       ]
+      },
+      {
+       "heard": "a -> over",
+       "n": 1,
+       "ids": [
+        "v2-O035"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "en",
+   "label": "languageBias English only",
+   "keywords": "none",
+   "language_bias": [
+    "English"
+   ],
+   "all": {
+    "readings": 412,
+    "wer": 0.386,
+    "ref_words": 3554,
+    "errors": 1372,
+    "values": {
+     "said": 176,
+     "right": 155,
+     "rate": 0.8807
+    },
+    "names": {
+     "said": 26,
+     "heard": 4,
+     "recall": 0.1538,
+     "missed": {
+      "Emeka": 6,
+      "Okon": 8,
+      "Pisgah": 2,
+      "Bisi": 4,
+      "Bassey": 2
+     }
+    },
+    "drugs": {
+     "said": 32,
+     "heard": 19,
+     "recall": 0.5938,
+     "missed": {
+      "ceftriaxone": 6,
+      "paracetamol": 3,
+      "normal saline": 2,
+      "metronidazole": 1,
+      "amlodipine": 1
+     }
+    },
+    "cost_usd": 0.114416,
+    "top_misheard": [
+     {
+      "heard": "temp -> temperature",
+      "n": 12,
+      "ids": [
+       "v2-O028",
+       "v2-O036",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018",
+       "v2-O028",
+       "v2-O036",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018"
+      ]
+     },
+     {
+      "heard": "resp -> respiratory",
+      "n": 10,
+      "ids": [
+       "v2-O033",
+       "v2-O037",
+       "v2-O041",
+       "v2-V015",
+       "v2-V019",
+       "v2-O033",
+       "v2-O037",
+       "v2-O041",
+       "v2-V015",
+       "v2-V019"
+      ]
+     },
+     {
+      "heard": "blood -> block",
+      "n": 9,
+      "ids": [
+       "r1b-H29",
+       "v2-O001",
+       "v2-R001",
+       "v2-R002",
+       "r1b-H29",
+       "v2-O001",
+       "v2-O002",
+       "v2-R001",
+       "v2-V024"
+      ]
+     },
+     {
+      "heard": "bp's -> is",
+      "n": 9,
+      "ids": [
+       "v2-O031",
+       "v2-O035",
+       "v2-O039",
+       "v2-O031",
+       "v2-O039",
+       "v2-O043",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017"
+      ]
+     },
+     {
+      "heard": "her -> our",
+      "n": 7,
+      "ids": [
+       "r1b-H32",
+       "v2-O024",
+       "v2-O068",
+       "r1b-H27",
+       "r1b-H27",
+       "r1b-H32",
+       "v2-O024"
+      ]
+     },
+     {
+      "heard": "on -> going",
+      "n": 6,
+      "ids": [
+       "v2-V005-part",
+       "v2-V011-part",
+       "v2-V012-part",
+       "v2-V005-part",
+       "v2-V011-part",
+       "v2-V012-part"
+      ]
+     },
+     {
+      "heard": "pulse -> pause",
+      "n": 6,
+      "ids": [
+       "r1b-T23",
+       "r1b-H21",
+       "r1b-H43",
+       "v2-O035",
+       "r1b-T23",
+       "r1b-H21"
+      ]
+     },
+     {
+      "heard": "a -> the",
+      "n": 5,
+      "ids": [
+       "r1b-T11",
+       "r1b-H21",
+       "v2-O001",
+       "r1b-T11",
+       "v2-O001"
+      ]
+     }
+    ]
+   },
+   "r1b": {
+    "readings": 140,
+    "wer": 0.225,
+    "ref_words": 2044,
+    "errors": 460,
+    "values": {
+     "said": 60,
+     "right": 56,
+     "rate": 0.9333
+    },
+    "names": {
+     "said": 16,
+     "heard": 2,
+     "recall": 0.125,
+     "missed": {
+      "Emeka": 4,
+      "Okon": 6,
+      "Pisgah": 2,
+      "Bisi": 2
+     }
+    },
+    "drugs": {
+     "said": 10,
+     "heard": 6,
+     "recall": 0.6,
+     "missed": {
+      "ceftriaxone": 2,
+      "paracetamol": 2
+     }
+    },
+    "cost_usd": 0.06364,
+    "top_misheard": [
+     {
+      "heard": "pulse -> pause",
+      "n": 5,
+      "ids": [
+       "r1b-T23",
+       "r1b-H21",
+       "r1b-H43",
+       "r1b-T23",
+       "r1b-H21"
+      ]
+     },
+     {
+      "heard": "her -> our",
+      "n": 4,
+      "ids": [
+       "r1b-H32",
+       "r1b-H27",
+       "r1b-H27",
+       "r1b-H32"
+      ]
+     },
+     {
+      "heard": "a -> the",
+      "n": 3,
+      "ids": [
+       "r1b-T11",
+       "r1b-H21",
+       "r1b-T11"
+      ]
+     },
+     {
+      "heard": "heart -> hard",
+      "n": 3,
+      "ids": [
+       "r1b-H11",
+       "r1b-H11",
+       "r1b-H11"
+      ]
+     },
+     {
+      "heard": "added -> other",
+      "n": 2,
+      "ids": [
+       "r1b-T05",
+       "r1b-T05"
+      ]
+     },
+     {
+      "heard": "anaesthetist -> anesthetist",
+      "n": 2,
+      "ids": [
+       "r1b-H23",
+       "r1b-H23"
+      ]
+     },
+     {
+      "heard": "as -> at",
+      "n": 2,
+      "ids": [
+       "r1b-H01",
+       "r1b-H01"
+      ]
+     },
+     {
+      "heard": "bed -> bedford",
+      "n": 2,
+      "ids": [
+       "r1b-H05",
+       "r1b-H05"
+      ]
+     }
+    ]
+   },
+   "v2": {
+    "readings": 272,
+    "wer": 0.604,
+    "ref_words": 1510,
+    "errors": 912,
+    "values": {
+     "said": 116,
+     "right": 99,
+     "rate": 0.8534
+    },
+    "names": {
+     "said": 10,
+     "heard": 2,
+     "recall": 0.2,
+     "missed": {
+      "Bisi": 2,
+      "Emeka": 2,
+      "Okon": 2,
+      "Bassey": 2
+     }
+    },
+    "drugs": {
+     "said": 22,
+     "heard": 13,
+     "recall": 0.5909,
+     "missed": {
+      "ceftriaxone": 4,
+      "normal saline": 2,
+      "metronidazole": 1,
+      "amlodipine": 1,
+      "paracetamol": 1
+     }
+    },
+    "cost_usd": 0.050776,
+    "top_misheard": [
+     {
+      "heard": "temp -> temperature",
+      "n": 12,
+      "ids": [
+       "v2-O028",
+       "v2-O036",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018",
+       "v2-O028",
+       "v2-O036",
+       "v2-O040",
+       "v2-O044",
+       "v2-V014",
+       "v2-V018"
+      ]
+     },
+     {
+      "heard": "resp -> respiratory",
+      "n": 10,
+      "ids": [
+       "v2-O033",
+       "v2-O037",
+       "v2-O041",
+       "v2-V015",
+       "v2-V019",
+       "v2-O033",
+       "v2-O037",
+       "v2-O041",
+       "v2-V015",
+       "v2-V019"
+      ]
+     },
+     {
+      "heard": "bp's -> is",
+      "n": 9,
+      "ids": [
+       "v2-O031",
+       "v2-O035",
+       "v2-O039",
+       "v2-O031",
+       "v2-O039",
+       "v2-O043",
+       "v2-O047",
+       "v2-V013",
+       "v2-V017"
+      ]
+     },
+     {
+      "heard": "blood -> block",
+      "n": 7,
+      "ids": [
+       "v2-O001",
+       "v2-R001",
+       "v2-R002",
+       "v2-O001",
+       "v2-O002",
+       "v2-R001",
+       "v2-V024"
+      ]
+     },
+     {
+      "heard": "on -> going",
+      "n": 6,
+      "ids": [
+       "v2-V005-part",
+       "v2-V011-part",
+       "v2-V012-part",
+       "v2-V005-part",
+       "v2-V011-part",
+       "v2-V012-part"
+      ]
+     },
+     {
+      "heard": "gram -> ground",
+      "n": 5,
+      "ids": [
+       "v2-O008",
+       "v2-O020",
+       "v2-V028",
+       "v2-O020",
+       "v2-V028"
+      ]
+     },
+     {
+      "heard": "stat -> start",
+      "n": 4,
+      "ids": [
+       "v2-O007",
+       "v2-R007",
+       "v2-O007",
+       "v2-R007"
+      ]
+     },
+     {
+      "heard": "go -> are",
+      "n": 3,
+      "ids": [
+       "v2-V011-part",
+       "v2-V005-part",
+       "v2-V011-part"
+      ]
+     }
+    ]
+   },
+   "per_run": [
+    {
+     "run": 0,
+     "readings": 206,
+     "wer": 0.377,
+     "ref_words": 1777,
+     "errors": 670,
+     "values": {
+      "said": 88,
+      "right": 77,
+      "rate": 0.875
+     },
+     "names": {
+      "said": 13,
+      "heard": 1,
+      "recall": 0.0769,
+      "missed": {
+       "Emeka": 3,
+       "Okon": 5,
+       "Pisgah": 1,
+       "Bisi": 2,
+       "Bassey": 1
+      }
+     },
+     "drugs": {
+      "said": 16,
+      "heard": 10,
+      "recall": 0.625,
+      "missed": {
+       "ceftriaxone": 3,
+       "paracetamol": 1,
+       "normal saline": 1,
+       "metronidazole": 1
+      }
+     },
+     "cost_usd": 0.057208,
+     "top_misheard": [
+      {
+       "heard": "temp -> temperature",
+       "n": 6,
+       "ids": [
+        "v2-O028",
+        "v2-O036",
+        "v2-O040",
+        "v2-O044",
+        "v2-V014",
+        "v2-V018"
+       ]
+      },
+      {
+       "heard": "resp -> respiratory",
+       "n": 5,
+       "ids": [
+        "v2-O033",
+        "v2-O037",
+        "v2-O041",
+        "v2-V015",
+        "v2-V019"
+       ]
+      },
+      {
+       "heard": "blood -> block",
+       "n": 4,
+       "ids": [
+        "r1b-H29",
+        "v2-O001",
+        "v2-R001",
+        "v2-R002"
+       ]
+      },
+      {
+       "heard": "pulse -> pause",
+       "n": 4,
+       "ids": [
+        "r1b-T23",
+        "r1b-H21",
+        "r1b-H43",
+        "v2-O035"
+       ]
+      },
+      {
+       "heard": "a -> the",
+       "n": 3,
+       "ids": [
+        "r1b-T11",
+        "r1b-H21",
+        "v2-O001"
+       ]
+      },
+      {
+       "heard": "bp's -> is",
+       "n": 3,
+       "ids": [
+        "v2-O031",
+        "v2-O035",
+        "v2-O039"
+       ]
+      },
+      {
+       "heard": "gram -> ground",
+       "n": 3,
+       "ids": [
+        "v2-O008",
+        "v2-O020",
+        "v2-V028"
+       ]
+      },
+      {
+       "heard": "her -> our",
+       "n": 3,
+       "ids": [
+        "r1b-H32",
+        "v2-O024",
+        "v2-O068"
+       ]
+      }
+     ]
+    },
+    {
+     "run": 1,
+     "readings": 206,
+     "wer": 0.395,
+     "ref_words": 1777,
+     "errors": 702,
+     "values": {
+      "said": 88,
+      "right": 78,
+      "rate": 0.8864
+     },
+     "names": {
+      "said": 13,
+      "heard": 3,
+      "recall": 0.2308,
+      "missed": {
+       "Emeka": 3,
+       "Pisgah": 1,
+       "Bisi": 2,
+       "Okon": 3,
+       "Bassey": 1
+      }
+     },
+     "drugs": {
+      "said": 16,
+      "heard": 9,
+      "recall": 0.5625,
+      "missed": {
+       "ceftriaxone": 3,
+       "paracetamol": 2,
+       "amlodipine": 1,
+       "normal saline": 1
+      }
+     },
+     "cost_usd": 0.057208,
+     "top_misheard": [
+      {
+       "heard": "bp's -> is",
+       "n": 6,
+       "ids": [
+        "v2-O031",
+        "v2-O039",
+        "v2-O043",
+        "v2-O047",
+        "v2-V013",
+        "v2-V017"
+       ]
+      },
+      {
+       "heard": "temp -> temperature",
+       "n": 6,
+       "ids": [
+        "v2-O028",
+        "v2-O036",
+        "v2-O040",
+        "v2-O044",
+        "v2-V014",
+        "v2-V018"
+       ]
+      },
+      {
+       "heard": "blood -> block",
+       "n": 5,
+       "ids": [
+        "r1b-H29",
+        "v2-O001",
+        "v2-O002",
+        "v2-R001",
+        "v2-V024"
+       ]
+      },
+      {
+       "heard": "resp -> respiratory",
+       "n": 5,
+       "ids": [
+        "v2-O033",
+        "v2-O037",
+        "v2-O041",
+        "v2-V015",
+        "v2-V019"
+       ]
+      },
+      {
+       "heard": "her -> our",
+       "n": 4,
+       "ids": [
+        "r1b-H27",
+        "r1b-H27",
+        "r1b-H32",
+        "v2-O024"
+       ]
+      },
+      {
+       "heard": "on -> going",
+       "n": 3,
+       "ids": [
+        "v2-V005-part",
+        "v2-V011-part",
+        "v2-V012-part"
+       ]
+      },
+      {
+       "heard": "a -> the",
+       "n": 2,
+       "ids": [
+        "r1b-T11",
+        "v2-O001"
+       ]
+      },
+      {
+       "heard": "chart -> chop",
+       "n": 2,
+       "ids": [
+        "r1b-H43",
+        "r1b-H43"
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

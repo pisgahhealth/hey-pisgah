@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { VITALS_KEYWORDS, VoiceError, buildKeywords, cleanTranscript, concat, continuesNumber, danglingEnd, decodeWav, encodeWav, leadingSilenceMs, parseWav, trailingSilenceMs, vitalsVocabulary, type FinalTranscript, type Rewrite } from "@hey-pisgah/voice";
+import { VITALS_KEYWORDS, VoiceError, buildKeywords, cleanTranscript, concat, continuesNumber, danglingEnd, wholeInRange, decodeWav, encodeWav, leadingSilenceMs, parseWav, trailingSilenceMs, vitalsVocabulary, type FinalTranscript, type Rewrite } from "@hey-pisgah/voice";
 import type { EmrRuntime } from "./runtime.js";
 import { primaryClass } from "./classes.js";
 import { afterWake } from "./entry.js";
@@ -32,7 +32,7 @@ export type UtteranceStatus = { status: "accepted" | "processing" | "failed" | "
 export type ListenUtterance = { id: string; line_id: string; task_id: string; text: string; seqs: number[]; class: string | null; classes: string[] };
 export type ListenOutcome = {
   seq: number; final: boolean;
-  why: "quiet_tail" | "short_chunk" | "pause_after_cap" | "held_for_join" | "held_for_number" | "joined_across_cut" | "number_alone" | "empty" | "duplicate" | "late" | "held_dropped_gap" | "held_too_long" | "failed" | "end_marker" | "held_timeout";
+  why: "quiet_tail" | "short_chunk" | "released_whole" | "pause_after_cap" | "held_for_join" | "held_for_number" | "joined_across_cut" | "number_alone" | "empty" | "duplicate" | "late" | "held_dropped_gap" | "held_too_long" | "failed" | "end_marker" | "held_timeout";
   trailing_silence_ms: number; audio_ms: number; transcript: string | null; raw_transcript: string | null; cost_usd: number; keywords_dropped: boolean;
   utterance: ListenUtterance | null; error?: string;
 };
@@ -43,6 +43,12 @@ type Held = { samples: Float32Array[]; seqs: number[]; audio_ms: number; rate: n
 type Heard = {
   samples: Float32Array[]; seqs: number[]; rate: number; audio_ms: number; trailing_ms: number; arrived: number;
   text: string; raw: string; cost_usd: number; keywords_dropped: boolean; rewrites: Rewrite[]; strong: boolean; joined: boolean; heard_at: number;
+  // Other first-ear readings of the same audio, cleaned the same way, for the second-opinion rule.
+  alternates?: string[];
+  // Set when a whole-number line was delivered at once (D17) and still waits for a continuation; it is never delivered again.
+  released?: ListenUtterance;
+  // The released line this one carries on ("eighty" then "two"), so the record it wrote is amended.
+  continues?: string;
   // The segment's voiceprint from the local speaker model, worked out beside the transcription; the audio itself is never kept.
   voiceprint: Voiceprint | null;
 };
@@ -61,6 +67,10 @@ export type ListenOptions = {
   // The replay defence: refuse copies and faster-than-live audio (the deployed serve turns this on; scripted feeds leave it off), whether a chunk must carry the strip's liveness marker, and the frozen rule.
   replay?: "refuse" | "off"; presence?: PresenceMode; presenceRule?: PresenceRule;
   heldEndWaitMs?: number;
+  // Staff names sent in the recognition hints after the patient's own words; empty unless the serve is given them.
+  staff?: readonly string[];
+  // D17: a line ending on a whole-number vital in range is delivered at once, and a continuation inside the number wait amends it.
+  releaseWhole?: boolean;
   onStatus?: (owner: string, sessionId: string, seq: number, st: UtteranceStatus) => void;
 };
 
@@ -125,6 +135,15 @@ export class ListenSessions {
     return s;
   }
 
+  // The recognition hints a session sends: vitals words first, then the patient's own words and the staff names.
+  async hintsFor(owner: string, target: EmrTarget, sessionId: string, at: number): Promise<string[]> {
+    return this.keywordsOf(await this.sessionFor(owner, target, sessionId, at));
+  }
+
+  private keywordsOf(s: Session): string[] {
+    return buildKeywords({ vitals: VITALS_KEYWORDS, wards: [], documents: s.ctx.keywords, staff: this.o.staff ?? [], beds: [] });
+  }
+
   // One finished stretch from the streaming ear: its words are already heard, so only the join and delivery rules run; a number wait counts the quiet already heard.
   async segment(c: StreamSegment): Promise<ListenUtterance[]> {
     const s = await this.sessionFor(c.owner, c.target, c.session_id, c.arrived);
@@ -144,7 +163,7 @@ export class ListenSessions {
         if (w.strong || continuesNumber(heard.text)) {
           const raw = `${w.raw.replace(/[.,;:!?]+$/, "")} ${c.raw}`;
           const jv = vitalsVocabulary(cleanTranscript(raw));
-          const joined: Heard = { ...heard, samples: [...w.samples, c.samples], seqs: [...w.seqs, seq], audio_ms: w.audio_ms + heard.audio_ms, text: jv.text, raw, rewrites: jv.rewrites, joined: true, voiceprint: w.voiceprint ?? heard.voiceprint };
+          const joined: Heard = { ...heard, samples: [...w.samples, c.samples], seqs: [...w.seqs, seq], audio_ms: w.audio_ms + heard.audio_ms, text: jv.text, raw, rewrites: jv.rewrites, joined: true, voiceprint: w.voiceprint ?? heard.voiceprint, ...(w.released ? { continues: w.released.line_id } : {}) };
           await this.settleHeard(s, c.session_id, joined, "joined_across_cut", joined.trailing_ms);
           return;
         }
@@ -328,6 +347,7 @@ export class ListenSessions {
         heard = await this.ear(s, c.session_id, [...w.samples, ...parts], [...w.seqs, ...seqs], sampleRate, silence, arrived);
         heard.cost_usd += w.cost_usd + cost;
         heard.joined = true;
+        if (w.released) heard.continues = w.released.line_id;
         cost = heard.cost_usd;
         const u = await this.settleHeard(s, c.session_id, heard, "joined_across_cut");
         return done(this.outcomeOf(base, heard, u ?? delivered, u ? "joined_across_cut" : "held_for_number", cost));
@@ -353,9 +373,11 @@ export class ListenSessions {
     const end = danglingEnd(h.text);
     if (!end || this.closed) return this.deliver(s, sessionId, h, why);
     h.strong = end === "strong";
+    // D17: a whole number in range is written now; the line still waits, delivered, so a continuation can amend it.
+    if (!h.strong && this.o.releaseWhole && wholeInRange(h.text)) h.released = await this.deliver(s, sessionId, h, "released_whole");
     s.waiting = h;
     // A line that ends on a number may be complete, so its decision starts while it waits; the runtime uses it only if these same words are delivered.
-    if (!h.strong) this.rt.speculate({ owner: s.owner, ctx: s.ctx, session_id: sessionId, text: h.text, clip: encodeWav(concat(h.samples), h.rate) });
+    if (!h.strong && !h.released) this.rt.speculate({ owner: s.owner, ctx: s.ctx, session_id: sessionId, text: h.text, clip: encodeWav(concat(h.samples), h.rate) });
     const timer = setTimeout(() => {
       s.timer = null;
       s.chain = s.chain.then(async () => { if (s.waiting === h) { s.waiting = null; await this.deliver(s, sessionId, h, "number_alone"); } })
@@ -363,13 +385,13 @@ export class ListenSessions {
     }, Math.max(0, (h.strong ? this.o.strongJoinWaitMs ?? STRONG_JOIN_WAIT_MS : this.o.numberJoinWaitMs ?? NUMBER_JOIN_WAIT_MS) - quietHeardMs));
     timer.unref?.();
     s.timer = timer;
-    return null;
+    return h.released ?? null;
   }
 
   // Transcribes one stretch of audio with vitals words first in the hints, then cleans it and applies the vitals vocabulary.
   private async ear(s: Session, sessionId: string, parts: Float32Array[], seqs: number[], rate: number, silence: number, arrived: number): Promise<Heard> {
     const joined = encodeWav(concat(parts), rate);
-    const keywords = buildKeywords({ vitals: VITALS_KEYWORDS, wards: [], documents: s.ctx.keywords, staff: [], beds: [] });
+    const keywords = this.keywordsOf(s);
     const asrId = `${sessionId}-${seqs.length > 1 ? `${seqs[0]}.` : ""}${seqs.at(-1)}`.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 64);
     let heard: FinalTranscript;
     let dropped = false;
@@ -386,11 +408,14 @@ export class ListenSessions {
     }
     const v = vitalsVocabulary(afterWake(cleanTranscript(heard.text)));
     const voiceprint = await print;
-    return { samples: parts, seqs, rate, audio_ms: totalMs(parts, rate), trailing_ms: silence, arrived, text: v.text, raw: heard.text, cost_usd: heard.cost_usd, keywords_dropped: dropped, rewrites: v.rewrites, strong: false, joined: false, heard_at: Date.now(), voiceprint };
+    const alternates = heard.alternates?.map((x) => vitalsVocabulary(afterWake(cleanTranscript(x))).text);
+    return { samples: parts, seqs, rate, audio_ms: totalMs(parts, rate), trailing_ms: silence, arrived, text: v.text, raw: heard.text, cost_usd: heard.cost_usd, keywords_dropped: dropped, rewrites: v.rewrites, strong: false, joined: false, heard_at: Date.now(), voiceprint, ...(alternates?.length ? { alternates } : {}) };
   }
 
   // Hands one finished utterance to the runtime as an ambient line, with its audio kept in memory for the second ear.
   private async deliver(s: Session, sessionId: string, h: Heard, why: ListenOutcome["why"]): Promise<ListenUtterance> {
+    // A released line that nothing carried on is already with the runtime.
+    if (h.released && why === "number_alone") return h.released;
     // A joined line that waited again and went on alone still says it was joined.
     const finished = h.joined && why === "number_alone" ? "joined_across_cut" : why;
     // A line said while the person was not at the screen keeps its words but never reaches the voice match.
@@ -399,14 +424,26 @@ export class ListenSessions {
     const r = await this.rt.say({
       owner: s.owner, target: { admission_id: s.ctx.admission_id }, text: h.text, source: "audio", spoken_at: new Date(h.arrived - h.audio_ms).toISOString(),
       audio: { audio_ms: h.audio_ms, cost_usd: h.cost_usd, session_id: sessionId },
-      ambient: { session_id: sessionId, seqs: h.seqs, raw_text: h.raw.slice(0, 2000), ended_at: new Date(h.arrived - h.trailing_ms).toISOString(), final_at: new Date(h.arrived).toISOString(), trailing_silence_ms: h.trailing_ms, finished_by: finished },
-      context: s.ctx, clip: encodeWav(concat(h.samples), h.rate), rewrites: h.rewrites, heard_at: h.heard_at, ...(this.o.embed ? absent ?? { voiceprint: h.voiceprint } : {})
+      ambient: { session_id: sessionId, seqs: h.seqs, raw_text: h.raw.slice(0, 2000), ended_at: new Date(h.arrived - h.trailing_ms).toISOString(), final_at: new Date(h.arrived).toISOString(), trailing_silence_ms: h.trailing_ms, finished_by: finished, ...(why === "released_whole" ? { released: true } : {}), ...(h.continues ? { continues: h.continues } : {}) },
+      context: s.ctx, clip: encodeWav(concat(h.samples), h.rate), rewrites: h.rewrites, heard_at: h.heard_at, ...(h.alternates ? { alternates: h.alternates } : {}), ...(this.o.embed ? absent ?? { voiceprint: h.voiceprint } : {})
     });
     const u: ListenUtterance = { id: r.line_id, line_id: r.line_id, task_id: r.task_id, text: h.text, seqs: h.seqs, class: null, classes: [] };
     s.unreported.push(u);
     this.status(s, sessionId, h.seqs, { status: "completed", task_id: r.task_id, line_id: r.line_id });
     return u;
   }
+}
+
+// Sends the same audio to the first ear several times at once; the first reading that answers in order is the line, and the others ride along as alternates.
+export function parallelReadings(inner: Transcriber, n: number): Transcriber {
+  if (n <= 1) return inner;
+  return async (wav, keywords, sessionId) => {
+    const rs = await Promise.allSettled(Array.from({ length: n }, (_, i) => inner(wav, keywords, i ? `${sessionId.slice(0, 60)}-r${i}` : sessionId)));
+    const ok = rs.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+    if (!ok.length) throw (rs[0] as PromiseRejectedResult).reason;
+    const [first, ...rest] = ok as [FinalTranscript, ...FinalTranscript[]];
+    return { ...first, cost_usd: ok.reduce((c, r) => c + r.cost_usd, 0), alternates: rest.map((r) => r.text) };
+  };
 }
 
 const shaOf = (wav: Uint8Array) => createHash("sha256").update(wav).digest("hex");

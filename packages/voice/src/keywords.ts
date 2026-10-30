@@ -1,6 +1,6 @@
 export const MAX_KEYWORDS = 100;
-export const MAX_KEYWORD_LENGTH = 60;
-// Voice Transcribe answered 400 to a seven-word keyword and took six words (measured 28 Oct 2026).
+// Both endpoints refuse a keyword over 30 characters; the 28 Oct seven-word 400 was this limit, since a 13-character seven-word keyword is accepted (measured 30 Oct 2026).
+export const MAX_KEYWORD_LENGTH = 30;
 export const MAX_KEYWORD_WORDS = 6;
 
 export type Vocabulary = { wards: readonly string[]; documents: readonly string[]; staff: readonly string[]; beds: readonly string[]; vitals?: readonly string[] };
