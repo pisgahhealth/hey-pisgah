@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-30T02:17:09.925Z",
-  "commit": "0f7d04d",
+  "generated_at": "2026-10-30T02:42:46.856Z",
+  "commit": "9708e33",
   "claims": [
     {
       "claim_id": "C-01",
@@ -369,9 +369,9 @@
         "checks_failed_closed": 5,
         "checks_tried": 5,
         "deny_hits": 0,
-        "delivery": "held: E4 merged the memo notification kind but no door route sends a memo, so the publisher's transport holds the deliveries"
+        "delivery": "through the door: the nurse received it, the incoming doctor was refused correctly, and the owner doctor was refused incorrectly because the door's record check does not count the doctor's own agent"
       },
-      "measured_at": "2026-10-30T01:52:46.750Z"
+      "measured_at": "2026-10-30T02:41:24.903Z"
     }
   ]
 }

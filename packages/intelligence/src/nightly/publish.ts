@@ -4,12 +4,16 @@ import { checkMemo, verifyMemo, type CheckFailure, type Verdict } from "./verify
 
 // The delivery route, E4's bell and inbox; a memo payload or a task alert, each with a preview that names nobody.
 export type MemoDelivery = { recipient_id: string; kind: "memo" | "task"; preview: string; payload_hash: string; body: unknown };
-export type MemoTransport = { deliver(d: MemoDelivery): Promise<{ ok: boolean; ref: string | null; reason: string | null }> };
+// A refused delivery is the door's answer and is recorded, never retried; a failed one could not reach the door.
+export type DeliveryAnswer = { ok: boolean; ref: string | null; reason: string | null; refused?: boolean };
+export type MemoTransport = { deliver(d: MemoDelivery): Promise<DeliveryAnswer> };
 // One bounded repair of the statements that failed, given the precise reasons; it may drop or restate them, never add a fact.
 export type MemoRepair = (m: Memo, failures: readonly CheckFailure[]) => Promise<Memo>;
 export type PublishResult = {
   recipient_id: string; status: "delivered" | "withheld" | "refused" | "transport_failed"; verdict: Verdict; repairs: number;
   delivered: { kind: MemoDelivery["kind"]; ref: string | null; preview: string }[];
+  // Each delivery the transport did not make, with its reason; a refusal is the door's own answer.
+  not_sent: { kind: MemoDelivery["kind"]; refused: boolean; reason: string }[];
   // Statements the checks did not clear, kept for an authorised review view and marked unverified; they are never published.
   review: { memo_id: string; unverified: CheckFailure[] } | null; ms: number;
 };
@@ -33,7 +37,13 @@ export function memoPublisher(o: { sources: NightSources; transport: MemoTranspo
         m = await o.repair(m, verdict.failures);
         verdict = verifyMemo(m, o.sources, check, o.now);
       }
-      const done = (status: PublishResult["status"], delivered: PublishResult["delivered"], review: PublishResult["review"]): PublishResult => ({ recipient_id: memo.recipient_id, status, verdict, repairs, delivered, review, ms: Date.now() - t0 });
+      const notSent: PublishResult["not_sent"] = [];
+      const send = async (d: MemoDelivery) => {
+        const r = await o.transport.deliver(d);
+        if (!r.ok) notSent.push({ kind: d.kind, refused: r.refused === true, reason: r.reason ?? "not delivered" });
+        return r;
+      };
+      const done = (status: PublishResult["status"], delivered: PublishResult["delivered"], review: PublishResult["review"]): PublishResult => ({ recipient_id: memo.recipient_id, status, verdict, repairs, delivered, not_sent: notSent, review, ms: Date.now() - t0 });
       if (verdict.status === "verified") {
         // The verdict covers this payload only; a payload changed after the check is refused, never sent on an old verdict.
         if (payloadHash(m) !== verdict.payload_hash) return done("refused", [], null);
@@ -41,11 +51,11 @@ export function memoPublisher(o: { sources: NightSources; transport: MemoTranspo
         const sent: PublishResult["delivered"] = [];
         if (m.urgent.length) {
           const preview = `Urgent: ${m.urgent.length} item${m.urgent.length === 1 ? "" : "s"} for you.`;
-          const u = await o.transport.deliver({ recipient_id: m.recipient_id, kind: "task", preview, payload_hash: verdict.payload_hash, body: taskAlert(m, m.urgent) });
+          const u = await send({ recipient_id: m.recipient_id, kind: "task", preview, payload_hash: verdict.payload_hash, body: taskAlert(m, m.urgent) });
           if (u.ok) sent.push({ kind: "task", ref: u.ref, preview });
         }
-        const r = await o.transport.deliver({ recipient_id: m.recipient_id, kind: "memo", preview: m.preview, payload_hash: verdict.payload_hash, body: m });
-        return done(r.ok ? "delivered" : "transport_failed", r.ok ? [...sent, { kind: "memo", ref: r.ref, preview: m.preview }] : sent, null);
+        const r = await send({ recipient_id: m.recipient_id, kind: "memo", preview: m.preview, payload_hash: verdict.payload_hash, body: m });
+        return done(r.ok ? "delivered" : r.refused ? "refused" : "transport_failed", r.ok ? [...sent, { kind: "memo", ref: r.ref, preview: m.preview }] : sent, null);
       }
       // The memo is withheld; open work the records back still reaches the recipient as a structured alert, checked on its own.
       const unverified = verdict.status === "unsupported_or_incomplete" ? verdict.failures : [];
@@ -53,7 +63,7 @@ export function memoPublisher(o: { sources: NightSources; transport: MemoTranspo
       const itemsOk = verdict.status !== "verifier_error" && m.unfinished.length > 0 && verifyMemo(alert, o.sources, check, o.now).status === "verified";
       if (!itemsOk) return done("withheld", [], { memo_id: m.memo_id, unverified });
       const body = taskAlert(m, m.unfinished);
-      const r = await o.transport.deliver({ recipient_id: m.recipient_id, kind: "task", preview: alert.preview, payload_hash: payloadHash(alert), body });
+      const r = await send({ recipient_id: m.recipient_id, kind: "task", preview: alert.preview, payload_hash: payloadHash(alert), body });
       return done("withheld", r.ok ? [{ kind: "task", ref: r.ref, preview: alert.preview }] : [], { memo_id: m.memo_id, unverified });
     }
   };
