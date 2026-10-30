@@ -117,6 +117,8 @@ export const DoorProfile = z.strictObject({
   watches: z.record(z.string(), ReadSpec.extend({ facts: z.record(z.string(), Fact) })).default({}),
   inbox: ReadSpec.extend({ list_path: Dotted, id: Dotted, subject: Dotted, at: Dotted, detail: ReadSpec.extend({ patient: Dotted }).optional() }).optional(),
   page_targets: z.record(z.string(), z.strictObject({ words: Words, vars: z.record(z.string(), z.string()) })).default({}),
+  // The hospital's own name for each value of a variable, such as the consent purposes the agent heard; a value with no name here is not sent.
+  value_maps: z.record(z.string().regex(/^[a-z_]{1,40}$/), z.record(z.string(), z.string().min(1).max(80))).default({}),
   clinics: z.record(z.string(), z.strictObject({ words: Words, id: EmrId })).default({}),
   // Wards the owner may name for an admission or a bed, with the ward's class.
   wards: z.record(z.string(), z.strictObject({ words: Words, id: EmrId, class: z.string().regex(/^[a-z_]{1,30}$/) })).default({}),

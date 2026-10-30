@@ -17,8 +17,8 @@ import { EMERGENCY_KIND, EMERGENCY_LINE, RULE_ONLY_KINDS, emergencyReason, ident
 import { screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
 import {
   ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_ARGS, DELEGATION_RULE_KINDS, DISPENSE_KIND, ESCALATE_KIND, NUDGE_KIND, PREPARE_KIND, REGISTER_KIND, WARD_REVIEW_KIND,
-  acceptedTask, consentSaid, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
-  type DelegationRead, type EmrDelegation
+  CONSENT_PURPOSES, acceptedTask, consentSaid, consentScope, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
+  type ConsentPurpose, type DelegationRead, type EmrDelegation
 } from "./delegate.js";
 import { FROM_NOW_ON, PreferenceError, SCOPE_KINDS, describePref, describeScope, describeSource, readRule, scopeAnswer, type PrefField, type PreferenceMemory } from "./preferences.js";
 
@@ -302,7 +302,11 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
     }
     case "delegation.details": {
       const d = t.delegations.find((y) => y.key === x["key"]);
-      if (d?.registration) { if (x["phone"]) d.registration.phone = String(x["phone"]); if (x["consent_line"]) d.registration.consent_line = String(x["consent_line"]); if (x["phone_line"]) d.registration.phone_line = String(x["phone_line"]); }
+      if (d?.registration) {
+        if (x["phone"]) d.registration.phone = String(x["phone"]); if (x["consent_line"]) d.registration.consent_line = String(x["consent_line"]); if (x["phone_line"]) d.registration.phone_line = String(x["phone_line"]);
+        if (Array.isArray(x["consent_purposes"])) d.registration.consent_purposes = (x["consent_purposes"] as string[]).filter((p): p is ConsentPurpose => (CONSENT_PURPOSES as readonly string[]).includes(p));
+        if (typeof x["consent_at"] === "string") d.registration.consent_at = x["consent_at"];
+      }
       break;
     }
     case "identity.closed": { const o = t.identities.find((y) => y.obligation_id === x["obligation_id"]); if (o) o.state = "done"; break; }
@@ -1666,7 +1670,9 @@ export class EmrRuntime {
       return this.settle(l, "other_clinician");
     }
     const args = DOCUMENTATION_KINDS.has(kind) && who && who.speaker !== "owner" ? this.attributed(kind, rawArgs, who) : rawArgs;
-    let awaiting: EmrAction["awaiting"] = needsOwner && who?.speaker !== "owner" ? "owner_voice" : null;
+    // A registration whose receptionist has no voice on file is taken on her session, and the hospital records it so (R-22); nothing else is.
+    const bySession = kind === REGISTER_KIND && who?.speaker === "unverified" && who.reason === "owner_not_enrolled";
+    let awaiting: EmrAction["awaiting"] = needsOwner && who?.speaker !== "owner" && !bySession ? "owner_voice" : null;
     const controlled = (kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(args["drug"])]?.controlled) || OWNER_CONFIRM_KINDS.has(kind);
     if (!awaiting && (controlled || CONFIRM_KINDS.has(kind))) awaiting = "confirm";
     const authorisedBy = kind === "countersign" || (ORDER_KINDS.has(kind) && who?.speaker === "owner") ? lineId : null;
@@ -2104,6 +2110,8 @@ export class EmrRuntime {
       const authorisation = voicedLine(a.authorised_by_line ?? a.line_id), confirmation = voicedLine(a.confirmed_by_line);
       return { ...base, ...(a.read_back ? { read_back_digest: a.read_back.digest } : {}), voice: { ...(authorisation ? { authorisation } : {}), ...(confirmation ? { confirmation } : {}) } };
     }
+    // A registration carries the receptionist's matched consent line when her voice is enrolled; with no token the hospital attributes it to her session.
+    if (a.kind === REGISTER_KIND) { const consent = voicedLine(String(a.args["evidence"] ?? "").replace(/^transcript:/, "") || null); return consent ? { ...base, voice: { authorisation: consent } } : base; }
     if (!a.kind || !ORDER_KINDS.has(a.kind)) return base;
     // An order carries the owner's matched lines as "evidence~token"; a token lost on restart leaves the header out, and the hospital refuses the write.
     const voiced = (lineId: string | null) => { const tok = lineId ? this.tokens.get(lineId) : undefined; return lineId && tok ? `transcript:${lineId}~${tok}` : undefined; };
@@ -2519,7 +2527,12 @@ export class EmrRuntime {
     // Another clinician's details are not the desk's; an unverified voice's are kept with their line, so the registration waits for the owner's yes.
     this.whenAttributed(l, lineId, (who) => {
       if (who?.speaker === "other_clinician" && this.notOwnersWords(l, lineId, who, REGISTER_KIND)) return this.settle(l, "needs_owner_voice");
-      this.append(l, "delegation.details", { key: d.key, ...(phone ? { phone, phone_line: lineId } : {}), ...(consent ? { consent_line: lineId } : {}) });
+      // The consent covers only the purposes said on its lines; a bare "she consents" at the desk is consent to registration alone.
+      const scope = consentScope(text);
+      const before = d.registration?.consent_purposes ?? [];
+      const said = scope.said.length || before.length ? scope.said : ["registration" as const];
+      const purposes = CONSENT_PURPOSES.filter((p) => (before.includes(p) || said.includes(p)) && !scope.refused.includes(p));
+      this.append(l, "delegation.details", { key: d.key, ...(phone ? { phone, phone_line: lineId } : {}), ...(consent ? { consent_line: lineId, consent_purposes: purposes, consent_at: spokenAt } : {}) });
       this.registerWhenReady(l, d, lineId);
       this.settle(l, "registration_details");
     });
@@ -2533,11 +2546,14 @@ export class EmrRuntime {
     const needs = registrationNeeds(r);
     if (!parts) { this.note(l, "The name on this registration is not a full name, so I have not registered it; say the patient's full name."); return; }
     if (needs.length) { this.note(l, `Still needed before I register: ${needs.map((n) => (n === "phone" ? "a phone number" : "the patient's consent, said by you")).join(" and ")}.`); return; }
+    const purposes = r.consent_purposes ?? [];
+    if (!purposes.includes("registration")) { this.note(l, "The consent you said does not cover registration, so I have not registered her; say whether she consents to registration."); return; }
     const tried = this.attempts(l.task, REGISTER_KIND, d.delegation_id);
     if (tried.live || tried.tries >= 2 || !l.task.patient_id) return;
-    // The registration rests on its least certain line: a detail no voice match gave to the owner holds it for the owner's yes.
-    const weak = [r.phone_line, r.consent_line].find((x) => { const w = x ? this.speakerOf(l.task, x) : null; return !!w && w.speaker !== "owner"; });
-    this.ruleAct(l, weak ?? lineId, REGISTER_KIND, { delegation_id: d.delegation_id, patient_id: l.task.patient_id, ...parts, phone: r.phone, evidence: `transcript:${r.consent_line}` });
+    // The registration rests on its least certain line: a detail no voice match gave to the owner holds it for the owner's yes, except that an owner with no voice on file is taken on her session and the record says so.
+    const weak = [r.phone_line, r.consent_line].find((x) => { const w = x ? this.speakerOf(l.task, x) : null; return !!w && w.speaker !== "owner" && !(w.speaker === "unverified" && w.reason === "owner_not_enrolled"); });
+    const at = r.consent_at ?? l.task.lines.find((x) => x.id === r.consent_line)?.at ?? this.wall().toISOString();
+    this.ruleAct(l, weak ?? lineId, REGISTER_KIND, { delegation_id: d.delegation_id, patient_id: l.task.patient_id, ...parts, phone: r.phone, evidence: `transcript:${r.consent_line}`, consent_purposes: purposes, consent_spoken_at: at });
   }
 
   // A task handed to this owner opens the owner's task for that patient with no read, and the agent tells its human on the bell at once.
@@ -2697,10 +2713,14 @@ export class EmrRuntime {
         this.append(l, "delegation.state", { key: d.key, record_id: recordId });
         this.note(l, `Dispensed: ${d.title} (record ${recordId}). The doctor's agent is told when it reads the record.`);
         break;
-      case REGISTER_KIND:
+      case REGISTER_KIND: {
         this.append(l, "delegation.state", { key: d.key, record_id: recordId });
-        this.note(l, `Registered at the desk: record ${recordId} now carries the name and phone.`);
+        const said = (a.args["consent_purposes"] as string[] | undefined) ?? [];
+        const line = String(a.args["evidence"] ?? "").replace(/^transcript:/, "");
+        const by = this.tokens.has(line) ? "matched to your voice" : "taken on your session, since your voice is not enrolled";
+        this.note(l, `Registered at the desk: record ${recordId} now carries the name and phone. Consent recorded for ${said.map((p) => p.replace(/_/g, " ")).join(", ")} only, ${by}; ${CONSENT_PURPOSES.filter((p) => !said.includes(p)).map((p) => p.replace(/_/g, " ")).join(", ")} not consented.`);
         break;
+      }
       default: break;
     }
   }

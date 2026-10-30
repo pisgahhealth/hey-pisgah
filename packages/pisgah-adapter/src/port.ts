@@ -386,6 +386,11 @@ export class PisgahPort implements EmrPort {
     if (!v["visit_id"] && patient) v["visit_id"] = this.learned.visit_by_patient.get(patient);
     if (typeof a["bp"] === "string") { const [sys, dia] = a["bp"].split("/").map(Number); v["bp_sys"] = sys; v["bp_dia"] = dia; }
     if (typeof a["temp_c"] === "string") v["temp_num"] = Number(a["temp_c"]);
+    for (const [name, map] of Object.entries(this.profile.value_maps)) {
+      const x = v[name];
+      if (typeof x === "string") v[name] = map[x];
+      else if (Array.isArray(x)) { const named = x.map((y) => (typeof y === "string" ? map[y] : undefined)).filter((y): y is string => !!y); v[name] = named.length ? named : undefined; }
+    }
     if (kind === OBSERVATION_KIND) { const r = [a["corrects_record_id"] ? `Corrects entry ${String(a["corrects_record_id"])}.` : null, a["remark"] ?? null].filter(Boolean).join(" "); if (r) v["remarks"] = r; }
     if (kind === "record_note") v["note_body"] = a["label"] === "handover" && !/^handover\b/i.test(String(a["text"])) ? `Handover. ${String(a["text"])}` : a["text"];
     const label = (a["admission_id"] ? this.learned.label.get(String(a["admission_id"])) : undefined) ?? (patient ? this.learned.label.get(patient) : undefined);

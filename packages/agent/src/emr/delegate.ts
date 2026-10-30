@@ -19,6 +19,9 @@ export const TASK_KINDS = ["review", "dispense", "lab_order", "registration", "n
 export type TaskKind = (typeof TASK_KINDS)[number];
 export const NEEDS = ["phone", "consent"] as const;
 export type Need = (typeof NEEDS)[number];
+// What a patient's spoken consent can cover: being registered, and each use of the record the hospital's notice lists; the profile maps each to the hospital's own name.
+export const CONSENT_PURPOSES = ["registration", "scribe", "tests", "results_sharing", "pharmacy", "messages", "identity_check"] as const;
+export type ConsentPurpose = (typeof CONSENT_PURPOSES)[number];
 
 const Evidence = z.string().regex(/^[A-Za-z0-9_.:#/-]{1,200}$/);
 const Title = z.string().trim().min(1).max(120);
@@ -36,7 +39,10 @@ export const DELEGATION_ARGS: Record<string, z.ZodType<Record<string, unknown>>>
   [WARD_REVIEW_KIND]: z.strictObject({ delegation_id: EmrId, admission_id: EmrId, team: z.string().regex(/^[a-z_]{1,30}$/), reason: z.string().trim().min(1).max(1000) }),
   [PREPARE_KIND]: z.strictObject({ delegation_id: EmrId, prescription_id: EmrId, title: Title, evidence: Evidence }),
   [DISPENSE_KIND]: z.strictObject({ delegation_id: EmrId, prescription_id: EmrId, title: Title, evidence: Evidence }),
-  [REGISTER_KIND]: z.strictObject({ delegation_id: EmrId, patient_id: EmrId, surname: z.string().min(1).max(200), other_names: z.string().min(1).max(200), phone: z.string().regex(/^0[789][01]\d{8}$/), evidence: Evidence })
+  [REGISTER_KIND]: z.strictObject({
+    delegation_id: EmrId, patient_id: EmrId, surname: z.string().min(1).max(200), other_names: z.string().min(1).max(200), phone: z.string().regex(/^0[789][01]\d{8}$/), evidence: Evidence,
+    consent_purposes: z.array(z.enum(CONSENT_PURPOSES)).min(1).max(CONSENT_PURPOSES.length), consent_spoken_at: z.iso.datetime({ offset: true })
+  })
 };
 
 // A team the owner's agent may hand work to: the words that name it, the kind of task, and the fixed title the record keeps, which never names a patient.
@@ -65,7 +71,7 @@ export type EmrDelegation = {
   action_id: string | null; line_id: string; at: string;
   assigned_at: string | null; acknowledged_at: string | null; completed_at: string | null; escalated_at: string | null; record_id: string | null;
   ward_review: "none" | "held" | "requested"; due_at: string | null;
-  registration: { name: string | null; phone: string | null; consent_line: string | null; phone_line?: string | null } | null;
+  registration: { name: string | null; phone: string | null; consent_line: string | null; phone_line?: string | null; consent_purposes?: ConsentPurpose[]; consent_at?: string | null } | null;
   // The spoken identity this task completes, closed on the delegating side when the record names the patient.
   obligation_id: string | null;
   // The record the task is about, what its holder asked the agent to do with it and on which line, and what it waits on.
@@ -125,6 +131,37 @@ export function consentSaid(line: string): boolean {
   const low = line.toLowerCase();
   if (/\b(?:no|not|never|doesn'?t|does not|won'?t|refuses?|refused|declined?|withdr[ae]w)\b[^.]{0,30}\bconsent/.test(low) || /\bconsent\w*\b[^.]{0,20}\b(?:refused|declined|withdrawn)\b/.test(low)) return false;
   return /\b(?:she|he|they|the patient|patient)\s+(?:has\s+)?(?:consents?|consented|agrees?|agreed)\b|\b(?:verbal\s+)?consent\s+(?:given|confirmed|obtained)\b|\bgave\s+(?:her|his|their)\s+consent\b/.test(low);
+}
+
+// The phrases that name each purpose, longest first, so a phrase of one purpose is never read as another's shorter word.
+const PURPOSE_PHRASES: readonly [ConsentPurpose, RegExp][] = [
+  ["results_sharing", /\b(?:shar\w*|send\w*)\s+(?:(?:her|his|their|the)\s+)?(?:(?:test|lab)\s+)?results?\b|\bresults?\s+(?:being\s+)?shared\b|\blab\s+sharing\b/g],
+  ["scribe", /\b(?:scrib\w*|transcri\w*|(?:the\s+)?(?:consultation|conversation|visit)\s+(?:being\s+)?recorded|record(?:ing)?\s+(?:of\s+)?(?:the\s+|her\s+|his\s+|their\s+)?(?:consultation|conversation|visit)|(?:the\s+)?recording|ai\s+notes?)\b/g],
+  ["identity_check", /\b(?:nin|identity\s+checks?|national\s+id\w*)\b/g],
+  ["messages", /\b(?:sms|text\s+messages?|texts?|whats\s?app|messages?|notifications?|reminders?)\b/g],
+  ["pharmacy", /\b(?:pharmac\w*|prescriptions?|medicines?|drugs?)\b/g],
+  ["tests", /\b(?:tests?|investigations?|lab\s+work|vitals|treatment\s+records?)\b/g],
+  ["registration", /\b(?:regist(?:er|ered|ering|ration)|her\s+details|his\s+details)\b/g],
+];
+const REFUSAL = /\b(?:no|not|never|don'?t|doesn'?t|does\s+not|won'?t|will\s+not|without|except|refus\w*|declin\w*|against)\b/;
+const CLAUSE_END = /[.;!?,]|\bbut\b|\bhowever\b/g;
+
+// Which purposes a consent line names, and which it refuses: a purpose is refused when a refusal word comes before it in its own clause.
+export function consentScope(line: string): { said: ConsentPurpose[]; refused: ConsentPurpose[] } {
+  let low = ` ${line.toLowerCase().replace(/\s+/g, " ")} `;
+  const said = new Set<ConsentPurpose>(), refused = new Set<ConsentPurpose>();
+  for (const [purpose, re] of PURPOSE_PHRASES) {
+    for (const m of [...low.matchAll(re)]) {
+      const before = low.slice(0, m.index);
+      const ends = [...before.matchAll(CLAUSE_END)];
+      const clause = before.slice(ends.length ? ends.at(-1)!.index! + ends.at(-1)![0].length : 0);
+      (REFUSAL.test(clause) ? refused : said).add(purpose);
+    }
+    // A phrase once read is blanked, so "test results" shared is not also "tests".
+    low = low.replace(re, (x) => " ".repeat(x.length));
+  }
+  for (const p of refused) said.delete(p);
+  return { said: CONSENT_PURPOSES.filter((p) => said.has(p)), refused: CONSENT_PURPOSES.filter((p) => refused.has(p)) };
 }
 
 // What the pharmacist asks the agent to do with a sent order: prepare it (the review), or prepare and dispense it.
