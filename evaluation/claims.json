@@ -688,14 +688,14 @@
         "table": "memo verdicts per recipient with the refused faults"
       },
       "acceptance": {
-        "command": "npx tsx apps/cli/src/nightly.ts over the day's evidence and task stores",
+        "command": "npx tsx apps/cli/src/nightly.ts over the day's evidence and task stores, delivered through the door with a record expectation per recipient",
         "result_path": "evaluation/results/memo.json",
-        "predicate": "delivered == true && verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0 ; amber: verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0",
+        "predicate": "verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0 && authorised_recipients >= 1 && authorised_delivered == authorised_recipients && correct_refusals == refusals && incorrect_outcomes == 0 ; amber: verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0",
         "measured_on": "dev"
       },
       "wording": {
-        "pass": "Every memo was checked against the records and delivered to the bell and inbox; {checks_failed_closed} of {checks_tried} planted faults were refused and no preview named a patient",
-        "partial": "Every memo passed its checks and {checks_failed_closed} of {checks_tried} planted faults were refused, but the memos are held: {delivery}",
+        "pass": "Every memo was checked against the records; {authorised_delivered} of {authorised_recipients} authorised recipients received it through the door, {correct_refusals} of {refusals} refusals were correct, {checks_failed_closed} of {checks_tried} planted faults were refused and no preview named a patient",
+        "partial": "Every memo passed its checks and {checks_failed_closed} of {checks_tried} planted faults were refused, but only {authorised_delivered} of {authorised_recipients} authorised recipients received it and {correct_refusals} of {refusals} refusals were correct",
         "fail": "A memo failed its checks, named a patient where it must not, or a planted fault was published",
         "not_measured": "Not measured yet"
       },
@@ -884,6 +884,25 @@
         "C-07": "adopted_by_person && ac09_pass && order_differs_where_diff_says"
       },
       "reason": "C-06 and C-07 asked the questions C-26 (discover) and C-27 (improve) now measure on E6.d's blind runs under the answer-invariance gate and E6's adoption, fresh and withheld cases; the M4.c result files they read predate the discovery rerun and the learning-claims script cannot read E6.d's store layout, so both now read the same result files as their successors; wording and status follow those files"
+    },
+    {
+      "date": "2026-10-30",
+      "by": "E6.m",
+      "claims": [
+        "C-28"
+      ],
+      "previous_predicates": {
+        "C-28": "delivered == true && verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0 ; amber: verified == true && names_in_previews == 0 && unauthorised_names == 0 && checks_failed_closed == checks_tried && deny_hits == 0"
+      },
+      "previous_wording": {
+        "C-28": {
+          "pass": "Every memo was checked against the records and delivered to the bell and inbox; {checks_failed_closed} of {checks_tried} planted faults were refused and no preview named a patient",
+          "partial": "Every memo passed its checks and {checks_failed_closed} of {checks_tried} planted faults were refused, but the memos are held: {delivery}",
+          "fail": "A memo failed its checks, named a patient where it must not, or a planted fault was published",
+          "not_measured": "Not measured yet"
+        }
+      },
+      "reason": "The memo now goes through the door, so the amber wording no longer says held. Green needs every recipient the record authorises to have received it, every refusal to be one the record calls for, and no outcome against the record, on top of the unchanged checks; amber keeps the checks and states the counts. The expectation per recipient is read from the record before the run, not from the door's answer."
     }
   ]
 }

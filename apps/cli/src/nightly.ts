@@ -122,7 +122,13 @@ if (process.argv[1]?.endsWith("nightly.ts")) {
     delivery: !throughDoor ? "held: no door profile was given, so the publisher's transport holds the deliveries"
       : deliveredAll ? "every authorised recipient received the memo and every refusal was correct"
       : `through the door: ${outcomes.filter((x) => x.out.correct === false).length} recipient(s) not as the record calls for, ${outcomes.filter((x) => x.out.correct === null).length} without a record expectation`,
-    sender, delivery_results: outcomes.map(({ memo, result, out }) => ({ recipient_role: recipients.find((x) => x.id === memo.recipient_id)!.role, incoming: recipients.find((x) => x.id === memo.recipient_id)!.incoming, ...out, why: expect[memo.recipient_id]?.why ?? null, task_alerts_not_sent: result.not_sent.filter((x) => x.kind === "task").length })), checks_failed_closed: closed.refused, checks_tried: closed.tried, negative_cases: closed.cases,
+    sender,
+    // The counts C-28 reads: recipients the record authorises against those who received it, and refusals against the correct ones.
+    recipients: outcomes.length, authorised_recipients: outcomes.filter((x) => x.out.expected === "deliver").length,
+    authorised_delivered: outcomes.filter((x) => x.out.expected === "deliver" && x.result.status === "delivered").length,
+    refusals: outcomes.filter((x) => x.out.memo === "refused").length, correct_refusals: outcomes.filter((x) => x.out.memo === "refused" && x.out.correct === true).length,
+    incorrect_outcomes: outcomes.filter((x) => x.out.correct !== true).length,
+    delivery_results: outcomes.map(({ memo, result, out }) => ({ recipient_role: recipients.find((x) => x.id === memo.recipient_id)!.role, incoming: recipients.find((x) => x.id === memo.recipient_id)!.incoming, ...out, why: expect[memo.recipient_id]?.why ?? null, task_alerts_not_sent: result.not_sent.filter((x) => x.kind === "task").length })), checks_failed_closed: closed.refused, checks_tried: closed.tried, negative_cases: closed.cases,
     tests: "packages/intelligence/test/nightly.test.ts", model_mode: process.env["HEY_PISGAH_MODE"] ?? "mock", calls: inv.calls, cost_usd: inv.cost_usd, effort: "medium", purposes: ["draft_text", "other"], model: "meta-models/Muse-Spark-Open-816B-A42B"
   };
   writeFileSync(need("out"), `${JSON.stringify(pub, null, 1)}\n`);

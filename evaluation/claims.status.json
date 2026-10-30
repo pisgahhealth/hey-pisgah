@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-30T02:42:46.856Z",
-  "commit": "9708e33",
+  "generated_at": "2026-10-30T02:50:20.324Z",
+  "commit": "7d9e302",
   "claims": [
     {
       "claim_id": "C-01",
@@ -360,18 +360,21 @@
     },
     {
       "claim_id": "C-28",
-      "status": "amber",
+      "status": "green",
       "values": {
-        "delivered": false,
         "verified": true,
         "names_in_previews": 0,
         "unauthorised_names": 0,
         "checks_failed_closed": 5,
         "checks_tried": 5,
         "deny_hits": 0,
-        "delivery": "through the door: the nurse received it, the incoming doctor was refused correctly, and the owner doctor was refused incorrectly because the door's record check does not count the doctor's own agent"
+        "authorised_recipients": 2,
+        "authorised_delivered": 2,
+        "correct_refusals": 1,
+        "refusals": 1,
+        "incorrect_outcomes": 0
       },
-      "measured_at": "2026-10-30T02:41:24.903Z"
+      "measured_at": "2026-10-30T02:49:10.437Z"
     }
   ]
 }

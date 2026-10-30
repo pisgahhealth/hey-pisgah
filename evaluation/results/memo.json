@@ -1,5 +1,5 @@
 {
- "measured_at": "2026-10-30T02:41:24.903Z",
+ "measured_at": "2026-10-30T02:49:10.437Z",
  "measured": true,
  "source": "nightly_run",
  "set": "sandbox",
@@ -33,7 +33,7 @@
   {
    "recipient_role": "doctor",
    "incoming": false,
-   "status": "refused",
+   "status": "delivered",
    "verdict": "verified",
    "failures": [],
    "repairs": 0,
@@ -45,7 +45,7 @@
    "encounters_named": 5,
    "preview": "Night memo: 3 recorded facts, 5 unfinished items for you, 2 urgent.",
    "nothing_warrants_change": false,
-   "publish_ms": 2220
+   "publish_ms": 218
   },
   {
    "recipient_role": "doctor",
@@ -62,7 +62,7 @@
    "encounters_named": 1,
    "preview": "Night memo: 3 recorded facts, 5 unfinished items for you, 2 urgent.",
    "nothing_warrants_change": false,
-   "publish_ms": 53
+   "publish_ms": 47
   },
   {
    "recipient_role": "nurse",
@@ -79,27 +79,26 @@
    "encounters_named": 0,
    "preview": "Night memo: 4 recorded facts, 0 unfinished items for you.",
    "nothing_warrants_change": false,
-   "publish_ms": 99
+   "publish_ms": 40
   }
  ],
  "verified": true,
  "names_in_previews": 0,
  "unauthorised_names": 0,
  "deny_hits": 0,
- "delivered": false,
- "delivery": "through the door: the nurse received it, the incoming doctor was refused correctly, and the owner doctor was refused incorrectly because the door's record check does not count the doctor's own agent",
+ "delivered": true,
+ "delivery": "through the door: both authorised recipients received it and the one refusal was correct",
  "sender": "Dr Edikan's agent, sending as the synthetic doctors' department lead (disclosed; a role played on the coordinator's instruction by the E6.m build lane)",
  "delivery_results": [
   {
    "recipient_role": "doctor",
    "incoming": false,
-   "memo": "refused",
-   "reason": "409 conflict: The record does not authorise this person for an encounter the memo names.",
+   "memo": "delivered",
+   "reason": null,
    "expected": "deliver",
-   "correct": false,
+   "correct": true,
    "why": "the owner doctor's own agent requested and accepted all three stays the memo names",
-   "task_alerts_not_sent": 1,
-   "observed": "incorrect refusal: the door's record check matches the person only, and these stays were requested and accepted by the doctor's own agent"
+   "task_alerts_not_sent": 1
   },
   {
    "recipient_role": "doctor",
@@ -142,6 +141,12 @@
   "other"
  ],
  "model": "meta-models/Muse-Spark-Open-816B-A42B",
+ "recipients": 3,
+ "authorised_recipients": 2,
+ "authorised_delivered": 2,
+ "refusals": 1,
+ "correct_refusals": 1,
+ "incorrect_outcomes": 0,
  "recorded": {
   "mode": "live",
   "at": "2026-10-30T01:51:56Z",
@@ -150,10 +155,17 @@
  },
  "cost_note": "the recorded live run's ledger, repairs included; the re-delivery replayed it and made no model call",
  "redelivered": {
-  "at": "2026-10-30T02:41:24.903Z",
+  "at": "2026-10-30T02:49:10.437Z",
   "through": "the door's memo route on the sandbox, under the profile's sender",
   "model_calls": 0,
-  "bell_rows_read_back": 1,
-  "bell_read_back": "one memo row on the nurse's bell with the memo's own preview, read by read-only SQL after the run"
+  "first_attempt": {
+   "at": "2026-10-30T02:41:24.903Z",
+   "owner_doctor": "refused incorrectly: the door's record check matched the person only, not the agent the doctor owns",
+   "nurse": "delivered",
+   "incoming_doctor": "refused correctly"
+  },
+  "after_fix": "the door's record check now counts the recipient's own active agents as the recipient; the same command and bearer were rerun",
+  "bell_rows_read_back": 2,
+  "bell_read_back": "one memo row each on the owner doctor's and the nurse's bell, read by read-only SQL; the nurse's memo was an idempotent replay and did not ring twice"
  }
 }
