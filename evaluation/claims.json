@@ -663,15 +663,15 @@
         "table": "fresh applicable case and withheld case under the adopted version"
       },
       "acceptance": {
-        "command": "version adopt through serve, two live demo tasks, then npx tsx apps/cli/src/improve.ts report",
+        "command": "version adopt through serve, two live demo tasks, the version offer read on a live stay and the fresh EMR journey, then npx tsx apps/cli/src/improve.ts report --profile <EMR profile> --stay-offer f --stay-offer-v1 f [--journey-version f | --journey-blocked reason]",
         "result_path": "evaluation/results/improve.json",
-        "predicate": "adopted_by_person == true && human_approval == true && fresh_applicable.executed_differently == true && fresh_applicable.actions_open == 0 && fresh_applicable.state == 'done' && withheld.version_withheld == true && withheld.actions_open == 0 && withheld.state == 'done' ; amber: adopted_by_person == true && fresh_applicable.executed_differently == true && withheld.version_withheld == true",
+        "predicate": "adopted_by_person == true && human_approval == true && deployable == true && emr_offers_made >= 1 && fresh_applicable.executed_differently == true && fresh_applicable.actions_open == 0 && fresh_applicable.state == 'done' && withheld.version_withheld == true && withheld.actions_open == 0 && withheld.state == 'done' ; amber: adopted_by_person == true && deployable == true && emr_offer_seen == true && fresh_applicable.executed_differently == true && withheld.version_withheld == true",
         "measured_on": "dev"
       },
       "wording": {
-        "pass": "A person adopted the change; on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes, and on {withheld_case} it was withheld by its scope",
-        "partial": "Ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes) and was withheld on {withheld_case}, adopted by the disclosed synthetic ward manager; awaiting Samuel's approval",
-        "fail": "The adopted change did not run differently on the fresh case, or was not withheld where its scope says",
+        "pass": "A person adopted the change; on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes, it was withheld on {withheld_case} by its scope, and in the EMR {emr_offer_reason}",
+        "partial": "Ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes) and was withheld on {withheld_case}, adopted by the disclosed synthetic ward manager; in the EMR {emr_offer_reason}; awaiting Samuel's approval",
+        "fail": "The adopted change did not run differently on the fresh case, was not withheld where its scope says, or this EMR cannot carry it or offered it nowhere: {deployment_reason}",
         "not_measured": "Not measured yet"
       },
       "evidence_links": []
@@ -903,6 +903,25 @@
         }
       },
       "reason": "The memo now goes through the door, so the amber wording no longer says held. Green needs every recipient the record authorises to have received it, every refusal to be one the record calls for, and no outcome against the record, on top of the unchanged checks; amber keeps the checks and states the counts. The expectation per recipient is read from the record before the run, not from the door's answer."
+    },
+    {
+      "date": "2026-10-30",
+      "by": "F3b",
+      "claims": [
+        "C-27"
+      ],
+      "previous_predicates": {
+        "C-27": "adopted_by_person == true && human_approval == true && fresh_applicable.executed_differently == true && fresh_applicable.actions_open == 0 && fresh_applicable.state == 'done' && withheld.version_withheld == true && withheld.actions_open == 0 && withheld.state == 'done' ; amber: adopted_by_person == true && fresh_applicable.executed_differently == true && withheld.version_withheld == true"
+      },
+      "previous_wording": {
+        "C-27": {
+          "pass": "A person adopted the change; on fresh case {applicable_case} the summary draft moved {draft_earlier_by_min} minutes ahead of version 1 and the wait after sign-off went from {wait_v1_min} to {wait_adopted_min} minutes, and on {withheld_case} it was withheld by its scope",
+          "partial": "Ran differently on fresh case {applicable_case} ({draft_earlier_by_min} minutes ahead, wait {wait_v1_min} to {wait_adopted_min} minutes) and was withheld on {withheld_case}, adopted by the disclosed synthetic ward manager; awaiting Samuel's approval",
+          "fail": "The adopted change did not run differently on the fresh case, or was not withheld where its scope says",
+          "not_measured": "Not measured yet"
+        }
+      },
+      "reason": "The review found the adopted version made no offer in the EMR: its trigger (the round entry) had no EMR counterpart, so the improvement held only on the simulator. C-27 now also needs the deploy check (every changed step has a watched EMR trigger point, a work kind that prepares it and an owner whose agent holds that kind) and an offer seen in the EMR: green needs the offer on the fresh EMR journey, amber accepts the offer on a live stay through the door when the fresh journey could not run, and every wording says which and why. Nothing was loosened: every earlier clause stays."
     }
   ]
 }

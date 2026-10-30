@@ -116,6 +116,37 @@ function changeLines(version: number, readings: readonly TriggerReading[]): stri
   return lines;
 }
 
+// The workflow events a version may trigger on, by name, so a reading can say which EMR event stands for each.
+export const TRIGGER_EVENTS: Record<string, string> = { st01: "round entry", st02: "take-home order", st05: "clinical sign-off", st07: "summary final", st13: "financial clearance", st15: "take-home hand-over", st16: "departure" };
+
+export type DeployStatus = "deployable" | "not_agent_work" | "no_trigger" | "no_trigger_counterpart" | "no_document_counterpart" | "no_owner";
+export type DeployReading = { step_id: string; trigger: string | null; event: string | null; status: DeployStatus; reason: string; owners: string[] };
+// Whether this EMR can carry a version's change at all, before any patient: every changed step needs a watched trigger point, a work kind that prepares it and an owner whose agent holds that kind.
+export type DeployCheck = { version: number; parent_version: number | null; changed: DeployReading[]; deployable: boolean; reason: string };
+
+export function deployCheck(def: WD, parent: WD | null, c: Counterparts, owners: readonly { id: string; kinds: readonly string[] }[]): DeployCheck {
+  const changed = [...changedSteps(def, parent)].sort().map((stepId): DeployReading => {
+    const step = def.steps.find((s) => s.step_id === stepId);
+    const t = def.triggers.find((x) => x.target.step === stepId) ?? null;
+    const trigger = t ? describePredicate(t.when) : null;
+    const event = t && "after" in t.when ? TRIGGER_EVENTS[t.when.after.step] ?? null : null;
+    const base = { step_id: stepId, trigger, event, owners: [] as string[] };
+    const ref = step?.document_ref ?? null;
+    if (!step || step.action_kind !== "prepare_document" || !ref || !step.actor_roles.includes("agent")) return { ...base, status: "not_agent_work", reason: `${stepId} is ${step?.action_kind ?? "unknown"} by ${step?.actor_roles.join(" or ") ?? "nobody"}; no agent can carry this change in the EMR` };
+    if (!t) return { ...base, status: "no_trigger", reason: `version ${def.version} leaves ${stepId} with no trigger, so no agent offer can carry it` };
+    if (!watchesFor(t.when, c)) return { ...base, status: "no_trigger_counterpart", reason: `no watched fact in this EMR shows ${trigger}${event ? ` (the ${event})` : ""}` };
+    const doc = c.documents[docKey(ref.document_id, ref.stage)];
+    if (!doc) return { ...base, status: "no_document_counterpart", reason: `no work kind in this EMR prepares the ${ref.document_id} ${ref.stage}` };
+    const holders = owners.filter((o) => o.kinds.includes(doc.kind)).map((o) => o.id);
+    if (!holders.length) return { ...base, status: "no_owner", reason: `no owner's agent holds ${doc.kind}` };
+    return { ...base, owners: holders, status: "deployable", reason: `${doc.kind} offered ${trigger}${event ? ` (the ${event})` : ""}` };
+  });
+  const blocked = changed.filter((r) => r.status !== "deployable");
+  const deployable = changed.length > 0 && blocked.length === 0;
+  const reason = !changed.length ? `version ${def.version} changes no step against its parent` : deployable ? `every changed step has a watched trigger point, a work kind and an owner` : blocked.map((r) => `${r.step_id}: ${r.reason}`).join("; ");
+  return { version: def.version, parent_version: parent?.version ?? null, changed, deployable, reason };
+}
+
 // Facts the version reads, with ward_requires from the requirement set in force.
 export function caseFacts(req: { ward_id: string; requirement_version: string; facts: Record<string, string> }, set?: WardRequirementSet): Facts {
   const s = set ?? loadWardRequirements(req.requirement_version as "r1" | "r2");

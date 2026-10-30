@@ -501,7 +501,7 @@ export class PisgahPort implements EmrPort {
       if (needs.some((k) => !vars[k])) continue;
       let json: unknown;
       try { json = await this.read(w, vars, prov); } catch { continue; }
-      for (const [k, f] of Object.entries(w.facts)) { facts[`${n}.${k}`] = str(pick(json, f.path)); labels[`${n}.${k}`] = f.label; }
+      for (const [k, f] of Object.entries(w.facts)) { facts[`${n}.${k}`] = factValue(json, f); labels[`${n}.${k}`] = f.label; }
     }
     return Object.keys(facts).length ? { facts, labels } : null;
   }
@@ -526,6 +526,11 @@ export class PisgahPort implements EmrPort {
 
 const opt = (v: unknown): string | null => (typeof v === "string" && v.length ? v : null);
 const flag = (v: unknown): boolean | null => (typeof v === "boolean" ? v : null);
+// A watched fact's value: the value at its path, or the present word when any value along the path is set and not false.
+export function factValue(json: unknown, f: { path: string; present?: string | undefined }): string | null {
+  if (!f.present) return str(f.path.includes("[].") ? pickAll(json, f.path) : pick(json, f.path));
+  return pickAll(json, f.path).some((v) => v !== null && v !== undefined && v !== false && v !== "" && !(Array.isArray(v) && !v.length)) ? f.present : null;
+}
 // One delegation from the door's answer, or null when it is not one.
 function delegationOf(x: unknown): DelegationRead | null {
   const id = opt(pick(x, "id"));

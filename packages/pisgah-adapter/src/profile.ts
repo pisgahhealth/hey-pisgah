@@ -37,7 +37,8 @@ const WriteOp = z.strictObject({
 }).refine((w) => !!w.proof !== !!w.unverifiable, "a write needs a proof or a reason it cannot have one");
 // A kind that only reads: the answer is rendered into a report or a draft from "{alias.path}" and "{alias.list[].field}" placeholders.
 const ReadOnlyOp = z.strictObject({ reads: z.record(z.string(), ReadSpec), report: z.string().max(2000).optional(), draft: z.string().max(4000).optional(), store: z.string().min(1) });
-const Fact = z.strictObject({ path: Dotted, label: z.string().min(1).max(60) });
+// A watched fact is the value at its path, or with present set, that word when any value along the path (lists read with "[].") is set and not false.
+const Fact = z.strictObject({ path: z.string().regex(/^[A-Za-z0-9_]+((\.|\[\]\.)[A-Za-z0-9_]+)*$/), label: z.string().min(1).max(60), present: z.string().regex(/^[a-z_]{1,30}$/).optional() });
 export const OwnerSpec = z.strictObject({
   id: z.string().min(1).max(80), label: z.string().min(1).max(80), kinds: z.array(z.string().min(1)).min(1),
   watches: z.array(z.string()).default([]), inbox: z.boolean().default(false),
