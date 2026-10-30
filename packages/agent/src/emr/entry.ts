@@ -52,8 +52,8 @@ export function unidentifiedRef(at: Date, timeZone = "Africa/Lagos"): string {
 
 export type SpokenIdentity = { name: string; phone: string | null; words: string };
 // The words that introduce a name, as people say them, Nigerian English included ("her name na").
-// "now" is how the local streaming ear hears the Nigerian "na" after "her name".
-const NAMING = /\b(?:(?:her|his|their|the patient'?s|patient'?s)\s+name\s+(?:is|na|now)|(?:she|he)\s+(?:is called|is named|says (?:she|he) is|says (?:her|his) name is)|(?:she|he)'s called|(?:they|people) call (?:her|him)|the patient is(?:\s+called)?)\b/i;
+// "now" and "no" are how the local streaming ear hears the Nigerian "na" after "her name".
+const NAMING = /\b(?:(?:her|his|their|the patient'?s|patient'?s)\s+name\s+(?:is|na|now|no)|(?:she|he)\s+(?:is called|is named|says (?:she|he) is|says (?:her|his) name is)|(?:she|he)'s called|(?:they|people) call (?:her|him)|the patient is(?:\s+called)?)\b/i;
 const NAME_RUN = /[A-Z][a-z'-]+(?:\s+[A-Z][a-z'-]+){1,3}/g;
 const NOT_NAME = /^(?:And|Phone|Her|His|She|He|The|Number|Em|Eh|Er|Um|Uh)$/;
 const PHONE = /(?:\+?234|0)\s*[789]\s*[01](?:[\s-]*\d){8}/;
