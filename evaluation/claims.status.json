@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-30T07:13:29.034Z",
-  "commit": "4628eb5",
+  "generated_at": "2026-10-30T09:35:35.288Z",
+  "commit": "6876cc4",
   "claims": [
     {
       "claim_id": "C-01",
@@ -285,7 +285,20 @@
         "errors_listed": null,
         "wake_p50_ms": null,
         "vitals_p50_ms": null,
-        "order_p50_ms": null
+        "order_p50_ms": null,
+        "floor_vitals_p50_ms": 7420,
+        "floor_vitals_p90_ms": 10005,
+        "floor_vitals_errors": 0,
+        "local_vitals_p50_ms": 4268,
+        "local_vitals_p90_ms": 6781,
+        "local_vitals_errors": 0,
+        "missing": [
+          "rows",
+          "errors_listed",
+          "wake_p50_ms",
+          "vitals_p50_ms",
+          "order_p50_ms"
+        ]
       },
       "measured_at": null
     },
