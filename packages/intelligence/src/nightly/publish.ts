@@ -19,6 +19,8 @@ export type PublishResult = {
   review: { memo_id: string; unverified: CheckFailure[] } | null; ms: number;
   // The sources read again right before publishing: whether they changed while the memo was written, and what was published against.
   refreshed: { changed: boolean; from: string; to: string; recomposed: boolean } | null;
+  // The memo as last checked, after any repair or rebuild; what was sent when status is delivered.
+  final: Memo;
 };
 export type Publisher = { publish(m: Memo): Promise<PublishResult> };
 
@@ -65,7 +67,7 @@ export function memoPublisher(o: { sources: NightSources; transport: MemoTranspo
         if (!r.ok) notSent.push({ kind: d.kind, refused: r.refused === true, reason: r.reason ?? "not delivered" });
         return r;
       };
-      const done = (status: PublishResult["status"], delivered: PublishResult["delivered"], review: PublishResult["review"]): PublishResult => ({ recipient_id: memo.recipient_id, status, verdict, repairs, delivered, not_sent: notSent, review, ms: Date.now() - t0, refreshed });
+      const done = (status: PublishResult["status"], delivered: PublishResult["delivered"], review: PublishResult["review"]): PublishResult => ({ recipient_id: memo.recipient_id, status, verdict, repairs, delivered, not_sent: notSent, review, ms: Date.now() - t0, refreshed, final: m });
       if (verdict.status === "verified") {
         // The verdict covers this payload only; a payload changed after the check is refused, never sent on an old verdict.
         if (payloadHash(m) !== verdict.payload_hash) return done("refused", [], null);

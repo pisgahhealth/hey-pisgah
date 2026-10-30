@@ -83,14 +83,17 @@ if (process.argv[1]?.endsWith("nightly.ts")) {
   const expect = (flag("expect") ? JSON.parse(readFileSync(need("expect"), "utf8")).recipients : {}) as Expect;
   const at = new Date(`${sources.day}T23:00:00.000Z`);
   // On a change the memo is written again from the fresh records with the same investigations, then checked again before it goes.
+  // One bounded repair from the records: a failed statement is left out and the memo rebuilt, then checked again; still failing, it is withheld with its reasons.
+  const dropped: { memo_id: string; finding_id: string; code: string; detail: string }[] = [];
   const publisher = nightly.memoPublisher({
-    sources, transport, now: () => at, refresh: readSources,
+    sources, transport, now: () => at, refresh: readSources, maxRepairs: 1, repair: nightly.repairFromRecords(sources, inv.investigations, at, dropped),
     recompose: (fresh, m) => nightly.composeMemo(fresh, fresh.recipients.find((r) => r.id === m.recipient_id)!, nightly.computeFacts(fresh), inv.investigations, at)
   });
   const results = [];
   for (const r of recipients) {
     const memo = nightly.composeMemo(sources, r, facts, inv.investigations, new Date(`${sources.day}T23:00:00.000Z`));
-    results.push({ memo, result: await publisher.publish(memo) });
+    const result = await publisher.publish(memo);
+    results.push({ memo: result.final, result });
   }
   client.close();
   // Cost and calls from the ledger, so a repaired call is counted with the attempt it replaced.
@@ -102,7 +105,7 @@ if (process.argv[1]?.endsWith("nightly.ts")) {
   // Delivered means every recipient the record authorises received the memo and every refusal was one the record calls for.
   const deliveredAll = throughDoor && outcomes.length > 0 && outcomes.every((x) => x.out.correct === true) && outcomes.some((x) => x.result.status === "delivered");
   const closed = await nightly.plantedFaults(sources, results.map((x) => x.memo), at);
-  const priv = { sources_hash: nightly.sourcesHash(sources), facts, investigations: inv.investigations, deny_hits: hits, results, held_deliveries: held.sent, door_log: doorLog, expect, sender, calls: inv.calls, cost_usd: inv.cost_usd, ms: Date.now() - t0 };
+  const priv = { repaired_out: dropped, sources_hash: nightly.sourcesHash(sources), facts, investigations: inv.investigations, deny_hits: hits, results, held_deliveries: held.sent, door_log: doorLog, expect, sender, calls: inv.calls, cost_usd: inv.cost_usd, ms: Date.now() - t0 };
   mkdirSync(dirname(need("out-private")), { recursive: true });
   writeFileSync(need("out-private"), `${JSON.stringify(priv, null, 1)}\n`);
   // The public file keeps statuses, counts and check codes only: no encounter id, no title, no name.
@@ -122,6 +125,8 @@ if (process.argv[1]?.endsWith("nightly.ts")) {
     refusals: outcomes.filter((x) => x.out.memo === "refused").length, correct_refusals: outcomes.filter((x) => x.out.memo === "refused" && x.out.correct === true).length,
     incorrect_outcomes: outcomes.filter((x) => x.out.correct !== true).length,
     delivery_results: outcomes.map(({ memo, result, out }) => ({ recipient_role: recipients.find((x) => x.id === memo.recipient_id)!.role, incoming: recipients.find((x) => x.id === memo.recipient_id)!.incoming, ...out, why: expect[memo.recipient_id]?.why ?? null, task_alerts_not_sent: result.not_sent.filter((x) => x.kind !== "memo").length, urgent_alerts_sent: result.delivered.filter((x) => x.kind === "urgent").length })), checks_failed_closed: closed.refused, checks_tried: closed.tried, negative_cases: closed.cases, negative_not_applicable: closed.not_applicable,
+    repairs: results.reduce((n, x) => n + x.result.repairs, 0), repaired_out: dropped.map(({ finding_id, code }) => ({ finding_id, code })),
+    withheld_reasons: results.filter((x) => x.result.status === "withheld").map((x) => ({ recipient_role: recipients.find((r) => r.id === x.memo.recipient_id)!.role, codes: x.result.verdict.failures.map((f) => f.code) })),
     refreshed: results.map((x) => x.result.refreshed), urgent_alerts: results.reduce((n, x) => n + x.result.delivered.filter((d) => d.kind === "urgent").length, 0), urgent_items: results.reduce((n, x) => n + x.memo.urgent.length, 0),
     // Each urgent item of a recipient the record authorises must ring as its own alert, not only inside the memo.
     urgent_items_authorised: outcomes.filter((x) => x.out.expected === "deliver").reduce((n, x) => n + x.memo.urgent.length, 0),
