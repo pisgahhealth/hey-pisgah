@@ -38,7 +38,9 @@ describe.skipIf(!RUN)("E5 discharge by voice and the accounts leg on the sandbox
     const dir = join(process.env["HEY_PISGAH_E5_TMP"] ?? "/tmp", `e5-${Date.now().toString(36)}`);
     mkdirSync(dir, { recursive: true });
     const prov = (owner: string, line: string, extra: Partial<Provenance> = {}): Provenance => ({ owner, evidence: `transcript:${line}`, spoken_at: now(), ...extra });
-    const matched = async (voice: string, text: string, line: string): Promise<SpeakerVerdict> => port.speaker!(doc.owner, (await embed(speak(voice, text, join(dir, `${line}.wav`))))!.vector, prov(doc.owner, line));
+    // Each recording is new for this run, since the hospital gives one recording a token for one line only.
+    const run = Date.now().toString(36);
+    const matched = async (voice: string, text: string, line: string): Promise<SpeakerVerdict> => port.speaker!(doc.owner, (await embed(speak(voice, `${text} Run ${run}.`, join(dir, `${line}.wav`))))!.vector, prov(doc.owner, line));
     const result: Record<string, unknown> = { settlement: "simulated: a cash payment recorded by the accounts person; no money moved" };
     const instruction = `e5-${Date.now().toString(36)}-home`;
 
@@ -50,11 +52,11 @@ describe.skipIf(!RUN)("E5 discharge by voice and the accounts leg on the sandbox
     // Negative control: the door itself refuses an agent's discharge with no confirmation line.
     const op = profile.work["release_home"]!;
     if (!("method" in op)) throw new Error("release_home is not a write in the profile");
-    const raw = async (headers: Record<string, string>, admission: string, diagnosis = paper.diagnosis ?? "x") => {
+    const raw = async (headers: Record<string, string>, admission: string, diagnosis = paper.diagnosis ?? "x", evidence = instruction) => {
       const h = profile.headers;
       const r = await fetch(`${profile.base_url.replace(/\/+$/, "")}/${op.path}`, {
         method: "POST", body: JSON.stringify({ admissionId: admission, dischargeType: "routine", primaryDiagnosis: diagnosis }),
-        headers: { authorization: `Bearer ${doc.bearer}`, "content-type": "application/json", [h.on_behalf_of]: doc.owner, [h.origin]: profile.origin_value, [h.evidence]: `transcript:${instruction}`, [h.spoken_at]: now(), [h.idempotency]: `e5-raw-${Math.random().toString(36).slice(2)}`, ...headers }
+        headers: { authorization: `Bearer ${doc.bearer}`, "content-type": "application/json", [h.on_behalf_of]: doc.owner, [h.origin]: profile.origin_value, [h.evidence]: `transcript:${evidence}`, [h.spoken_at]: now(), [h.idempotency]: `e5-raw-${Math.random().toString(36).slice(2)}`, ...headers }
       });
       return { status: r.status, text: (await r.text()).slice(0, 200) };
     };
@@ -110,12 +112,13 @@ describe.skipIf(!RUN)("E5 discharge by voice and the accounts leg on the sandbox
     expect(reused.text).toMatch(/already used/);
     expect(sandboxQuery(sb, "e5_stay", { admission: other })[0]!["state"]).toBe("open");
 
-    // Voice orders still awaiting countersign hold the encounter open, even with a fresh confirm.
+    // Voice orders still awaiting countersign hold the encounter open, even with a fresh instruction and confirm, since a spoken line is bound to the stay it first discharged.
     const unsignedPaper = await port.readPaperwork!(doc.owner, unsignedStay, prov(doc.owner, instruction));
     expect(unsignedPaper.unsigned).toBeGreaterThan(0);
-    const line2 = `${instruction}-u`;
-    const owner2 = await matched(VOICES.owner, "Confirm.", line2);
-    const held = await raw({ [A]: instr, [C]: owner2.speaker === "owner" ? `transcript:${line2}~${owner2.token}` : "", [D]: unsignedPaper.digest }, unsignedStay, unsignedPaper.diagnosis ?? "x");
+    const home2 = `${instruction}-h2`, line2 = `${instruction}-u`;
+    const said2 = await matched(VOICES.owner, "She can go home now.", home2);
+    const owner2 = await matched(VOICES.owner, "Yes, confirm.", line2);
+    const held = await raw({ [A]: said2.speaker === "owner" ? `transcript:${home2}~${said2.token}` : "", [C]: owner2.speaker === "owner" ? `transcript:${line2}~${owner2.token}` : "", [D]: unsignedPaper.digest }, unsignedStay, unsignedPaper.diagnosis ?? "x", home2);
     expect(held.status).toBe(409);
     expect(held.text).toMatch(/countersign/);
     result["controls"] = { no_confirmation: bare.status, forged: forged.status, instruction_as_confirmation: selfConfirm.status, wrong_diagnosis: wrongDiagnosis.status, stale_digest: stale.status, reused_confirmation: reused.status, unsigned_orders: held.status, stranger: stranger.speaker };
