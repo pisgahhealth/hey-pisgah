@@ -221,6 +221,28 @@ describe("the running agent follows the version history a person writes", () => 
     await rt.stop();
   });
 
+  it("leaves the nurse's own later request alone once the offered summary was saved, even after the suspension", async () => {
+    const log = versionLog();
+    const { rt, port, root } = boot({ source: liveSource(log.root), watchMs: 0 });
+    const t = await rt.open(NURSE, { admission_id: ADM_A });
+    port.notes[ADM_A]!.push("Ward round: pain settling.");
+    await rt.pollOnce();
+    await rt.say({ owner: NURSE, target: { admission_id: ADM_A }, text: "Draft the discharge summary." }, t.task_id);
+    await rt.settled();
+    await rt.say({ owner: NURSE, target: { admission_id: ADM_A }, text: "That reads right. Save the summary." }, t.task_id);
+    await rt.settled();
+    expect(rt.view(t.task_id)!.actions.find((a) => a.kind === "record_note")).toMatchObject({ state: "completed" });
+    log.suspend();
+    await rt.pollOnce();
+    expect(types(root, t.task_id)).not.toContain("version.offer_withdrawn");
+    await rt.say({ owner: NURSE, target: { admission_id: ADM_A }, text: "Draft the discharge summary again." }, t.task_id);
+    await rt.settled();
+    const drafts = rt.view(t.task_id)!.actions.filter((a) => a.kind === "draft_stay_summary");
+    expect(drafts.map((a) => a.state)).toEqual(["completed", "completed"]);
+    expect(types(root, t.task_id)).not.toContain("version.offer_withdrawn");
+    await rt.stop();
+  });
+
   it("a restart after the suspension withdraws the offer the stopped agent left open", async () => {
     const log = versionLog();
     const first = boot({ source: liveSource(log.root), watchMs: 0 });
