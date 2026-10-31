@@ -214,7 +214,7 @@ function realignFakeMic(why: string): void {
 const fakeSlots = new Map<string, { at: number; clipMs: number; end: number }>();
 const heardInRoom = (l: Line) => l.mode === "speak" || l.mode === "play";
 function slotGap(l: Line, next: Line | undefined): number {
-  if (!heardInRoom(l)) return l.mode === "wait" ? Math.min(l.timeout_s ?? 90, 180) * 1000 : l.mode === "fault" ? 45_000 : l.mode === "person" ? 30_000 : 20_000;
+  if (!heardInRoom(l)) return l.mode === "wait" ? Math.min(l.timeout_s ?? 90, 180) * 1000 : l.mode === "fault" ? 45_000 : l.mode === "person" ? (l.timeout_s ?? 30) * 1000 : 20_000;
   if (l.interrupt) return 60_000;
   if (l.lose_ack || next?.confirm) return 40_000;
   return Number(process.env["ACC_FAKE_GAP_MS"] ?? 25_000);
@@ -521,6 +521,7 @@ async function runLine(line: Line): Promise<void> {
     if (DRIVER === "human" && line.who === "doctor") { process.stdout.write(`\n  AT THE SCREEN (${line.id}): ${line.note ?? line.op}\n  Press Enter here when done.\n`); await rl!.question(""); note = "done by Samuel at the screen"; }
     else if (HOSPITAL === "sandbox" && line.op === "acc_lab_result") { const r = await labResult(vars); note = r.note; if (!r.ok) errors.push(r.note); }
     else if (HOSPITAL === "sandbox" && line.op === "acc_lab_cancel") { const r = await labCancelOnScreen(vars); note = r.note; if (!r.ok) errors.push(r.note); }
+    else if (HOSPITAL === "sandbox" && line.op === "acc_pay_test") { const r = await payTestAtDesk(vars); note = r.note; if (!r.ok) errors.push(r.note); }
     else if (!hospital.hasPerson(line.op!)) { blocked = true; errors.push(`person op ${line.op} is not in the profile`); }
     else { const r = await hospital.person(line.op!, vars); note = `person ${line.op}: ${r.status} ${r.note ?? ""}`.trim(); if (!r.ok) errors.push(note); }
     otherTouches.push({ line: line.id, who: line.who, what: `person step ${line.op} at that person's screen` });
@@ -591,14 +592,52 @@ async function labResult(vars: Record<string, string>): Promise<{ ok: boolean; n
   const as = (o: Record<string, unknown>) => ({ order_id: String(o["order_id"]), case_version: Number(o["case_version"]), specimen_id: String(o["specimen_id"] ?? ""), specimen_version: Number(o["specimen_version"] ?? 0), raw_text: vars["raw_text"] ?? "ZZ-TEST result" }) as unknown as Record<string, string>;
   let o = await read();
   if (!o) return { ok: false, note: `no ${vars["test"]} order on the visit` };
-  for (const [op, need] of [["acc_lab_accession", () => !o!["specimen_id"]], ["acc_lab_record", () => !["collected", "received", "in_process", "processed"].includes(String(o!["specimen_state"] ?? ""))], ["acc_lab_result_post", () => true]] as const) {
+  for (const [op, need] of [["acc_lab_accession", () => !o!["specimen_id"]], ["acc_lab_record", () => !["collected", "received", "in_process", "processed"].includes(String(o!["specimen_state"] ?? ""))], ["accept", () => String(o!["specimen_state"] ?? "") !== "processed"], ["acc_lab_result_post", () => true]] as const) {
     if (!need()) continue;
+    // Receipt and processing have no door; lab.grace presses Accept on her worklist, which records both.
+    if (op === "accept") {
+      const a = await labAcceptOnScreen(String(o["order_id"]), vars["test"] ?? "the test");
+      steps.push(a.note);
+      if (!a.ok) return { ok: false, note: steps.join("; ") };
+      o = (await read()) ?? o;
+      continue;
+    }
     const r = await hospital.person(op, as(o));
     steps.push(`${op} ${r.status}${r.note ? ` ${r.note.slice(0, 120)}` : ""}`);
     if (!r.ok) return { ok: false, note: steps.join("; ") };
     o = (await read()) ?? o;
   }
   return { ok: true, note: steps.join("; ") };
+}
+
+// A person's own web step for the rehearsal, run as that person through the sandbox's acceptance seed (the step's action, never SQL); returns the action's own line.
+function webStep(envName: "ACC_CANCEL_CASE" | "ACC_ACCEPT_ORDER" | "ACC_PAY_ORDER", id: string, label: string): string {
+  const out = (() => { try { return execFileSync("/bin/bash", [process.env["ACC_LAB_CANCEL_SCRIPT"]!], { env: { ...process.env, ACC_CANCEL_CASE: "", ACC_ACCEPT_ORDER: "", ACC_PAY_ORDER: "", [envName]: id }, encoding: "utf8", timeout: 600_000, stdio: ["ignore", "pipe", "pipe"] }); } catch (e) { return `${String((e as { stdout?: string }).stdout ?? "")}${String((e as { stderr?: string }).stderr ?? e)}`; } })();
+  return new RegExp(`${label}: (\\{.*)`).exec(out)?.[1] ?? out.replace(/\s+/g, " ").slice(-200);
+}
+
+// lab.grace accepts the sample on her worklist (receipt and both processing steps); Samuel's run asks for the press in her window.
+async function labAcceptOnScreen(orderId: string, test: string): Promise<{ ok: boolean; note: string }> {
+  if (DRIVER === "human") {
+    process.stdout.write(`\n  LAB STEP: in lab.grace's window open ${APP}/lab, find the ${test} sample under To receive and press Accept. Press Enter here when done.\n`);
+    await rl!.question("");
+  } else if (process.env["ACC_LAB_CANCEL_SCRIPT"]) {
+    const line = webStep("ACC_ACCEPT_ORDER", orderId, "lab accept");
+    const after = (await hospital.query("acc_specimen_processed", { order: orderId })).length > 0;
+    return { ok: after, note: `lab.grace's Accept on the worklist: ${after ? "received and processed" : line.slice(0, 200)}` };
+  } else return { ok: false, note: "no web step for the lab's Accept" };
+  const after = (await hospital.query("acc_specimen_processed", { order: orderId })).length > 0;
+  return { ok: after, note: `lab.grace's Accept on the worklist (a person): ${after ? "received and processed" : "not processed"}` };
+}
+
+// Accounts takes the payment for one test at the desk (Record payment on its lab bill), so that money is linked to the order, as a relative paying for a test before it runs does.
+async function payTestAtDesk(vars: Record<string, string>): Promise<{ ok: boolean; note: string }> {
+  const orderId = vars["order_id"] ?? "";
+  if (!orderId) return { ok: false, note: `no ${vars["order_test"]} order on the visit` };
+  if (!process.env["ACC_LAB_CANCEL_SCRIPT"]) return { ok: false, note: "no web step for the desk payment" };
+  const line = webStep("ACC_PAY_ORDER", orderId, "lab bill paid");
+  const paid = (await hospital.query("acc_test_prepaid", { order: orderId })).length > 0;
+  return { ok: paid, note: `accounts.bola's Record payment on the ${vars["order_test"]} lab bill (run for her): ${paid ? "paid" : line.slice(0, 200)}` };
 }
 
 // The lab scientist cancels the test on her own lab screen in a second Chrome window: Samuel's run asks her to, the rehearsal clicks it for her.
@@ -612,8 +651,7 @@ async function labCancelOnScreen(vars: Record<string, string>): Promise<{ ok: bo
     await rl!.question("");
   } else if (process.env["ACC_LAB_CANCEL_SCRIPT"]) {
     // The lab screen does not offer the cancel on an arrival with no identifiers, so the rehearsal runs the lab's own action as lab.grace.
-    const out = (() => { try { return execFileSync("/bin/bash", [process.env["ACC_LAB_CANCEL_SCRIPT"]!], { env: { ...process.env, ACC_CANCEL_CASE: String(o["case_id"]) }, encoding: "utf8", timeout: 600_000, stdio: ["ignore", "pipe", "pipe"] }); } catch (e) { return String((e as { stderr?: string }).stderr ?? e); } })();
-    const line = /lab cancel: (.*)/.exec(out)?.[1] ?? out.slice(-200);
+    const line = webStep("ACC_CANCEL_CASE", String(o["case_id"]), "lab cancel");
     const caseDone = (await hospital.query("acc_case_cancelled", { visit: vars["visit"] ?? "", test: vars["test"] ?? "" })).length > 0;
     return { ok: caseDone, note: `lab.grace's own cancel action: ${line.slice(0, 220)}` };
   } else {
