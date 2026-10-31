@@ -385,6 +385,20 @@ function lineAfter(since: string, owners: string[] = [DOCTOR]): { line_id: strin
   return l ? { line_id: l.line_id, text: l.text, at: l.at, ended: l.ambient?.ended_at ?? null } : null;
 }
 
+// The utterance a script line became: the heard line, not yet claimed by another step, whose words best match the script's, from a little before the step on; the room's timing and the ear's spelling may both drift, the words do not.
+const claimed = new Set<string>();
+const wordsOf = (t: string) => t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2);
+function lineFor(text: string, since: string, owners: string[]): ReturnType<typeof lineAfter> {
+  const want = new Set(wordsOf(text));
+  const from = new Date(Date.parse(since) - 60_000).toISOString();
+  const ls = owners.flatMap((o) => (views.get(o) ?? []).flatMap((t) => t.transcript)).filter((l) => l.at >= from && !claimed.has(l.line_id) && l.text);
+  const score = (t: string) => { const w = wordsOf(t); return w.length && want.size ? w.filter((x) => want.has(x)).length / Math.max(1, Math.min(want.size, w.length)) : 0; };
+  const best = ls.map((l) => ({ l, n: score(l.text) })).filter((x) => x.n >= 0.5).sort((a, b) => b.n - a.n || (a.l.at < b.l.at ? -1 : 1))[0];
+  if (!best) return null;
+  claimed.add(best.l.line_id);
+  return { line_id: best.l.line_id, text: best.l.text, at: best.l.at, ended: best.l.ambient?.ended_at ?? null };
+}
+
 const steps: StepOutcome[] = [];
 const harnessErrors: string[] = [];
 const faults: Fault[] = [];
@@ -455,9 +469,11 @@ async function runLine(line: Line): Promise<void> {
   for (;;) {
     await wait(700);
     await refreshBound();
-    if (!heard && ["speak", "play", "type", "remote"].includes(line.mode)) heard = lineAfter(started, line.mode === "type" || line.mode === "remote" ? ownersOf(line.who) : [DOCTOR]);
+    if (!heard && ["speak", "play", "type", "remote"].includes(line.mode)) heard = lineFor(line.text ?? "", started, line.mode === "type" || line.mode === "remote" ? ownersOf(line.who) : [DOCTOR]);
+    // The step's window opens when its own words were heard, if that was before the step began.
+    const from = heard && heard.at < started ? new Date(Date.parse(heard.at) - 2000).toISOString() : started;
     outcomes = [];
-    for (const e of line.expect) outcomes.push({ expect: e, optional: "optional" in e && e.optional === true, ...(await check(e, line, heard?.line_id ?? null, before, started)) });
+    for (const e of line.expect) outcomes.push({ expect: e, optional: "optional" in e && e.optional === true, ...(await check(e, line, heard?.line_id ?? null, before, from)) });
     if (blocked || outcomes.every((c) => c.ok) || Date.now() > limit) break;
   }
   if (interruptWatch) await interruptWatch;
