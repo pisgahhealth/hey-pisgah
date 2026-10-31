@@ -138,7 +138,10 @@ describe.skipIf(!RUN)("VER: adopt, use, suspend and stop, live in the EMR", () =
 // The nurse's own EMR page in Chrome with her strip pointed at this serve, for a screenshot of what the strip shows.
 async function openStrip(out: string, _owner: string, serve: string): Promise<{ shot: (name: string, admission: string) => Promise<Row>; close: () => Promise<void> }> {
   const app = process.env["VER_APP"] ?? "http://localhost:3311";
-  const req = createRequire(process.env["VER_PISGAH_PKG"] ?? "/Users/samuel/Documents/Pisgah/Pisgah/package.json");
+  // The screenshots borrow Playwright from the EMR checkout, named by its package.json.
+  const pkg = process.env["VER_PISGAH_PKG"];
+  if (!pkg) throw new Error("VER_SHOTS=1 needs VER_PISGAH_PKG, the EMR package.json that provides playwright");
+  const req = createRequire(pkg);
   type Pg = { goto: (u: string, o?: unknown) => Promise<unknown>; fill: (s: string, v: string) => Promise<void>; click: (s: string) => Promise<void>; waitForURL: (f: (u: URL) => boolean, o?: unknown) => Promise<void>; waitForTimeout: (ms: number) => Promise<void>; screenshot: (o: { path: string; fullPage?: boolean }) => Promise<unknown>; evaluate: <T>(f: () => T) => Promise<T> };
   const { chromium } = req("playwright") as { chromium: { launch: (o: unknown) => Promise<{ newContext: (o: unknown) => Promise<{ addInitScript: (f: (s: string) => void, a: string) => Promise<void>; newPage: () => Promise<Pg> }>; close: () => Promise<void> }> } };
   const b = await chromium.launch({ channel: "chrome", headless: true });
