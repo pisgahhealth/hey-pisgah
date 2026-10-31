@@ -355,6 +355,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
     case "delegation.details": {
       const d = t.delegations.find((y) => y.key === x["key"]);
       if (d?.registration) {
+        if (typeof x["name"] === "string") d.registration.name = x["name"];
         if (x["phone"]) d.registration.phone = String(x["phone"]); if (x["consent_line"]) d.registration.consent_line = String(x["consent_line"]); if (x["phone_line"]) d.registration.phone_line = String(x["phone_line"]);
         if (Array.isArray(x["consent_purposes"])) d.registration.consent_purposes = (x["consent_purposes"] as string[]).filter((p): p is ConsentPurpose => (CONSENT_PURPOSES as readonly string[]).includes(p));
         if (typeof x["consent_at"] === "string") d.registration.consent_at = x["consent_at"];
@@ -3138,7 +3139,9 @@ export class EmrRuntime {
         const took = acceptedTask(first, [d]);
         if (took && "hit" in took) this.ruleAct(l, lineId, ACK_KIND, { delegation_id: d.delegation_id, title: d.title, evidence: `transcript:${lineId}` });
       }
-      this.append(l, "delegation.details", { key: d.key, ...(phone ? { phone, phone_line: lineId } : {}), ...(consent ? { consent_line: lineId, consent_purposes: purposes, consent_at: spokenAt } : {}) });
+      // The desk takes the name from the patient, so a name the desk says is the one registered, over the doctor's words as the ear spelled them.
+      const deskName = identityFrom(text)?.name ?? null;
+      this.append(l, "delegation.details", { key: d.key, ...(deskName ? { name: deskName, name_line: lineId } : {}), ...(phone ? { phone, phone_line: lineId } : {}), ...(consent ? { consent_line: lineId, consent_purposes: purposes, consent_at: spokenAt } : {}) });
       this.registerWhenReady(l, d, lineId);
       this.settle(l, "registration_details");
     });

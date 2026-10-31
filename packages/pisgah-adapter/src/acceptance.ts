@@ -18,6 +18,7 @@ export const Expect = z.union([
   z.strictObject({ awaits: z.string().min(1), optional: z.boolean().optional() }),
   z.strictObject({ question: z.string().min(1), optional: z.boolean().optional() }),
   z.strictObject({ no_write_from_line: z.string().min(1) }),
+  z.strictObject({ no_write_during: z.string().min(1) }),
   z.strictObject({ no_order_from_line: z.literal(true) }),
   z.strictObject({ class: z.string().min(1) }),
   z.strictObject({ speaker: z.enum(["owner", "other_clinician", "unverified"]) }),
@@ -44,6 +45,8 @@ export const Line = z.strictObject({
   muted: z.boolean().optional(),
   // The page reloads just before the line, as a server restart does; the strip must be listening again with no touch.
   reload: z.boolean().optional(),
+  // Said only when the agent has asked a question holding these words (a clarification); otherwise the line is not said and its checks still run.
+  only_if_asked: z.string().min(3).max(80).optional(),
   confirm: z.enum(["r3", "countersign"]).optional(), speed: z.enum(["vitals", "order"]).optional(),
   after: z.array(z.strictObject({ nudged: z.enum(WHO) })).optional(), expect: z.array(Expect).default([]), timeout_s: z.number().int().min(5).max(3600).optional(), note: z.string().max(400).optional()
 }).refine((l) => (["speak", "play", "remote", "type"].includes(l.mode) ? !!l.text : true), "a spoken or typed line needs its text")
@@ -151,7 +154,8 @@ export function completion(r: Pick<AccResult, "steps" | "faults" | "unaccounted"
     // A harness error means the run did not do what it claims to have tested, so it never completes.
     ...(r.harness_errors ?? []).map((e) => `harness error: ${e}`),
     ...(r.trees_changed ? [`the code changed during the run: ${r.trees_changed}`] : []),
-    ...r.steps.filter((s) => s.status !== "verified" && s.status !== "partial").map((s) => `${s.line} ${s.status}`),
+    // A name held for the desk in the ear's own spelling is the held state the script expects before registration; only the established record name must be the script's.
+    ...r.steps.filter((s) => s.status !== "verified" && s.status !== "partial" && !(s.status === "held" && s.checks.filter((c) => !c.ok && !c.optional).every((c) => "identity" in c.expect && !c.expect.established))).map((s) => `${s.line} ${s.status}`),
     ...r.faults.filter((f) => !f.ok).map((f) => `${f.kind} at ${f.line} did not recover: ${f.outcome}`),
     ...(r.faults.length < expectedFaults ? [`${expectedFaults - r.faults.length} of ${expectedFaults} faults never ran`] : []),
     ...r.unaccounted.map((u) => `${u.kind} by ${u.owner} completed outside every step`)

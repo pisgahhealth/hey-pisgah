@@ -416,17 +416,27 @@ async function check(e: Expect, line: Line, lineId: string | null, before: Set<s
     return { ok: true, detail: `arrival ${t.patient_id!.slice(0, 8)} visit ${t.visit_id?.slice(0, 8) ?? "?"}` };
   }
   if ("identity" in e) {
-    const ids = doctorTasks(e.identity).flatMap((t) => t.identities);
     const norm = (n: string) => n.toLowerCase().replace(/[^a-z]+/g, " ").trim();
-    const first = norm(e.name).split(" ")[0]!;
-    const fresh = ids.filter((i) => during(i.at) || (e.established && i.state === "done"));
-    // Only the script's own name passes; the ear's other spelling is held and uncertain, never an established identity.
-    // The script's spelling, or a spelling the ear is known to write for this name, listed in the script and on the run sheet.
     const names = new Set([e.name, ...(e.spellings ?? [])].map(norm));
-    const exact = fresh.find((i) => names.has(norm(i.name)) && (!e.established || i.state === "done"));
-    if (exact) return { ok: true, detail: `${e.established ? "established" : "held"} ${exact.name}${norm(exact.name) === norm(e.name) ? "" : ` (a known ear spelling of ${e.name})`} ${exact.phone ?? "no phone"} (${exact.state})` };
-    const like = fresh.find((i) => norm(i.name).startsWith(`${first} `)) ?? fresh[0];
-    return { ok: false, held: !!like, detail: like ? `held, uncertain: ${like.name} (said ${e.name}) ${like.phone ?? "no phone"} (${like.state})` : `held: ${ids.map((i) => i.name).join(", ") || "none"}` };
+    // Established: the name the registration wrote to the record (the desk's own completed write, proved by a read) is the script's.
+    if (e.established) {
+      const regs = ofPatient(e.identity, ownersOf("reception")[0]).filter((a) => a.kind === "complete_registration" && a.state === "completed");
+      const written = regs.map((a) => `${String(a.args["other_names"] ?? "")} ${String(a.args["surname"] ?? "")}`.trim());
+      const hit = written.find((w) => names.has(norm(w)));
+      return hit ? { ok: true, detail: `established on the record as ${hit}` } : { ok: false, held: written.length > 0, detail: written.length ? `held: the record says ${written.join(", ")} (said ${e.name})` : "no registration written yet" };
+    }
+    // Held: the doctor's words held a name for the desk; the ear's spelling is uncertain until the desk establishes it, and the detail always shows it.
+    const ids = doctorTasks(e.identity).flatMap((t) => t.identities).filter((i) => during(i.at));
+    const exact = ids.find((i) => names.has(norm(i.name)));
+    const any = exact ?? ids[0];
+    if (exact) return { ok: true, detail: `held ${exact.name} ${exact.phone ?? "no phone"} (${exact.state})` };
+    return any ? { ok: false, held: true, detail: `held, uncertain: ${any.name} (said ${e.name}); the desk establishes the record's spelling ${any.phone ?? "no phone"} (${any.state})` } : { ok: false, detail: "no name held" };
+  }
+  // No write of this kind for the step's patient began during the step, for a line that leaves no transcript row (the wake phrase).
+  if ("no_write_during" in e) {
+    const xs = ofPatient(ref, DOCTOR).filter((a) => a.kind === e.no_write_during && a.proposed_at >= started);
+    const quiet = Date.now() - Date.parse(started) >= 15_000;
+    return { ok: xs.length === 0 && quiet, detail: `${xs.length} ${e.no_write_during} for this patient during the step${quiet ? "" : " (waiting 15 s)"}` };
   }
   if ("act" in e) {
     const owners = e.owner ? ownersOf(e.owner) : [DOCTOR];
@@ -541,6 +551,19 @@ let muteAt: string | null = null, unmuteAt: string | null = null, muteFailed = f
 async function typedDone(): Promise<void> {
   for (;;) { const a = (await rl!.question("  type done: ")).trim().toLowerCase(); if (a === "done") return; process.stdout.write("  (only done moves on)\n"); }
 }
+// Kinds whose page draws no record of them (VIS's registry), so the page never reports them shown; they are checked on the record only.
+const NEVER_SHOWN = new Set(["complete_registration", "record_triage_vitals", "request_admission", "send_pay_link", "prepare_bill", "add_care_plan_item", "delegate_task", "schedule_review"]);
+// The EMR screen check: every doctor's write this step's own line made, whose page draws it, was reported shown by that page with the same record id and for this step's patient.
+function screenCheck(line: Line, lineId: string | null): CheckOutcome | null {
+  if (!lineId || !line.patient || !page || process.env["ACC_SCREEN_REQUIRED"] === "0") return null;
+  const b = bound[line.patient];
+  const mine = ofPatient(line.patient, DOCTOR).filter((a) => a.line_id === lineId && a.state === "completed" && !NEVER_SHOWN.has(a.kind)) as unknown as { kind: string; proof?: { record_id: string }; screen?: { page: string; encounter: { patient_id: string | null; admission_id: string | null } } | null; shown?: { page: string; record_id: string } | null }[];
+  const drawn = mine.filter((a) => a.screen);
+  if (!drawn.length) return null;
+  const wrong = drawn.filter((a) => b && a.screen!.encounter.patient_id && a.screen!.encounter.patient_id !== b.patient && a.screen!.encounter.admission_id !== b.admission);
+  const unshown = drawn.filter((a) => !a.shown || a.shown.record_id !== a.proof?.record_id);
+  return { expect: { screen: line.patient }, optional: false, ok: !wrong.length && !unshown.length, detail: `${drawn.length - unshown.length} of ${drawn.length} shown on the page (${drawn.map((a) => `${a.kind} on ${a.screen!.page}${a.shown ? " shown" : ""}`).join(", ")})${wrong.length ? `; ${wrong.length} on another patient's page` : ""}` };
+}
 // A lost-acknowledgement fault is judged once per path, on the line where its write was seen or on the last line that could carry it.
 const lostAckJudged = new Set<string>();
 async function runLine(line: Line): Promise<void> {
@@ -622,7 +645,12 @@ async function runLine(line: Line): Promise<void> {
     if (line.reload && page && DRIVER === "fake" && process.env["ACC_FAKE_RELOAD"] === "0") log(`${line.id}: reload not run under the fake microphone; see the reload probe`);
     else if (line.reload && page && DRIVER !== "fake") await reloadPage(line);
     if (line.offline_s && page) await setOffline(true);
-    const d = await deliver(line).catch((e: unknown) => ({ lineEnd: null, note: `delivery failed: ${e instanceof Error ? e.message.slice(0, 160) : String(e)}` }));
+    // A clarification is said only when the agent asked for it; under the fake microphone its words are already in the file, so the strip is muted through them.
+    const asked = !line.only_if_asked || doctorTasks(line.patient).some((t) => t.questions.some((q) => q.text.toLowerCase().includes(line.only_if_asked!.toLowerCase())));
+    if (!asked) log(`${line.id}: the agent did not ask "${line.only_if_asked}", so the line is not said`);
+    if (!asked && DRIVER === "fake" && page) await page.click(`${STRIP} button[aria-label="Mute the agent"]`, { timeout: 10_000 }).catch(() => harnessErrors.push(`${line.id}: no Mute button`));
+    const d = !asked && DRIVER !== "fake" ? { lineEnd: now(), note: "not said: nothing was asked" } : await deliver(line).catch((e: unknown) => ({ lineEnd: null, note: `delivery failed: ${e instanceof Error ? e.message.slice(0, 160) : String(e)}` }));
+    if (!asked && DRIVER === "fake" && page) { await wait(1500); await page.click(`${STRIP} button[aria-label="Unmute the agent"]`, { timeout: 10_000 }).catch(() => harnessErrors.push(`${line.id}: could not unmute`)); }
     lineEnd = d.lineEnd; note = d.note;
     if (!lineEnd || /refused|delivery failed/.test(note ?? "")) harnessErrors.push(`${line.id}: ${note}`);
     if (line.offline_s && page && DRIVER !== "human") { await wait(line.offline_s * 1000); await setOffline(false); log(`${line.id}: the browser was offline ${line.offline_s} s while the line was said`); }
@@ -635,29 +663,25 @@ async function runLine(line: Line): Promise<void> {
   // Each check is tried until it holds or the line's time runs out; nothing passes by default.
   const limit0 = Date.now() + (line.timeout_s ?? 90) * 1000;
   // A step that starts after its slot ended, because a fault ran long, still gets a short window for its own words.
-  const floor = Date.now() + 25_000;
+  const floor = Date.now() + (DRIVER === "fake" ? 5_000 : 25_000);
   const limit = () => (slot ? Math.max(fakeT0 + FAKE_LEAD_MS + slot.end - 1500, floor) : limit0);
   let heard: ReturnType<typeof lineAfter> = null;
   let outcomes: CheckOutcome[] = [];
   for (;;) {
     await wait(700);
     await refreshBound();
-    if (!heard && ["speak", "play", "type", "remote"].includes(line.mode)) heard = lineFor(line.text ?? "", started, line.mode === "type" || line.mode === "remote" ? ownersOf(line.who) : [DOCTOR]);
+    // Under the fake microphone the words play at their slot whatever the harness is doing, so a step that starts late still looks for them from the slot.
+    const lookFrom = slot && heardInRoom(line) ? new Date(Math.min(Date.parse(started), fakeT0 + FAKE_LEAD_MS + slot.at - 5000)).toISOString() : started;
+    if (!heard && ["speak", "play", "type", "remote"].includes(line.mode)) heard = lineFor(line.text ?? "", lookFrom, line.mode === "type" || line.mode === "remote" ? ownersOf(line.who) : [DOCTOR]);
     // The step's window opens when its own words were heard, if that was before the step began.
     const from = heard && heard.at < started ? new Date(Date.parse(heard.at) - 2000).toISOString() : started;
     outcomes = [];
     for (const e of line.expect) outcomes.push({ expect: e, optional: "optional" in e && e.optional === true, ...(await check(e, line, heard?.line_id ?? null, before, from)) });
+    const sc = screenCheck(line, heard?.line_id ?? null);
+    if (sc) outcomes.push(sc);
     if (blocked || outcomes.every((c) => c.ok) || Date.now() > limit()) break;
   }
   if (interruptWatch) await interruptWatch;
-  // The screen check: the doctor's main page, outside the strip, and the strip itself name the step's patient; required once ACC_SCREEN_REQUIRED=1 (with VIS's screen mapping merged).
-  const named = line.patient ? script.lines.slice(0, script.lines.findIndex((x) => x.id === line.id)).flatMap((x) => x.expect).find((e): e is Extract<Expect, { identity: "A" | "B" }> => "identity" in e && e.identity === line.patient) : undefined;
-  if (page && named && line.who === "doctor" && line.mode !== "person") {
-    const first = named.name.split(" ")[0]!.toLowerCase();
-    const seenOn = await page.evaluate((st: string) => { const s = document.querySelector(st); const strip = s?.textContent ?? ""; const all = document.body.innerText; return { strip: strip.toLowerCase(), main: (s ? all.replace((s as HTMLElement).innerText, "") : all).toLowerCase() }; }, STRIP).catch(() => ({ strip: "", main: "" }));
-    const ok = seenOn.main.includes(first) && seenOn.strip.includes(first);
-    outcomes.push({ expect: { screen: line.patient!, optional: process.env["ACC_SCREEN_REQUIRED"] !== "1" }, optional: process.env["ACC_SCREEN_REQUIRED"] !== "1", ok, detail: `page ${seenOn.main.includes(first) ? "shows" : "does not show"} ${named.name.split(" ")[0]}; strip ${seenOn.strip.includes(first) ? "shows" : "does not show"} it` });
-  }
   // A write a clarification finishes on the next line keeps the dropped reply armed for that line, and the fault is judged there.
   const nextLine = script.lines[script.lines.findIndex((x) => x.id === line.id) + 1];
   const judged = !!line.lose_ack && lostAckJudged.has(line.lose_ack.path);

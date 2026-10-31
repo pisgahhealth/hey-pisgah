@@ -254,6 +254,35 @@ describe("delegation by rule between agents", () => {
     await b.rt.stop();
   });
 
+  it("registers the name as the desk gives it, so the ear's spelling of the doctor's words is corrected at the desk", async () => {
+    const port = new DelegationFake();
+    const a = boot(() => [], port);
+    const er = await a.rt.emergency(DOC, { text: "hey Pisgah, emergency", spoken_at: new Date().toISOString(), args: { unidentified_ref: "Unknown arrival 10:00", reason: "Emergency arrival" } });
+    await a.rt.settled();
+    // Pass 10f: the ear wrote "Emeka Nwosu" as "Imika Nosu".
+    await a.rt.say({ owner: DOC, target: { patient_id: UNNAMED }, text: "His name is Imika Nosu." }, er.task_id);
+    await a.rt.settled();
+    await a.rt.pollOnce();
+    await a.rt.settled();
+    await a.rt.say({ owner: DESK, target: { patient_id: UNNAMED }, text: "Accepted register the emergency arrival. His name is Emeka Nwosu, his phone is 0806 555 1234, and he consents to registration." });
+    await a.rt.settled();
+    expect(port.writes.find((w) => w.kind === REGISTER_KIND)!.args).toMatchObject({ surname: "Nwosu", other_names: "Emeka" });
+    // Negative control: with no name from the desk, the doctor's held name is registered.
+    const port2 = new DelegationFake();
+    const b = boot(() => [], port2);
+    const er2 = await b.rt.emergency(DOC, { text: "hey Pisgah, emergency", spoken_at: new Date().toISOString(), args: { unidentified_ref: "Unknown arrival 10:00", reason: "Emergency arrival" } });
+    await b.rt.settled();
+    await b.rt.say({ owner: DOC, target: { patient_id: UNNAMED }, text: "His name is Imika Nosu." }, er2.task_id);
+    await b.rt.settled();
+    await b.rt.pollOnce();
+    await b.rt.settled();
+    await b.rt.say({ owner: DESK, target: { patient_id: UNNAMED }, text: "His phone is 0806 555 1234, and he consents to registration." });
+    await b.rt.settled();
+    expect(port2.writes.find((w) => w.kind === REGISTER_KIND)!.args).toMatchObject({ surname: "Nosu", other_names: "Imika" });
+    await a.rt.stop();
+    await b.rt.stop();
+  });
+
   it("rings the bell once when a handed task is overdue, and never closes it on a record that does not show it", async () => {
     const port = new DelegationFake();
     port.admitted = true;
