@@ -2915,6 +2915,8 @@ export class EmrRuntime {
       // A lab refusal is said and never sent again: a 409 means the case moved or the test started, and a sample not waiting is never posted.
       if (a.kind === RECEIVE_KIND || a.kind === CANCEL_TEST_KIND) this.note(l, `${a.summary}: not done. ${/^door_409/.test(c.reason) ? "The lab record changed or the test has started, so I did not try again. Check the worklist." : c.reason === "nothing_free" ? "The sample is not waiting to be received: not collected yet, or already received." : `The lab door refused it (${c.reason}).`}`, "refusal");
       if (a.kind === "countersign") this.note(l, "Nothing was signed: the orders changed after they were read back, or one is not yours to sign now. Say sign everything to read them back again.");
+      // Any other refused write says why in the hospital's own words, so a refusal never reads as nothing happening.
+      else if (a.kind !== RECEIVE_KIND && a.kind !== CANCEL_TEST_KIND && a.kind !== EMERGENCY_KIND) this.note(l, `${a.summary}: not done. ${c.message ?? "The hospital refused it."}`, "refusal");
       this.settle(l, "write_refused");
       return false;
     }

@@ -45,6 +45,12 @@ export type DoorBudget = { capacity: number; perSecond: number; writeReserve: nu
 export const PISGAH_AGENT_BUDGET: DoorBudget = { capacity: 60, perSecond: 1, writeReserve: 15, readWaitMs: 15_000 };
 
 // One owner's share of the door budget: a write always goes and spends a token, a read waits for a token above the write reserve and gives up after its wait.
+// The hospital's own words for a refused write, kept short and plain so the owner's strip can say why.
+function refusalMessage(json: unknown): { message?: string } {
+  const m = pick(json, "error.message");
+  return typeof m === "string" && m.trim() ? { message: m.trim().replace(/\s+/g, " ").slice(0, 200) } : {};
+}
+
 export class DoorPacer {
   private tokens: number;
   private at: number;
@@ -410,7 +416,7 @@ export class PisgahPort implements EmrPort {
     if (r.status < 200 || r.status > 299) {
       const code = pick(r.json, "error.code");
       // A door that says to ask again, such as a key whose first request is still running, has not refused the write.
-      return { ok: false, reason: `door_${r.status}${typeof code === "string" && /^[a-z_]{1,40}$/.test(code) ? `_${code}` : ""}`, status: r.status, retryable: pick(r.json, "error.retryable") === true, counted: false };
+      return { ok: false, reason: `door_${r.status}${typeof code === "string" && /^[a-z_]{1,40}$/.test(code) ? `_${code}` : ""}`, status: r.status, retryable: pick(r.json, "error.retryable") === true, counted: false, ...refusalMessage(r.json) };
     }
     const writes = pick(r.json, op.writes_path);
     const list = Array.isArray(writes) ? writes.filter((w): w is { store: string; id: string } => !!w && typeof w === "object" && typeof (w as P).store === "string" && typeof (w as P).id === "string") : [];
@@ -547,7 +553,7 @@ export class PisgahPort implements EmrPort {
     if (r.status < 200 || r.status > 299) {
       const code = pick(r.json, "error.code");
       // A door that says to ask again, such as a key whose first request is still running, has not refused the write.
-      return { ok: false, reason: `door_${r.status}${typeof code === "string" && /^[a-z_]{1,40}$/.test(code) ? `_${code}` : ""}`, status: r.status, retryable: pick(r.json, "error.retryable") === true, counted: false };
+      return { ok: false, reason: `door_${r.status}${typeof code === "string" && /^[a-z_]{1,40}$/.test(code) ? `_${code}` : ""}`, status: r.status, retryable: pick(r.json, "error.retryable") === true, counted: false, ...refusalMessage(r.json) };
     }
     if (op.ack.positive && !(Number(pick(r.json, op.ack.positive)) > 0)) return { ok: false, reason: "no_recipient", status: r.status, retryable: false, counted: false };
     let id: string | null = op.ack.id_path ? str(pick(r.json, op.ack.id_path)) : null;

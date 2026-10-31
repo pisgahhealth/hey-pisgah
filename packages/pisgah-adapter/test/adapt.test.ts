@@ -195,3 +195,15 @@ describe("the serve can pick a second Spark Open route by name once its key exis
     }
   });
 });
+
+// Coordinator smoke, 1 Nov: the hospital's reason for a refused write reaches the runtime so the owner's strip can say why.
+describe("a refused write carries the hospital's own reason", () => {
+  it("keeps a short plain error message and nothing when the hospital gives none", async () => {
+    const said = fakeFetch([() => json(409, { error: { code: "conflict", retryable: false, message: "Record the patient's vitals before assigning.   Missing temperature." } })]);
+    const port = new PisgahPort(profile(), { bearers: { [OWNER]: "b" }, fetch: said.f, budget: null });
+    expect(await port.commit("record_observation", { admission_id: ADM, pulse: 80 }, "k".repeat(64), PROV)).toMatchObject({ ok: false, reason: "door_409_conflict", message: "Record the patient's vitals before assigning. Missing temperature." });
+    const bare = fakeFetch([() => json(409, { error: { code: "conflict" } })]);
+    const quiet = new PisgahPort(profile(), { bearers: { [OWNER]: "b" }, fetch: bare.f, budget: null });
+    expect(await quiet.commit("record_observation", { admission_id: ADM, pulse: 80 }, "k".repeat(64), PROV)).not.toHaveProperty("message");
+  });
+});
