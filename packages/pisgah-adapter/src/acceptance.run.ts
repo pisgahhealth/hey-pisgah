@@ -2,17 +2,16 @@ import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync, writeSync, appendFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { createHash } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import { createServer, request as httpRequest } from "node:http";
-import type { EmrTaskView } from "@hey-pisgah/agent";
+import { describeScope, type EmrTaskView } from "@hey-pisgah/agent";
 import { decodeWav, encodeWav, parseWav } from "@hey-pisgah/voice";
 import { loadProfile } from "./profile.js";
 import { personCaller } from "./journey.sandbox.js";
 import type { DoorLog } from "./port.js";
 import { SandboxBlock, mintPersonCookie, sandboxQuery } from "./sandbox.js";
 import { FAKE_OWNERS } from "./acceptance.fake.js";
-import { bindLine, completion, didBy, fakeRealign, loadScript, speedTable, stepStatus, writeAccResults, type AccResult, type CheckOutcome, type DelegationRow, type Expect, type Fault, type Line, type SpeakerRow, type SpeedErr, type SpeedRowIn, type StepOutcome, type Who } from "./acceptance.js";
+import { bindLine, completion, didBy, fakeRealign, fingerprint, fingerprintMoved, frozenRefusal, identityOutcome, loadScript, speedTable, stepLines, stepStatus, writeAccResults, type Fingerprint, type AccResult, type CheckOutcome, type DelegationRow, type Expect, type Fault, type Line, type SpeakerRow, type SpeedErr, type SpeedRowIn, type StepOutcome, type Who } from "./acceptance.js";
 
 // Runs the acceptance script against a serve on the loopback sandbox: says or plays each line, waits for the record after it, injects the faults, and writes the result files.
 const env = (k: string, d?: string): string => { const v = process.env[k] ?? d; if (v === undefined) throw new Error(`set ${k}`); return v; };
@@ -40,20 +39,31 @@ const logFile = join(OUT, "harness.log");
 const log = (s: string) => { const l = `${((Date.now() - t0) / 1000).toFixed(1).padStart(7)}s ${s}`; appendFileSync(logFile, `${l}\n`); process.stdout.write(`${l}\n`); };
 
 const { script, sha256 } = loadScript(env("ACC_SCRIPT"));
+// The person step that reads a patient's name from the record, for the identity checks.
+const IDENTITY_READ = env("ACC_IDENTITY_READ", "acc_patient_record");
 const doorLog: DoorLog[] = [];
 type Rows = Record<string, unknown>[];
-type Hospital = { hasQuery: (n: string) => boolean; query: (n: string, vars: Record<string, string>) => Promise<Rows>; hasPerson: (op: string) => boolean; person: (op: string, vars: Record<string, string>) => Promise<{ ok: boolean; status: number | null; json?: unknown; note?: string }> };
+type Hospital = { hasQuery: (n: string) => boolean; query: (n: string, vars: Record<string, string>) => Promise<Rows>; hasPerson: (op: string) => boolean; person: (op: string, vars: Record<string, string>) => Promise<{ ok: boolean; status: number | null; json?: unknown; note?: string }>; recordName: (patient: string) => Promise<string | null> };
 function sandboxHospital(): Hospital {
   const profile = loadProfile();
   const sb = SandboxBlock.parse(profile.sandbox);
   const call = personCaller(profile, sb, new Map(), doorLog);
-  return { hasQuery: (n) => !!sb.sql[n], query: async (n, v) => sandboxQuery(sb, n, v), hasPerson: (op) => !!sb.person_ops[op], person: (op, v) => call(op, v) };
+  // The patient's name as the hospital's own read returns it, by a person step the private profile names (a clinician reading the chart).
+  const recordName = async (patient: string) => {
+    if (!sb.person_ops[IDENTITY_READ]) return null;
+    const r = await call(IDENTITY_READ, { patient, patient_id: patient });
+    const j = (r.ok ? r.json : null) as { patient?: { name?: unknown }; name?: unknown } | null;
+    const n = j?.patient?.name ?? j?.name;
+    return typeof n === "string" && n.trim() ? n.trim() : null;
+  };
+  return { hasQuery: (n) => !!sb.sql[n], query: async (n, v) => sandboxQuery(sb, n, v), hasPerson: (op) => !!sb.person_ops[op], person: (op, v) => call(op, v), recordName };
 }
 const post = async (path: string, body: unknown) => { const r = await fetch(`${SERVE}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }); return { status: r.status, json: (await r.json().catch(() => null)) as unknown }; };
 const memoryHospital = (): Hospital => ({
   hasQuery: () => true, hasPerson: () => true,
   query: async (n, v) => { const r = await post("/acc/query", { name: n, vars: v }); if (r.status === 404) throw new Error(`no query ${n} in the in-memory hospital`); return (r.json as Rows) ?? []; },
-  person: async (op, v) => { const r = await post("/acc/person", { op, vars: v }); return { ok: r.status < 300, status: r.status, json: r.json, ...(r.status >= 300 ? { note: JSON.stringify(r.json).slice(0, 160) } : {}) }; }
+  person: async (op, v) => { const r = await post("/acc/person", { op, vars: v }); return { ok: r.status < 300, status: r.status, json: r.json, ...(r.status >= 300 ? { note: JSON.stringify(r.json).slice(0, 160) } : {}) }; },
+  recordName: async (patient) => { const r = await post("/acc/record", { patient }); const n = (r.json as { name?: unknown } | null)?.name; return typeof n === "string" ? n : null; }
 });
 const hospital = HOSPITAL === "memory" ? memoryHospital() : sandboxHospital();
 // The seed names owners by role; the lab work goes to whichever scientist is on, so both are watched.
@@ -135,7 +145,7 @@ async function restartServe(signal: "SIGKILL" | "SIGTERM"): Promise<{ ms: number
   for (let i = 0; i < 240 && (pidsOnPort().length || alive().length); i++) await wait(250);
   if (alive().length) { log(`restart: the old serve (pids ${alive().join(",")}) was still stopping after 60 s, so it was killed`); for (const p of alive()) { try { process.kill(p, "SIGKILL"); } catch { /* gone */ } } await wait(500); }
   restarts += 1;
-  recordTrees(`at serve restart ${restarts}`);
+  await recordTrees(`at serve restart ${restarts}`);
   const stoppedMs = Date.now() - at;
   startServe();
   const ok = await healthy();
@@ -416,21 +426,12 @@ async function check(e: Expect, line: Line, lineId: string | null, before: Set<s
     return { ok: true, detail: `arrival ${t.patient_id!.slice(0, 8)} visit ${t.visit_id?.slice(0, 8) ?? "?"}` };
   }
   if ("identity" in e) {
-    const norm = (n: string) => n.toLowerCase().replace(/[^a-z]+/g, " ").trim();
-    const names = new Set([e.name, ...(e.spellings ?? [])].map(norm));
-    // Established: the name the registration wrote to the record (the desk's own completed write, proved by a read) is the script's.
-    if (e.established) {
-      const regs = ofPatient(e.identity, ownersOf("reception")[0]).filter((a) => a.kind === "complete_registration" && a.state === "completed");
-      const written = regs.map((a) => `${String(a.args["other_names"] ?? "")} ${String(a.args["surname"] ?? "")}`.trim());
-      const hit = written.find((w) => names.has(norm(w)));
-      return hit ? { ok: true, detail: `established on the record as ${hit}` } : { ok: false, held: written.length > 0, detail: written.length ? `held: the record says ${written.join(", ")} (said ${e.name})` : "no registration written yet" };
-    }
-    // Held: the doctor's words held a name for the desk; the ear's spelling is uncertain until the desk establishes it, and the detail always shows it.
-    const ids = doctorTasks(e.identity).flatMap((t) => t.identities).filter((i) => during(i.at));
-    const exact = ids.find((i) => names.has(norm(i.name)));
-    const any = exact ?? ids[0];
-    if (exact) return { ok: true, detail: `held ${exact.name} ${exact.phone ?? "no phone"} (${exact.state})` };
-    return any ? { ok: false, held: true, detail: `held, uncertain: ${any.name} (said ${e.name}); the desk establishes the record's spelling ${any.phone ?? "no phone"} (${any.state})` } : { ok: false, detail: "no name held" };
+    // The name is read from the record each time; the doctor's agent's own naming writes for this patient are only shown beside it.
+    const written = ofPatient(e.identity, DOCTOR).filter((a) => a.kind === "record_identity" && a.state === "completed").map((a) => String(a.args["name"] ?? "")).filter(Boolean);
+    const patient = bound[e.identity]?.patient;
+    let record: string | null = null;
+    if (patient) { try { record = await hospital.recordName(patient); } catch (err) { return { ok: false, detail: `the record read failed: ${err instanceof Error ? err.message.slice(0, 120) : String(err)}` }; } }
+    return identityOutcome(e, record, written);
   }
   // No write of this kind for the step's patient began during the step, for a line that leaves no transcript row (the wake phrase).
   if ("no_write_during" in e) {
@@ -444,7 +445,9 @@ async function check(e: Expect, line: Line, lineId: string | null, before: Set<s
     // from_step: the action must come from an earlier step's own line (a request a clarification finished), whenever it reached its state.
     const stepLine = e.from_step ? steps.find((x) => x.line === e.from_step)?.line_id ?? null : null;
     if (e.from_step && !stepLine) return { ok: false, detail: `${e.act}: step ${e.from_step}'s words were not heard` };
-    const xs = owners.flatMap((o) => ofPatient(ref, o)).filter((a) => a.kind === e.act && (!e.from_line || a.line_id === lineId) && (!stepLine || a.line_id === stepLine));
+    // A request a clarification finished is written under the answer's line, linked by the question the request raised.
+    const fromStep = stepLine ? stepLines(stepLine, doctorTasks(ref).flatMap((t) => t.asked)) : null;
+    const xs = owners.flatMap((o) => ofPatient(ref, o)).filter((a) => a.kind === e.act && (!e.from_line || a.line_id === lineId) && (!fromStep || fromStep.has(a.line_id)));
     const inState = xs.filter((a) => a.state === e.state && (stepLine ? true : during(seen.get(`${a.action_id}:${a.state}`))));
     const n = e.n ?? 1;
     const vals = e.values ? inState.filter((a) => Object.entries(e.values!).every(([k, v]) => String(a.args[k] ?? "") === String(v))) : inState;
@@ -474,6 +477,19 @@ async function check(e: Expect, line: Line, lineId: string | null, before: Set<s
     return { ok: ok.length >= (e.delegation.n ?? 1), detail: `${e.delegation.team}: ${ds.map((d) => (d.completed_at ? "completed" : d.acknowledged_at ? "acknowledged" : d.assigned_at ? "assigned" : "asked")).join(", ") || "none"}` };
   }
   if ("obligation" in e) { const os = doctorTasks(ref).flatMap((t) => t.obligations).filter((o) => (!e.obligation.after || o.after === e.obligation.after)); const hit = os.find((o) => o.state === e.obligation.state && during(e.obligation.state === "held" ? o.held_at : o.fired_at ?? o.held_at)); return { ok: !!hit, detail: `${os.map((o) => `${o.title.slice(0, 40)}:${o.state}`).join(", ") || "none"}` }; }
+  if ("preference" in e) {
+    const prefs = (await getJson<{ pref_id: string; state: string; scope: string; value: string; source: string }[]>(`/preferences?owner=${DOCTOR}`)) ?? [];
+    const tasks = doctorTasks(ref);
+    if (e.preference === "used") {
+      const u = tasks.flatMap((t) => t.preferences?.applied ?? []).find((x) => x.value === e.value && x.line_id === lineId);
+      return { ok: !!u && !!u.source, detail: u ? `used ${u.text} from ${u.source} (${u.scope})` : `no use of ${e.value} on this line` };
+    }
+    const noted = new Set(tasks.flatMap((t) => t.preferences?.candidates ?? []));
+    // The scope as the serve describes it: the ward's own name follows "ward", so only its start is compared.
+    const scopeIs = (text: string) => !e.scope || (e.scope === "ward" ? text.startsWith("ward ") : text === describeScope(e.scope === "patient" ? { kind: "patient", patient_id: "" } : { kind: e.scope }));
+    const p = prefs.find((x) => x.value === e.value && noted.has(x.pref_id) && (e.preference === "candidate" || (x.state === "active" && scopeIs(x.scope))));
+    return { ok: !!p, detail: p ? `${p.state} ${p.value}, scope ${p.scope}, from ${p.source}` : `preferences: ${prefs.map((x) => `${x.value}:${x.state}`).join(", ") || "none"}` };
+  }
   if ("tracking" in e) { await readTracking(); return { ok: trackingTarget === (bound[e.tracking]?.patient ?? "?") || (!!bound[e.tracking]?.admission && trackingTarget === bound[e.tracking]!.admission), detail: `tracking ${trackingTarget?.slice(0, 8) ?? "none"}` }; }
   if ("tasks_survive" in e) return { ok: survived, detail: survivedDetail };
   if ("not_heard" in e) {
@@ -872,23 +888,30 @@ async function watchInterrupt(line: Line): Promise<void> {
   faults.push({ kind: "interrupt", line: line.id, at, killed_during: hit.state, restarted_in_ms: r.ms, outcome: `after restart the write is ${final ?? "gone"}; ${same.length} completed ${kind} for this patient`, ok: final === "completed" && same.length === 1 });
 }
 
-// What code ran: each tree's commit and a hash of its uncommitted state (engine packages and apps; Pisgah src and drizzle), at the start, at every serve restart and at the end.
-const PISGAH_ROOT = dirname(env("ACC_PISGAH_PKG", "/Users/samuel/Documents/Pisgah/Pisgah/package.json"));
-function treeOf(cwd: string, paths: string[]): string {
-  const git = (args: string[]) => { try { return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", maxBuffer: 1 << 29 }); } catch { return "?"; } };
-  return `${git(["rev-parse", "--short", "HEAD"]).trim()}+${createHash("sha256").update(git(["status", "--porcelain", "--", ...paths])).update(git(["diff", "--", ...paths])).digest("hex").slice(0, 12)}`;
+// What ran: the engine and Pisgah trees with their untracked files, the run's named files, the applied migrations and the run's settings, at the start, at every serve restart and at the end.
+const PISGAH_ROOT = process.env["ACC_PISGAH_ROOT"] ?? (process.env["ACC_PISGAH_PKG"] ? dirname(process.env["ACC_PISGAH_PKG"]) : null);
+// Settings that only steer this run (who drives, where it writes, where it resumes) stay out; a name that may hold a secret is kept by name only.
+const RUN_KNOBS = new Set(["ACC_OUT", "ACC_FROZEN", "ACC_KIND", "ACC_DRIVER", "ACC_BROWSER", "ACC_FROM", "ACC_ONLY", "ACC_RESUME_BOUND", "ACC_HUMAN_HANDS", "ACC_FINGERPRINT_ONLY", "ACC_STOP_ON_FAIL", "ACC_TAIL_S", "ACC_KEEP_SERVE", "ACC_REUSE_SERVE", "ACC_PUBLISH_ROOT", "ACC_SAY_RATE", "ACC_FAKE_FAIL", "ACC_FAKE_DROP", "ACC_FAKE_RELOAD"]);
+const settings = () => Object.keys(process.env).filter((k) => /^(ACC|HEY_PISGAH)_/.test(k) && !RUN_KNOBS.has(k)).sort().map((k) => (/KEY|TOKEN|SECRET|PASS/.test(k) ? k : `${k}=${process.env[k]}`)).join("\n");
+async function takeFingerprint(): Promise<Fingerprint> {
+  let migrations = "not read";
+  // The in-memory hospital has no migrations, and its queries answer only once its serve is up.
+  if (HOSPITAL === "sandbox" && hospital.hasQuery("acc_migrations")) { try { migrations = JSON.stringify(await hospital.query("acc_migrations", {})); } catch (err) { migrations = `unreadable: ${err instanceof Error ? err.message.slice(0, 80) : String(err)}`; } }
+  const extra = (process.env["ACC_FREEZE_FILES"] ?? "").split(",").filter(Boolean);
+  return fingerprint({
+    trees: [{ name: "engine", root: process.cwd(), paths: ["packages", "apps"] }, ...(PISGAH_ROOT ? [{ name: "pisgah", root: PISGAH_ROOT, paths: (process.env["ACC_PISGAH_PATHS"] ?? "src,drizzle,packages/core").split(",") }] : [])],
+    files: { ...(PISGAH_ROOT ? {} : { pisgah: undefined }), script: env("ACC_SCRIPT"), profile: process.env["HEY_PISGAH_DOOR_PROFILE"], seed: process.env["ACC_SEED_FILE"], serve_start: START, ...Object.fromEntries(extra.map((f, i) => [`file_${i + 1}`, f])) },
+    extra: { migrations, settings: settings() }
+  });
 }
-const trees: { at: string; why: string; engine: string; pisgah: string }[] = [];
-function recordTrees(why: string): void {
-  const t = { at: now(), why, engine: treeOf(process.cwd(), ["packages", "apps"]), pisgah: treeOf(PISGAH_ROOT, ["src", "drizzle"]) };
+const trees: { at: string; why: string; fp: Fingerprint }[] = [];
+async function recordTrees(why: string): Promise<void> {
+  const t = { at: now(), why, fp: await takeFingerprint() };
   trees.push(t);
-  log(`code ${why}: engine ${t.engine}, Pisgah ${t.pisgah}`);
+  writeFileSync(join(OUT, "fingerprint.json"), `${JSON.stringify(trees, null, 1)}\n`);
+  log(`code ${why}: fingerprint ${t.fp.id} (engine ${t.fp.parts["engine"]}, Pisgah ${t.fp.parts["pisgah"]}, migrations ${t.fp.parts["migrations"]})`);
 }
-function treesChanged(): string | null {
-  const first = trees[0];
-  const moved = trees.filter((t) => t.engine !== first?.engine || t.pisgah !== first?.pisgah);
-  return first && moved.length ? moved.map((t) => `${t.why} at ${t.at}: engine ${t.engine}, Pisgah ${t.pisgah} (start: ${first.engine}, ${first.pisgah})`).join("; ") : null;
-}
+const treesChanged = () => fingerprintMoved(trees);
 // A resumed run takes its two patients from the stopped run's folder and starts at ACC_FROM.
 const BOUND_FILE = join(OUT, "bound.json");
 function saveBound(): void { writeFileSync(BOUND_FILE, `${JSON.stringify(Object.fromEntries(Object.entries(bound).map(([k, b]) => [k, { ...b!, tasks: [...b!.tasks] }])), null, 1)}\n`); }
@@ -899,9 +922,11 @@ function loadBound(file: string): void {
 
 async function main(): Promise<void> {
   log(`acceptance ${KIND} run ${OUT}: driver ${DRIVER}, browser ${BROWSER}, serve ${SERVE}, script ${sha256.slice(0, 12)}`);
-  recordTrees("at the start");
-  // Samuel's final run starts only on the code the coordinator froze, named as ACC_FROZEN="<engine tree> <Pisgah tree>".
-  if (KIND === "final" && process.env["ACC_FROZEN"] && process.env["ACC_FROZEN"] !== `${trees[0]!.engine} ${trees[0]!.pisgah}`) throw new Error(`the code is not the frozen code: ${trees[0]!.engine} ${trees[0]!.pisgah}, frozen ${process.env["ACC_FROZEN"]}`);
+  await recordTrees("at the start");
+  // ACC_FINGERPRINT_ONLY=1 prints the fingerprint the coordinator freezes as ACC_FROZEN, and runs nothing.
+  if (process.env["ACC_FINGERPRINT_ONLY"] === "1") { process.stdout.write(`${trees[0]!.fp.id}\n`); process.exit(0); }
+  const refused = frozenRefusal(KIND, process.env["ACC_FROZEN"], trees[0]!.fp.id);
+  if (refused) throw new Error(refused);
   if (process.env["ACC_RESUME_BOUND"]) { loadBound(process.env["ACC_RESUME_BOUND"]); log(`resumed with patients ${JSON.stringify(Object.fromEntries(Object.entries(bound).map(([k, b]) => [k, b!.patient.slice(0, 8)])))}`); }
   // A serve already on the port holds another run's store, so the harness starts its own unless told to reuse that one.
   if ((await healthy(2000)) && process.env["ACC_REUSE_SERVE"] !== "1") throw new Error(`a serve is already listening on ${SERVE}; stop it by its port or set ACC_REUSE_SERVE=1`);
@@ -926,7 +951,7 @@ async function finish(): Promise<void> {
   const tailMs = Number(process.env["ACC_TAIL_S"] ?? 0) * 1000;
   if (tailMs > 0 && page) { log(`tail: the browser stays open ${tailMs / 1000} s after the last line`); await wait(tailMs); await page.screenshot({ path: join(OUT, "tail.png") }).catch(() => undefined); appendFileSync(join(OUT, "pages.jsonl"), `${JSON.stringify({ line: "tail", at: now(), path: (page as unknown as { url: () => string }).url().replace(/^https?:\/\/[^/]+/, ""), wrote: [] })}\n`); }
   polling = false;
-  recordTrees("at the end");
+  await recordTrees("at the end");
   const acts = allActions();
   // Speed counts only the run's own patients and lines a step bound; an order that waited for its spoken confirm is timed in its own group, since the wait is the clinician's.
   const boundLines = new Set(steps.map((x) => x.line_id).filter((x): x is string => !!x));
@@ -975,10 +1000,10 @@ async function finish(): Promise<void> {
   const unmatchedOrders = acts.filter((a) => ["order_test", "prescribe"].includes(a.kind) && ["sent", "acknowledged", "completed"].includes(a.state) && transcriptLine(a.line_id)?.speaker?.speaker !== "owner" && !a.authorised_by_line);
   const usd = [...views.values()].flat().reduce((s, x) => s + x.usd, 0), calls = [...views.values()].flat().reduce((s, x) => s + x.calls, 0);
   const rateLimited = [...Array(restarts + 1).keys()].map((i) => join(OUT, `serve-${i}.log`)).filter(existsSync).reduce((n, f) => n + (readFileSync(f, "utf8").match(/\b429\b/g)?.length ?? 0), 0);
-  const commit = trees.map((t) => `${t.why}: ${t.engine}`).join("; ");
+  const commit = trees.map((t) => `${t.why}: ${t.fp.parts["engine"]}`).join("; ");
   const result: AccResult = {
     measured_at: now(), run_id: OUT.split("/").filter(Boolean).at(-1)!, kind: KIND, driver: DRIVER, browser: page ? "launched" : "none", script_sha256: sha256, engine_commit: commit,
-    pisgah: `${trees.map((t) => `${t.why}: ${t.pisgah}`).join("; ")}; `+env("ACC_PISGAH_STATE", "Samuel's working tree, uncommitted, frozen by the coordinator for this run"),
+    pisgah: `${trees.map((t) => `${t.why}: ${t.fp.parts["pisgah"]} (fingerprint ${t.fp.id})`).join("; ")}; `+env("ACC_PISGAH_STATE", "Samuel's working tree, uncommitted, frozen by the coordinator for this run"),
     payment: "simulated: every payment is a cash entry the accounts person records on the door; no money moves and no provider is called",
     steps, touches: { emr, strip, source, by_line: Object.fromEntries(steps.filter((s) => s.touches_during).map((s) => [s.line, s.touches_during])), other_people: otherTouches },
     // The grant, each explicit confirmation (which the screen may give instead), and each attestation the doctor makes at the screen, such as signing the consultation.

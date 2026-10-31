@@ -17,16 +17,20 @@ type Act = { action_id: string; kind: string; state: string; line_id: string; ar
 type Task = {
   task_id: string; owner: string; patient_id: string | null; visit_id: string | null; admission_id: string; actions: Act[]; usd: number; calls: number;
   transcript: { id: string; line_id: string; text: string; at: string; source: string; class: string | null; classes: string[]; speaker?: { speaker: string; label: string | null }; ambient?: { ended_at: string } }[];
-  questions: { question_id: string; text: string }[]; asked: { question_id: string; text: string; line_id: string; at: string }[]; identities: { name: string; phone: string | null; state: string; at: string }[];
+  questions: { question_id: string; text: string }[]; asked: { question_id: string; text: string; line_id: string; at: string; answered_by?: string | null }[]; identities: { name: string; phone: string | null; state: string; at: string }[];
   delegations: { key: string; delegation_id: string; side: string; team: string; task_kind: string; at: string; assigned_at: string | null; acknowledged_at: string | null; completed_at: string | null }[];
   obligations: { title: string; state: string; after: string | null; held_at: string; fired_at: string | null }[]; speed: { rows: { kind: string; ms: number; line_id: string; action_id: string }[] };
+  preferences: { applied: { value: string; text: string; scope: string; source: string; line_id: string }[]; withheld: unknown[]; candidates: string[] };
 };
-type State = { tasks: Task[]; tracking: Record<string, string | null>; refs: Record<string, string>; done: string[]; queries: Record<string, Record<string, unknown>[]>; n: number };
+type Pref = { pref_id: string; state: string; scope: string; value: string; source: string };
+// names: the name each patient's record carries, written when a line's identity expectation is played; prefs: the doctor's remembered preferences.
+type State = { tasks: Task[]; tracking: Record<string, string | null>; refs: Record<string, string>; done: string[]; queries: Record<string, Record<string, unknown>[]>; n: number; names?: Record<string, string>; prefs?: Pref[] };
 
 export async function startFakeHospital(o: { port: number; dir: string; script: Script; fail?: Set<string>; drop?: Set<string>; log?: (s: string) => void }): Promise<{ close: () => Promise<void> }> {
   const file = join(o.dir, "fake.json");
   mkdirSync(o.dir, { recursive: true });
   const st: State = existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as State) : { tasks: [], tracking: {}, refs: {}, done: [], queries: {}, n: 0 };
+  st.names ??= {}; st.prefs ??= [];
   // Each change is written whole before it is answered, so a kill at any moment leaves the last answered state.
   const save = () => { writeFileSync(`${file}.tmp`, JSON.stringify(st)); renameSync(`${file}.tmp`, file); };
   const now = () => new Date().toISOString();
@@ -34,7 +38,7 @@ export async function startFakeHospital(o: { port: number; dir: string; script: 
   const taskOf = (owner: string, ref: string | null): Task => {
     const patient = ref ? st.refs[ref] ?? null : null;
     let t = st.tasks.find((x) => x.owner === owner && x.patient_id === patient);
-    if (!t) { t = { task_id: id("task"), owner, patient_id: patient, visit_id: patient ? `${patient}-visit` : null, admission_id: "", actions: [], transcript: [], questions: [], asked: [], identities: [], delegations: [], obligations: [], speed: { rows: [] }, usd: 0, calls: 0 }; st.tasks.push(t); }
+    if (!t) { t = { task_id: id("task"), owner, patient_id: patient, visit_id: patient ? `${patient}-visit` : null, admission_id: "", actions: [], transcript: [], questions: [], asked: [], identities: [], delegations: [], obligations: [], speed: { rows: [] }, preferences: { applied: [], withheld: [], candidates: [] }, usd: 0, calls: 0 }; st.tasks.push(t); }
     return t;
   };
   // A write goes proposed, then sent, then completed and timed; a restart finishes any write a kill left sent, once.
@@ -63,7 +67,15 @@ export async function startFakeHospital(o: { port: number; dir: string; script: 
     const doc = () => taskOf("fake-doctor", ref);
     for (const e of line.expect as Expect[]) {
       if ("arrival" in e) { st.refs[e.arrival] = `fake-patient-${e.arrival}`; const t = doc(); write(t, "open_unnamed_encounter", lineId, {}, endAt); st.tracking["fake-doctor"] = st.refs[e.arrival]!; }
-      else if ("identity" in e) doc().identities.push({ name: e.name, phone: null, state: "open", at: now() });
+      else if ("identity" in e) { const p = st.refs[e.identity]; if (p) st.names![p] = e.name; }
+      else if ("preference" in e) {
+        const t = doc();
+        t.preferences ??= { applied: [], withheld: [], candidates: [] };
+        const SCOPE: Record<string, string> = { me: "your patients", patient: "this patient only", everyone: "everyone", ward: "ward A" };
+        if (e.preference === "candidate") { const pid = id("pref"); st.prefs!.push({ pref_id: pid, state: "candidate", scope: "no scope chosen", value: e.value, source: `you said "${line.text ?? ""}"` }); t.preferences.candidates.push(pid); }
+        else if (e.preference === "kept") { const p = st.prefs!.find((x) => x.value === e.value && x.state === "candidate"); if (p) { p.state = "active"; p.scope = SCOPE[e.scope ?? "me"]!; } }
+        else { const p = st.prefs!.find((x) => x.value === e.value && x.state === "active"); if (p) t.preferences.applied.push({ value: p.value, text: p.value, scope: p.scope, source: p.source, line_id: lineId }); }
+      }
       else if ("act" in e) {
         const t = taskOf(e.owner ? ROLE_OWNER[e.owner]! : "fake-doctor", ref);
         const waiting = t.actions.filter((a) => a.kind === e.act && a.state === "proposed" && a.awaiting);
@@ -105,6 +117,8 @@ export async function startFakeHospital(o: { port: number; dir: string; script: 
     const lineId = id("line");
     const cls = (line?.expect.find((e) => "class" in e) as { class: string } | undefined)?.class ?? (line?.who === "doctor" ? "instruction" : "aside");
     const at = now();
+    // A clarification answers the open question it was said for, as the runtime records it.
+    if (line?.only_if_asked) for (const q of taskOf("fake-doctor", line.patient).asked) if (!q.answered_by && q.text.toLowerCase().includes(line.only_if_asked)) q.answered_by = lineId;
     if (line) { st.done.push(line.id); apply(line, lineId, at, voice); }
     const tt = line ? taskOf(owner, line.patient) : t;
     tt.transcript.push({ id: lineId, line_id: lineId, text, at, source, class: cls, classes: [cls], ...(voice ? { speaker: owner !== "fake-doctor" ? { speaker: "owner", label: null } : VOICE_SPEAKER[voice] ?? { speaker: "unverified", label: null } } : {}), ambient: { ended_at: at } });
@@ -132,6 +146,8 @@ export async function startFakeHospital(o: { port: number; dir: string; script: 
         if (form.get("end") === "1") return send(202, { accepted: true });
         return send(202, heard(String(form.get("owner")), String(form.get("acc_text") ?? ""), String(form.get("acc_voice") ?? "Rishi"), "audio"));
       }
+      if (url.pathname === "/preferences" && req.method === "GET") return send(200, st.prefs);
+      if (url.pathname === "/acc/record" && req.method === "POST") { const b = JSON.parse((await body(req)).toString()) as { patient: string }; return send(200, { name: st.names![b.patient] ?? null }); }
       if (url.pathname === "/acc/query" && req.method === "POST") { const b = JSON.parse((await body(req)).toString()) as { name: string; vars: Record<string, string> }; const k = Object.keys(st.queries).find((x) => x.startsWith(`${b.name}:`)); return send(200, k ? st.queries[k] : []); }
       if (url.pathname === "/acc/person" && req.method === "POST") {
         const b = JSON.parse((await body(req)).toString()) as { op: string };

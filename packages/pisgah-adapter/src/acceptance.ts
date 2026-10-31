@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
@@ -27,6 +29,8 @@ export const Expect = z.union([
   // The main EMR page and the strip both show this patient after the step (review 4 item 6); the harness adds it to every patient step once the name is said.
   z.strictObject({ screen: Ref, optional: z.boolean().optional() }),
   z.strictObject({ tracking: Ref }),
+  // A remembered preference: a "from now on" line made it a candidate, the owner's one word kept it with a scope, or a later line used it for a value not said, with its source.
+  z.strictObject({ preference: z.enum(["candidate", "kept", "used"]), value: z.string().min(1).max(20), scope: z.enum(["patient", "me", "ward", "everyone"]).optional() }),
   z.strictObject({ tasks_survive: z.literal(true) }),
   z.strictObject({ wake: z.literal(true) }),
   z.strictObject({ not_heard: z.literal(true) }),
@@ -161,6 +165,54 @@ export function completion(r: Pick<AccResult, "steps" | "faults" | "unaccounted"
     ...r.unaccounted.map((u) => `${u.kind} by ${u.owner} completed outside every step`)
   ];
   return { complete: reasons.length === 0, reasons };
+}
+
+const normName = (n: string) => n.toLowerCase().replace(/[^a-z]+/g, " ").trim();
+// The identity check reads the name the record itself carries; what the agent heard or wrote is only shown beside it, so a name never passes unless the record holds it (D39).
+// Without established, another spelling on the record is held (the spoken correction may still come); established needs the script's spelling.
+export function identityOutcome(e: { name: string; spellings?: string[] | undefined; established?: true | undefined }, record: string | null, written: readonly string[]): { ok: boolean; held: boolean; detail: string } {
+  const names = new Set([e.name, ...(e.spellings ?? [])].map(normName));
+  const wrote = written.length ? `; the agent wrote ${written.join(", ")}` : "; the agent wrote no name";
+  if (!record) return { ok: false, held: false, detail: `the record carries no name yet${wrote}` };
+  if (names.has(normName(record))) return { ok: true, held: false, detail: `the record carries ${record}${e.established ? " (established)" : ""}${wrote}` };
+  return { ok: false, held: written.length > 0, detail: `the record carries ${record} (said ${e.name})${wrote}` };
+}
+
+// The lines a request's work may come from: the request's own line and the line that answered a question it raised, since the runtime finishes the request under the answer's line.
+export function stepLines(stepLine: string, asked: readonly { line_id: string; answered_by: string | null }[]): Set<string> {
+  return new Set([stepLine, ...asked.filter((q) => q.line_id === stepLine && q.answered_by).map((q) => q.answered_by!)]);
+}
+
+// The freeze fingerprint: each tree's commit with a hash of its changes and its untracked files' contents, each named file's hash, and the extra facts (applied migrations, settings), all hashed into one id.
+export type Fingerprint = { id: string; parts: Record<string, string> };
+const sha = (b: string | Buffer) => createHash("sha256").update(b).digest("hex").slice(0, 16);
+export function fingerprint(o: { trees: { name: string; root: string; paths: string[] }[]; files: Record<string, string | undefined>; extra?: Record<string, string> }): Fingerprint {
+  const parts: Record<string, string> = {};
+  for (const t of o.trees) {
+    const git = (args: string[]) => { try { return execFileSync("git", ["-C", t.root, ...args], { encoding: "utf8", maxBuffer: 1 << 29 }); } catch { return "?"; } };
+    const h = createHash("sha256").update(git(["status", "--porcelain", "--", ...t.paths])).update(git(["diff", "HEAD", "--", ...t.paths]));
+    for (const f of git(["ls-files", "--others", "--exclude-standard", "-z", "--", ...t.paths]).split("\0").filter(Boolean).sort()) {
+      h.update(`\0${f}\0`);
+      try { h.update(readFileSync(join(t.root, f))); } catch { h.update("unreadable"); }
+    }
+    parts[t.name] = `${git(["rev-parse", "--short", "HEAD"]).trim()}+${h.digest("hex").slice(0, 12)}`;
+  }
+  for (const [k, f] of Object.entries(o.files)) parts[k] = !f ? "not set" : existsSync(f) ? sha(readFileSync(f)) : "missing";
+  for (const [k, v] of Object.entries(o.extra ?? {})) parts[k] = sha(v);
+  return { id: sha(JSON.stringify(Object.entries(parts).sort(([a], [b]) => a.localeCompare(b)))), parts };
+}
+// Every fingerprint taken after the first that differs from it, with the parts that moved; null when none did.
+export function fingerprintMoved(taken: readonly { why: string; at: string; fp: Fingerprint }[]): string | null {
+  const first = taken[0];
+  if (!first) return null;
+  const moved = taken.filter((t) => t.fp.id !== first.fp.id).map((t) => `${t.why} at ${t.at}: ${Object.keys(t.fp.parts).filter((k) => t.fp.parts[k] !== first.fp.parts[k]).map((k) => `${k} ${first.fp.parts[k]} to ${t.fp.parts[k]}`).join(", ")}`);
+  return moved.length ? moved.join("; ") : null;
+}
+// Samuel's final run starts only on the fingerprint the coordinator froze; any run given one refuses another.
+export function frozenRefusal(kind: "rehearsal" | "final", frozen: string | undefined, current: string): string | null {
+  if (kind === "final" && !frozen) return `a final run needs ACC_FROZEN, the fingerprint the coordinator froze; this code is ${current}`;
+  if (frozen && frozen !== current) return `the code is not the frozen code: ${current}, frozen ${frozen}`;
+  return null;
 }
 
 // The claims fields C-20 to C-24 read, from one run; a field stays out when the run did not measure it, so a claim reads not measured rather than a guess.
