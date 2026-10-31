@@ -17,7 +17,7 @@ import { EMERGENCY_KIND, EMERGENCY_LINE, IDENTITY_KIND, IdentityArgs, RULE_ONLY_
 import { openableHref, screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
 import {
   ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_ARGS, DELEGATION_RULE_KINDS, DISPENSE_KIND, ESCALATE_KIND, NUDGE_KIND, PREPARE_KIND, REGISTER_KIND, WARD_REVIEW_KIND, RECEIVE_KIND, CANCEL_TEST_KIND,
-  ACCEPT_LINE, cancelReason, labAsked, CONSENT_PURPOSES, acceptedTask, consentSaid, consentScope, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
+  ACCEPT_LINE, cancelReason, labAsked, patientSaid, CONSENT_PURPOSES, acceptedTask, consentSaid, consentScope, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
   type ConsentPurpose, type DelegationRead, type EmrDelegation
 } from "./delegate.js";
 import { VERBAL_LINE, VERBAL_ORDER_ARGS, VERBAL_ORDER_KIND, verbalMissingNote, verbalOrderSaid } from "./verbal.js";
@@ -2264,11 +2264,13 @@ export class EmrRuntime {
     // A countersign read-back is signed only within the confirm window (D38); a yes after it reads the batch back again.
     const age = open ? Date.parse(line.at) - Date.parse(open.at) : 0;
     const q = open && age <= (this.o.confirmWindowMs ?? 60_000) ? open : null;
-    if (open && !q && !sign && age <= (this.o.answerWindowMs ?? 600_000) && text.split(" ").length <= 5 && (OWNER_YES.test(text) || READ_BACK_YES.test(text))) return { sign: false, yes: true, no: false, q: open, refuse: "late" };
+    // A bare yes answers the read-back only while it is the latest question shown; a yes naming the batch, a signing or its ref binds wherever it stands.
+    const bindsYes = !!open && (t.questions.filter((y) => y.answered_by === null).at(-1) === open || /\b(sign|signed|countersign|batch|ref)\b/.test(text));
+    if (open && !q && !sign && bindsYes && age <= (this.o.answerWindowMs ?? 600_000) && text.split(" ").length <= 5 && (OWNER_YES.test(text) || READ_BACK_YES.test(text))) return { sign: false, yes: true, no: false, q: open, refuse: "late" };
     // The short yes and the read-back's batch are one rule: it answers only the countersign question it follows, whose args carry that batch's digest.
     const readBack = !!q && q.rule?.kind === "countersign";
     const lastShown = readBack && t.questions.at(-1) === q && !t.notes.some((n) => Date.parse(n.at) >= Date.parse(q.at));
-    const yes = text.split(" ").length <= 5 && (OWNER_YES.test(text) || (readBack && READ_BACK_YES.test(text)) || (lastShown && READ_BACK_MM.test(text)));
+    const yes = text.split(" ").length <= 5 && ((bindsYes && (OWNER_YES.test(text) || (readBack && READ_BACK_YES.test(text)))) || (lastShown && READ_BACK_MM.test(text)));
     const no = text.split(" ").length <= 4 && OWNER_NO.test(text);
     return sign || (q && (yes || no)) ? { sign, yes, no, q } : null;
   }
@@ -2895,8 +2897,10 @@ export class EmrRuntime {
         this.append(l, "action.retry", { action_id: a.action_id, reason: a.uncertain?.reason ?? "uncertain", status: null, same_key: true });
       }
       const c = await this.o.port.commit(a.kind, a.args, a.intent_key!, prov);
+      // A lab 409 is final whatever the door says of retrying: the case moved or the test started, so it is never sent again.
+      const labFinal = !c.ok && c.status === 409 && (a.kind === RECEIVE_KIND || a.kind === CANCEL_TEST_KIND);
       // A success that names the visit or stay for work that makes its own record named no record at all.
-      if ((!c.ok && c.committed) || (c.ok && NEW_RECORD_KINDS.has(a.kind) && this.encounterIds(t, a).has(c.record_id))) {
+      if ((!c.ok && c.committed && !labFinal) || (c.ok && NEW_RECORD_KINDS.has(a.kind) && this.encounterIds(t, a).has(c.record_id))) {
         this.append(l, "action.uncertain", { action_id: a.action_id, attempts: (a.uncertain?.attempts ?? 0) + 1, reason: "saved, but the hospital's answer named no record", status: c.ok ? null : c.status, next_in_ms: null, committed: true });
         continue;
       }
@@ -2906,7 +2910,7 @@ export class EmrRuntime {
         return true;
       }
       // A replay the port would not send leaves the first send's outcome as unknown as before.
-      if (c.retryable || (a.state === "uncertain" && c.status === null)) {
+      if (!labFinal && (c.retryable || (a.state === "uncertain" && c.status === null))) {
         this.append(l, "action.uncertain", { action_id: a.action_id, attempts: (a.uncertain?.attempts ?? 0) + 1, reason: c.retryable ? c.reason : `not sent again: ${c.reason}`, status: c.status, next_in_ms: null });
         continue;
       }
@@ -3258,17 +3262,34 @@ export class EmrRuntime {
     const asked = labAsked(text);
     const kind = asked === "cancel" ? CANCEL_TEST_KIND : RECEIVE_KIND;
     const all = open.filter((x) => x.d.task_kind === "lab_order" && x.d.subject_id && x.d.delegation_id);
-    if (!asked || !all.length || !this.kinds(owner).includes(kind)) return null;
+    if (!asked || !all.length || !this.kinds(owner).includes(asked === "unclear" ? RECEIVE_KIND : kind)) return null;
     const tests = this.o.port.orderables?.().tests ?? {};
     const low = ` ${text.toLowerCase().replace(/[^a-z0-9]+/g, " ")} `;
     const said = Object.entries(tests).filter(([, ws]) => ws.some((w) => low.includes(` ${w.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `))).map(([k]) => k);
     const testOf = (d: EmrDelegation) => Object.keys(tests).find((k) => new RegExp(`\\btest: ${k.replace(/_/g, " ")}(,|$)`, "i").test(d.instruction ?? "")) ?? null;
     const here = all.filter((x) => target && ((target.patient_id && x.l.task.patient_id === target.patient_id) || (target.admission_id && x.l.task.admission_id === target.admission_id)));
-    const pool = (here.length ? here : all).filter((x) => !this.attempts(x.l.task, kind, x.d.delegation_id).live);
+    // An explicit patient is never widened to everyone's lab tasks.
+    const scoped = target && (target.patient_id || target.admission_id) ? here : all;
+    if (!scoped.length) return null;
+    const free = scoped.filter((x) => !this.attempts(x.l.task, kind, x.d.delegation_id).live);
+    // A patient named in the line must be one the task knows by name, else the line is held, so "for Blessing" never lands on Emeka's order.
+    const whose = patientSaid(text, Object.values(tests).flat());
+    const known = whose ? free.filter((x) => patientNames(x.l.task).some((n) => n.toLowerCase().split(/[^a-z']+/).includes(whose))) : free;
+    const pool = known;
     const hits = said.length === 1 ? pool.filter((x) => testOf(x.d) === said[0]) : [];
-    const home = (hits[0] ?? (here.length ? here : all).at(-1)!).l;
+    const home = (hits[0] ?? scoped.at(-1)!).l;
     const lineId = this.ruledLine(home, owner, text, spokenAt, source, "lab", vp, unverifiedReason);
     const name = (k: string | null) => (k ? tests[k]?.[0] ?? k : "a test");
+    if (asked === "unclear") {
+      this.ask(home, lineId, `I did not act: that line says ${said.length === 1 ? `the ${name(said[0]!)}` : "a test"} was not received or not cancelled. Say "received the ${said.length === 1 ? name(said[0]!) : "test"}" or "cancel the ${said.length === 1 ? name(said[0]!) : "test"}" with the reason if you want me to.`);
+      this.settle(home, "lab_line");
+      return { task_id: home.task.task_id, line_id: lineId };
+    }
+    if (whose && !known.length) {
+      this.ask(home, lineId, `I could not match "${whose}" to a lab task waiting here, so nothing was done. Open that patient and say it again without the name.`);
+      this.settle(home, "lab_line");
+      return { task_id: home.task.task_id, line_id: lineId };
+    }
     // The test is never guessed: none named, none matching, or the same test for two patients is asked, not picked.
     if (hits.length !== 1) {
       this.ask(home, lineId, hits.length > 1 ? `The ${name(said[0]!)} is waiting for more than one patient. Open the patient and say it again.` : `Which test? Waiting: ${pool.map((x) => name(testOf(x.d))).join(", ") || "none"}. Say it again with the test.`);
@@ -3283,7 +3304,11 @@ export class EmrRuntime {
       return { task_id: l.task.task_id, line_id: lineId };
     }
     this.whenAttributed(l, lineId, (who) => {
-      if (this.notOwnersWords(l, lineId, who, kind)) return this.settle(l, "needs_owner_voice");
+      // Lab work goes only on the owner's own matched voice; a typed or unmatched line is held with a note.
+      if (who?.speaker !== "owner") {
+        if (!this.notOwnersWords(l, lineId, who, kind)) this.note(l, "Not done: lab work is sent only on your own matched voice. Say it aloud on your strip.", "hold");
+        return this.settle(l, "needs_owner_voice");
+      }
       if (!d.acknowledged_at && !this.attempts(l.task, ACK_KIND, d.delegation_id).live) this.ruleAct(l, lineId, ACK_KIND, { delegation_id: d.delegation_id, title: d.title, evidence: `transcript:${lineId}` });
       this.ruleAct(l, lineId, kind, { delegation_id: d.delegation_id, order_id: d.subject_id, title: d.title, test: said[0], ...(reason ? { reason } : {}), evidence: `transcript:${lineId}` });
       this.settle(l, "lab_line");

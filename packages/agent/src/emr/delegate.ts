@@ -107,10 +107,23 @@ export function delegationSummary(kind: string, a: Record<string, unknown>): str
 }
 
 // What a lab scientist's line asks of a test handed to the lab: receive it, cancel it, or neither.
-export function labAsked(line: string): "receive" | "cancel" | null {
+export function labAsked(line: string): "receive" | "cancel" | "unclear" | null {
   const low = line.toLowerCase();
+  // A negation outside a stated reason makes the line unclear, so "we have not received the FBC" is asked about, never acted on.
+  const rest = low.replace(/\b(did not|didn'?t|never) (come|turn up|show)\b|\b(can ?not|cannot|could not|couldn'?t|unable to) (reach|contact|find|get hold of)\b|\b(does not|doesn'?t|did not|didn'?t) want\b/g, " ");
+  const act = /\bcancel(l?ed|l?ing)?\b/.test(low) || /\b(received|receiving|is in|came in|running it|run it|processing it)\b/.test(low);
+  if (act && /\b(not|never|no longer|hasn'?t|haven'?t|hadn'?t|isn'?t|wasn'?t|aren'?t|don'?t|doesn'?t|didn'?t|won'?t|can'?t)\b/.test(rest)) return "unclear";
   if (/\bcancel(l?ed|l?ing)?\b/.test(low) && !/\b(do not|don'?t) cancel\b/.test(low)) return "cancel";
   return /\b(received|receiving|is in|came in|running it|run it|processing it)\b/.test(low) ? "receive" : null;
+}
+
+const NOT_A_NAME = new Set(["the", "her", "him", "them", "this", "that", "now", "me", "you", "it", "processing", "testing", "today", "a", "an", "us", "review", "the patient", "patient"]);
+// The one word a line names a patient by after "for", such as "received the FBC for Blessing", or null; test names are not patients.
+export function patientSaid(line: string, testWords: readonly string[]): string | null {
+  let low = ` ${line.toLowerCase().replace(/[^a-z' ]+/g, " ")} `;
+  for (const w of testWords) low = low.split(` ${w.toLowerCase().replace(/[^a-z' ]+/g, " ").trim()} `).join(" ");
+  const m = /\bfor (?:mr |mrs |ms |miss |baby |master )?([a-z'][a-z'-]+)/.exec(low);
+  return m && !NOT_A_NAME.has(m[1]!) ? m[1]! : null;
 }
 
 // The cancellation reason a line states, or null when it states none, so the scientist is asked rather than a reason guessed.

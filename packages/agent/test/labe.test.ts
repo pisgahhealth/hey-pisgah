@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ORDER_REFERENCE_KINDS } from "../src/emr/gate.js";
-import type { Orderables, Provenance } from "../src/emr/port.js";
+import type { Orderables, Provenance, ReadBack } from "../src/emr/port.js";
 import type { SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
 import { ClerkFake, CLERK_KINDS, DOC, PAT, clerkBoot, ins, type W } from "./clerking-helpers.js";
 
@@ -13,6 +13,8 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // A doctor who orders and clerks, with a voice match where 5 is the owner and 4 is Dr B.
 class LabeFake extends ClerkFake {
   private n = 0;
+  readBackAnswer: ReadBack | null = null;
+  readonly readBack = async (): Promise<ReadBack> => this.readBackAnswer!;
   override kindsFor(): readonly string[] { return [...new Set([...CLERK_KINDS, ...ORDER_REFERENCE_KINDS])]; }
   orderables(): Orderables {
     return { tests: { fbc: ["full blood count", "FBC"] }, drugs: { paracetamol_iv: { words: ["IV paracetamol", "paracetamol IV"], controlled: false }, paracetamol_oral: { words: ["paracetamol tablets", "oral paracetamol"], controlled: false }, morphine: { words: ["morphine"], controlled: true } } };
@@ -170,5 +172,40 @@ describe("LABE: a restart in the middle of a two-field question", () => {
     expect(of(b, "prescribe")).toHaveLength(1);
     expect(of(b, "prescribe")[0]!.args).toMatchObject({ drug: "paracetamol_iv", quantity: 3, frequency: 3 });
     await again.rt.stop();
+  });
+});
+
+describe("LABE: a bare yes after a later question never signs the earlier read-back (review 3)", () => {
+  const LINE = "She is allergic to penicillin, severe.";
+  const script = (s: string): W[] => (/sign everything/i.test(s) ? [ins("countersign", {})] : s === LINE ? [ins("record_allergy", { substance: "penicillin", severity: "severe", confidence: 0.3 })] : ASIDE);
+  const readBack: ReadBack = { items: [{ stateId: "dddddddd-1111-4222-8333-444444444440", label: "Full blood count", kind: "lab", controlled: false, sentAt: null }], itemsDigest: "a".repeat(64), readBackAt: "2026-10-29T10:05:00.000Z", seal: "S".repeat(43), awaitingSecond: [], changed: [] };
+  const setUp = async () => {
+    const b = boot(script);
+    b.port.readBackAnswer = readBack;
+    const a = await say(b, "Sign everything.");
+    await b.rt.settled();
+    expect(open(b, a.task_id).at(-1)).toMatch(/Full blood count/);
+    await say(b, LINE, { task: a.task_id });
+    await b.rt.settled();
+    expect(open(b, a.task_id).at(-1)).toMatch(/^Did you want me to chart this/);
+    return { b, task: a.task_id };
+  };
+
+  it("a bare yes answers the later floor question, not the countersign", async () => {
+    const { b, task } = await setUp();
+    await say(b, "Yes.", { task });
+    await b.rt.settled();
+    expect(of(b, "countersign")).toHaveLength(0);
+    expect(of(b, "record_allergy")).toHaveLength(1);
+    await b.rt.stop();
+  });
+
+  it("a yes that names the signing still signs the read-back", async () => {
+    const { b, task } = await setUp();
+    await say(b, "Yes, sign them.", { task });
+    await b.rt.settled();
+    expect(of(b, "countersign")).toHaveLength(1);
+    expect(of(b, "record_allergy")).toHaveLength(0);
+    await b.rt.stop();
   });
 });

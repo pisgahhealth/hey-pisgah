@@ -19,6 +19,7 @@ type Row = DelegationRead & { assignee_owner: string };
 class LabFake extends ClerkFake {
   readonly rows = new Map<string, Row>();
   conflict = false;
+  conflictRetryable = false;
   private t = 0;
   override kindsFor(owner?: string): readonly string[] { return owner === LAB ? [NUDGE_KIND, ACK_KIND, RECEIVE_KIND, CANCEL_TEST_KIND] : [...CLERK_KINDS, "order_test", DELEGATE_KIND]; }
   orderables(): Orderables { return { tests: { fbc: ["full blood count", "FBC"], urinalysis: ["urinalysis", "urine test"] }, drugs: {} }; }
@@ -53,7 +54,7 @@ class LabFake extends ClerkFake {
     }
     if (kind === RECEIVE_KIND && this.conflict) {
       this.writes.push({ kind: "refused_receive", args, key, prov, id: "" });
-      return { ok: false, reason: "door_409_conflict", status: 409, retryable: false, counted: false };
+      return { ok: false, reason: "door_409_conflict", status: 409, retryable: this.conflictRetryable, counted: false };
     }
     if (kind === ACK_KIND) { const r = this.rows.get(String(args["delegation_id"])); if (r) r.acknowledged_at = new Date().toISOString(); }
     const id = kind === RECEIVE_KIND || kind === CANCEL_TEST_KIND ? uuid() : String(args["delegation_id"] ?? uuid());
@@ -72,7 +73,9 @@ async function handed(tests: string[]) {
   await b.rt.settled();
   return { ...b, port };
 }
-const labSay = (b: Awaited<ReturnType<typeof handed>>, text: string, v: Voiceprint = LAB_V) => b.rt.say({ owner: LAB, target: { patient_id: PAT }, text, source: "audio", voiceprint: v });
+const labSay = (b: Awaited<ReturnType<typeof handed>>, text: string, v: Voiceprint = LAB_V, o: { typed?: boolean; patient?: string } = {}) =>
+  b.rt.say({ owner: LAB, target: { patient_id: o.patient ?? PAT }, text, source: o.typed ? "text" : "audio", ...(o.typed ? {} : { voiceprint: v }) });
+const OTHER_PAT = "abababab-1111-4222-8333-444444444444";
 const lab = (port: LabFake, kind: string) => port.writes.filter((w) => w.kind === kind && w.prov.owner === LAB);
 const labNotes = (b: Awaited<ReturnType<typeof handed>>) => b.rt.views(LAB).flatMap((v) => v.notes.map((x) => x.text));
 const labAsks = (b: Awaited<ReturnType<typeof handed>>) => b.rt.views(LAB).flatMap((v) => v.questions.map((x) => x.text));
@@ -88,7 +91,7 @@ describe("LABE 4.1: the lab hand-off names the lab order", () => {
 describe("LABE 4.1: the lab scientist receives and cancels by voice", () => {
   it("receives the FBC the line names, on the lab order, once, and takes the task", async () => {
     const b = await handed(["urinalysis", "fbc"]);
-    const s = await labSay(b, "Received the FBC for Emeka, running it.");
+    const s = await labSay(b, "Received the FBC, running it.");
     await b.rt.settled();
     expect(lab(b.port, RECEIVE_KIND).map((w) => w.args)).toEqual([expect.objectContaining({ order_id: ORDER["fbc"], test: "fbc", evidence: `transcript:${s.line_id}` })]);
     expect(lab(b.port, ACK_KIND)).toHaveLength(1);
@@ -154,5 +157,58 @@ describe("LABE 4.1: the lab scientist receives and cancels by voice", () => {
     expect(cancelReason("it is a duplicate")).toBe("duplicate_order");
     expect(cancelReason("it was entered in error")).toBe("entered_in_error");
     expect(cancelReason("cancel it")).toBeNull();
+  });
+
+  it("holds a line naming a patient the lab task is not known by, so the FBC for Blessing never lands on the open patient's order (review 1)", async () => {
+    const b = await handed(["fbc"]);
+    await labSay(b, "Received the FBC for Blessing, running it.");
+    await b.rt.settled();
+    expect(lab(b.port, RECEIVE_KIND)).toHaveLength(0);
+    expect(labAsks(b).some((q) => /^I could not match "blessing" to a lab task waiting here, so nothing was done/.test(q))).toBe(true);
+    await b.rt.stop();
+  });
+
+  it("never widens an explicit patient to everyone's lab tasks (review 1)", async () => {
+    const b = await handed(["fbc"]);
+    await labSay(b, "Received the FBC, running it.", LAB_V, { patient: OTHER_PAT }).catch(() => null);
+    await b.rt.settled();
+    expect(lab(b.port, RECEIVE_KIND)).toHaveLength(0);
+    expect(lab(b.port, ACK_KIND)).toHaveLength(0);
+    await b.rt.stop();
+  });
+
+  it("holds a typed lab line with a note and sends nothing (review 2)", async () => {
+    const b = await handed(["fbc"]);
+    await labSay(b, "Cancel the FBC, the patient declined.", LAB_V, { typed: true });
+    await b.rt.settled();
+    expect(b.port.writes.filter((w) => w.prov.owner === LAB && w.kind !== NUDGE_KIND)).toHaveLength(0);
+    expect(labNotes(b)).toContain("Not done: lab work is sent only on your own matched voice. Say it aloud on your strip.");
+    await b.rt.stop();
+  });
+
+  it("asks and does nothing on a negated lab line (review 4)", async () => {
+    const b = await handed(["fbc"]);
+    await labSay(b, "We have not received the FBC.");
+    await b.rt.settled();
+    await labSay(b, "Cancel the FBC? The doctor has not cancelled it.");
+    await b.rt.settled();
+    expect(b.port.writes.filter((w) => w.prov.owner === LAB && w.kind !== NUDGE_KIND)).toHaveLength(0);
+    expect(labNotes(b).some((q) => /^I did not act: that line says the full blood count was not received or not cancelled/.test(q))).toBe(true);
+    expect(labAsked("We have not received the FBC.")).toBe("unclear");
+    expect(labAsked("Cancel the FBC, she did not come.")).toBe("cancel");
+    await b.rt.stop();
+  });
+
+  it("treats a lab 409 as final even when the door calls it retryable (review 5)", async () => {
+    const b = await handed(["fbc"]);
+    b.port.conflict = true;
+    b.port.conflictRetryable = true;
+    await labSay(b, "FBC is in, running it.");
+    await b.rt.settled();
+    await b.rt.pollOnce();
+    await b.rt.settled();
+    expect(b.port.writes.filter((w) => w.kind === "refused_receive")).toHaveLength(1);
+    expect(b.rt.views(LAB).flatMap((v) => v.actions).find((a) => a.kind === RECEIVE_KIND)!.state).toBe("refused");
+    await b.rt.stop();
   });
 });
