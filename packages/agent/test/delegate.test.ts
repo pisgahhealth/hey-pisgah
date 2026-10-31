@@ -365,6 +365,29 @@ describe("delegation by rule between agents", () => {
     await a.rt.stop();
   });
 
+  it("an acceptance closes only a question an acceptance asked, never one about other work (CONV, RECONCILE 2.10)", async () => {
+    const port = new DelegationFake();
+    port.admitted = true;
+    port.handoffs = { add_care_plan_item: { team: "pharmacy", subject_table: "prescriptions" } };
+    const a = boot((s) => (/^What about/.test(s) ? [{ class: "unclear", confidence: 0.9, words: s, question: "Which bag of fluids do you mean?" }] : [
+      ins("add_care_plan_item", { title: "IV paracetamol one gram", item_kind: "medication", cadence: "q6h" }),
+      ins("add_care_plan_item", { title: "IV fluids one litre", item_kind: "medication", cadence: "q8h" })
+    ]), port);
+    await a.rt.say({ owner: DOC, target: { admission_id: ADMIT }, text: "IV paracetamol one gram six hourly, and a litre of fluids eight hourly." });
+    await a.rt.settled();
+    await a.rt.pollOnce();
+    await a.rt.settled();
+    await a.rt.say({ owner: PHARM, target: { admission_id: ADMIT }, text: "What about the fluids?" });
+    await a.rt.settled();
+    const mine = () => a.rt.views(PHARM).find((v) => v.questions.length || v.delegations.length)!;
+    expect(mine().questions.map((q) => q.text)).toEqual(["Which bag of fluids do you mean?"]);
+    await a.rt.say({ owner: PHARM, target: { admission_id: ADMIT }, text: "Accepted the voice order." });
+    await a.rt.settled();
+    expect(port.kindsWritten(PHARM).filter((k) => k === ACK_KIND)).toHaveLength(2);
+    expect(mine().questions.map((q) => q.text)).toEqual(["Which bag of fluids do you mean?"]);
+    await a.rt.stop();
+  });
+
   it("reads what the pharmacist asks for a sent order from the words, never from a model", () => {
     expect(orderAsked("Prepare and dispense it.")).toBe("dispense");
     expect(orderAsked("prepare the paracetamol")).toBe("prepare");

@@ -286,6 +286,20 @@ describe("the patient the clinician is with", () => {
     await s.close();
   });
 
+  it("passes on the one word said after the wake phrase once the device opened the arrival, so 'emergency. Oxygen.' is never dropped (ACC2 review 4)", async () => {
+    const { s } = await boot(["Hey Pisgah, emergency. Oxygen."]);
+    const arrival = await post(`${s.url}/tasks/emergency`, { owner: OWNER, spokenAt: new Date().toISOString() });
+    await s.runtime.settled();
+    const opened = s.runtime.view(arrival.body.task_id)!.transcript.length;
+    await listen(s.url, { session: "s-wake3", seq: 0 });
+    await s.runtime.settled();
+    const t = s.runtime.view(arrival.body.task_id)!.transcript;
+    expect(t.length).toBe(opened + 1);
+    // Heard words are withheld from the store until work rests on them, so the line is known by its one word.
+    expect(s.runtime.task(arrival.body.task_id)!.lines.at(-1)!.words).toBe(1);
+    await s.close();
+  });
+
   it("opens a second arrival from the phrase as the local ear writes it while a patient is open, and not from a bare hey emergency", async () => {
     const { s } = await boot(["", "Hey, emergency.", "Heape is the emergency"]);
     await listen(s.url, { session: "s-wake", seq: 0, patientId: PAGE_A });

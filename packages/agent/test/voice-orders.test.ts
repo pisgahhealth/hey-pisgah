@@ -1,3 +1,4 @@
+import { readStream } from "@hey-pisgah/store";
 import { describe, expect, it } from "vitest";
 import { gatePrompt, gateTool, holdsOrders, ORDER_REFERENCE_KINDS } from "../src/emr/gate.js";
 import type { Orderables, Provenance, ReadBack } from "../src/emr/port.js";
@@ -97,7 +98,7 @@ describe("voice orders, attribution and countersign", () => {
   });
 
   it("holds a prescription whose medicine the ear misheard, and the owner's short answer finishes that same request once (review 4 item 6)", async () => {
-    const { rt, port } = orderBoot((s) => (/give her|paracetamol/i.test(s) ? [ins("prescribe", { drug: "paracetamol_iv", dose: "1 g" })] : []));
+    const { rt, port, root } = orderBoot((s) => (/give her|paracetamol/i.test(s) ? [ins("prescribe", { drug: "paracetamol_iv", dose: "1 g" })] : []));
     port.orderables = () => ({ tests: {}, drugs: { paracetamol_iv: { words: ["IV paracetamol", "paracetamol IV"], controlled: false }, paracetamol_oral: { words: ["paracetamol tablets", "oral paracetamol"], controlled: false } } });
     // Pass 10b's A10: the local ear wrote "IV pay rasitamol", so the medicine is asked, never guessed.
     const a = await sayAs(rt, "Give her IV pay rasitamol, one gram, eight hourly, for one day. That's three doses", OWNER_VOICE);
@@ -115,8 +116,10 @@ describe("voice orders, attribution and countersign", () => {
     const rx = port.writes.filter((w) => w.kind === "prescribe");
     expect(rx).toHaveLength(1);
     expect(rx[0]!.args).toMatchObject({ drug: "paracetamol_iv", dose: "1 g", quantity: 3 });
-    expect(rx[0]!.prov.voice?.authorisation).toContain(`transcript:${a.line_id}~`);
-    expect(rt.view(a.task_id)!.actions.find((x) => x.kind === "prescribe")!.line_id).toBe(a.line_id);
+    // The answer finishes the held request on its own line and voice, journaled as resumed (ACC2 review 1).
+    expect(rx[0]!.prov.voice?.authorisation).toContain(`transcript:${b.line_id}~`);
+    expect(rt.view(a.task_id)!.actions.find((x) => x.kind === "prescribe")!.line_id).toBe(b.line_id);
+    expect(readStream(root, `emr/${a.task_id}`).some((e) => e.record_type === "line.resumed")).toBe(true);
     // Said again with nothing held, the answer is not a second order.
     await sayAs(rt, "IV paracetamol, one gram.", OWNER_VOICE);
     await rt.settled();

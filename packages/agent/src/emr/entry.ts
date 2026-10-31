@@ -3,8 +3,10 @@ import { EmrId, type EmrTarget } from "./port.js";
 
 // The hands-free entry: the wake phrase, the emergency entry that needs no patient, the spoken identity, and the patient the clinician is with.
 export const EMERGENCY_KIND = "open_unnamed_encounter" as const;
+// The name said for an unnamed emergency arrival, written by the owner's own agent; the record stays unidentified until the desk completes it (D39).
+export const IDENTITY_KIND = "record_identity" as const;
 // Kinds the agent takes only by rule, never from the speech gate, so the gate prompt does not list them.
-export const RULE_ONLY_KINDS: ReadonlySet<string> = new Set([EMERGENCY_KIND]);
+export const RULE_ONLY_KINDS: ReadonlySet<string> = new Set([EMERGENCY_KIND, IDENTITY_KIND]);
 
 export const EmergencyArgs = z.strictObject({
   unidentified_ref: z.string().min(1).max(200),
@@ -12,6 +14,7 @@ export const EmergencyArgs = z.strictObject({
   clinic_id: EmrId.optional()
 });
 export type EmergencyArgs = z.infer<typeof EmergencyArgs>;
+export const IdentityArgs = z.strictObject({ visit_id: EmrId, patient_id: EmrId, name: z.string().trim().min(1).max(200), phone: z.string().regex(/^0[789][01]\d{8}$/).optional() });
 
 // "hey Pisgah, emergency" as a transcript reads it; the wake word alone is spotted on the device.
 export const EMERGENCY_LINE = /^\s*(?:(?:ok(?:ay)?|hey|hi|hay|a)[,\s]+)?(?:pisgah|pizgah|pisga|pisgar|pisca)[,.!\s]+(?:this is an?\s+|we have an?\s+)?emergency\b/i;
@@ -55,9 +58,9 @@ export function unidentifiedRef(at: Date, timeZone = "Africa/Lagos"): string {
 export type SpokenIdentity = { name: string; phone: string | null; words: string };
 // The words that introduce a name, as people say them, Nigerian English included ("her name na").
 // "now" and "no" are how the local streaming ear hears the Nigerian "na" after "her name".
-const NAMING = /\b(?:(?:her|his|their|the patient'?s|patient'?s)\s+name\s+(?:is|na|now|no)|(?:she|he)\s+(?:is called|is named|says (?:she|he) is|says (?:her|his) name is)|(?:she|he)'s called|(?:they|people) call (?:her|him)|the patient is(?:\s+called)?)\b/i;
+const NAMING = /\b(?:(?:her|his|my|their|the patient'?s|patient'?s)\s+name\s+(?:is|na|now|no)|(?:she|he)\s+(?:is called|is named|says (?:she|he) is|says (?:her|his) name is)|(?:she|he)'s called|(?:they|people) call (?:her|him)|the patient is(?:\s+called)?)\b/i;
 const NAME_RUN = /[A-Z][a-z'-]+(?:\s+[A-Z][a-z'-]+){1,3}/g;
-const NOT_NAME = /^(?:And|Phone|Her|His|She|He|The|Number|Em|Eh|Er|Um|Uh)$/;
+const NOT_NAME = /^(?:And|Phone|Her|His|She|He|The|Number|Em|Eh|Er|Um|Uh|Mr|Mrs|Ms|Miss|Dr|Doctor|Madam|Sir)$/;
 const PHONE = /(?:\+?234|0)\s*[789]\s*[01](?:[\s-]*\d){8}/;
 
 // The name, and the phone when said, from a line that names the patient: the longest run of two to four capitalised words after the naming words, so "Grace, Grace Okafor" reads as Grace Okafor.
@@ -77,6 +80,24 @@ export function identityFrom(line: string): SpokenIdentity | null {
   const digits = p ? p[0].replace(/\D/g, "") : null;
   const phone = digits ? (digits.startsWith("234") ? `0${digits.slice(3)}` : digits) : null;
   return { name, phone: phone && /^0[789][01]\d{8}$/.test(phone) ? phone : null, words: `${m[0]} ${name}` };
+}
+
+// True when the patient named themselves ("my name is"), which counts unless the voice is the owner's own (D40).
+export const selfNamed = (line: string): boolean => /\bmy\s+name\s+(?:is|na|now|no)\b/i.test(line);
+
+// A name spelled letter by letter ("A-D-E-Y-E-M-I", "A D E Y E M I"), read as the word, put in place of the part of the held name it spells, else the surname.
+export function spelledName(line: string, held: string): string | null {
+  const runs = [...line.matchAll(/(?<![A-Za-z])(?:[A-Za-z](?:[\s,.-]+|$)){3,}/g)].map((m) => m[0].replace(/[^A-Za-z]/g, "")).filter((w) => w.length >= 3);
+  if (!runs.length || !(/\bspel(?:l|lt|led|ling)\b/i.test(line) || runs[0]!.length >= 4)) return null;
+  const word = runs[0]![0]!.toUpperCase() + runs[0]!.slice(1).toLowerCase();
+  const parts = held.split(/\s+/).filter(Boolean);
+  if (!parts.length) return null;
+  const near = (a: string, b: string) => a[0]!.toLowerCase() === b[0]!.toLowerCase() && Math.abs(a.length - b.length) <= 2;
+  const i = parts.findIndex((p) => near(p, word));
+  const at = i >= 0 ? i : parts.length - 1;
+  if (parts[at] === word) return null;
+  parts[at] = word;
+  return parts.join(" ");
 }
 
 // "over" is how the local streaming ear hears a spoken "oh" inside a phone number; it counts only inside a run of four or more digit words.
@@ -117,7 +138,11 @@ export function spokenPatient(line: string, known: readonly KnownPatient[]): Kno
 export type EmrIdentityHold = {
   obligation_id: string; kind: "identity_pending"; state: "open" | "done" | "cancelled";
   encounter: { patient_id: string | null; visit_id: string | null };
-  name: string; phone: string | null; said_by: string; line_id: string; at: string; completes_by: "receptionist";
+  name: string; phone: string | null; said_by: string; line_id: string; at: string; completes_by: "receptionist" | "owner_agent";
+  // Each earlier name this one replaced, with the line that corrected it.
+  amended?: { from: string; line_id: string }[];
+  // When the owner's agent wrote this name to the record, so the strip says it is recorded.
+  recorded_at?: string | null;
 };
 
 // Words in a label that never tell two patients apart.
