@@ -43,7 +43,7 @@
  "version": 2,
  "definition_hash": "c6574e8e7111737a0dddedf0d0f2e7703a9124ad6a490c66d7429e7bbd6fd6b3",
  "fallback_version": 1,
- "adopted_by_person": true,
+ "adopted_by_person": false,
  "approver": "Synthetic Ward A manager (disclosed; a person's role played on the coordinator's instruction by the E6 build lane)",
  "approver_id": "wm_a_synthetic",
  "human_approval": false,
@@ -631,5 +631,6 @@
  "rev_dev_unchanged": 11,
  "rev_dev_median_wait_delta_min": 0,
  "dev_unchanged": 10,
- "scope_change": "the draft starts at the round entry or at sign-off, whichever the record shows first, so a round entry that reaches the record after sign-off no longer holds the draft back"
+ "scope_change": "the draft starts at the round entry or at sign-off, whichever the record shows first, so a round entry that reaches the record after sign-off no longer holds the draft back",
+ "adopted_by_person_role": true
 }

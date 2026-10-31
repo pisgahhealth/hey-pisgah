@@ -1,5 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { adoptionApproval } from "./approval.js";
+import { adoptedByPerson, adoptionApproval } from "./approval.js";
 
 const adopted = (approver: Record<string, unknown>, wall_at: string | null = "2026-10-31T09:00:00.000Z") => ({ record_type: "version.adopted", payload: { version: 2, approver, at: { occurred_at: 0, recorded_at: 0, wall_at } } });
 const LANE = { kind: "person", staff_id: "wm_a_synthetic", role: "ward_manager", display_name: "Synthetic Ward A manager (disclosed; a person's role played on the coordinator's instruction by the E6 build lane)" };
@@ -14,5 +15,20 @@ describe("human approval is read from the adoption record, never set by the repo
     expect(adoptionApproval([adopted(SAMUEL, null)], 2).human_approval).toBe(false);
     expect(adoptionApproval([adopted({ ...SAMUEL, kind: "agent" })], 2).human_approval).toBe(false);
     expect(adoptionApproval([], 2)).toMatchObject({ human_approval: false, approval: { why: "no adoption record for this version" } });
+  });
+});
+
+describe("the learning result names a person's adoption only when no lane played the role", () => {
+  it("keeps the role fact apart from a person's own adoption", () => {
+    expect(adoptedByPerson(LANE)).toEqual({ adopted_by_person: false, adopted_by_person_role: true });
+    expect(adoptedByPerson(SAMUEL)).toEqual({ adopted_by_person: true, adopted_by_person_role: true });
+    expect(adoptedByPerson({ ...SAMUEL, kind: "agent" })).toEqual({ adopted_by_person: false, adopted_by_person_role: false });
+    expect(adoptedByPerson({ ...SAMUEL, role: "nurse" })).toEqual({ adopted_by_person: false, adopted_by_person_role: false });
+  });
+
+  it("agrees with the adoption record in the published improve.json", () => {
+    const r = JSON.parse(readFileSync(new URL("../../../evaluation/results/improve.json", import.meta.url), "utf8")) as { adopted_by_person: boolean; adopted_by_person_role: boolean; approval: { played_by_lane: boolean } };
+    expect(r.adopted_by_person_role).toBe(true);
+    expect(r.adopted_by_person).toBe(!r.approval.played_by_lane);
   });
 });
