@@ -165,6 +165,9 @@ let fakeT0 = 0;
 // The whole fake microphone file in memory, so a reloaded page's microphone can be given the rest of it from the moment of the reload.
 let fakeBytes: Uint8Array | null = null;
 let fakeRealigning: Promise<void> | null = null;
+// The strip session the doctor's page last posted under, and who waits for the first post of a new one.
+let lastStripSid: string | null = null;
+let newSidSeen: ((sid: string) => void) | null = null;
 // Waits until the fake microphone file reaches an offset, following the file's zero when a reload moves it.
 async function untilFake(offsetMs: number): Promise<void> {
   for (;;) {
@@ -187,9 +190,13 @@ function realignFakeMic(why: string): void {
   const fd = openSync(`${file}.next`, "w"); writeSync(fd, head); writeSync(fd, data); closeSync(fd);
   renameSync(`${file}.next`, file);
   log(`fake microphone: the doctor's page reloaded (${why}); the file now plays on from ${(cut / 1000).toFixed(1)} s`);
-  const p = page;
-  fakeRealigning = p.waitForFunction((st: string) => /Listening|Hearing you/.test(document.querySelector(`${st} header`)?.textContent ?? ""), STRIP, { timeout: 180_000 }).then(() => true, () => false).then((back) => {
-    fakeT0 = fakeRealign(fakeT0, reloadAt, Date.now()).fakeT0;
+  // The file starts again when the new page's microphone opens, which is when its first post reaches the serve under a new session; the header shows Listening earlier.
+  const before = lastStripSid;
+  fakeRealigning = new Promise<boolean>((resolve) => {
+    const t = setTimeout(() => { newSidSeen = null; resolve(false); }, 180_000);
+    newSidSeen = (sid) => { if (sid === before) return; clearTimeout(t); newSidSeen = null; resolve(true); };
+  }).then((back) => {
+    fakeT0 = fakeRealign(fakeT0, reloadAt, Date.now() - 100).fakeT0;
     log(`fake microphone: listening ${back ? "came back" : "did not come back"} ${((Date.now() - reloadAt) / 1000).toFixed(1)} s after the reload; the script's slots moved with it`);
     fakeRealigning = null;
   });
@@ -315,7 +322,7 @@ async function openBrowser(): Promise<void> {
     if (fr.parentFrame() !== null) return;
     void fr.evaluate(() => (window as unknown as { __accDoc?: number }).__accDoc).then((d) => { const fresh = d !== doc; doc = d; if (fresh) realignFakeMic(fr.url().replace(/^https?:\/\/[^/]+/, "").slice(0, 60)); }, () => undefined);
   });
-  pg.on("response", (r) => { const x = r as { url: () => string; status: () => number; request: () => { method: () => string } }; const u = x.url(); if (x.request().method() === "POST" && u.includes(`:${SERVE_PORT}/tasks/`)) appendFileSync(join(OUT, "strip-posts.log"), `${now()} ${u.replace(/^.*\/tasks/, "/tasks").slice(0, 80)} ${x.status()}\n`); });
+  pg.on("response", (r) => { const x = r as { url: () => string; status: () => number; request: () => { method: () => string } }; const u = x.url(); if (x.request().method() === "POST" && u.includes(`:${SERVE_PORT}/tasks/listen`)) { const sid = /session_id=([^&]+)/.exec(u)?.[1] ?? null; if (sid) { newSidSeen?.(sid); lastStripSid = sid; } } if (x.request().method() === "POST" && u.includes(`:${SERVE_PORT}/tasks/`)) appendFileSync(join(OUT, "strip-posts.log"), `${now()} ${u.replace(/^.*\/tasks/, "/tasks").slice(0, 80)} ${x.status()}\n`); });
   pg.on("requestfailed", (r) => { const x = r as { url: () => string; failure: () => { errorText: string } | null }; if (x.url().includes(`:${SERVE_PORT}/`)) appendFileSync(join(OUT, "strip-posts.log"), `${now()} FAILED ${x.url().replace(/^.*\/tasks/, "/tasks").slice(0, 80)} ${x.failure()?.errorText ?? ""}\n`); });
   pg.on("console", (m) => { const x = m as { type: () => string; text: () => string }; if (x.type() === "error") appendFileSync(join(OUT, "strip-posts.log"), `${now()} console ${x.text().slice(0, 200)}\n`); });
   browserClose = () => browser.close();
@@ -441,6 +448,17 @@ function lineFor(text: string, since: string, owners: string[]): ReturnType<type
   return hit ? { line_id: hit.line_id, text: hit.text, at: hit.at, ended: hit.ambient?.ended_at ?? null } : null;
 }
 
+// Reloads the doctor's page and waits for the strip to say it is listening again with no touch.
+async function reloadPage(line: Line): Promise<void> {
+  if (!page) return;
+  const pg = page as unknown as { reload: (o?: unknown) => Promise<unknown> };
+  await pg.reload({ timeout: 120_000 }).catch(() => harnessErrors.push(`${line.id}: the page did not reload`));
+  const back = await page.waitForFunction((st: string) => /Listening|Hearing you/.test(document.querySelector(`${st} header`)?.textContent ?? ""), STRIP, { timeout: 60_000 }).then(() => true, () => false);
+  log(`${line.id}: page reloaded; listening again with no touch: ${back}`);
+  reloadBack = back;
+  if (fakeRealigning) await fakeRealigning;
+}
+
 const steps: StepOutcome[] = [];
 const harnessErrors: string[] = [];
 const faults: Fault[] = [];
@@ -448,6 +466,8 @@ const otherTouches: AccResult["touches"]["other_people"] = [];
 async function runLine(line: Line): Promise<void> {
   // Under the fake microphone each line runs in its slot of the file, so the room's timing never depends on the agent.
   const slot = DRIVER === "fake" ? fakeSlots.get(line.id) : undefined;
+  // Under the fake microphone a reload runs in the quiet before its line, so the file is cut before the words and they play whole once listening is back.
+  if (line.reload && page && DRIVER === "fake" && process.env["ACC_FAKE_RELOAD"] !== "0") await reloadPage(line);
   if (slot) await untilFake(FAKE_LEAD_MS + slot.at);
   const started = now();
   const errors: string[] = [];
@@ -497,7 +517,7 @@ async function runLine(line: Line): Promise<void> {
     else if (line.muted && page) { await page.click(`${STRIP} button[aria-label="Mute the agent"]`).catch(() => harnessErrors.push(`${line.id}: no Mute button`)); await wait(800); }
     // Chrome's fake microphone reads its file afresh on a reload, so the harness cuts the file at the reload (realignFakeMic); ACC_FAKE_RELOAD=0 skips the reload.
     if (line.reload && page && DRIVER === "fake" && process.env["ACC_FAKE_RELOAD"] === "0") log(`${line.id}: reload not run under the fake microphone; see the reload probe`);
-    else if (line.reload && page) { const pg = page as unknown as { reload: (o?: unknown) => Promise<unknown> }; await pg.reload({ timeout: 120_000 }).catch(() => harnessErrors.push(`${line.id}: the page did not reload`)); const back = await page.waitForFunction((st: string) => /Listening|Hearing you/.test(document.querySelector(`${st} header`)?.textContent ?? ""), STRIP, { timeout: 60_000 }).then(() => true, () => false); log(`${line.id}: page reloaded; listening again with no touch: ${back}`); reloadBack = back; if (fakeRealigning) await fakeRealigning; }
+    else if (line.reload && page && DRIVER !== "fake") await reloadPage(line);
     if (line.offline_s && page) await setOffline(true);
     const d = await deliver(line).catch((e: unknown) => ({ lineEnd: null, note: `delivery failed: ${e instanceof Error ? e.message.slice(0, 160) : String(e)}` }));
     lineEnd = d.lineEnd; note = d.note;
