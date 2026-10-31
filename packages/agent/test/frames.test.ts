@@ -90,6 +90,21 @@ describe("the strip's frames route", () => {
     await off.s.close();
   });
 
+  it("closes within seconds on a restart while a request is still open, so the next serve can start (pass 10's R1 waited 60 s)", async () => {
+    const { s } = await boot({ asr: "stream" });
+    const { request } = await import("node:http");
+    const u = new URL(`${s.url}/tasks/listen/stream?owner=${OWNER}&session_id=open-1&rate=${RATE}&stream=0&part=0`);
+    const req = request({ host: u.hostname, port: u.port, path: `${u.pathname}${u.search}`, method: "POST", headers: { "content-type": "application/octet-stream", "transfer-encoding": "chunked" } });
+    req.on("error", () => undefined);
+    req.write(pcm([["quiet", 80]]));
+    await new Promise((r) => setTimeout(r, 200));
+    const t0 = Date.now();
+    const closed = await Promise.race([s.close().then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 8000))]);
+    expect(closed).toBe(true);
+    expect(Date.now() - t0).toBeLessThan(8000);
+    req.destroy();
+  }, 15_000);
+
   it("feeds numbered parts in order, answers a repeat as a duplicate, restarts on a missing part, and reports lines and statuses under the strip's session", async () => {
     const { s, port, part, frames } = await boot({ asr: "stream", lines: ["Chart his pulse 116", "Chart his temperature 37.6"] });
     const audio = pcm([["quiet", 400], ["tone", 1200], ["quiet", 1000], ["tone", 1200], ["quiet", 1000]]);

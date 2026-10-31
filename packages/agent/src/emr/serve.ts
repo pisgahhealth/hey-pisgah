@@ -823,8 +823,12 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   return {
     urls, url: urls[0] ?? "", runtime: rt, client, listening, preferences: prefs,
     close: async () => {
-      await Promise.all(servers.map((s) => new Promise<void>((r) => s.close(() => r()))));
+      const closed = Promise.all(servers.map((s) => new Promise<void>((r) => s.close(() => r()))));
       await Promise.all([...frames.values()].map((f) => endFrames(f).catch(() => undefined)));
+      // A request a client keeps open would hold the port past a restart, so whatever is still open after a short grace is cut.
+      await Promise.race([closed, new Promise((r) => setTimeout(r, 2000).unref())]);
+      for (const s of servers) s.closeAllConnections();
+      await closed;
       listening.close();
       await rt.stop();
       if (prefs && !o.runtime?.preferences) prefs.close();
