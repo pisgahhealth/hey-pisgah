@@ -85,19 +85,29 @@ export function identityFrom(line: string): SpokenIdentity | null {
 // True when the patient named themselves ("my name is"), which counts unless the voice is the owner's own (D40).
 export const selfNamed = (line: string): boolean => /\bmy\s+name\s+(?:is|na|now|no)\b/i.test(line);
 
-// A name spelled letter by letter ("A-D-E-Y-E-M-I", "A D E Y E M I"), read as the word, put in place of the part of the held name it spells, else the surname.
-export function spelledName(line: string, held: string): string | null {
+// A name spelled letter by letter ("A-D-E-Y-E-M-I"), read as the word, put in place of the one held part it is closest to; when no part or several parts are as close, it is asked.
+export function spelledName(line: string, held: string): { name: string } | { ask: string[]; word: string } | null {
   const runs = [...line.matchAll(/(?<![A-Za-z])(?:[A-Za-z](?:[\s,.-]+|$)){3,}/g)].map((m) => m[0].replace(/[^A-Za-z]/g, "")).filter((w) => w.length >= 3);
-  if (!runs.length || !(/\bspel(?:l|lt|led|ling)\b/i.test(line) || runs[0]!.length >= 4)) return null;
+  if (!runs.length || !(/\bspel(?:l(?:ed|ing|s)?|t)\b/i.test(line) || runs[0]!.length >= 4)) return null;
   const word = runs[0]![0]!.toUpperCase() + runs[0]!.slice(1).toLowerCase();
   const parts = held.split(/\s+/).filter(Boolean);
   if (!parts.length) return null;
-  const near = (a: string, b: string) => a[0]!.toLowerCase() === b[0]!.toLowerCase() && Math.abs(a.length - b.length) <= 2;
-  const i = parts.findIndex((p) => near(p, word));
-  const at = i >= 0 ? i : parts.length - 1;
-  if (parts[at] === word) return null;
-  parts[at] = word;
-  return parts.join(" ");
+  const near = parts.map((p, i) => ({ i, d: editDistance(p.toLowerCase(), word.toLowerCase()) })).filter((x) => parts[x.i]![0]!.toLowerCase() === word[0]!.toLowerCase() && x.d <= Math.max(2, Math.floor(word.length / 3)));
+  const best = Math.min(...near.map((x) => x.d));
+  const top = near.filter((x) => x.d === best);
+  if (top.length !== 1) return { ask: top.length ? top.map((x) => parts[x.i]!) : parts, word };
+  if (parts[top[0]!.i] === word) return null;
+  parts[top[0]!.i] = word;
+  return { name: parts.join(" ") };
+}
+function editDistance(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j]! + 1, cur[j - 1]! + 1, prev[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length]!;
 }
 
 // "over" is how the local streaming ear hears a spoken "oh" inside a phone number; it counts only inside a run of four or more digit words.

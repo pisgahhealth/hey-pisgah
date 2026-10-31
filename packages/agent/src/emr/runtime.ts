@@ -669,6 +669,8 @@ export class EmrRuntime {
   private renewed: string | null = null;
   // Lines held for "for whom?", in memory only, by question; a restart drops them and the owner is told to say them again.
   private readonly whomHeld = new Map<string, { s: SayInput; spoken_at: string }>();
+  // The held lines said again on the chosen patient's task, so that replay is not held for whom again.
+  private readonly whomResolved = new WeakSet<SayInput>();
   private fresh: string | null = null;
   private readonly early = new Map<string, EarlyEar>();
   private readonly times = new Map<string, LineTimes>();
@@ -744,12 +746,13 @@ export class EmrRuntime {
       for (const aid of l.task.order) {
         const a = l.task.actions.get(aid)!;
         if (a.state === "sent") this.append(l, "action.uncertain", { action_id: aid, attempts: 1, reason: "restarted while the write was on its way", status: null, next_in_ms: 0 });
-        if (a.state === "uncertain") this.enqueueExec(l, () => this.execute(l, aid));
+        // An uncertain write whose voice match the restart lost is only read for, never sent again; one the hospital said it saved keeps its read-only rounds.
+        if (a.state === "uncertain") this.enqueueExec(l, () => (this.tokenLost(l.task, a) && !a.uncertain?.committed ? this.readOnly(l, a) : this.execute(l, aid)));
       }
       for (const aid of l.task.order) {
         const a = l.task.actions.get(aid)!;
         // Voice tokens live in memory only, so an order a pre-restart line authorised can never be sent; it is cancelled with an honest note, never sent bare.
-        if (a.state === "proposed" && a.authorised_by_line && (ORDER_KINDS.has(a.kind) || a.kind === VERBAL_ORDER_KIND || CONFIRM_KINDS.has(a.kind)) && !this.tokens.has(a.authorised_by_line)) {
+        if (a.state === "proposed" && this.tokenLost(l.task, a)) {
           this.append(l, "action.cancelled", { action_id: aid, reason: "voice_token_lost_in_restart" });
           this.note(l, `${a.summary.replace(/, as a voice order awaiting your countersign$/, "")}: not sent. The agent restarted before it went, and your voice match did not survive the restart. Say it again.`, "refusal");
           continue;
@@ -770,6 +773,25 @@ export class EmrRuntime {
     }
     this.sweepObligations();
     if (!this.obTick) { this.obTick = setInterval(() => this.sweepObligations(), this.o.obligationTickMs ?? 1000); this.obTick.unref(); }
+  }
+
+  // True when a voice-bound write rests on an owner's matched line whose token is no longer in memory.
+  private tokenLost(t: EmrTask, a: EmrAction): boolean {
+    if (!(ORDER_KINDS.has(a.kind) || a.kind === VERBAL_ORDER_KIND || CONFIRM_KINDS.has(a.kind)) || a.awaiting === "owner_voice") return false;
+    return [a.authorised_by_line ?? a.line_id, a.confirmed_by_line].some((id) => !!id && this.speakerOf(t, id)?.speaker === "owner" && !this.tokens.has(id));
+  }
+
+  // Reads the record for a write sent before a restart; found, it is proved as written; otherwise it is closed here and never sent again.
+  private async readOnly(l: Live, a: EmrAction): Promise<void> {
+    const found = await this.findWrite(l, a, this.provFor(l.task, a));
+    if (found && found !== "unread") {
+      this.append(l, "action.reconciled", { action_id: a.action_id, by: "record", record_id: found.record_id });
+      this.append(l, "action.written", { action_id: a.action_id, written: { ...found, replayed: true } });
+      return this.execute(l, a.action_id);
+    }
+    this.append(l, "action.cancelled", { action_id: a.action_id, reason: "voice_token_lost_in_restart" });
+    this.note(l, `${a.summary.replace(/, as a voice order awaiting your countersign$/, "")}: the agent restarted while it was on its way and your voice match did not survive, so it was not sent again. Check the record before you say it again.`, "refusal");
+    this.settle(l, "token_lost");
   }
 
   async stop(): Promise<void> {
@@ -874,8 +896,14 @@ export class EmrRuntime {
       l = this.live.get(taskId) ?? null;
       if (!l) throw new Error("unknown task");
       if (l.task.owner !== s.owner) throw new Error("the task belongs to another owner");
-      // A tapped or typed answer to "for whom?" on this task sends the held line to the patient chosen.
-      if (s.question_id && l.task.questions.some((q) => q.question_id === s.question_id && q.whom && q.answered_by === null)) { const whom = await this.whomAnswer(s, text, spokenAt, s.question_id); if (whom) return whom; }
+      // A line said again for the patient chosen is not asked about again; any other task-scoped line may answer or raise "for whom?".
+      const resolved = this.whomResolved.has(s);
+      checkWhom = !resolved;
+      if (!resolved) {
+        const bound = s.question_id && l.task.questions.some((q) => q.question_id === s.question_id && q.whom && q.answered_by === null) ? s.question_id : undefined;
+        const whom = await this.whomAnswer(s, text, spokenAt, bound);
+        if (whom) return whom;
+      }
       ctx = await this.o.port.resolve(this.subjectOf(l.task), prov);
     } else {
       // "hey Pisgah, emergency" heard in a transcript opens an arrival, unless the device already did within the last ten seconds.
@@ -942,7 +970,15 @@ export class EmrRuntime {
     // A spoken name for an unnamed patient, or its spelling, is taken by rule with no model call: written by the owner's agent on an emergency arrival, else held for the front desk.
     const named = live.task.unidentified ? identityFrom(text) : null;
     const held = live.task.unidentified && !named ? live.task.identities.filter((i) => i.state === "open").at(-1) : undefined;
-    const spelled = held ? spelledName(text, held.name) : null;
+    const sp = held ? spelledName(text, held.name) : null;
+    if (sp && "ask" in sp) {
+      this.append(live, "line.ruled", { line_id: lineId, classes: ["instruction"], as: "identity" });
+      this.ask(live, lineId, `Which part of ${held!.name} is ${sp.word}? Say the full name.`);
+      this.afterLine(live, lineId, true);
+      this.settle(live, "identity_asked");
+      return { task_id: live.task.task_id, line_id: lineId };
+    }
+    const spelled = sp?.name ?? null;
     // The naming line is handled whole by rule; anything else said in it waits for the next line.
     if (named || spelled) {
       const name = named?.name ?? spelled!, phone = named?.phone ?? null;
@@ -1013,6 +1049,14 @@ export class EmrRuntime {
       const lineId = this.nextLineId(s.owner, text);
       this.append(l, "utterance.heard", { line_id: lineId, text, source: s.source ?? "text", spoken_at: spokenAt, via: "rule" });
       this.append(l, "line.ruled", { line_id: lineId, classes: ["instruction"], as: "whom_answer", question_id: q.question_id });
+      // A spoken choice is matched like any line; another clinician's choice moves nothing.
+      this.matchVoice(s.owner, lineId, s.source ?? "text", s.voiceprint, { owner: s.owner, evidence: `transcript:${lineId}`, spoken_at: spokenAt }, s.unverified_reason);
+      const who = this.speakers.has(lineId) ? await this.attribute(l, lineId) : null;
+      if (who?.speaker === "other_clinician") {
+        this.note(l, `${who.label} chose the patient, so nothing was moved or written. Say which patient yourself.`, "refusal");
+        this.settle(l, "needs_owner_voice");
+        return { task_id: t.task_id, line_id: lineId };
+      }
       this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
       const held = this.whomHeld.get(q.question_id);
       this.whomHeld.delete(q.question_id);
@@ -1023,7 +1067,11 @@ export class EmrRuntime {
         return { task_id: t.task_id, line_id: lineId };
       }
       this.settle(l, "whom_answered");
-      return this.say({ ...held.s, spoken_at: held.spoken_at }, to.task.task_id);
+      // Only the owner's own spoken choice carries the held line's voice; a tapped, typed or unmatched choice moves the words, and an order then waits for the owner's yes.
+      const { voiceprint: _held, ...bare } = held.s;
+      const next: SayInput = who?.speaker === "owner" ? { ...held.s, spoken_at: held.spoken_at } : { ...bare, spoken_at: held.spoken_at, unverified_reason: "patient_chosen_without_your_voice" };
+      this.whomResolved.add(next);
+      return this.say(next, to.task.task_id);
     }
     return null;
   }
@@ -1408,7 +1456,7 @@ export class EmrRuntime {
     // An earlier line's write can finish while this call is out and leave the task done or waiting; this line wakes it again rather than being dropped.
     if (l.task.state === "done" || l.task.state === "waiting") this.setState(l, "running", `heard_${lineId}`);
     // A decision that comes back after the task stopped running is said, never dropped in silence.
-    if (l.task.state !== "running") { if (clauses.some((c) => c.class === "instruction" || c.class === "correction")) this.note(l, `That line came while this task was ${l.task.state.replace(/_/g, " ")}, so nothing was written from it. Say it again if it still stands.`, "refusal"); return; }
+    if (l.task.state !== "running") { if (clauses.some((c) => c.class !== "aside")) this.note(l, `That line came while this task was ${l.task.state.replace(/_/g, " ")}, so nothing was written from it. Say it again if it still stands.`, "refusal"); return; }
     // Words meant for the agent answer only the question they answer; every other open question stays open and shown.
     this.closeAnswered(l, lineId, clauses);
     this.fresh = lineId;
@@ -1702,7 +1750,7 @@ export class EmrRuntime {
     const all = t.questions.filter((q) => q.answered_by === null);
     const named = line.question_id ? open.find((q) => q.question_id === line.question_id) ?? null : null;
     // The question the gate was shown with this line: the one it names, else the latest open one.
-    const shown = named ?? (all.at(-1)?.pending ? all.at(-1)! : null);
+    const shown = named ?? (all.at(-1)?.pending && open.includes(all.at(-1)!) ? all.at(-1)! : null);
     const short = line.text.split(/\s+/).filter(Boolean).length <= 6;
     const answers = (c: AnyClause) => c.class === "instruction" || (c.class === "unclear" && !measuresIn(c.words).length);
     const otherWork = clauses.some((c) => c.class === "instruction" && c.kind && !open.some((q) => q.pending!.kind === c.kind));
@@ -2162,7 +2210,10 @@ export class EmrRuntime {
     if (bound) return { sign: false, ...bound };
     const open = t.questions.filter((y) => y.answered_by === null && y.rule).at(-1) ?? null;
     if (open && open.rule?.kind !== "countersign") return sign ? { sign, yes: false, no: false, q: null } : null;
-    const q = open && Date.parse(line.at) - Date.parse(open.at) <= (this.o.answerWindowMs ?? 600_000) ? open : null;
+    // A countersign read-back is signed only within the confirm window (D38); a yes after it reads the batch back again.
+    const age = open ? Date.parse(line.at) - Date.parse(open.at) : 0;
+    const q = open && age <= (this.o.confirmWindowMs ?? 60_000) ? open : null;
+    if (open && !q && !sign && age <= (this.o.answerWindowMs ?? 600_000) && text.split(" ").length <= 5 && (OWNER_YES.test(text) || READ_BACK_YES.test(text))) return { sign: false, yes: true, no: false, q: open, refuse: "late" };
     // The short yes and the read-back's batch are one rule: it answers only the countersign question it follows, whose args carry that batch's digest.
     const readBack = !!q && q.rule?.kind === "countersign";
     const lastShown = readBack && t.questions.at(-1) === q && !t.notes.some((n) => Date.parse(n.at) >= Date.parse(q.at));
@@ -2247,6 +2298,13 @@ export class EmrRuntime {
         this.ask(l, lineId, `${q.text.replace(/ Ref #\d+\.$/, "").replace(/ Say a longer yes that names it[^.]*\.$/, "")} Say a longer yes that names it, such as "yes, go ahead with the ${thing}".`, q.choice, q.rule);
       }
       this.settle(l, "needs_owner_voice");
+      return true;
+    }
+    if (w.refuse && q?.rule?.kind === "countersign") {
+      this.append(l, "confirm.refused", { line_id: lineId, question_id: q.question_id, reason: "late" });
+      this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
+      this.note(l, `Not signed: that yes came more than ${Math.round((this.o.confirmWindowMs ?? 60_000) / 1000)} seconds after the read-back, so I read the orders back again.`, "refusal");
+      await this.readBackBatch(l, lineId, prov);
       return true;
     }
     if (w.refuse && q) { this.confirmRefused(l, lineId, q, w.refuse); return true; }
