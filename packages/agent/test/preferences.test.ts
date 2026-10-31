@@ -106,6 +106,19 @@ describe("preference memory in the EMR runtime", () => {
     await a.close();
   });
 
+  it("takes a correction after the write as a candidate only: the record is unchanged and its scope is asked (R-F)", async () => {
+    const a = boot();
+    await a.say(DOC, "p1", "Add four hourly observations to the care plan.");
+    expect(cadences(a.port)).toEqual(["q4h"]);
+    const fix = await a.say(DOC, "p1", "No, make that two hourly.");
+    expect(cadences(a.port)).toEqual(["q4h"]);
+    const v = a.rt.view(fix.task_id)!;
+    expect(v.notes.map((n) => n.text)).toContain("That is already in the record and stays as written.");
+    expect(v.questions.at(-1)).toMatchObject({ text: expect.stringMatching(/^Keep observation items two hourly \(q2h\) for later entries\?/), answers: ["patient", "me", "ward", "everyone", "no"] });
+    expect(a.prefs.all()).toMatchObject([{ state: "candidate", scope: null, value: "q2h", source: { kind: "correction" } }]);
+    await a.close();
+  });
+
   it("applies a correction kept for 'me' on a fresh encounter, visible with its source, and survives a restart", async () => {
     const a = boot({ holdMs: 1500 });
     await a.sayNow(DOC, "p1", "Add four hourly observations to the care plan.");

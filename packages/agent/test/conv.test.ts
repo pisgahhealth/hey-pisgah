@@ -3,7 +3,8 @@ import { ORDER_REFERENCE_KINDS } from "../src/emr/gate.js";
 import { EMERGENCY_KIND, IDENTITY_KIND, spelledName, identityFrom } from "../src/emr/entry.js";
 import type { EmrCommit, EmrContext, EmrTarget, Orderables, Provenance, ReadBack, WorkArgs } from "../src/emr/port.js";
 import type { SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
-import { ClerkFake, DOC, PAT, VISIT, clerkBoot, ins, type W } from "./clerking-helpers.js";
+import { openStream } from "@hey-pisgah/store";
+import { ADMIT, ClerkFake, DOC, PAT, VISIT, clerkBoot, ins, type W } from "./clerking-helpers.js";
 
 // Lane CONV: the conversation fixes after the ACC2 review, each red before its fix.
 const TOKEN = (n: number) => `v1.${String(1_761_700_000_000 + n)}.${"A".repeat(43)}`;
@@ -235,6 +236,95 @@ describe("CONV 1: read-backs whole, a longer yes after a refused match", () => {
     await b.rt.say({ owner: DOC, target: { patient_id: PAT }, text: "Yes, go ahead with the morphine.", source: "audio", voiceprint: OWNER, spoken_at: now() }, a.task_id);
     await b.rt.settled();
     expect(rx(b.port)).toHaveLength(1);
+    await b.rt.stop();
+  });
+});
+
+describe("CONV 2: a held order after a restart", () => {
+  it("cancels a controlled order its pre-restart line authorised, says so, and sends nothing on the yes after the restart", async () => {
+    const b = boot((s) => (/^Give morphine/.test(s) ? [ins("prescribe", { drug: "morphine", dose: "5 mg" })] : ASIDE));
+    const a = await say(b.rt, "Give morphine 5 mg IV, one dose.");
+    await b.rt.settled();
+    expect(b.rt.view(a.task_id)!.actions.find((x) => x.kind === "prescribe")).toMatchObject({ state: "proposed", awaiting: "confirm" });
+    await b.rt.stop();
+    const again = clerkBoot((s) => (/^Give morphine/.test(s) ? [ins("prescribe", { drug: "morphine", dose: "5 mg" })] : ASIDE), { root: b.root, port: b.port, clock: b.clock });
+    await again.rt.settled();
+    await again.rt.say({ owner: DOC, target: { patient_id: PAT }, text: "Yes, go ahead with the morphine.", source: "audio", voiceprint: OWNER }, a.task_id);
+    await again.rt.settled();
+    expect(rx(b.port)).toHaveLength(0);
+    const v = again.rt.view(a.task_id)!;
+    expect(v.actions.find((x) => x.kind === "prescribe")!.state).toBe("cancelled");
+    expect(v.notes.some((n) => /did not survive the restart\. Say it again\./.test(n.text))).toBe(true);
+    await again.rt.stop();
+  });
+});
+
+describe("CONV 2: a ward vitals line names its screen", () => {
+  it("attaches the stay page's vitals section to a record_observation, as every other kind does (lane SCR)", async () => {
+    const b = boot((s) => (/^Pulse/.test(s) ? [ins("record_observation", { pulse: 88 })] : ASIDE));
+    b.port.admitted = true;
+    const a = await b.rt.say({ owner: DOC, target: { admission_id: ADMIT }, text: "Pulse 88.", source: "audio", voiceprint: OWNER });
+    await b.rt.settled();
+    expect(b.rt.task(a.task_id)!.actions.get(b.rt.task(a.task_id)!.order[0]!)).toMatchObject({ kind: "record_observation", screen: { page: "stay", section: "vitals", values: { pulse: "88" } } });
+    await b.rt.stop();
+  });
+});
+
+describe("CONV 2: no line ends in silence, and a bound answer ignores the window", () => {
+  const notes = (rt: Rt, id: string) => rt.view(id)!.notes.map((n) => n.text);
+
+  it("says so when the decision fails", async () => {
+    const b = boot(() => []);
+    const a = await say(b.rt, "Chart something unclear.");
+    await b.rt.settled();
+    expect(notes(b.rt, a.task_id)).toContain("I could not decide what that line asked for, so nothing was written from it. Say it again.");
+    await b.rt.stop();
+  });
+
+  it("says so when a decision comes back after the task was paused", async () => {
+    const b = boot((s) => (/blood count/.test(s) ? [ins("order_test", { test: "fbc" })] : ASIDE));
+    const a = await say(b.rt, "Send a full blood count.");
+    await say(b.rt, "Stop, I'll come back to this.");
+    await b.rt.settled();
+    expect(b.port.writes.filter((w) => w.kind === "order_test")).toHaveLength(0);
+    expect(notes(b.rt, a.task_id).some((n) => /came while this task was paused, so nothing was written/.test(n))).toBe(true);
+    await b.rt.stop();
+  });
+
+  it("says so when the agent restarted before deciding a line", async () => {
+    const b = boot(() => ASIDE);
+    const a = await say(b.rt, "Hello.");
+    await b.rt.settled();
+    await b.rt.stop();
+    const st = openStream(b.root, `emr/${a.task_id}`, { writer: true });
+    st.append("utterance.heard", { line_id: "u-lost0001", text: "Send a full blood count.", source: "text", spoken_at: new Date().toISOString() }, { recorded_at: 0, occurred_at: 0 });
+    st.append("task.state_changed", { from: "done", to: "running", reason: "heard_u-lost0001" }, { recorded_at: 0, occurred_at: 0 });
+    st.close();
+    const again = clerkBoot(() => ASIDE, { root: b.root, port: b.port, clock: b.clock });
+    await again.rt.settled();
+    expect(again.rt.view(a.task_id)!.notes.map((n) => n.text)).toContain("The agent restarted before deciding your last line, so nothing was written from it. Say it again.");
+    await again.rt.stop();
+  });
+
+  it("says so when the next instruction closes a question it did not name", async () => {
+    const b = boot((s) => (/^Chart the thing/.test(s) ? [{ class: "unclear", confidence: 0.9, words: s, question: "Which thing do you mean?" }] : /blood count/.test(s) ? [ins("order_test", { test: "fbc" })] : ASIDE));
+    const a = await say(b.rt, "Chart the thing.");
+    await b.rt.settled();
+    await say(b.rt, "Send a full blood count.");
+    await b.rt.settled();
+    expect(notes(b.rt, a.task_id)).toContain('Closed my question "Which thing do you mean?" when you went on.');
+    await b.rt.stop();
+  });
+
+  it("a typed answer bound to its question finishes the request past the window, still held for the owner's voice", async () => {
+    const b = boot((s) => (/^IV paracetamol one gram/.test(s) ? [ins("prescribe", { drug: "paracetamol_iv", dose: "1 g" })] : ASIDE));
+    const a = await say(b.rt, "IV paracetamol one gram.");
+    await b.rt.settled();
+    const q = b.rt.view(a.task_id)!.questions.at(-1)!;
+    expect(q.text).toMatch(/How many/);
+    await b.rt.say({ owner: DOC, target: { patient_id: PAT }, text: "3", source: "text", question_id: q.question_id, spoken_at: new Date(Date.now() + 130_000).toISOString() }, a.task_id);
+    await b.rt.settled();
+    expect(b.rt.view(a.task_id)!.actions.find((x) => x.kind === "prescribe")).toMatchObject({ state: "proposed", awaiting: "owner_voice", args: { quantity: 3 } });
     await b.rt.stop();
   });
 });

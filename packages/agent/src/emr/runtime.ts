@@ -748,11 +748,20 @@ export class EmrRuntime {
       }
       for (const aid of l.task.order) {
         const a = l.task.actions.get(aid)!;
+        // Voice tokens live in memory only, so an order a pre-restart line authorised can never be sent; it is cancelled with an honest note, never sent bare.
+        if (a.state === "proposed" && a.authorised_by_line && (ORDER_KINDS.has(a.kind) || a.kind === VERBAL_ORDER_KIND || CONFIRM_KINDS.has(a.kind)) && !this.tokens.has(a.authorised_by_line)) {
+          this.append(l, "action.cancelled", { action_id: aid, reason: "voice_token_lost_in_restart" });
+          this.note(l, `${a.summary.replace(/, as a voice order awaiting your countersign$/, "")}: not sent. The agent restarted before it went, and your voice match did not survive the restart. Say it again.`, "refusal");
+          continue;
+        }
         if (a.state === "acknowledged" && !a.unverified) this.enqueueExec(l, () => this.execute(l, aid));
         else if (a.state === "proposed" && l.task.state === "running") this.hold(l, aid);
       }
       if (l.task.state === "running" && l.task.lines.some((x) => !x.decided)) {
-        for (const x of l.task.lines.filter((y) => !y.decided)) this.append(l, "intent.failed", { line_id: x.id, reason: "restarted_before_decision" });
+        const lost = l.task.lines.filter((y) => !y.decided);
+        for (const x of lost) this.append(l, "intent.failed", { line_id: x.id, reason: "restarted_before_decision" });
+        // Lines the agent had not decided when it restarted are said, so nothing is lost in silence.
+        this.note(l, `The agent restarted before deciding ${lost.length === 1 ? "your last line" : `your last ${lost.length} lines`}, so nothing was written from ${lost.length === 1 ? "it" : "them"}. Say ${lost.length === 1 ? "it" : "them"} again.`, "refusal");
         this.settle(l, "restarted_before_decision");
       }
     }
@@ -1205,7 +1214,8 @@ export class EmrRuntime {
     if (!line || line.decided || t.state !== "running") return false;
     if (this.scopeByWord(l, lineId, line)) return true;
     const q = (line.question_id ? t.questions.find((y) => y.question_id === line.question_id && (y.answered_by === null || y.answered_by === lineId)) : undefined) ?? t.questions.filter((y) => y.answered_by === null || y.answered_by === lineId).at(-1);
-    if (!q?.choice || Date.parse(line.at) - Date.parse(q.at) > (this.o.answerWindowMs ?? 120_000)) return false;
+    // A tapped or typed answer bound to its question by id ignores the window; a spoken bare answer keeps it (D40).
+    if (!q?.choice || (line.question_id !== q.question_id && Date.parse(line.at) - Date.parse(q.at) > (this.o.answerWindowMs ?? 120_000))) return false;
     const a = answerChoice(line.text, q.choice);
     if (!a) return false;
     if (q.answered_by === null) this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
@@ -1330,6 +1340,8 @@ export class EmrRuntime {
     } catch (e) {
       const code = e instanceof ModelError ? e.code : "error";
       this.append(l, "intent.failed", { line_id: lineId, reason: `model_${code}` });
+      // A failed decision is said, so the line never ends in silence.
+      this.note(l, "I could not decide what that line asked for, so nothing was written from it. Say it again.", "refusal");
       if (l.task.state === "running") this.setState(l, "needs_input", `model_${code}`);
       return;
     }
@@ -1375,6 +1387,8 @@ export class EmrRuntime {
       if (who) await who;
       const code = e instanceof ModelError ? e.code : "error";
       this.append(l, "intent.failed", { line_id: lineId, reason: `model_${code}` });
+      // A failed decision is said, so the line never ends in silence.
+      this.note(l, "I could not decide what that line asked for, so nothing was written from it. Say it again.", "refusal");
       if (l.task.state === "running") this.setState(l, "needs_input", `model_${code}`);
       return;
     } finally { l.calling = null; }
@@ -1393,7 +1407,8 @@ export class EmrRuntime {
     this.gateStage.set(lineId, r.stage ?? "full");
     // An earlier line's write can finish while this call is out and leave the task done or waiting; this line wakes it again rather than being dropped.
     if (l.task.state === "done" || l.task.state === "waiting") this.setState(l, "running", `heard_${lineId}`);
-    if (l.task.state !== "running") return;
+    // A decision that comes back after the task stopped running is said, never dropped in silence.
+    if (l.task.state !== "running") { if (clauses.some((c) => c.class === "instruction" || c.class === "correction")) this.note(l, `That line came while this task was ${l.task.state.replace(/_/g, " ")}, so nothing was written from it. Say it again if it still stands.`, "refusal"); return; }
     // Words meant for the agent answer only the question they answer; every other open question stays open and shown.
     this.closeAnswered(l, lineId, clauses);
     this.fresh = lineId;
@@ -1665,7 +1680,11 @@ export class EmrRuntime {
     const open = t.questions.filter((y) => y.answered_by === null);
     const named = t.lines.find((x) => x.id === lineId)?.question_id;
     const q = (named ? open.find((y) => y.question_id === named) : undefined) ?? open.at(-1);
-    if (q && !q.rule && !q.pending && !q.whom) this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
+    if (q && !q.rule && !q.pending && !q.whom) {
+      this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
+      // A question the next instruction closes without naming it is said, so it never disappears in silence.
+      if (!named) this.note(l, `Closed my question "${q.text.slice(0, 120)}" when you went on.`);
+    }
   }
 
   // A line that answers a question about missing work is merged with the request it asked about, so the request finishes instead of being asked again.
@@ -1678,7 +1697,7 @@ export class EmrRuntime {
     if (!line || (who && who !== "owner")) return used;
     const win = this.o.answerWindowMs ?? 120_000;
     // A question raised on another voice's line is never finished by the owner's answer, so the owner's count cannot release Dr B's order.
-    const open = t.questions.filter((q) => q.answered_by === null && q.pending && Date.parse(line.at) - Date.parse(q.at) <= win && (this.speakerOf(t, q.line_id)?.speaker ?? "owner") === "owner");
+    const open = t.questions.filter((q) => q.answered_by === null && q.pending && (q.question_id === line.question_id || Date.parse(line.at) - Date.parse(q.at) <= win) && (this.speakerOf(t, q.line_id)?.speaker ?? "owner") === "owner");
     if (!open.length) return used;
     const all = t.questions.filter((q) => q.answered_by === null);
     const named = line.question_id ? open.find((q) => q.question_id === line.question_id) ?? null : null;
@@ -1714,7 +1733,12 @@ export class EmrRuntime {
 
   // A correction of other work replaces it while it is still on hold; once written, only a new instruction adds to the record.
   private correctWork(l: Live, lineId: string, c: AnyClause, target: EmrAction): void {
-    if (target.state !== "proposed") { this.ask(l, lineId, "That is already in the record and stays as written. Tell me what to add and I will add it."); return; }
+    // A correction after the write leaves the record as written; a value a preference may hold becomes a candidate whose scope is asked (R-F, R-18).
+    if (target.state !== "proposed") {
+      const said = Object.fromEntries((["cadence", "note_type"] as const).filter((k) => typeof (c as Record<string, unknown>)[k] === "string").map((k) => [k, (c as Record<string, unknown>)[k]]));
+      if (this.correctionCandidate(l, lineId, target, { ...target, args: { ...target.args, ...said } }, true)) return;
+      this.ask(l, lineId, "That is already in the record and stays as written. Tell me what to add and I will add it."); return;
+    }
     const over = Object.fromEntries(Object.entries(c).filter(([k, v]) => v !== null && v !== undefined && !["words", "class", "kind", "target", "confidence", "question", "asked_for"].includes(k)));
     this.append(l, "action.cancelled", { action_id: target.action_id, reason: `corrected_by_${lineId}` });
     const merged: AnyClause = { ...(c as AnyClause), ...Object.fromEntries(Object.entries(target.args).map(([k, v]) => [k === "reason" || k === "note" ? "text" : k, v])), ...over, class: "instruction", kind: target.kind, words: c.words };
@@ -1756,16 +1780,18 @@ export class EmrRuntime {
   }
 
   // A correction that changed a value a preference may hold becomes a candidate only, with one question for its scope; the correction itself stays with this entry.
-  private correctionCandidate(l: Live, lineId: string, before: EmrAction, after: EmrAction): void {
+  private correctionCandidate(l: Live, lineId: string, before: EmrAction, after: EmrAction, written = false): boolean {
     const mem = this.o.preferences;
-    if (!mem) return;
+    if (!mem) return false;
     const field: PrefField | null = after.kind === "add_care_plan_item" && after.args["cadence"] !== before.args["cadence"] ? "care_plan_cadence"
       : after.kind === "record_note" && after.args["note_type"] !== before.args["note_type"] ? "note_type" : null;
-    if (!field) return;
+    if (!field) return false;
     const line = l.task.lines.find((x) => x.id === lineId);
     const reading = { field, item_kind: field === "care_plan_cadence" ? String(after.args["item_kind"]) : null, value: String(after.args[field === "care_plan_cadence" ? "cadence" : "note_type"]) };
     const p = mem.candidate({ owner: l.task.owner, reading, source: { kind: "correction", task_id: l.task.task_id, line_id: lineId, quote: line?.kept ? line.text : "" }, patient_id: l.task.patient_id, ward: this.wardFor(l, lineId) });
-    this.askScope(l, lineId, p.pref_id, `Corrected for this entry. Keep ${describePref(p)} beyond it? Say patient, me, ward or everyone; no keeps it to this entry.`);
+    if (written) this.note(l, "That is already in the record and stays as written.");
+    this.askScope(l, lineId, p.pref_id, written ? `Keep ${describePref(p)} for later entries? Say patient, me, ward or everyone; no keeps nothing.` : `Corrected for this entry. Keep ${describePref(p)} beyond it? Say patient, me, ward or everyone; no keeps it to this entry.`);
+    return true;
   }
 
   // "From now on ..." read by rule; a rule it cannot read is said so, and nothing is kept.
@@ -1787,7 +1813,7 @@ export class EmrRuntime {
   private scopeByWord(l: Live, lineId: string, line: EmrLine): boolean {
     const mem = this.o.preferences;
     const q = l.task.questions.filter((y) => y.answered_by === null || y.answered_by === lineId).at(-1);
-    if (!mem || !q?.pref_id || Date.parse(line.at) - Date.parse(q.at) > (this.o.answerWindowMs ?? 120_000)) return false;
+    if (!mem || !q?.pref_id || (line.question_id !== q.question_id && Date.parse(line.at) - Date.parse(q.at) > (this.o.answerWindowMs ?? 120_000))) return false;
     const a = scopeAnswer(line.text);
     if (!a) return false;
     if (q.answered_by === null) this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
@@ -2371,7 +2397,9 @@ export class EmrRuntime {
     const anchor = this.anchorOf(t, lineId);
     // D17: a released whole number in range goes to its write at once; the second reading must still agree before it is written.
     const holdMs = this.o.releaseWhole && t.lines.find((x) => x.id === lineId)?.ambient?.released && releasable(args) ? 0 : this.o.holdMs ?? 0;
-    this.append(l, "action.proposed", { action_id: actionId, kind: OBSERVATION_KIND, args, summary: summarise(args, correctsId), line_id: lineId, corrects_action_id: correctsId, hold_ms: holdMs, ...this.holdUntil(anchor, holdMs), ...(ears ? { ears: true } : {}), ...(holdMs === 0 && (this.o.holdMs ?? 0) > 0 ? { released: true } : {}) });
+    // The stay page's vitals section is the screen a ward vitals line shows on, as every other kind names its own.
+    const screen = this.screenOf(t, OBSERVATION_KIND, args);
+    this.append(l, "action.proposed", { action_id: actionId, kind: OBSERVATION_KIND, args, summary: summarise(args, correctsId), line_id: lineId, corrects_action_id: correctsId, hold_ms: holdMs, ...this.holdUntil(anchor, holdMs), ...(ears ? { ears: true } : {}), ...(holdMs === 0 && (this.o.holdMs ?? 0) > 0 ? { released: true } : {}), ...(screen ? { screen } : {}) });
     this.settle(l, "proposed");
     this.noteHold(actionId, anchor, holdMs);
     this.hold(l, actionId, anchor, holdMs);
