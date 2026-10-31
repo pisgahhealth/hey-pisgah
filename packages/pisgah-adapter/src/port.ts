@@ -675,7 +675,8 @@ function checkOne(seen: unknown, want: string, vars: Vars, now = Date.now()): bo
   return same(seen, val(want));
 }
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
-const skipped = (want: string, vars: Vars) => { const m = /\$([a-z_]+)$/.exec(want); return !!m && (vars[m[1]!] === undefined || vars[m[1]!] === null); };
+// A variable name may hold digits (spo2), as fillTemplate allows, so a check on a value the work did not carry is skipped for those too.
+const skipped = (want: string, vars: Vars) => { const m = /\$([a-z_][a-z0-9_]*)$/.exec(want); return !!m && (vars[m[1]!] === undefined || vars[m[1]!] === null); };
 
 // Picks a list path where "a[].b" flattens each element's b, so nested groups read as one list.
 export function pickAll(v: unknown, path: string): unknown[] {
