@@ -6,8 +6,13 @@ import { loadManifests, runAcceptance, runCase } from "@hey-pisgah/evaluator";
 import { loadV1, worldRules } from "@hey-pisgah/hospital";
 import { readStream } from "@hey-pisgah/store";
 import { Registry, type Facts } from "@hey-pisgah/workflow";
+import { PROPOSALS_STREAM, runValidationStream } from "@hey-pisgah/evaluator";
+import { openStream } from "@hey-pisgah/store";
 import { adoptionApproval } from "./approval.js";
+import { adoptionLive } from "./adoption-live.js";
+import { adverseCase } from "./adverse.js";
 import { devDistribution, devFields } from "./dev-distribution.js";
+import { submittedProposal } from "./version.js";
 
 type Row = Record<string, unknown>;
 const argv = process.argv.slice(2);
@@ -21,6 +26,20 @@ export function narrowedChild(parent: Row, wards: string[], note: string): Row {
   const why = ` Scope set at adoption: ${note}`;
   const rationale = `${String(rest["rationale"] ?? "").slice(0, 600 - why.length)}${why}`;
   return { ...rest, parent_proposal_id: pid, scope: { wards, condition: null }, rationale };
+}
+
+// revision: the parent proposal with new operations and the reason, linked to its parent, for the evaluator to validate before any person adopts it.
+export function revisedChild(parent: Row, ops: unknown[], note: string): Row {
+  const { proposal_id: pid, hash: _h, status: _s, ...rest } = parent;
+  const why = ` Revision: ${note}`;
+  const keep = Math.max(0, 600 - why.length);
+  return { ...rest, parent_proposal_id: pid, ops, rationale: `${String(rest["rationale"] ?? "").slice(0, keep)}${why}`.slice(0, 600) };
+}
+
+// What the EMR loop showed, in the words the run supports: typed lines, not voice, and an existing ward B stay when one was reused.
+export function emrOfferReason(loop: { applicable: { offers_made: number }; withheld: { reason: unknown; reused_stay: unknown } }): string {
+  const b = loop.withheld.reused_stay === true ? "on an existing ward B stay" : "on a fresh ward B stay";
+  return `on a fresh ward A stay the adopted version offered the summary draft at the round entry (${loop.applicable.offers_made} offer), the nurse approved it in two typed lines at her serve and the reviewed draft was saved as a note on the stay and proved by a fresh read; ${b} at the same trigger point it was withheld with the reason "${String(loop.withheld.reason ?? "")}"`;
 }
 
 // The first start of a step in a run's events, in case minutes.
@@ -85,6 +104,17 @@ if (argv[0] === "child") {
   const sub = lines(need("parent-file")).find((e) => e.record_type === "proposal.submitted" && e.payload["proposal_id"] === parentId);
   if (!sub) throw new Error(`no submitted proposal ${parentId}`);
   writeFileSync(need("out"), `${JSON.stringify(narrowedChild(sub.payload, need("wards").split(","), need("note")), null, 1)}\n`);
+} else if (argv[0] === "revise") {
+  // Submits the revision to the store's proposals and runs the dev gate on every proposal not yet validated; nothing is adopted.
+  const store = need("store");
+  const parentId = need("parent");
+  const sub = readStream(store, PROPOSALS_STREAM).find((e) => e.record_type === "proposal.submitted" && (e.payload as Row)["proposal_id"] === parentId);
+  if (!sub) throw new Error(`no submitted proposal ${parentId}`);
+  const p = submittedProposal(revisedChild(sub.payload as Row, JSON.parse(readFileSync(need("ops-file"), "utf8")) as unknown[], need("note")));
+  const s = openStream(store, PROPOSALS_STREAM, { writer: true });
+  try { if (!s.records().some((e) => (e.payload as Row)["hash"] === p.hash)) s.append("proposal.submitted", p, { recorded_at: 0, occurred_at: 0 }); } finally { s.close(); }
+  const reports = await runValidationStream(store);
+  console.log(JSON.stringify({ proposal_id: p.proposal_id, validated: reports.map((r) => [r.proposal_id, r.status]) }));
 } else if (argv[0] === "outcomes") {
   // The verified engine events of the two live runs, in the outcome shape the second cycle reads.
   const store = need("store");
@@ -144,7 +174,8 @@ if (argv[0] === "child") {
       measured_at: new Date().toISOString(), measured: true, source: "simulator_demo_cases", set: "demo", measured_in: "simulator",
       proposal: { adopted: (created["meta"] as Row)["proposal_id"], parent: flag("parent") ?? null, ops: created["ops"], scope: created["scope"], trade_offs: flag("trade-offs") ? JSON.parse(flag("trade-offs")!) : null },
       version: v, definition_hash: def.definition_hash, fallback_version: def.fallback_version,
-      adopted_by_person: approver["role"] === "ward_manager", approver: approver["display_name"], approver_id: approver["staff_id"],
+      // The record names a person in the ward manager role; whether that person decided themselves is human_approval below.
+      adopted_by_person: approver["kind"] === "person" && approver["role"] === "ward_manager", approver: approver["display_name"], approver_id: approver["staff_id"],
       ...adoptionApproval(log, v),
       fresh_applicable: {
         ...app, resolved_version: desk.registry.current(facts(String(app["case_id"]))).version,
@@ -193,10 +224,10 @@ if (argv[0] === "child") {
   const w = ((b["b_withheld"] as Row | undefined) ?? {}) as Row;
   const wRow = (w["row"] ?? {}) as Row;
   const loop = {
-    mode: "sandbox door, live Spark Open gate on the nurse's two lines, the doctor's admission and round entry written by his agent through the door (scripted)",
+    mode: "sandbox door, live Spark Open gate on the nurse's two lines typed to her serve, the doctor's admission and round entry written by his agent through the door (scripted)",
     applicable: {
       ward_id: "A", version_in_force: v, offers_made: offerRows.length, offer_step: offerRows[0]?.["step_id"] ?? null, watched_before_round: a["a_watch_before_round"] ?? null,
-      approved_by: "the nurse's own spoken line through serve (say draft, then save once reviewed)",
+      approved_by: "the nurse's own two lines typed to her serve (say draft, then save once reviewed)",
       action: { kind: "record_note", label: "stay_summary", persisted: notes.some((n) => n["id"] === saved["record_id"]), verified: !!saved["record_id"], by_owner_agent: prov.some((r) => r["origin"] === "voice"), provenance_rows: prov.length }
     },
     withheld: { ward_id: wRow["ward_id"] ?? null, version_in_force: w["version_in_force"] ?? null, offers_made: w["offers"] ?? null, questions: w["questions"] ?? null, refused_with_reason: !!wRow["reason"], reason: wRow["reason"] ?? null, reused_stay: ((b["stay_b"] as Row | undefined)?.["reused"]) ?? null }
@@ -207,10 +238,53 @@ if (argv[0] === "child") {
   const next = {
     ...rest, ...approval, emr_loop: loop, emr_loop_complete: ok,
     emr_offers_made: loop.applicable.offers_made, emr_offer_seen: loop.applicable.offers_made >= 1 || cur["emr_offer_seen"] === true, emr_journey_blocked: null,
-    emr_offer_reason: `on a fresh ward A stay the adopted version offered the summary draft at the round entry (${loop.applicable.offers_made} offer), the nurse approved it by voice and the reviewed draft was saved as a note on the stay and proved by a fresh read; on a ward B stay at the same trigger point it was withheld with the reason "${String(loop.withheld.reason ?? "")}"`
+    emr_offer_reason: emrOfferReason(loop)
   };
   writeFileSync(file, `${JSON.stringify(next, null, 1)}\n`);
   console.log(JSON.stringify({ emr_loop_complete: ok, human_approval: approval["human_approval"] }));
+} else if (argv[0] === "adoption-live") {
+  // The live adopt, use, suspend and stop sequence into evaluation/results/adoption-live.json, with the version log's hashes and the monitor's planted check beside it.
+  const out = adoptionLive({ live: JSON.parse(readFileSync(need("live"), "utf8")) as Row, afterRestart: JSON.parse(readFileSync(need("after-restart"), "utf8")) as Row[], logText: readFileSync(need("version-log"), "utf8"), monitor: JSON.parse(readFileSync(flag("monitor") ?? "evaluation/results/monitor.json", "utf8")) as Row });
+  writeFileSync(need("out"), `${JSON.stringify(out, null, 1)}\n`);
+  console.log(JSON.stringify({ sequence_complete: out["sequence_complete"], human_approval: out["human_approval"], withdrawn_after_s: out["withdrawn_after_s"] }));
+} else if (argv[0] === "revision") {
+  // The adverse dev case and the revision that takes it out, read from the dev gate's stored reports, into improve.json beside the adopted version's distribution.
+  const store = need("store");
+  const file = need("file");
+  const cur = JSON.parse(readFileSync(file, "utf8")) as Row;
+  const id = need("proposal");
+  const subs = readStream(store, PROPOSALS_STREAM).filter((e) => e.record_type === "proposal.submitted");
+  const sub = subs.find((e) => (e.payload as Row)["proposal_id"] === id);
+  if (!sub) throw new Error(`no submitted proposal ${id}`);
+  const val = readStream(store, "learning/validations").filter((e) => e.record_type === "validation.completed" && ((e.payload as Row)["proposal_ref"] as Row)["seq"] === sub.seq).at(-1);
+  if (!val) throw new Error(`no validation for ${id}`);
+  const report = (val.payload as { report: Parameters<typeof devDistribution>[0] & { hashes: { proposal: string }; gate: Row } }).report;
+  const dist = devDistribution(report);
+  const p = sub.payload as Row;
+  const reg = Registry.load([loadV1()]);
+  const adoptedOps = ((cur["proposal"] as Row)["ops"] as unknown[]);
+  const adoptedDef = reg.propose(1, adoptedOps as never, { author: { kind: "model_session", id: "p-adopted" }, proposal_id: "p-adopted", source_evidence: { event_ids: [], hypothesis_ids: [], experiment_ids: [], validation_report_id: null }, model_provenance: null }, { scope: (cur["proposal"] as Row)["scope"] as never, fallback: 1 }).version!;
+  const revisedDef = Registry.load([loadV1()]).propose(1, p["ops"] as never, { author: { kind: "model_session", id: id }, proposal_id: id, source_evidence: { event_ids: [], hypothesis_ids: [], experiment_ids: [], validation_report_id: null }, model_provenance: null }, { scope: p["scope"] as never, fallback: 1 }).version!;
+  const worst = ((cur["dev_distribution"] as Row)["wait_deltas_min"] as { case_id: string; wait: number }[]).reduce((a, b) => (b.wait > a.wait ? b : a));
+  const adverse = adverseCase(loadV1(), adoptedDef, worst.case_id);
+  const after = adverseCase(loadV1(), revisedDef, worst.case_id);
+  const prof = flag("profile");
+  const deploy = prof && existsSync(prof) ? (() => { const f = JSON.parse(readFileSync(prof, "utf8")) as { versions: Counterparts; owners?: { id: string; kinds: string[] }[] }; const d = deployCheck(revisedDef, loadV1(), f.versions, f.owners ?? []); return { deployable: d.deployable, reason: d.reason }; })() : null;
+  const unchanged = Number(dist["cases"]) - Number(dist["moved"]);
+  const next = {
+    ...cur,
+    adverse_case: adverse, adverse_case_id: adverse["case_id"], adverse_case_min: adverse["wait_delta_min"], adverse_why: adverse["why"],
+    revision: {
+      proposal_id: id, parent_proposal_id: p["parent_proposal_id"] ?? null, ops: p["ops"], scope: p["scope"], rationale: p["rationale"], status: report.status,
+      definition_hash: report.hashes.proposal, gate: report.gate, dev_distribution: dist, adverse_case_after: { case_id: after["case_id"], wait_delta_min: after["wait_delta_min"], draft_start_version: after["draft_start_version"] },
+      deployable_in_emr: deploy, adopted: false, adoption: "awaiting a person's decision at the version desk; it would be adopted as a new version and version 2 stays suspended"
+    },
+    rev_proposal_id: id, rev_status: report.status, rev_dev_cases: dist["cases"], rev_dev_shorter: dist["shorter"], rev_dev_longer: dist["longer"], rev_dev_unchanged: unchanged, rev_dev_median_wait_delta_min: dist["median_wait_delta_min"],
+    dev_unchanged: Number(cur["dev_cases"]) - Number(cur["dev_moved"]),
+    scope_change: `the draft starts at the round entry or at sign-off, whichever the record shows first, so a round entry that reaches the record after sign-off no longer holds the draft back`
+  };
+  writeFileSync(file, `${JSON.stringify(next, null, 1)}\n`);
+  console.log(JSON.stringify({ adverse: adverse["case_id"], adverse_min: adverse["wait_delta_min"], rev: [dist["shorter"], dist["longer"], unchanged], status: report.status, deploy }));
 } else if (argv[0] === "dev") {
   // Adds the dev-case distribution to an existing improve.json without touching its measured fields.
   const store = need("store");
