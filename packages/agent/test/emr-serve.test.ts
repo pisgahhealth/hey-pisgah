@@ -64,6 +64,19 @@ describe("EMR serve", () => {
     await s.close();
   });
 
+  it("takes a typed answer's question_id on both say routes and refuses a malformed one (RT item 8)", async () => {
+    const { s } = await boot();
+    const said = await j(await post(`${s.url}/tasks/say`, { owner: OWNER, admissionId: ADM, text: "Chart pulse 92", question_id: "q-0a1b2c3d" }));
+    expect(said.status).toBe(202);
+    await s.runtime.settled();
+    expect((await post(`${s.url}/tasks/${said.body.task_id}/say`, { text: "Chart pulse 90", question_id: "q-0a1b2c3d" })).status).toBe(202);
+    expect((await post(`${s.url}/tasks/say`, { owner: OWNER, admissionId: ADM, text: "Chart pulse 91", question_id: "drop table" })).status).toBe(400);
+    await s.runtime.settled();
+    const t = (await j(await fetch(`${s.url}/tasks?owner=${OWNER}`))).body[0];
+    expect(Array.isArray(t.notes)).toBe(true);
+    await s.close();
+  });
+
   it("refuses bad bodies, unknown tasks, a mismatched task id and another owner", async () => {
     const { s } = await boot();
     expect((await post(`${s.url}/tasks/say`, { owner: OWNER, text: "x" })).status).toBe(400);
