@@ -198,8 +198,13 @@ function buildFakeMic(): void {
   log(`fake microphone: ${lines.length} slots, ${Math.round(at / 60_000)} min after a ${FAKE_LEAD_MS / 1000} s lead-in`);
 }
 
+// A typed stand-in's phone is unique to the run, because the hospital refuses a phone another patient already holds; it is said in digit words.
+const DIGIT_WORD = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+const runPhone = (prefix: string, salt: number) => `${prefix}${String((Date.now() + salt * 7919) % 10_000_000).padStart(7, "0")}`;
+const phones: Record<string, string> = { A: runPhone("0803", 1), B: runPhone("0806", 2) };
+const withPhones = (t: string) => t.replace(/\{phone:(A|B)\}/g, (_m, r: "A" | "B") => phones[r]!.split("").map((d) => DIGIT_WORD[Number(d)]).join(" "));
 async function deliver(line: Line): Promise<{ lineEnd: string | null; note: string | null }> {
-  const text = line.text!;
+  const text = withPhones(line.text!);
   if (line.mode === "type" || line.mode === "remote") {
     const owner = nudgedOwner(line.who, line.patient) ?? ownersOf(line.who)[0]!;
     const patientId = line.patient ? bound[line.patient]?.patient : undefined;
@@ -532,6 +537,12 @@ async function labCancelOnScreen(vars: Record<string, string>): Promise<{ ok: bo
   if (DRIVER === "human") {
     process.stdout.write(`\n  LAB STEP: in a second browser window, sign in as lab.grace and open ${url}; under "Cancel before testing" pick "Requester cancelled", tick the box, press Cancel diagnostic case. Press Enter here when done.\n`);
     await rl!.question("");
+  } else if (process.env["ACC_LAB_CANCEL_SCRIPT"]) {
+    // The lab screen does not offer the cancel on an arrival with no identifiers, so the rehearsal runs the lab's own action as lab.grace.
+    const out = (() => { try { return execFileSync("/bin/bash", [process.env["ACC_LAB_CANCEL_SCRIPT"]!], { env: { ...process.env, ACC_CANCEL_CASE: String(o["case_id"]) }, encoding: "utf8", timeout: 600_000, stdio: ["ignore", "pipe", "pipe"] }); } catch (e) { return String((e as { stderr?: string }).stderr ?? e); } })();
+    const line = /lab cancel: (.*)/.exec(out)?.[1] ?? out.slice(-200);
+    const caseDone = (await hospital.query("acc_case_cancelled", { visit: vars["visit"] ?? "", test: vars["test"] ?? "" })).length > 0;
+    return { ok: caseDone, note: `lab.grace's own cancel action: ${line.slice(0, 220)}` };
   } else {
     if (!labWindow || !browserNewContext) return { ok: false, note: "no browser for the lab screen" };
     const w = labWindow as unknown as { goto: (u: string, o?: unknown) => Promise<unknown>; locator: (s: string) => { first: () => { click: () => Promise<void>; selectOption: (v: string) => Promise<unknown>; check: () => Promise<void> } }; getByRole: (r: string, o: unknown) => { click: () => Promise<void> }; getByText: (t: string, o?: unknown) => { first: () => { click: () => Promise<void>; waitFor: (o?: unknown) => Promise<void> } } };

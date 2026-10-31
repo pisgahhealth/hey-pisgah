@@ -46,7 +46,8 @@ const script = (s: string) => {
   const out = [];
   if (/blood count/i.test(s) && /send/i.test(s)) out.push(ins("order_test", { test: "fbc" }));
   if (/malaria/i.test(s) && /send/i.test(s)) out.push(ins("order_test", { test: "malaria" }));
-  if (/comes? back|is back/i.test(s)) out.push(ins("record_note", { note_type: "progress", text: "result back, reviewed", after: "result" }));
+  if (/let me know|tell me/i.test(s)) out.push({ ...ins("record_note", { after: "result" }), kind: null, asked_for: "notify when malaria result available" });
+  else if (/comes? back|is back/i.test(s)) out.push(ins("record_note", { note_type: "progress", text: "result back, reviewed", after: "result" }));
   return out;
 };
 const say = (rt: ReturnType<typeof clerkBoot>["rt"], text: string, task?: string) => rt.say({ owner: DOC, target: { patient_id: PAT }, text, source: "audio", voiceprint: OWNER }, task);
@@ -93,6 +94,29 @@ describe("hand-offs keyed by the order, conditions keyed by the result", () => {
     await a.rt.settled();
     expect(port.of("record_note")).toHaveLength(1);
     expect(a.rt.view(sent.task_id)!.obligations[0]).toMatchObject({ state: "done", fired_by: "condition" });
+    await a.rt.stop();
+  });
+
+  // Acceptance rehearsal, 31 Oct: "When the malaria result comes back, let me know" names no work, and the gate refusal left it as "Not mine to do".
+  it("holds 'let me know when the malaria result comes back' on that order and tells the clinician once, writing nothing", async () => {
+    const port = new LabFake();
+    const a = clerkBoot(script, { port, watchMs: 20 });
+    const sent = await say(a.rt, "Send a full blood count and a malaria test.");
+    await a.rt.settled();
+    await say(a.rt, "When the malaria result comes back, let me know.", sent.task_id);
+    await a.rt.settled();
+    expect(a.rt.view(sent.task_id)!.notes.some((x) => x.text.startsWith("Not mine to do"))).toBe(false);
+    expect(a.rt.view(sent.task_id)!.obligations[0]).toMatchObject({ kind: "tell_me", after: "result", state: "held" });
+    port.resultFor("fbc", "resulted");
+    await wait(150);
+    await a.rt.settled();
+    expect(a.rt.view(sent.task_id)!.obligations[0]).toMatchObject({ state: "held" });
+    port.resultFor("malaria", "resulted");
+    for (let i = 0; i < 100 && a.rt.view(sent.task_id)!.obligations[0]!.state === "held"; i++) await wait(20);
+    await a.rt.settled();
+    expect(a.rt.view(sent.task_id)!.obligations[0]).toMatchObject({ state: "done", fired_by: "condition" });
+    expect(a.rt.view(sent.task_id)!.notes.filter((x) => x.text.includes("result is back in the record"))).toHaveLength(1);
+    expect(port.of("record_note")).toHaveLength(0);
     await a.rt.stop();
   });
 
