@@ -1,9 +1,10 @@
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { claimStatus, parseClaimPredicate } from "@hey-pisgah/evaluator";
-import { Script, bindLine, claimFields, completion, didBy, fakeRealign, percentile, speedTable, stepStatus, writeAccResults, type AccResult, type HeardRow, type StepOutcome } from "../src/acceptance.js";
+import { Script, bindLine, claimFields, completion, didBy, fakeRealign, fingerprint, fingerprintMoved, frozenRefusal, identityOutcome, percentile, speedTable, stepLines, stepStatus, writeAccResults, type AccResult, type HeardRow, type StepOutcome } from "../src/acceptance.js";
 
 const claims = (JSON.parse(readFileSync(join(__dirname, "../../../evaluation/claims.json"), "utf8")) as { claims: { claim_id: string; acceptance: { predicate: string } }[] }).claims;
 const status = (id: string, data: unknown) => claimStatus(parseClaimPredicate(claims.find((c) => c.claim_id === id)!.acceptance.predicate), data).status;
@@ -51,6 +52,63 @@ describe("acceptance harness", () => {
     // Harness audit F1 and F3: a harness error or a code change during the run keeps it from completing.
     expect(completion({ ...result(), harness_errors: ["B04M: no Mute button"] }, 0).reasons).toEqual(["harness error: B04M: no Mute button"]);
     expect(completion({ ...result(), trees_changed: "at serve restart 1: engine b+2" }, 0).complete).toBe(false);
+  });
+  it("establishes a name only from the record's own read, never from what the agent heard or wrote (D39)", () => {
+    const e = { identity: "A" as const, name: "Blessing Adeyemi", established: true as const };
+    // The agent wrote the right name but the record does not carry it: not established.
+    expect(identityOutcome(e, null, ["Blessing Adeyemi"])).toMatchObject({ ok: false });
+    expect(identityOutcome(e, "Blessing Adeyemi", [])).toMatchObject({ ok: true });
+    expect(identityOutcome(e, "blessing  ADEYEMI", ["Blessing Adimi"]).ok).toBe(true);
+    // The record carries another spelling than the one said: held, never passed, whatever the agent wrote.
+    expect(identityOutcome(e, "Blessing Adimi", ["Blessing Adeyemi"])).toMatchObject({ ok: false, held: true });
+    // Without established the record still has to carry a name from the agent's write; a placeholder the agent never wrote is a failure, not a held name.
+    const said = { identity: "B" as const, name: "Emeka Nwosu" };
+    expect(identityOutcome(said, null, ["Emeka Nwosu"]).ok).toBe(false);
+    expect(identityOutcome(said, "Imika Nosu", ["Imika Nosu"])).toMatchObject({ ok: false, held: true });
+    expect(identityOutcome(said, "Unknown male", [])).toMatchObject({ ok: false, held: false });
+  });
+  it("credits a clarification's write to the request it finished, through the question that request raised (review ACC2 finding 1)", () => {
+    const asked = [
+      { question_id: "q1", text: "Which medicine should I prescribe?", line_id: "l-a10", answered_by: "l-a10c", at: "" },
+      { question_id: "q2", text: "How many?", line_id: "l-b05", answered_by: "l-b06", at: "" },
+      { question_id: "q3", text: "Which test?", line_id: "l-a10", answered_by: null, at: "" }
+    ];
+    expect([...stepLines("l-a10", asked)].sort()).toEqual(["l-a10", "l-a10c"]);
+    // An answer to another line's question is never this request's.
+    expect(stepLines("l-a10", asked).has("l-b06")).toBe(false);
+    expect([...stepLines("l-z", asked)]).toEqual(["l-z"]);
+  });
+  it("fingerprints every tree with its untracked files, every named file and the migration list, and refuses a final run without the frozen one", () => {
+    const root = mkdtempSync(join(tmpdir(), "acc-fp-"));
+    const git = (...a: string[]) => execFileSync("git", ["-C", root, ...a], { encoding: "utf8" });
+    git("init", "-q");
+    mkdirSync(join(root, "src"));
+    writeFileSync(join(root, "src", "a.ts"), "export const a = 1;\n");
+    git("add", "."); git("-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-qm", "t");
+    const prof = join(root, "profile.json");
+    writeFileSync(prof, "{}");
+    const take = (migrations = "m1:abc") => fingerprint({ trees: [{ name: "engine", root, paths: ["src"] }], files: { profile: prof }, extra: { migrations } });
+    const start = take();
+    expect(take()).toEqual(start);
+    // An untracked file appearing, then its contents changing with its name the same, both move the fingerprint.
+    writeFileSync(join(root, "src", "new.ts"), "export const b = 1;\n");
+    const added = take();
+    expect(added.id).not.toBe(start.id);
+    writeFileSync(join(root, "src", "new.ts"), "export const b = 2;\n");
+    const edited = take();
+    expect(edited.id).not.toBe(added.id);
+    expect(fingerprintMoved([{ why: "at the start", at: "t0", fp: added }, { why: "at the end", at: "t1", fp: edited }])).toMatch(/at the end at t1: engine/);
+    expect(fingerprintMoved([{ why: "at the start", at: "t0", fp: edited }, { why: "at the end", at: "t1", fp: take() }])).toBeNull();
+    // A named file and the applied migrations are part of it too.
+    writeFileSync(prof, "{\"x\":1}");
+    expect(take().parts["profile"]).not.toBe(edited.parts["profile"]);
+    expect(take("m1:abc,m2:def").parts["migrations"]).not.toBe(take().parts["migrations"]);
+    // Samuel's final run never starts without the frozen fingerprint, or on another one; a rehearsal only refuses a mismatch it was given.
+    expect(frozenRefusal("final", undefined, start.id)).toMatch(/ACC_FROZEN/);
+    expect(frozenRefusal("final", "other", start.id)).toMatch(/not the frozen/);
+    expect(frozenRefusal("final", start.id, start.id)).toBeNull();
+    expect(frozenRefusal("rehearsal", undefined, start.id)).toBeNull();
+    expect(frozenRefusal("rehearsal", "other", start.id)).toMatch(/not the frozen/);
   });
   it("names who did each step", () => {
     expect(didBy({ who: "doctor", mode: "speak" }, "human")).toMatch(/Samuel's own voice/);
