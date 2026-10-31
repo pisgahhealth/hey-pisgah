@@ -153,6 +153,8 @@ async function postChunk(owner: string, file: string, ms: number, text: string, 
   const r = await fetch(`${SERVE}/tasks/listen`, { method: "POST", body: form });
   const end = new FormData();
   end.set("owner", owner); end.set("session_id", session); end.set("seq", String(seq++)); end.set("end", "1");
+  // The end marker names the same page, or the service has no patient to finish the words for.
+  if (patientId) end.set("patientId", patientId);
   await fetch(`${SERVE}/tasks/listen`, { method: "POST", body: end }).catch(() => undefined);
   return r.json().catch(() => null);
 }
@@ -643,7 +645,8 @@ async function finish(): Promise<void> {
     pisgah: env("ACC_PISGAH_STATE", "Samuel's working tree, uncommitted, frozen by the coordinator for this run"),
     payment: "simulated: every payment is a cash entry the accounts person records on the door; no money moves and no provider is called",
     steps, touches: { emr, strip, source, by_line: Object.fromEntries(steps.filter((s) => s.touches_during).map((s) => [s.line, s.touches_during])), other_people: otherTouches },
-    touches_allowed: 1 + confirmations, confirmations_spoken: confirmations,
+    // The grant, each explicit confirmation (which the screen may give instead), and each attestation the doctor makes at the screen, such as signing the consultation.
+    touches_allowed: 1 + confirmations + script.lines.filter((l) => l.who === "doctor" && l.mode === "person").length, confirmations_spoken: confirmations,
     speed: { rows, table: speedTable(rows, errRows, wake), wake_ms: wake }, errors: steps.flatMap((s) => s.errors.map((e) => `${s.line}: ${e}`)), error_rows: errRows,
     faults, delegations, speakers, unaccounted,
     countersign: { batches: signs.length, batch_orders: firstBatch.size, batch_signed_by_voice: signs.some((a) => transcriptLine(a.line_id)?.source === "audio"), changed_after_batch_unsigned: signs[0] ? later.every((a) => !firstBatch.has(a.proof?.record_id ?? "")) && later.length > 0 : null, unmatched_voice_orders: unmatchedOrders.length },
