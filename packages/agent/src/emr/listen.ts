@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { VITALS_KEYWORDS, VoiceError, buildKeywords, cleanTranscript, concat, continuesNumber, danglingEnd, wholeInRange, decodeWav, encodeWav, leadingSilenceMs, parseWav, trailingSilenceMs, vitalsVocabulary, type FinalTranscript, type Rewrite } from "@hey-pisgah/voice";
 import type { EmrRuntime } from "./runtime.js";
@@ -49,6 +49,8 @@ type Heard = {
   released?: ListenUtterance;
   // The released line this one carries on ("eighty" then "two"), so the record it wrote is amended.
   continues?: string;
+  // Words kept across a restart without their audio: the line is joined by its words and no voice match can cover them.
+  partial?: boolean;
   // The segment's voiceprint from the local speaker model, worked out beside the transcription; the audio itself is never kept.
   voiceprint: Voiceprint | null;
 };
@@ -74,7 +76,11 @@ export type ListenOptions = {
   // D17: a line ending on a whole-number vital in range is delivered at once, and a continuation inside the number wait amends it.
   releaseWhole?: boolean;
   onStatus?: (owner: string, sessionId: string, seq: number, st: UtteranceStatus) => void;
+  // Where a line waiting for its number keeps its words, never its audio, so a restart or another session for the same patient can finish it.
+  joinFile?: string;
 };
+// A line waiting for the rest of its number, as kept on disk: the owner, the patient, the words and when the wait began.
+export type PendingJoin = { key: string; owner: string; target: EmrTarget; session_id: string; text: string; raw: string; strong: boolean; at: number; released: ListenUtterance | null };
 
 const totalMs = (parts: readonly Float32Array[], rate: number) => Math.round((parts.reduce((n, p) => n + p.length, 0) / rate) * 1000);
 
@@ -83,7 +89,77 @@ export class ListenSessions {
   private readonly sessions = new Map<string, Session>();
   private closed = false;
   private readonly guard: ReplayGuard;
-  constructor(private readonly rt: EmrRuntime, private readonly o: ListenOptions) { this.guard = new ReplayGuard(o.presence ?? "observed", o.presenceRule, o.replay === "refuse", o.heartbeat); }
+  // The session holding each owner's waiting line for one patient, so the next words for that patient finish it whichever session they come on.
+  private readonly waitingFor = new Map<string, { s: Session; sessionId: string }>();
+  // Lines that were waiting when the serve last stopped, by owner and patient, each with its own deadline.
+  private readonly restored = new Map<string, { p: PendingJoin; timer: NodeJS.Timeout }>();
+  constructor(private readonly rt: EmrRuntime, private readonly o: ListenOptions) {
+    this.guard = new ReplayGuard(o.presence ?? "observed", o.presenceRule, o.replay === "refuse", o.heartbeat);
+    this.restore();
+  }
+
+  private joinKey(owner: string, ctx: EmrContext): string { return `${owner}\u0000${ctx.patient_id || ctx.admission_id || ""}`; }
+  private persistJoins(): void {
+    const f = this.o.joinFile;
+    if (!f) return;
+    const rows: PendingJoin[] = [...[...this.waitingFor.entries()].flatMap(([key, x]) => (x.s.waiting ? [{ key, owner: x.s.owner, target: x.s.ctx.admission_id ? { admission_id: x.s.ctx.admission_id } : { patient_id: x.s.ctx.patient_id ?? "" }, session_id: x.sessionId, text: x.s.waiting.text, raw: x.s.waiting.raw, strong: x.s.waiting.strong, at: x.s.waiting.arrived, released: x.s.waiting.released ?? null }] : [])), ...[...this.restored.values()].map((r) => r.p)];
+    if (!rows.length && !existsSync(f)) return;
+    mkdirSync(dirname(f), { recursive: true });
+    writeFileSync(`${f}.next`, JSON.stringify(rows));
+    renameSync(`${f}.next`, f);
+  }
+  private markWaiting(s: Session, sessionId: string): void {
+    this.waitingFor.set(this.joinKey(s.owner, s.ctx), { s, sessionId });
+    this.persistJoins();
+  }
+  private unmarkWaiting(s: Session): void {
+    const key = this.joinKey(s.owner, s.ctx);
+    if (this.waitingFor.get(key)?.s !== s) return;
+    this.waitingFor.delete(key);
+    this.persistJoins();
+  }
+  // A waiting line for this patient held by another session, or kept from before a restart, becomes this session's, so these words can carry it on.
+  private adoptWaiting(s: Session, sessionId: string, rate: number): void {
+    if (s.waiting) return;
+    const key = this.joinKey(s.owner, s.ctx);
+    const other = this.waitingFor.get(key);
+    if (other && other.s !== s && other.s.waiting && other.s.waiting.rate === rate) {
+      const w = other.s.waiting;
+      this.status(other.s, other.sessionId, w.seqs, { status: "completed", note: "carried on in the next words" });
+      this.clearWait(other.s);
+      s.waiting = { ...w, seqs: [] };
+      this.markWaiting(s, sessionId);
+      return;
+    }
+    const r = this.restored.get(key);
+    if (!r) return;
+    clearTimeout(r.timer);
+    this.restored.delete(key);
+    s.waiting = this.wordsOnly(r.p, rate);
+    this.markWaiting(s, sessionId);
+  }
+  private wordsOnly(p: PendingJoin, rate: number): Heard {
+    return { samples: [], seqs: [], rate, audio_ms: 0, trailing_ms: 0, arrived: p.at, text: p.text, raw: p.raw, cost_usd: 0, keywords_dropped: false, rewrites: [], strong: p.strong, joined: false, heard_at: p.at, voiceprint: null, partial: true, ...(p.released ? { released: p.released } : {}) };
+  }
+  // Lines that were waiting when the serve stopped wait one more join window from now; with nothing to carry them on they go on alone, so no words are lost.
+  private restore(): void {
+    const f = this.o.joinFile;
+    if (!f || !existsSync(f)) return;
+    let rows: PendingJoin[] = [];
+    try { rows = JSON.parse(readFileSync(f, "utf8")) as PendingJoin[]; } catch { rows = []; }
+    for (const p of rows) {
+      const timer = setTimeout(() => {
+        if (this.restored.get(p.key)?.timer !== timer) return;
+        this.restored.delete(p.key);
+        this.persistJoins();
+        void this.sessionFor(p.owner, p.target, `${p.session_id}`.slice(0, 80), this.now()).then((s) => {
+          s.chain = s.chain.then(() => this.deliver(s, p.session_id, this.wordsOnly(p, 16_000), "number_alone")).catch((e: unknown) => { s.errors.push(e instanceof Error ? e.message.slice(0, 200) : "listen failed"); });
+        }, () => undefined);
+      }, p.strong ? this.o.strongJoinWaitMs ?? STRONG_JOIN_WAIT_MS : this.o.numberJoinWaitMs ?? NUMBER_JOIN_WAIT_MS);
+      timer.unref?.();
+      this.restored.set(p.key, { p, timer });
+    }
+  }
 
   // The one live check for audio from either path: a strip chunk, or a piece of a frames stream (its samples as given, numbered by the stream).
   admit(c: { owner: string; session_id: string; seq: number | string; samples: Float32Array; rate: number; arrived_at?: number; captured_at?: number | undefined; presence?: LivenessMarker | null | undefined }): GuardVerdict {
@@ -167,6 +243,7 @@ export class ListenSessions {
         text: v.text, raw: c.raw, cost_usd: 0, keywords_dropped: false, rewrites: v.rewrites, strong: false, joined: false, heard_at: c.heard_at ?? this.now(), voiceprint: await print
       };
       if (!heard.text) return;
+      this.adoptWaiting(s, c.session_id, c.rate);
       const w = s.waiting;
       if (w && w.rate === c.rate) {
         this.clearWait(s);
@@ -177,7 +254,7 @@ export class ListenSessions {
           // The joined line is matched on every piece it was heard in, so a continuation in another voice never inherits the first speaker's authority.
           const samples = [...w.samples, c.samples];
           const voiceprint = this.o.embed ? await printLine(this.o.embed, matchWindows(samples, c.rate), c.rate) : null;
-          const joined: Heard = { ...heard, samples, seqs: [...w.seqs, seq], audio_ms: w.audio_ms + heard.audio_ms, text: jv.text, raw, rewrites: jv.rewrites, joined: true, voiceprint, ...(w.released ? { continues: w.released.line_id } : {}) };
+          const joined: Heard = { ...heard, samples, seqs: [...w.seqs, seq], audio_ms: w.audio_ms + heard.audio_ms, text: jv.text, raw, rewrites: jv.rewrites, joined: true, voiceprint, ...(w.released ? { continues: w.released.line_id } : {}), ...(w.partial ? { partial: true } : {}) };
           await this.settleHeard(s, c.session_id, joined, "joined_across_cut", joined.trailing_ms);
           return;
         }
@@ -288,12 +365,15 @@ export class ListenSessions {
 
   close(): void {
     this.closed = true;
-    for (const s of this.sessions.values()) { this.clearWait(s); this.clearHeld(s); }
+    // A stopped serve leaves the waiting lines on disk for the next start, so only the timers stop here.
+    for (const s of this.sessions.values()) { if (s.timer) clearTimeout(s.timer); s.timer = null; this.clearHeld(s); }
+    for (const r of this.restored.values()) clearTimeout(r.timer);
   }
 
   private clearWait(s: Session): void {
     if (s.timer) clearTimeout(s.timer);
     s.timer = null;
+    if (s.waiting) this.unmarkWaiting(s);
     s.waiting = null;
   }
 
@@ -324,6 +404,7 @@ export class ListenSessions {
     if (c.seq > s.next) await alone();
     s.next = c.seq + 1;
     if (s.held && s.held.rate !== sampleRate) { s.held = null; s.dropped += 1; }
+    this.adoptWaiting(s, c.session_id, sampleRate);
     if (s.waiting && s.waiting.rate !== sampleRate) await alone();
     // A cap that fell in the quiet after speech left a whole utterance on hold; when the pause runs on into this chunk, that utterance is finished alone.
     if (s.held) {
@@ -355,10 +436,11 @@ export class ListenSessions {
     if (w) {
       this.clearWait(s);
       // A strong cut is always joined; a number is joined only when the next words carry it on.
-      const next = w.strong ? null : await this.ear(s, c.session_id, parts, seqs, sampleRate, silence, arrived);
+      // Words kept without their audio are joined by their words, so these words are heard on their own first.
+      const next = w.strong && !w.partial ? null : await this.ear(s, c.session_id, parts, seqs, sampleRate, silence, arrived);
       if (next) cost += next.cost_usd;
       if (w.strong || continuesNumber(next!.text)) {
-        heard = await this.ear(s, c.session_id, [...w.samples, ...parts], [...w.seqs, ...seqs], sampleRate, silence, arrived);
+        heard = w.partial ? this.joinWords(w, next!) : await this.ear(s, c.session_id, [...w.samples, ...parts], [...w.seqs, ...seqs], sampleRate, silence, arrived);
         heard.cost_usd += w.cost_usd + cost;
         heard.joined = true;
         if (w.released) heard.continues = w.released.line_id;
@@ -377,6 +459,12 @@ export class ListenSessions {
     return done(this.outcomeOf(base, heard, u ?? delivered, u ? why : "held_for_number", cost));
   }
 
+  private joinWords(w: Heard, next: Heard): Heard {
+    const raw = `${w.raw.replace(/[.,;:!?]+$/, "")} ${next.raw}`;
+    const jv = vitalsVocabulary(cleanTranscript(raw));
+    return { ...next, text: jv.text, raw, rewrites: jv.rewrites, partial: true, voiceprint: null };
+  }
+
   private outcomeOf(base: Omit<ListenOutcome, "final" | "why">, h: Heard, u: ListenUtterance | null, why: ListenOutcome["why"], cost: number): ListenOutcome {
     return { ...base, final: why !== "held_for_number", why, audio_ms: h.audio_ms, transcript: h.text, raw_transcript: h.raw, cost_usd: cost, keywords_dropped: h.keywords_dropped, utterance: u };
   }
@@ -390,11 +478,12 @@ export class ListenSessions {
     // D17: a whole number in range is written now; the line still waits, delivered, so a continuation can amend it.
     if (!h.strong && this.o.releaseWhole && wholeInRange(h.text)) h.released = await this.deliver(s, sessionId, h, "released_whole");
     s.waiting = h;
+    this.markWaiting(s, sessionId);
     // A line that ends on a number may be complete, so its decision starts while it waits; the runtime uses it only if these same words are delivered.
     if (!h.strong && !h.released) this.rt.speculate({ owner: s.owner, ctx: s.ctx, session_id: sessionId, text: h.text, clip: encodeWav(concat(h.samples), h.rate) });
     const timer = setTimeout(() => {
       s.timer = null;
-      s.chain = s.chain.then(async () => { if (s.waiting === h) { s.waiting = null; await this.deliver(s, sessionId, h, "number_alone"); } })
+      s.chain = s.chain.then(async () => { if (s.waiting === h) { this.clearWait(s); await this.deliver(s, sessionId, h, "number_alone"); } })
         .catch((e: unknown) => { s.errors.push(e instanceof Error ? e.message.slice(0, 200) : "listen failed"); });
     }, Math.max(0, (h.strong ? this.o.strongJoinWaitMs ?? STRONG_JOIN_WAIT_MS : this.o.numberJoinWaitMs ?? NUMBER_JOIN_WAIT_MS) - quietHeardMs));
     timer.unref?.();
@@ -435,14 +524,16 @@ export class ListenSessions {
     // A line said while the person was not at the screen keeps its words but never reaches the voice match.
     const present = this.guard.lineOf(sessionId, h.seqs, s.owner);
     const tooLong = h.audio_ms > LINE_MATCH_MAX_MS ? { voiceprint: null, unverified_reason: "too_long_to_match" } : null;
-    const absent = present.live === false ? { voiceprint: null, unverified_reason: `not_present:${present.reason}` } : tooLong;
+    // Words kept across a restart lost their audio, so no voice match can cover the whole line.
+    const lost = h.partial ? { voiceprint: null, unverified_reason: "first_piece_not_kept" } : null;
+    const absent = present.live === false ? { voiceprint: null, unverified_reason: `not_present:${present.reason}` } : tooLong ?? lost;
     // A patient with no admission yet (or none the port knows after a restart) is named by the patient, so the line still reaches that patient's tasks.
     const target: EmrTarget = { admission_id: s.ctx.admission_id, ...(!s.ctx.admission_id && s.ctx.patient_id ? { patient_id: s.ctx.patient_id } : {}) };
     const r = await this.rt.say({
       owner: s.owner, target, text: h.text, source: "audio", spoken_at: new Date(h.arrived - h.audio_ms).toISOString(),
       audio: { audio_ms: h.audio_ms, cost_usd: h.cost_usd, session_id: sessionId },
       ambient: { session_id: sessionId, seqs: h.seqs, raw_text: h.raw.slice(0, 2000), ended_at: new Date(h.arrived - h.trailing_ms).toISOString(), final_at: new Date(h.arrived).toISOString(), trailing_silence_ms: h.trailing_ms, finished_by: finished, ...(why === "released_whole" ? { released: true } : {}), ...(h.continues ? { continues: h.continues } : {}) },
-      context: s.ctx, clip: encodeWav(concat(h.samples), h.rate), rewrites: h.rewrites, heard_at: h.heard_at, ...(h.alternates ? { alternates: h.alternates } : {}), ...(this.o.embed ? absent ?? { voiceprint: h.voiceprint } : {})
+      context: s.ctx, ...(h.samples.length && !h.partial ? { clip: encodeWav(concat(h.samples), h.rate) } : {}), rewrites: h.rewrites, heard_at: h.heard_at, ...(h.alternates ? { alternates: h.alternates } : {}), ...(this.o.embed ? absent ?? { voiceprint: h.voiceprint } : {})
     });
     const u: ListenUtterance = { id: r.line_id, line_id: r.line_id, task_id: r.task_id, text: h.text, seqs: h.seqs, class: null, classes: [] };
     s.unreported.push(u);

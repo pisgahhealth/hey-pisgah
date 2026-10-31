@@ -262,7 +262,8 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   const origin = o.allowOrigin ?? "http://localhost:3311";
   // Each patient's listening session reports its utterances' statuses under the strip's own session id, and is present only while that strip session beats.
   const seqBase = new Map<string, number>();
-  const listening = new ListenSessions(rt, { ...(o.listen ?? {}), heartbeat: (owner, sid) => heartbeats.present(owner, clientOf.get(sid) ?? sid), transcribe, ...(o.releaseWhole ? { releaseWhole: true } : {}), ...(o.staffHints?.length ? { staff: o.staffHints } : {}), ...(o.embed ? { embed: o.embed } : {}), onStatus: (owner, sid, seq, st) => setStatus(owner, clientOf.get(sid) ?? sid, seq + (seqBase.get(sid) ?? 0), st) });
+  // A line waiting for its number keeps its words beside the tracked patient (serve/tracking), so a restart finishes it; the file holds no line once it is joined or delivered.
+  const listening = new ListenSessions(rt, { joinFile: join(o.storeRoot, "serve", "join-pending.json"), ...(o.listen ?? {}), heartbeat: (owner, sid) => heartbeats.present(owner, clientOf.get(sid) ?? sid), transcribe, ...(o.releaseWhole ? { releaseWhole: true } : {}), ...(o.staffHints?.length ? { staff: o.staffHints } : {}), ...(o.embed ? { embed: o.embed } : {}), onStatus: (owner, sid, seq, st) => setStatus(owner, clientOf.get(sid) ?? sid, seq + (seqBase.get(sid) ?? 0), st) });
   // Lines a frames stream finished, kept for the answer to its next part.
   const frameHeard = new Map<string, ListenUtterance[]>();
   const onHeard = (sid: string, us: ListenUtterance[]) => { const h = frameHeard.get(sid); if (h) h.push(...us); };
