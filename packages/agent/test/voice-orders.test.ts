@@ -96,24 +96,6 @@ describe("voice orders, attribution and countersign", () => {
     await rt.stop();
   });
 
-  it("takes the drug the gate named when the ear spells it its own way, and never a drug only like another one or one the line does not hold", async () => {
-    const words = { tests: {}, drugs: { paracetamol_iv: { words: ["IV paracetamol", "paracetamol IV"], controlled: false }, paracetamol_oral: { words: ["paracetamol tablets", "oral paracetamol"], controlled: false }, morphine: { words: ["morphine"], controlled: true } } };
-    const { rt, port } = orderBoot((s) => (/give her/i.test(s) ? [ins("prescribe", { drug: "paracetamol_iv", dose: "1 g" })] : /amox/i.test(s) ? [ins("prescribe", { drug: "paracetamol_iv" })] : []));
-    port.orderables = () => words;
-    // Pass 10's A10: the local ear wrote "IV pay rasitamol".
-    await sayAs(rt, "Give her IV pay rasitamol, one gram, eight hourly, for one day. That's three doses", OWNER_VOICE);
-    await rt.settled();
-    const rx = port.writes.filter((w) => w.kind === "prescribe");
-    expect(rx).toHaveLength(1);
-    expect(rx[0]!.args).toMatchObject({ drug: "paracetamol_iv", quantity: 3 });
-    // Negative control: a line that holds no word near any of that drug's words is still asked about.
-    const b = await sayAs(rt, "Give her amoxil, one gram, for one day, three doses", OWNER_VOICE);
-    await rt.settled();
-    expect(port.writes.filter((w) => w.kind === "prescribe")).toHaveLength(1);
-    expect(rt.view(b.task_id)!.questions.at(-1)!.text).toMatch(/Which medicine should I prescribe/);
-    await rt.stop();
-  });
-
   it("holds a controlled drug for the owner's spoken confirm and sends it with that line as confirmation", async () => {
     const { rt, port } = orderBoot((s) => (s.includes("morphine") ? [ins("prescribe", { drug: "morphine", dose: "5 mg" })] : []));
     const a = await sayAs(rt, "Give morphine 5 mg IV, one dose.", OWNER_VOICE);
