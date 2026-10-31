@@ -198,8 +198,13 @@ function buildFakeMic(): void {
   log(`fake microphone: ${lines.length} slots, ${Math.round(at / 60_000)} min after a ${FAKE_LEAD_MS / 1000} s lead-in`);
 }
 
+// A typed stand-in's phone is unique to the run, because the hospital refuses a phone another patient already holds; it is said in digit words.
+const DIGIT_WORD = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+const runPhone = (prefix: string, salt: number) => `${prefix}${String((Date.now() + salt * 7919) % 10_000_000).padStart(7, "0")}`;
+const phones: Record<string, string> = { A: runPhone("0803", 1), B: runPhone("0806", 2) };
+const withPhones = (t: string) => t.replace(/\{phone:(A|B)\}/g, (_m, r: "A" | "B") => phones[r]!.split("").map((d) => DIGIT_WORD[Number(d)]).join(" "));
 async function deliver(line: Line): Promise<{ lineEnd: string | null; note: string | null }> {
-  const text = line.text!;
+  const text = withPhones(line.text!);
   if (line.mode === "type" || line.mode === "remote") {
     const owner = nudgedOwner(line.who, line.patient) ?? ownersOf(line.who)[0]!;
     const patientId = line.patient ? bound[line.patient]?.patient : undefined;
