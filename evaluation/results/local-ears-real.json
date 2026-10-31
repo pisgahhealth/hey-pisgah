@@ -1,0 +1,585 @@
+{
+ "generated_by": "packages/agent/research/local-real.run.ts",
+ "cost_usd": 0,
+ "network_calls": 0,
+ "ears": {
+  "kroko_whole": "Kroko streaming Zipformer, the whole clip decoded at once (the chunk path)",
+  "kroko_paced": "Kroko through the live frames listener, 20 ms frames, a stretch ended at 700 ms of quiet, stretches joined",
+  "parakeet": "Parakeet TDT 0.6B v2 int8, the whole clip (the second ear)"
+ },
+ "reference": "the same lines and references as the Voice Transcribe hint test: R1.b words as said, v2 script words",
+ "lines": {
+  "total": 206,
+  "scored": 206,
+  "unscored": [],
+  "hash_mismatches": [
+   "r1b-T04",
+   "r1b-T07",
+   "r1b-T08",
+   "r1b-T09",
+   "r1b-T10",
+   "r1b-T12",
+   "r1b-T13",
+   "r1b-T14",
+   "r1b-T15",
+   "r1b-T16",
+   "r1b-T17",
+   "r1b-T18",
+   "r1b-T19",
+   "r1b-T20",
+   "r1b-T21",
+   "r1b-T22",
+   "r1b-T23",
+   "r1b-T24",
+   "r1b-H01",
+   "r1b-H02",
+   "r1b-H05",
+   "r1b-H06",
+   "r1b-H07",
+   "r1b-H08",
+   "r1b-H11",
+   "r1b-H12",
+   "r1b-H13",
+   "r1b-H14",
+   "r1b-H15",
+   "r1b-H17",
+   "r1b-H18",
+   "r1b-H19",
+   "r1b-H22",
+   "r1b-H23",
+   "r1b-H24",
+   "r1b-H25",
+   "r1b-H26",
+   "r1b-H27",
+   "r1b-H28",
+   "r1b-H29",
+   "r1b-X01",
+   "r1b-H33",
+   "r1b-H34",
+   "r1b-H35",
+   "r1b-H36",
+   "r1b-H37",
+   "r1b-H38",
+   "r1b-H40",
+   "r1b-H41",
+   "r1b-H42",
+   "r1b-H43",
+   "r1b-H45",
+   "r1b-H46",
+   "r1b-H48",
+   "v2-O005",
+   "v2-O009",
+   "v2-O010",
+   "v2-O012",
+   "v2-O013",
+   "v2-O014",
+   "v2-O015",
+   "v2-O016",
+   "v2-O017",
+   "v2-O018",
+   "v2-O019",
+   "v2-O020",
+   "v2-O024",
+   "v2-O026",
+   "v2-O027",
+   "v2-O029",
+   "v2-O030",
+   "v2-O031",
+   "v2-O032",
+   "v2-O033",
+   "v2-O034",
+   "v2-O038",
+   "v2-O039",
+   "v2-O062",
+   "v2-Y002",
+   "v2-Y003",
+   "v2-K005",
+   "v2-R009",
+   "v2-V004-part",
+   "v2-V005-part",
+   "v2-V020",
+   "v2-V022",
+   "v2-V023",
+   "v2-V024",
+   "v2-V026",
+   "v2-V030-part",
+   "v2-V032-part",
+   "v2-V034-part"
+  ],
+  "rebuild_error": null
+ },
+ "audio_ms": 1135564,
+ "models_missing": [],
+ "results": {
+  "kroko_whole": {
+   "all": {
+    "readings": 206,
+    "wer": 0.5166,
+    "ref_words": 1777,
+    "errors": 918,
+    "values": {
+     "said": 88,
+     "right": 57,
+     "rate": 0.6477
+    },
+    "names": {
+     "said": 13,
+     "heard": 0,
+     "recall": 0,
+     "missed": {
+      "Emeka": 3,
+      "Okon": 5,
+      "Pisgah": 1,
+      "Bisi": 2,
+      "Ada": 1,
+      "Bassey": 1
+     }
+    },
+    "drugs": {
+     "said": 16,
+     "heard": 1,
+     "recall": 0.0625,
+     "missed": {
+      "ceftriaxone": 3,
+      "penicillin": 1,
+      "paracetamol": 4,
+      "metronidazole": 3,
+      "metformin": 1,
+      "normal saline": 2,
+      "amlodipine": 1
+     }
+    },
+    "cost_usd": 0
+   },
+   "r1b": {
+    "readings": 70,
+    "wer": 0.3933,
+    "ref_words": 1022,
+    "errors": 402,
+    "values": {
+     "said": 30,
+     "right": 21,
+     "rate": 0.7
+    },
+    "names": {
+     "said": 8,
+     "heard": 0,
+     "recall": 0,
+     "missed": {
+      "Emeka": 2,
+      "Okon": 4,
+      "Pisgah": 1,
+      "Bisi": 1
+     }
+    },
+    "drugs": {
+     "said": 5,
+     "heard": 0,
+     "recall": 0,
+     "missed": {
+      "ceftriaxone": 1,
+      "penicillin": 1,
+      "paracetamol": 1,
+      "metronidazole": 1,
+      "metformin": 1
+     }
+    },
+    "cost_usd": 0
+   },
+   "v2": {
+    "readings": 136,
+    "wer": 0.6834,
+    "ref_words": 755,
+    "errors": 516,
+    "values": {
+     "said": 58,
+     "right": 36,
+     "rate": 0.6207
+    },
+    "names": {
+     "said": 5,
+     "heard": 0,
+     "recall": 0,
+     "missed": {
+      "Ada": 1,
+      "Bisi": 1,
+      "Emeka": 1,
+      "Okon": 1,
+      "Bassey": 1
+     }
+    },
+    "drugs": {
+     "said": 11,
+     "heard": 1,
+     "recall": 0.0909,
+     "missed": {
+      "normal saline": 2,
+      "paracetamol": 3,
+      "ceftriaxone": 2,
+      "metronidazole": 2,
+      "amlodipine": 1
+     }
+    },
+    "cost_usd": 0
+   },
+   "failed": [],
+   "repeat": {
+    "clips": 5,
+    "identical": 5
+   },
+   "silent_control": {
+    "audio_ms": 3000,
+    "words": 0
+   },
+   "decode_ms": 21040,
+   "real_time_factor": 0.0185
+  },
+  "kroko_paced": {
+   "all": {
+    "readings": 206,
+    "wer": 0.5205,
+    "ref_words": 1777,
+    "errors": 925,
+    "values": {
+     "said": 88,
+     "right": 58,
+     "rate": 0.6591
+    },
+    "names": {
+     "said": 13,
+     "heard": 0,
+     "recall": 0,
+     "missed": {
+      "Emeka": 3,
+      "Okon": 5,
+      "Pisgah": 1,
+      "Bisi": 2,
+      "Ada": 1,
+      "Bassey": 1
+     }
+    },
+    "drugs": {
+     "said": 16,
+     "heard": 1,
+     "recall": 0.0625,
+     "missed": {
+      "ceftriaxone": 3,
+      "penicillin": 1,
+      "paracetamol": 4,
+      "metronidazole": 3,
+      "metformin": 1,
+      "normal saline": 2,
+      "amlodipine": 1
+     }
+    },
+    "cost_usd": 0
+   },
+   "r1b": {
+    "readings": 70,
+    "wer": 0.3953,
+    "ref_words": 1022,
+    "errors": 404,
+    "values": {
+     "said": 30,
+     "right": 22,
+     "rate": 0.7333
+    },
+    "names": {
+     "said": 8,
+     "heard": 0,
+     "recall": 0,
+     "missed": {
+      "Emeka": 2,
+      "Okon": 4,
+      "Pisgah": 1,
+      "Bisi": 1
+     }
+    },
+    "drugs": {
+     "said": 5,
+     "heard": 0,
+     "recall": 0,
+     "missed": {
+      "ceftriaxone": 1,
+      "penicillin": 1,
+      "paracetamol": 1,
+      "metronidazole": 1,
+      "metformin": 1
+     }
+    },
+    "cost_usd": 0
+   },
+   "v2": {
+    "readings": 136,
+    "wer": 0.6901,
+    "ref_words": 755,
+    "errors": 521,
+    "values": {
+     "said": 58,
+     "right": 36,
+     "rate": 0.6207
+    },
+    "names": {
+     "said": 5,
+     "heard": 0,
+     "recall": 0,
+     "missed": {
+      "Ada": 1,
+      "Bisi": 1,
+      "Emeka": 1,
+      "Okon": 1,
+      "Bassey": 1
+     }
+    },
+    "drugs": {
+     "said": 11,
+     "heard": 1,
+     "recall": 0.0909,
+     "missed": {
+      "normal saline": 2,
+      "paracetamol": 3,
+      "ceftriaxone": 2,
+      "metronidazole": 2,
+      "amlodipine": 1
+     }
+    },
+    "cost_usd": 0
+   },
+   "failed": [],
+   "repeat": {
+    "clips": 5,
+    "identical": 5
+   },
+   "silent_control": {
+    "audio_ms": 3000,
+    "words": 0
+   },
+   "decode_ms": 21710,
+   "real_time_factor": 0.0191
+  },
+  "parakeet": {
+   "all": {
+    "readings": 206,
+    "wer": 0.363,
+    "ref_words": 1777,
+    "errors": 645,
+    "values": {
+     "said": 88,
+     "right": 73,
+     "rate": 0.8295
+    },
+    "names": {
+     "said": 13,
+     "heard": 2,
+     "recall": 0.1538,
+     "missed": {
+      "Emeka": 2,
+      "Okon": 5,
+      "Pisgah": 1,
+      "Bisi": 2,
+      "Bassey": 1
+     }
+    },
+    "drugs": {
+     "said": 16,
+     "heard": 4,
+     "recall": 0.25,
+     "missed": {
+      "ceftriaxone": 3,
+      "penicillin": 1,
+      "paracetamol": 3,
+      "metronidazole": 3,
+      "metformin": 1,
+      "amlodipine": 1
+     }
+    },
+    "cost_usd": 0
+   },
+   "r1b": {
+    "readings": 70,
+    "wer": 0.2114,
+    "ref_words": 1022,
+    "errors": 216,
+    "values": {
+     "said": 30,
+     "right": 30,
+     "rate": 1
+    },
+    "names": {
+     "said": 8,
+     "heard": 1,
+     "recall": 0.125,
+     "missed": {
+      "Emeka": 1,
+      "Okon": 4,
+      "Pisgah": 1,
+      "Bisi": 1
+     }
+    },
+    "drugs": {
+     "said": 5,
+     "heard": 0,
+     "recall": 0,
+     "missed": {
+      "ceftriaxone": 1,
+      "penicillin": 1,
+      "paracetamol": 1,
+      "metronidazole": 1,
+      "metformin": 1
+     }
+    },
+    "cost_usd": 0
+   },
+   "v2": {
+    "readings": 136,
+    "wer": 0.5682,
+    "ref_words": 755,
+    "errors": 429,
+    "values": {
+     "said": 58,
+     "right": 43,
+     "rate": 0.7414
+    },
+    "names": {
+     "said": 5,
+     "heard": 1,
+     "recall": 0.2,
+     "missed": {
+      "Bisi": 1,
+      "Emeka": 1,
+      "Okon": 1,
+      "Bassey": 1
+     }
+    },
+    "drugs": {
+     "said": 11,
+     "heard": 4,
+     "recall": 0.3636,
+     "missed": {
+      "ceftriaxone": 2,
+      "metronidazole": 2,
+      "amlodipine": 1,
+      "paracetamol": 2
+     }
+    },
+    "cost_usd": 0
+   },
+   "failed": [],
+   "repeat": {
+    "clips": 5,
+    "identical": 5
+   },
+   "silent_control": {
+    "audio_ms": 3000,
+    "words": 0
+   },
+   "decode_ms": 64551,
+   "real_time_factor": 0.0568
+  }
+ },
+ "voice_transcribe_no_hints": {
+  "source": "evaluation/results/transcribe-hints.json",
+  "runs": 2,
+  "all": {
+   "readings": 412,
+   "wer": 0.4066,
+   "values": {
+    "said": 176,
+    "right": 156,
+    "rate": 0.8864
+   },
+   "names": {
+    "said": 26,
+    "heard": 3,
+    "recall": 0.1154,
+    "missed": {
+     "Emeka": 4,
+     "Okon": 9,
+     "Pisgah": 2,
+     "Bisi": 4,
+     "Ada": 2,
+     "Bassey": 2
+    }
+   },
+   "drugs": {
+    "said": 32,
+    "heard": 18,
+    "recall": 0.5625,
+    "missed": {
+     "ceftriaxone": 6,
+     "paracetamol": 4,
+     "metronidazole": 2,
+     "normal saline": 2
+    }
+   }
+  },
+  "per_run": [
+   {
+    "readings": 206,
+    "wer": 0.408,
+    "values": {
+     "said": 88,
+     "right": 79,
+     "rate": 0.8977
+    },
+    "names": {
+     "said": 13,
+     "heard": 1,
+     "recall": 0.0769,
+     "missed": {
+      "Emeka": 2,
+      "Okon": 5,
+      "Pisgah": 1,
+      "Bisi": 2,
+      "Ada": 1,
+      "Bassey": 1
+     }
+    },
+    "drugs": {
+     "said": 16,
+     "heard": 9,
+     "recall": 0.5625,
+     "missed": {
+      "ceftriaxone": 3,
+      "paracetamol": 2,
+      "metronidazole": 1,
+      "normal saline": 1
+     }
+    }
+   },
+   {
+    "readings": 206,
+    "wer": 0.4052,
+    "values": {
+     "said": 88,
+     "right": 77,
+     "rate": 0.875
+    },
+    "names": {
+     "said": 13,
+     "heard": 2,
+     "recall": 0.1538,
+     "missed": {
+      "Emeka": 2,
+      "Pisgah": 1,
+      "Bisi": 2,
+      "Okon": 4,
+      "Ada": 1,
+      "Bassey": 1
+     }
+    },
+    "drugs": {
+     "said": 16,
+     "heard": 9,
+     "recall": 0.5625,
+     "missed": {
+      "ceftriaxone": 3,
+      "paracetamol": 2,
+      "metronidazole": 1,
+      "normal saline": 1
+     }
+    }
+   }
+  ]
+ }
+}

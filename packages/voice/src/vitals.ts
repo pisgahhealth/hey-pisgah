@@ -49,7 +49,7 @@ const MEASURE_WORDS: readonly [Measure, RegExp][] = [
 ];
 const PHRASES = ["respiratory rate", "respiration rate", "breathing rate", "blood pressure", "oxygen saturation", "heart rate"];
 const NUMBER = /^\d+(?:\.\d+)?$/;
-const FILLER = /^(?:uh|um|er|erm|hmm|mm|ah)$/;
+const FILLER = /^(?:uh|um|er|erm|hmm|mm|ah|eh|ehn|em|ehm)$/;
 
 // Words of a cleaned transcript, with two-word measure names kept together and punctuation dropped except a decimal point.
 export function vitalsTokens(text: string): string[] {
