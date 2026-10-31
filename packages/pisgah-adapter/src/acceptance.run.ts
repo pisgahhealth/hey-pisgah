@@ -532,6 +532,12 @@ async function labCancelOnScreen(vars: Record<string, string>): Promise<{ ok: bo
   if (DRIVER === "human") {
     process.stdout.write(`\n  LAB STEP: in a second browser window, sign in as lab.grace and open ${url}; under "Cancel before testing" pick "Requester cancelled", tick the box, press Cancel diagnostic case. Press Enter here when done.\n`);
     await rl!.question("");
+  } else if (process.env["ACC_LAB_CANCEL_SCRIPT"]) {
+    // The lab screen does not offer the cancel on an arrival with no identifiers, so the rehearsal runs the lab's own action as lab.grace.
+    const out = (() => { try { return execFileSync("/bin/bash", [process.env["ACC_LAB_CANCEL_SCRIPT"]!], { env: { ...process.env, ACC_CANCEL_CASE: String(o["case_id"]) }, encoding: "utf8", timeout: 600_000, stdio: ["ignore", "pipe", "pipe"] }); } catch (e) { return String((e as { stderr?: string }).stderr ?? e); } })();
+    const line = /lab cancel: (.*)/.exec(out)?.[1] ?? out.slice(-200);
+    const caseDone = (await hospital.query("acc_case_cancelled", { visit: vars["visit"] ?? "", test: vars["test"] ?? "" })).length > 0;
+    return { ok: caseDone, note: `lab.grace's own cancel action: ${line.slice(0, 220)}` };
   } else {
     if (!labWindow || !browserNewContext) return { ok: false, note: "no browser for the lab screen" };
     const w = labWindow as unknown as { goto: (u: string, o?: unknown) => Promise<unknown>; locator: (s: string) => { first: () => { click: () => Promise<void>; selectOption: (v: string) => Promise<unknown>; check: () => Promise<void> } }; getByRole: (r: string, o: unknown) => { click: () => Promise<void> }; getByText: (t: string, o?: unknown) => { first: () => { click: () => Promise<void>; waitFor: (o?: unknown) => Promise<void> } } };
