@@ -17,7 +17,7 @@ import { EMERGENCY_KIND, EMERGENCY_LINE, RULE_ONLY_KINDS, emergencyHeardLoosely,
 import { screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
 import {
   ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_ARGS, DELEGATION_RULE_KINDS, DISPENSE_KIND, ESCALATE_KIND, NUDGE_KIND, PREPARE_KIND, REGISTER_KIND, WARD_REVIEW_KIND,
-  CONSENT_PURPOSES, acceptedTask, consentSaid, consentScope, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
+  ACCEPT_LINE, CONSENT_PURPOSES, acceptedTask, consentSaid, consentScope, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
   type ConsentPurpose, type DelegationRead, type EmrDelegation
 } from "./delegate.js";
 import { VERBAL_LINE, VERBAL_ORDER_ARGS, VERBAL_ORDER_KIND, verbalMissingNote, verbalOrderSaid } from "./verbal.js";
@@ -2651,7 +2651,10 @@ export class EmrRuntime {
     const waiting = open.filter((x) => !x.d.acknowledged_at);
     // With the patient open, an acceptance is read against that patient's tasks first, so the same task for two patients is not ambiguous.
     const atHand = waiting.filter((x) => target && ((target.admission_id && x.l.task.admission_id === target.admission_id) || (target.patient_id && x.l.task.patient_id === target.patient_id)));
-    const acc = acceptedTask(text, atHand.length ? atHand : waiting);
+    // "Accepted register the emergency arrival. His phone is ..." takes the task and fills it in one line, so the details are not dropped for the acceptance.
+    const [first = "", ...more] = text.split(/(?<=[.!?])\s+/);
+    const acceptsAndFills = more.length > 0 && ACCEPT_LINE.test(first) && (!!phoneSaid(more.join(" ")) || consentSaid(more.join(" ")));
+    const acc = acceptsAndFills ? null : acceptedTask(text, atHand.length ? atHand : waiting);
     if (acc) {
       const home = "hit" in acc ? acc.hit.l : "ambiguous" in acc && acc.ambiguous.length ? acc.ambiguous[0]!.l : open.at(-1)!.l;
       const lineId = this.ruledLine(home, owner, text, spokenAt, source, "accept", vp, unverifiedReason);
@@ -2707,6 +2710,10 @@ export class EmrRuntime {
       const before = d.registration?.consent_purposes ?? [];
       const said = scope.said.length || before.length ? scope.said : ["registration" as const];
       const purposes = CONSENT_PURPOSES.filter((p) => (before.includes(p) || said.includes(p)) && !scope.refused.includes(p));
+      if (acceptsAndFills && !d.acknowledged_at && d.delegation_id && !this.attempts(l.task, ACK_KIND, d.delegation_id).live) {
+        const took = acceptedTask(first, [d]);
+        if (took && "hit" in took) this.ruleAct(l, lineId, ACK_KIND, { delegation_id: d.delegation_id, title: d.title, evidence: `transcript:${lineId}` });
+      }
       this.append(l, "delegation.details", { key: d.key, ...(phone ? { phone, phone_line: lineId } : {}), ...(consent ? { consent_line: lineId, consent_purposes: purposes, consent_at: spokenAt } : {}) });
       this.registerWhenReady(l, d, lineId);
       this.settle(l, "registration_details");

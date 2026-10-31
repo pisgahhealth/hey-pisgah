@@ -39,6 +39,11 @@ describe("acceptance harness", () => {
     expect(stepStatus([], false)).toBe("failed");
     expect(stepStatus([{ expect: { wake: true }, ok: false, optional: true, detail: "" }, { expect: { arrival: "A" }, ok: true, optional: false, detail: "" }], false)).toBe("partial");
     expect(stepStatus([{ expect: { arrival: "A" }, ok: true, optional: false, detail: "" }], true)).toBe("blocked");
+    // Review 4: a name heard with another spelling is held, never passed, and a held step keeps the run from completing.
+    const heldName = { expect: { identity: "A" as const, name: "Emeka Nwosu" }, ok: false, optional: false, detail: "held, uncertain: Amika Emikonvosu", held: true };
+    expect(stepStatus([heldName, { expect: { arrival: "A" }, ok: true, optional: false, detail: "" }], false)).toBe("held");
+    expect(stepStatus([heldName, { expect: { arrival: "A" }, ok: false, optional: false, detail: "" }], false)).toBe("failed");
+    expect(completion(result({ steps: [step({ line: "B02", status: "held" })] }), 0).reasons).toEqual(["B02 held"]);
   });
   it("names who did each step", () => {
     expect(didBy({ who: "doctor", mode: "speak" }, "human")).toMatch(/Samuel's own voice/);

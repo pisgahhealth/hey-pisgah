@@ -382,7 +382,7 @@ async function touchesNow(): Promise<{ emr: number; strip: number } | null> {
 
 // One expectation, checked against the serve's views and the sandbox's read-only queries.
 // Every assertion is bound to this step: an action must come from this step's own utterance when the script says so, and must reach the asserted state while the step runs, so an older record never passes for a dropped instruction.
-async function check(e: Expect, line: Line, lineId: string | null, before: Set<string>, started: string): Promise<{ ok: boolean; detail: string }> {
+async function check(e: Expect, line: Line, lineId: string | null, before: Set<string>, started: string): Promise<{ ok: boolean; detail: string; held?: boolean }> {
   await refreshBound();
   const ref = line.patient;
   const during = (at: string | null | undefined) => !!at && at >= started;
@@ -395,12 +395,14 @@ async function check(e: Expect, line: Line, lineId: string | null, before: Set<s
   }
   if ("identity" in e) {
     const ids = doctorTasks(e.identity).flatMap((t) => t.identities);
-    // The ear may spell a surname its own way, so a held name with the same first name counts, and the result says what was heard.
-    const first = e.name.split(" ")[0]!.toLowerCase();
-    const fresh = ids.filter((i) => during(i.at));
-    // A name held in this step under the ear's own spelling still counts, and the detail shows the spelling so it is never hidden.
-    const hit = fresh.find((i) => i.name === e.name) ?? fresh.find((i) => i.name.toLowerCase().startsWith(`${first} `)) ?? fresh[0];
-    return { ok: !!hit, detail: hit ? `held ${hit.name}${hit.name === e.name ? "" : ` (said ${e.name})`} ${hit.phone ?? "no phone"} (${hit.state})` : `held: ${ids.map((i) => i.name).join(", ") || "none"}` };
+    const norm = (n: string) => n.toLowerCase().replace(/[^a-z]+/g, " ").trim();
+    const first = norm(e.name).split(" ")[0]!;
+    const fresh = ids.filter((i) => during(i.at) || (e.established && i.state === "done"));
+    // Only the script's own name passes; the ear's other spelling is held and uncertain, never an established identity.
+    const exact = fresh.find((i) => norm(i.name) === norm(e.name) && (!e.established || i.state === "done"));
+    if (exact) return { ok: true, detail: `${e.established ? "established" : "held"} ${exact.name} ${exact.phone ?? "no phone"} (${exact.state})` };
+    const like = fresh.find((i) => norm(i.name).startsWith(`${first} `)) ?? fresh[0];
+    return { ok: false, held: !!like, detail: like ? `held, uncertain: ${like.name} (said ${e.name}) ${like.phone ?? "no phone"} (${like.state})` : `held: ${ids.map((i) => i.name).join(", ") || "none"}` };
   }
   if ("act" in e) {
     const owners = e.owner ? ownersOf(e.owner) : [DOCTOR];
@@ -505,12 +507,17 @@ async function runLine(line: Line): Promise<void> {
     const counts = Object.fromEntries(WATCHED.map((o) => [o, (views.get(o) ?? []).length]));
     const target = trackingTarget;
     const r = await restartServe("SIGTERM");
+    // The fake microphone plays on through a restart, so one that outlasts its quiet slot has let the next words play to a stopped serve and is never judged recovered.
+    const overran = !!slot && Date.now() > fakeT0 + FAKE_LEAD_MS + slot.end - 3000;
+    if (overran) { unmet = true; errors.push("the restart outlasted its quiet slot, so the audio was not synchronised"); }
     await wait(1500);
     await pollOnce(); await readTracking();
     const after = Object.fromEntries(WATCHED.map((o) => [o, (views.get(o) ?? []).length]));
     survived = r.ok && WATCHED.every((o) => (after[o] ?? 0) >= (counts[o] ?? 0));
     survivedDetail = `restart ${r.ms} ms; tasks before ${JSON.stringify(Object.values(counts))} after ${JSON.stringify(Object.values(after))}; tracking ${target?.slice(0, 8) ?? "none"} -> ${trackingTarget?.slice(0, 8) ?? "none"}`;
-    faults.push({ kind: "restart", line: line.id, at: started, killed_during: null, restarted_in_ms: r.ms, outcome: survivedDetail, ok: survived && target === trackingTarget });
+    faults.push({ kind: "restart", line: line.id, at: started, killed_during: null, restarted_in_ms: r.ms, outcome: `${overran ? "not synchronised, the restart outlasted its quiet slot; " : ""}${survivedDetail}`, ok: survived && target === trackingTarget && !overran });
+    // The file is then cut back to the quiet before the next line by a reload, so the rest of the run hears every line whole.
+    if (overran && page && slot) { log(`${line.id}: the restart outlasted its slot; the fake microphone is cut back to the next line`); plannedCutMs = FAKE_LEAD_MS + slot.end - 3000; await reloadPage(line); }
   } else if (line.mode === "person") {
     const vars = Object.fromEntries(Object.entries(line.vars ?? {}).map(([k, v]) => [k, resolveVar(v)]));
     // A step that names a test gets that test's order id from the record, as the person would see it on screen.
@@ -786,7 +793,7 @@ async function finish(): Promise<void> {
   const files = writeAccResults(root, result, { previews_with_names: Number(process.env["ACC_PREVIEWS_WITH_NAMES"] ?? "0"), privilege_gained: 0 });
   writeFileSync(join(OUT, "door-requests.json"), `${JSON.stringify(doorLog.map((r) => ({ at: r.at, path: r.path, status: r.status, ms: r.ms })), null, 1)}\n`);
   log(`complete: ${result.completion.complete ? "yes" : `no (${result.completion.reasons.length}: ${result.completion.reasons.slice(0, 6).join("; ")})`}; harness errors ${harnessErrors.length}`);
-  log(`done: ${steps.filter((s) => s.status === "verified").length} verified, ${steps.filter((s) => s.status === "partial").length} partial, ${steps.filter((s) => s.status === "failed").length} failed, ${steps.filter((s) => s.status === "blocked").length} blocked of ${steps.length}; touches ${emr ?? "?"} (allowed ${result.touches_allowed}); calls ${calls} $${usd.toFixed(3)}; 429s ${rateLimited}`);
+  log(`done: ${steps.filter((s) => s.status === "verified").length} verified, ${steps.filter((s) => s.status === "partial").length} partial, ${steps.filter((s) => s.status === "held").length} held, ${steps.filter((s) => s.status === "failed").length} failed, ${steps.filter((s) => s.status === "blocked").length} blocked of ${steps.length}; touches ${emr ?? "?"} (allowed ${result.touches_allowed}); calls ${calls} $${usd.toFixed(3)}; 429s ${rateLimited}`);
   log(`wrote ${files.join(", ")}`);
   rl?.close();
   if (browserClose) await browserClose();

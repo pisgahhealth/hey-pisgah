@@ -12,7 +12,8 @@ const Ref = z.enum(["A", "B"]);
 const Vars = z.record(z.string(), z.string());
 export const Expect = z.union([
   z.strictObject({ arrival: Ref }),
-  z.strictObject({ identity: Ref, name: z.string().min(3) }),
+  // established: the registration wrote the record with this name; without it the name need only be held, and either way a different spelling is held, never passed.
+  z.strictObject({ identity: Ref, name: z.string().min(3), established: z.literal(true).optional() }),
   z.strictObject({ act: z.string().min(1), owner: z.enum(WHO).optional(), state: z.enum(["proposed", "sent", "acknowledged", "completed", "refused", "failed", "cancelled"]), from_line: z.boolean().optional(), n: z.number().int().min(1).optional(), values: z.record(z.string(), z.union([z.string(), z.number()])).optional(), optional: z.boolean().optional() }),
   z.strictObject({ awaits: z.string().min(1), optional: z.boolean().optional() }),
   z.strictObject({ question: z.string().min(1), optional: z.boolean().optional() }),
@@ -102,11 +103,12 @@ export function speedTable(rows: readonly SpeedRowIn[], errors: readonly SpeedEr
   return out.sort((a, b) => (order.indexOf(a.group) + 1 || 99) - (order.indexOf(b.group) + 1 || 99) || a.group.localeCompare(b.group));
 }
 
-export type CheckOutcome = { expect: Expect; ok: boolean; optional: boolean; detail: string };
+// held: the check found the thing only in an uncertain form (a name heard with another spelling), which is never a pass.
+export type CheckOutcome = { expect: Expect; ok: boolean; optional: boolean; detail: string; held?: boolean };
 export type StepOutcome = {
   line: string; patient: "A" | "B" | null; step: string; who: Who; mode: (typeof MODES)[number]; did_by: string; text: string | null; heard: string | null;
   line_id: string | null; line_end_at: string | null; verified: { kind: string; owner: string; action_id: string; record_id: string | null; verified_at: string | null; ms_from_line_end: number | null }[];
-  checks: CheckOutcome[]; status: "verified" | "partial" | "failed" | "blocked" | "skipped"; confirm: "r3" | "countersign" | null; touches_during: number; errors: string[]; started_at: string; ended_at: string;
+  checks: CheckOutcome[]; status: "verified" | "partial" | "held" | "failed" | "blocked" | "skipped"; confirm: "r3" | "countersign" | null; touches_during: number; errors: string[]; started_at: string; ended_at: string;
 };
 
 // A step is verified when every required check held, partial when only optional ones failed, failed otherwise; nothing completes without a check.
@@ -114,7 +116,9 @@ export function stepStatus(checks: readonly CheckOutcome[], blocked: boolean): S
   if (blocked) return "blocked";
   if (!checks.length) return "failed";
   if (checks.every((c) => c.ok)) return "verified";
-  return checks.filter((c) => !c.optional).every((c) => c.ok) ? "partial" : "failed";
+  const missed = checks.filter((c) => !c.optional && !c.ok);
+  if (!missed.length) return "partial";
+  return missed.every((c) => c.held) ? "held" : "failed";
 }
 
 export type Fault = { kind: "interrupt" | "restart" | "lost_ack" | "offline" | "mute" | "reload"; line: string; at: string; killed_during: string | null; restarted_in_ms: number | null; outcome: string; ok: boolean };
@@ -180,7 +184,7 @@ export function writeAccResults(root: string, r: AccResult, extra: { previews_wi
   const head = { measured_at: r.measured_at, source: `acceptance ${r.kind} run ${r.run_id} (${r.driver} voice, browser ${r.browser}); payment simulated`, run_id: r.run_id, kind: r.kind };
   const written: string[] = [];
   const put = (name: string, v: unknown) => { const f = join(dir, name); writeFileSync(f, `${JSON.stringify(v, null, 2)}\n`); written.push(f); };
-  const summary = Object.fromEntries((["verified", "partial", "failed", "blocked", "skipped"] as const).map((k) => [k, r.steps.filter((x) => x.status === k).map((x) => x.line)]));
+  const summary = Object.fromEntries((["verified", "partial", "held", "failed", "blocked", "skipped"] as const).map((k) => [k, r.steps.filter((x) => x.status === k).map((x) => x.line)]));
   put("acceptance.json", { ...r, summary, claims: fields });
   for (const [claim, file] of Object.entries(CLAIM_FILES)) put(file, { ...head, ...fields[claim as keyof typeof CLAIM_FILES] });
   const speedFile = join(dir, "speed.json");
