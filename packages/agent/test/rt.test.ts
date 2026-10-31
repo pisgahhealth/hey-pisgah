@@ -230,6 +230,9 @@ describe("RT 4: a controlled-drug, death, leave-against-advice or discharge conf
     expect(naturalYes("yeah go on".split(" "), ["morphine"])).toBe(false);
     expect(naturalYes("yes but not the morphine".split(" "), ["morphine"])).toBe(false);
     expect(naturalYes("yes and send a full blood count".split(" "), ["morphine"])).toBe(false);
+    // REC's repeated-order question ("Order again?") is a confirm too, and takes the same natural yes.
+    expect(naturalYes("yes order it again".split(" "), ["full", "blood", "count"])).toBe(true);
+    expect(naturalYes("yes send the full blood count again".split(" "), ["full", "blood", "count"])).toBe(true);
     const { rt, port } = boot(ward);
     const a = await morphine(rt);
     await say(rt, "Yes, go ahead with the morphine.", OWNER, { task: a.task_id });
