@@ -371,7 +371,8 @@ async function openBrowser(): Promise<void> {
     await page.getByRole("button", { name: "Continue" }).click();
     await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 90_000 }).catch(() => undefined);
   }
-  await page.waitForSelector(STRIP, { timeout: 120_000 });
+  // A cold app with the serve's first sweep of every owner's tasks can take minutes to render the strip.
+  await page.waitForSelector(STRIP, { timeout: 360_000 });
   log(`browser: signed in as ${script.people["doctor"]!.login}; the strip is mounted`);
   if (DRIVER === "human") {
     process.stdout.write("\n  In the Chrome window: press the ear button once to grant the microphone, then once more to start listening. Type done here when it says Listening.\n");
