@@ -83,7 +83,8 @@ const hasTarget = (b: { admissionId?: string | undefined; patientId?: string | u
 const AudioMeta = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional() }).refine(hasTarget, "admissionId or patientId is required");
 const Via = z.enum(["gate", "intent"]).optional();
 const Say = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional(), text: z.string().min(1).max(1000), spokenAt: z.iso.datetime({ offset: true }).optional(), via: Via });
-const FollowUp = z.strictObject({ text: z.string().min(1).max(1000), task_id: z.string().optional(), owner: Owner.optional(), spokenAt: z.iso.datetime({ offset: true }).optional(), via: Via });
+// The strip names the question a typed reply answers; the runtime binds the answer by it.
+const FollowUp = z.strictObject({ text: z.string().min(1).max(1000), task_id: z.string().optional(), owner: Owner.optional(), spokenAt: z.iso.datetime({ offset: true }).optional(), via: Via, question_id: z.string().max(80).optional() });
 const Open = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional() }).refine(hasTarget, "admissionId or patientId is required");
 // Listening needs no patient: the agent tracks the patient the clinician is with, or waits for the emergency phrase or a name.
 const SessionId = z.string().min(1).max(80).regex(/^[A-Za-z0-9_.:-]+$/);
