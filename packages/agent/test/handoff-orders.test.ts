@@ -116,6 +116,7 @@ describe("hand-offs keyed by the order, conditions keyed by the result", () => {
     await a.rt.settled();
     expect(a.rt.view(sent.task_id)!.obligations[0]).toMatchObject({ state: "done", fired_by: "condition" });
     expect(a.rt.view(sent.task_id)!.notes.filter((x) => x.text.includes("result is back in the record"))).toHaveLength(1);
+    expect(a.rt.view(sent.task_id)!.notes.find((x) => x.text.includes("result is back in the record"))?.kind).toBe("info");
     expect(port.of("record_note")).toHaveLength(0);
     await a.rt.stop();
   });

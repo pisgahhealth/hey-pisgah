@@ -15,9 +15,10 @@ export const ObservationArgs = z.strictObject({
   pulse: z.number().int().min(20).max(250).optional(),
   resp_rate: z.number().int().min(4).max(80).optional(),
   bp: z.string().regex(/^\d{2,3}\/\d{2,3}$/).optional(),
+  spo2: z.number().int().min(50).max(100).optional(),
   remark: z.string().min(1).max(300).optional(),
   corrects_record_id: z.string().min(1).max(80).optional()
-}).refine((a) => a.temp_c !== undefined || a.pulse !== undefined || a.resp_rate !== undefined || a.bp !== undefined, "an observation needs at least one measurement");
+}).refine((a) => a.temp_c !== undefined || a.pulse !== undefined || a.resp_rate !== undefined || a.bp !== undefined || a.spo2 !== undefined, "an observation needs at least one measurement");
 export type ObservationArgs = z.infer<typeof ObservationArgs>;
 
 export type EmrTarget = { admission_id?: string; patient_id?: string };

@@ -373,7 +373,7 @@ export class PisgahPort implements EmrPort {
     if (!episode) return { ok: false, reason: "no_episode_for_admission", status: null, retryable: false, counted: false };
     const remarks = [a.corrects_record_id ? `Corrects entry ${a.corrects_record_id}.` : null, a.remark ?? null].filter((x): x is string => x !== null).join(" ") || undefined;
     const op = this.profile.ops.write_observation;
-    const body = fillTemplate(op.body, { episode_id: episode, temp_c: a.temp_c, pulse: a.pulse, resp_rate: a.resp_rate, bp: a.bp, remarks });
+    const body = fillTemplate(op.body, { episode_id: episode, temp_c: a.temp_c, pulse: a.pulse, resp_rate: a.resp_rate, bp: a.bp, spo2: a.spo2, remarks });
     const r = await this.request(op.method, op.path, prov, { body, idempotencyKey: intentKey });
     if (r.kind === "refused") return { ok: false, reason: r.reason, status: null, retryable: false, counted: true };
     if (r.kind === "network_error") return { ok: false, reason: r.reason, status: null, retryable: true, counted: false };

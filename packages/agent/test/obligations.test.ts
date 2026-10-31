@@ -50,6 +50,8 @@ describe("obligations held for a time or a condition", () => {
     const v2 = b.rt.view(said.task_id)!;
     expect(v2.obligations[0]).toMatchObject({ state: "done", fired_by: "timer" });
     expect(v2.notes.at(-1)?.text).toBe("Review due now: review his abdomen. It is on the ward board.");
+    expect(v2.notes.at(-1)?.kind).toBe("info");
+    expect(v1.notes.find((n) => n.text.startsWith("Held"))?.kind).toBe("hold");
     expect(fired(a.root, said.task_id)).toHaveLength(1);
     await b.rt.stop();
 

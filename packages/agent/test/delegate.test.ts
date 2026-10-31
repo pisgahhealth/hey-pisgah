@@ -327,7 +327,7 @@ describe("delegation by rule between agents", () => {
     expect(port.kindsWritten(SURG)).toEqual([NUDGE_KIND]);
     const surg = a.rt.view(stranger.task_id)!;
     expect(surg.actions.find((x) => x.kind === ACK_KIND)).toMatchObject({ state: "proposed", awaiting: "owner_voice" });
-    expect(surg.questions.at(-1)!.text).toBe("Held: Accept the task: Surgical review. I could not match the voice to you, so it waits until you say yes yourself.");
+    expect(surg.questions.at(-1)!.text).toBe("Held: Accept the task: Surgical review. I could not match the voice to you, so it waits until you say yes yourself. Ref #2.");
     // Dr B's "yes" and Dr B's own acceptance change nothing.
     await a.rt.say(spoken(SURG, "Yes.", DRB_V, { admission_id: ADMIT }));
     await a.rt.say(spoken(SURG, "Accepted surgical review.", DRB_V, { admission_id: ADMIT }));
