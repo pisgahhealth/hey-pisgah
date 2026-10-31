@@ -905,7 +905,8 @@ async function main(): Promise<void> {
   if (process.env["ACC_RESUME_BOUND"]) { loadBound(process.env["ACC_RESUME_BOUND"]); log(`resumed with patients ${JSON.stringify(Object.fromEntries(Object.entries(bound).map(([k, b]) => [k, b!.patient.slice(0, 8)])))}`); }
   // A serve already on the port holds another run's store, so the harness starts its own unless told to reuse that one.
   if ((await healthy(2000)) && process.env["ACC_REUSE_SERVE"] !== "1") throw new Error(`a serve is already listening on ${SERVE}; stop it by its port or set ACC_REUSE_SERVE=1`);
-  if (!(await healthy(2000))) { startServe(); if (!(await healthy())) throw new Error(`the serve did not come up on ${SERVE}; see ${serveLog()}`); }
+  // Minting nine owners' sessions on a loaded machine can take minutes, so the first start waits up to six.
+  if (!(await healthy(2000))) { startServe(); if (!(await healthy(360_000))) throw new Error(`the serve did not come up on ${SERVE}; see ${serveLog()}`); }
   if (DRIVER === "fake") buildFakeMic();
   if (BROWSER === "launch") await openBrowser();
   const only = process.env["ACC_ONLY"] ? new Set(process.env["ACC_ONLY"].split(",")) : null;
@@ -980,7 +981,10 @@ async function finish(): Promise<void> {
     model: { calls, usd: Number(usd.toFixed(4)), rate_limited: rateLimited },
     harness_errors: harnessErrors, presence: (await getJson<{ presence?: string }>("/health"))?.presence ?? null, completion: { complete: false, reasons: [] }
   };
-  result.completion = completion({ ...result, trees_changed: treesChanged() }, script.lines.filter((l) => l.mode === "fault" || l.interrupt).length + (PROXY_PORT ? new Set(script.lines.filter((l) => l.lose_ack).map((l) => l.lose_ack!.path)).size : 0) + (page ? script.lines.filter((l) => l.offline_s || l.muted || (l.reload && (DRIVER !== "fake" || process.env["ACC_FAKE_RELOAD"] !== "0"))).length : 0));
+  // Every line the run was asked to run must have run; a run that stopped early is never complete.
+  const asked = script.lines.filter((l) => (!process.env["ACC_ONLY"] || process.env["ACC_ONLY"].split(",").includes(l.id))).slice(Math.max(0, process.env["ACC_FROM"] ? script.lines.findIndex((l) => l.id === process.env["ACC_FROM"]) : 0)).length;
+  if (steps.length < asked) harnessErrors.push(`${asked - steps.length} of ${asked} lines never ran`);
+  result.completion = completion({ ...result, harness_errors: harnessErrors, trees_changed: treesChanged() }, script.lines.filter((l) => l.mode === "fault" || l.interrupt).length + (PROXY_PORT ? new Set(script.lines.filter((l) => l.lose_ack).map((l) => l.lose_ack!.path)).size : 0) + (page ? script.lines.filter((l) => l.offline_s || l.muted || (l.reload && (DRIVER !== "fake" || process.env["ACC_FAKE_RELOAD"] !== "0"))).length : 0));
   void signedIds;
   const root = KIND === "final" ? env("ACC_PUBLISH_ROOT") : OUT;
   const files = writeAccResults(root, result, { previews_with_names: null, privilege_gained: null });
@@ -994,4 +998,4 @@ async function finish(): Promise<void> {
   if (process.env["ACC_KEEP_SERVE"] !== "1") { const pids = killServe("SIGTERM"); if (pids.length) log(`stopped the run's serve (pids ${pids.join(",")})`); }
 }
 
-main().then(() => process.exit(0), async (e: unknown) => { log(`harness error: ${e instanceof Error ? e.message : String(e)}`); await finish().catch(() => undefined); process.exit(1); });
+main().then(() => process.exit(0), async (e: unknown) => { const why = `harness error: ${e instanceof Error ? e.message : String(e)}`; log(why); harnessErrors.push(why.slice(0, 300)); await finish().catch(() => undefined); process.exit(1); });
