@@ -368,6 +368,9 @@ async function openBrowser(): Promise<void> {
     fakeT0 = Date.now();
     await page.click(`${STRIP} button[aria-label="Listen"]`);
     if (!(await armed())) { log("browser: the first press did not arm the strip; pressing again"); fakeT0 = Date.now(); await page.click(`${STRIP} button[aria-label="Listen"]`); if (!(await armed())) log("browser: the wake spotter did not say it was ready"); }
+    // Chrome starts the fake microphone file when the page first asks for the microphone, which may be the press that did not seem to arm.
+    const micAt = await page.evaluate(() => (window as unknown as { __accMicAt?: number }).__accMicAt ?? null, "").catch(() => null);
+    if (typeof micAt === "number" && micAt < fakeT0) { log(`browser: the microphone opened at the first press, ${fakeT0 - micAt} ms before the second; the script is timed from the first`); fakeT0 = micAt; }
     if (!(await page.locator(`${STRIP} button[aria-label="Stop listening"]`).count())) await page.click(`${STRIP} button[aria-label="Listen"]`);
     await page.waitForSelector(`${STRIP} button[aria-label="Stop listening"]`, { timeout: 30_000 }).catch(() => { log("browser: the strip did not start listening"); harnessErrors.push("browser: the strip did not start listening"); });
     log("browser: the harness pressed Listen (the one microphone grant, and a start if the strip asked for one)");
@@ -580,6 +583,8 @@ async function runLine(line: Line): Promise<void> {
   log(`${line.id} ${status.toUpperCase()} ${line.step} [${out.did_by.split(" (")[0]}] ${note ?? ""}`);
   for (const c of outcomes) log(`    ${c.ok ? "ok " : c.optional ? "opt" : "BAD"} ${JSON.stringify(c.expect).slice(0, 90)} -> ${c.detail}`);
   if (page && process.env["ACC_SHOTS"] !== "0") await page.screenshot({ path: join(OUT, `${line.id}.png`) }).catch(() => undefined);
+  // The page the doctor's screen was on at the end of the step, beside the saved and shown facts of what the step wrote.
+  if (page) appendFileSync(join(OUT, "pages.jsonl"), `${JSON.stringify({ line: line.id, at: now(), path: (page as unknown as { url: () => string }).url().replace(/^https?:\/\/[^/]+/, ""), wrote: verified.map((v) => ({ kind: v.kind, action_id: v.action_id, record_id: v.record_id, saved: true, shown: allActions().find((a) => a.action_id === v.action_id)?.shown ?? null })) })}\n`);
   writeFileSync(join(OUT, "steps.json"), `${JSON.stringify(steps, null, 1)}\n`);
   if (STOP_ON_FAIL && status === "failed") throw new Error(`stopped at ${line.id}`);
 }
@@ -690,6 +695,9 @@ async function main(): Promise<void> {
 }
 
 async function finish(): Promise<void> {
+  // A tail after the last line lets the screen finish showing what the last line saved, so the shown facts are read after it.
+  const tailMs = Number(process.env["ACC_TAIL_S"] ?? 0) * 1000;
+  if (tailMs > 0 && page) { log(`tail: the browser stays open ${tailMs / 1000} s after the last line`); await wait(tailMs); await page.screenshot({ path: join(OUT, "tail.png") }).catch(() => undefined); appendFileSync(join(OUT, "pages.jsonl"), `${JSON.stringify({ line: "tail", at: now(), path: (page as unknown as { url: () => string }).url().replace(/^https?:\/\/[^/]+/, ""), wrote: [] })}\n`); }
   polling = false;
   const acts = allActions();
   const rows: SpeedRowIn[] = [...views.entries()].flatMap(([o, vs]) => vs.flatMap((t) => t.speed.rows.map((r) => ({ kind: r.kind, ms: r.ms, owner: whoOf(o), line_id: r.line_id, action_id: r.action_id, ...(r.from_record ? { from_record: true } : {}) }))));

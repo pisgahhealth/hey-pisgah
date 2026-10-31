@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { EmrId, TASK_KINDS } from "@hey-pisgah/agent";
+import { EmrId, SCREEN_PAGES, TASK_KINDS, type ScreenPage } from "@hey-pisgah/agent";
 
 // The door's route table, header names and target ids live in a private profile file, so this public package names none of them.
 export const DEFAULT_PROFILE_PATH = join(homedir(), ".hey-pisgah-door.json");
@@ -48,7 +48,7 @@ export const OwnerSpec = z.strictObject({
   context: ReadSpec.extend({ label: Dotted, facts: z.record(z.string(), Dotted).default({}) }).optional(),
   offers: z.array(z.strictObject({ fact: z.string().min(1), equals: z.string().min(1), kind: z.string().min(1), ask: z.string().min(1).max(300) })).default([]),
   // The page this owner sees a kind of work on, when it is not the kind's usual page.
-  screens: z.record(z.string(), z.enum(["triage", "doctor_workspace", "admissions", "reception_identity"])).default({}),
+  screens: z.record(z.string(), z.enum(SCREEN_PAGES as [ScreenPage, ...ScreenPage[]])).default({}),
   // Which side of a delegation this owner's agent follows: tasks handed to it, tasks it handed on, or both.
   delegation: z.enum(["none", "assignee", "delegator", "both"]).default("none")
 });
@@ -151,7 +151,8 @@ export const DoorProfile = z.strictObject({
   // The memo route, and the route that takes each urgent item, or a withheld memo's open work, as a task alert of its own.
   memos: z.strictObject({ path: PathTpl, alerts_path: PathTpl.optional(), sender: z.string().min(1).max(80), sender_label: z.string().min(1).max(200) }).optional(),
   // Where each page the strip can operate lives in the EMR.
-  pages: z.partialRecord(z.enum(["triage", "doctor_workspace", "admissions", "reception_identity"]), z.string().regex(/^\/[a-z0-9/_-]*$/)).default({})
+  // A page route may name the stay, patient or visit it shows, as "/ward/{admission_id}".
+  pages: z.partialRecord(z.enum(SCREEN_PAGES as [ScreenPage, ...ScreenPage[]]), z.string().regex(/^\/([a-z0-9_-]+|\{(admission_id|patient_id|visit_id)\})?(\/([a-z0-9_-]+|\{(admission_id|patient_id|visit_id)\}))*$/)).default({})
 });
 export type DoorProfile = z.infer<typeof DoorProfile>;
 
