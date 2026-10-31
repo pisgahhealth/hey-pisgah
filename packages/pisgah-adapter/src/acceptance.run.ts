@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync, writeSync, appendFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
@@ -546,7 +546,9 @@ async function runLine(line: Line): Promise<void> {
   }
   // Each check is tried until it holds or the line's time runs out; nothing passes by default.
   const limit0 = Date.now() + (line.timeout_s ?? 90) * 1000;
-  const limit = () => (slot ? fakeT0 + FAKE_LEAD_MS + slot.end - 1500 : limit0);
+  // A step that starts after its slot ended, because a fault ran long, still gets a short window for its own words.
+  const floor = Date.now() + 25_000;
+  const limit = () => (slot ? Math.max(fakeT0 + FAKE_LEAD_MS + slot.end - 1500, floor) : limit0);
   let heard: ReturnType<typeof lineAfter> = null;
   let outcomes: CheckOutcome[] = [];
   for (;;) {
@@ -612,7 +614,8 @@ async function labResult(vars: Record<string, string>): Promise<{ ok: boolean; n
 
 // A person's own web step for the rehearsal, run as that person through the sandbox's acceptance seed (the step's action, never SQL); returns the action's own line.
 function webStep(envName: "ACC_CANCEL_CASE" | "ACC_ACCEPT_ORDER" | "ACC_PAY_ORDER", id: string, label: string): string {
-  const out = (() => { try { return execFileSync("/bin/bash", [process.env["ACC_LAB_CANCEL_SCRIPT"]!], { env: { ...process.env, ACC_CANCEL_CASE: "", ACC_ACCEPT_ORDER: "", ACC_PAY_ORDER: "", [envName]: id }, encoding: "utf8", timeout: 600_000, stdio: ["ignore", "pipe", "pipe"] }); } catch (e) { return `${String((e as { stdout?: string }).stdout ?? "")}${String((e as { stderr?: string }).stderr ?? e)}`; } })();
+  const r = spawnSync("/bin/bash", [process.env["ACC_LAB_CANCEL_SCRIPT"]!], { env: { ...process.env, ACC_CANCEL_CASE: "", ACC_ACCEPT_ORDER: "", ACC_PAY_ORDER: "", [envName]: id }, encoding: "utf8", timeout: 600_000 });
+  const out = `${r.stdout ?? ""}\n${r.stderr ?? ""}${r.error ? `\n${r.error.message}` : ""}`;
   return new RegExp(`${label}: (\\{.*)`).exec(out)?.[1] ?? out.replace(/\s+/g, " ").slice(-200);
 }
 
