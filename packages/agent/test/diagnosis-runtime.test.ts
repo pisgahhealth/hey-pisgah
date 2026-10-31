@@ -33,7 +33,7 @@ describe("the diagnosis by voice in the runtime", () => {
     await rt.settled();
     const v = rt.view(a.task_id)!;
     expect(v.actions.find((x) => x.kind === "record_diagnosis")).toMatchObject({ state: "proposed", awaiting: "confirm", args: { visit_id: VISIT, patient_id: PAT, diagnosis: "acute appendicitis" } });
-    expect(v.questions.at(-1)!.text).toBe('Record the diagnosis: "acute appendicitis". Say confirm to record this diagnosis.');
+    expect(v.questions.at(-1)!.text).toBe('Record the diagnosis: "acute appendicitis". Say confirm to record this diagnosis. Ref #1.');
     expect(dx(port)).toHaveLength(0);
     // Negative controls: an unverified voice and Dr B saying confirm write nothing.
     await say(rt, "Confirm.", STRANGER, a.task_id);
@@ -86,13 +86,14 @@ describe("the diagnosis by voice in the runtime", () => {
     await rt.stop();
   });
 
-  it("still lets the owner's own instruction move past the open confirm, as before", async () => {
+  it("keeps the confirm open and shown when the owner's own instruction is about something else (RT item 3)", async () => {
     const { rt, port } = boot();
     const a = await say(rt, "The diagnosis is acute appendicitis.", OWNER);
     await rt.settled();
     await say(rt, "Pulse is one hundred and four.", OWNER, a.task_id);
     await rt.settled();
-    expect(rt.view(a.task_id)!.questions.some((q) => q.text.startsWith("Record the diagnosis"))).toBe(false);
+    expect(rt.view(a.task_id)!.questions.some((q) => q.text.startsWith("Record the diagnosis"))).toBe(true);
+    expect(rt.view(a.task_id)!.notes.some((n) => n.kind === "question" && n.text.startsWith("Record the diagnosis") && !n.resolved_at)).toBe(true);
     expect(dx(port)).toHaveLength(0);
     await rt.stop();
   });

@@ -82,9 +82,10 @@ const Owner = z.string().min(1).max(80).regex(/^[A-Za-z0-9_.:-]+$/);
 const hasTarget = (b: { admissionId?: string | undefined; patientId?: string | undefined }) => b.admissionId !== undefined || b.patientId !== undefined;
 const AudioMeta = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional() }).refine(hasTarget, "admissionId or patientId is required");
 const Via = z.enum(["gate", "intent"]).optional();
-const Say = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional(), text: z.string().min(1).max(1000), spokenAt: z.iso.datetime({ offset: true }).optional(), via: Via });
-// The strip names the question a typed reply answers; the runtime binds the answer by it.
-const FollowUp = z.strictObject({ text: z.string().min(1).max(1000), task_id: z.string().optional(), owner: Owner.optional(), spokenAt: z.iso.datetime({ offset: true }).optional(), via: Via, question_id: z.string().max(80).optional() });
+// A typed answer names the question it answers, so only that question closes.
+const QuestionId = z.string().regex(/^q-[A-Za-z0-9_-]{1,40}$/).optional();
+const Say = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional(), text: z.string().min(1).max(1000), spokenAt: z.iso.datetime({ offset: true }).optional(), via: Via, question_id: QuestionId });
+const FollowUp = z.strictObject({ text: z.string().min(1).max(1000), task_id: z.string().optional(), owner: Owner.optional(), spokenAt: z.iso.datetime({ offset: true }).optional(), via: Via, question_id: QuestionId });
 const Open = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional() }).refine(hasTarget, "admissionId or patientId is required");
 // Listening needs no patient: the agent tracks the patient the clinician is with, or waits for the emergency phrase or a name.
 const SessionId = z.string().min(1).max(80).regex(/^[A-Za-z0-9_.:-]+$/);
@@ -719,7 +720,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       const arrived = target ? null : await arrivalHeard(b.owner, b.text, at, "text");
       if (arrived) return [202, { ...arrived, entry: "arrival" }];
       if (!target) throw new HttpError(400, "No patient is open yet; describe the patient arriving, say hey Pisgah, emergency, or open a patient");
-      return [202, await rt.say({ owner: b.owner, target, text: b.text, ...(b.spokenAt ? { spoken_at: b.spokenAt } : {}), ...(b.via ? { via: b.via } : {}) })];
+      return [202, await rt.say({ owner: b.owner, target, text: b.text, ...(b.spokenAt ? { spoken_at: b.spokenAt } : {}), ...(b.via ? { via: b.via } : {}), ...(b.question_id ? { question_id: b.question_id } : {}) })];
     }
     // Opening a patient's page starts the owner's task with no words, so the agent watches that record for them.
     if (parts.length === 2 && parts[1] === "watch" && m === "POST") {
@@ -764,7 +765,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       if (!task) throw new HttpError(404, "unknown task");
       if (b.task_id !== undefined && b.task_id !== id) throw new HttpError(400, "task_id does not match the path");
       if (b.owner !== undefined && b.owner !== task.owner) throw new HttpError(403, "the task belongs to another owner");
-      return [202, await rt.say({ owner: task.owner, target: task.admission_id ? { admission_id: task.admission_id } : { ...(task.patient_id ? { patient_id: task.patient_id } : {}) }, text: b.text, ...(b.spokenAt ? { spoken_at: b.spokenAt } : {}), ...(b.via ? { via: b.via } : {}) }, id)];
+      return [202, await rt.say({ owner: task.owner, target: task.admission_id ? { admission_id: task.admission_id } : { ...(task.patient_id ? { patient_id: task.patient_id } : {}) }, text: b.text, ...(b.spokenAt ? { spoken_at: b.spokenAt } : {}), ...(b.via ? { via: b.via } : {}), ...(b.question_id ? { question_id: b.question_id } : {}) }, id)];
     }
     if (parts.length === 3 && parts[2] === "resume" && m === "POST") {
       const b = parse(Interrupt, await json(req));

@@ -695,6 +695,9 @@ async function main(): Promise<void> {
 }
 
 async function finish(): Promise<void> {
+  // A tail after the last line lets the screen finish showing what the last line saved, so the shown facts are read after it.
+  const tailMs = Number(process.env["ACC_TAIL_S"] ?? 0) * 1000;
+  if (tailMs > 0 && page) { log(`tail: the browser stays open ${tailMs / 1000} s after the last line`); await wait(tailMs); await page.screenshot({ path: join(OUT, "tail.png") }).catch(() => undefined); appendFileSync(join(OUT, "pages.jsonl"), `${JSON.stringify({ line: "tail", at: now(), path: (page as unknown as { url: () => string }).url().replace(/^https?:\/\/[^/]+/, ""), wrote: [] })}\n`); }
   polling = false;
   const acts = allActions();
   const rows: SpeedRowIn[] = [...views.entries()].flatMap(([o, vs]) => vs.flatMap((t) => t.speed.rows.map((r) => ({ kind: r.kind, ms: r.ms, owner: whoOf(o), line_id: r.line_id, action_id: r.action_id, ...(r.from_record ? { from_record: true } : {}) }))));
