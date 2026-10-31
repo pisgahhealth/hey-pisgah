@@ -168,6 +168,8 @@ let fakeRealigning: Promise<void> | null = null;
 // The strip session the doctor's page last posted under, and who waits for the first post of a new one.
 let lastStripSid: string | null = null;
 let newSidSeen: ((sid: string) => void) | null = null;
+// A planned reload cuts the file in the quiet before its line, wherever the reload itself lands.
+let plannedCutMs: number | null = null;
 // Waits until the fake microphone file reaches an offset, following the file's zero when a reload moves it.
 async function untilFake(offsetMs: number): Promise<void> {
   for (;;) {
@@ -181,7 +183,8 @@ async function untilFake(offsetMs: number): Promise<void> {
 function realignFakeMic(why: string): void {
   if (DRIVER !== "fake" || !fakeBytes || !fakeT0 || !page || fakeRealigning) return;
   const reloadAt = Date.now();
-  const cut = fakeRealign(fakeT0, reloadAt, reloadAt).cutMs;
+  const cut = plannedCutMs ?? fakeRealign(fakeT0, reloadAt, reloadAt).cutMs;
+  plannedCutMs = null;
   const file = join(OUT, "fake-mic.wav");
   // The rest of the file after the cut, under a header that says its new length; written beside and renamed so Chrome never reads half a file.
   const data = fakeBytes.subarray(Math.min(fakeBytes.length, 44 + Math.round((cut / 1000) * 16_000) * 2));
@@ -467,7 +470,7 @@ async function runLine(line: Line): Promise<void> {
   // Under the fake microphone each line runs in its slot of the file, so the room's timing never depends on the agent.
   const slot = DRIVER === "fake" ? fakeSlots.get(line.id) : undefined;
   // Under the fake microphone a reload runs in the quiet before its line, so the file is cut before the words and they play whole once listening is back.
-  if (line.reload && page && DRIVER === "fake" && process.env["ACC_FAKE_RELOAD"] !== "0") await reloadPage(line);
+  if (line.reload && page && DRIVER === "fake" && process.env["ACC_FAKE_RELOAD"] !== "0") { if (slot) plannedCutMs = FAKE_LEAD_MS + slot.at - 3000; await reloadPage(line); }
   if (slot) await untilFake(FAKE_LEAD_MS + slot.at);
   const started = now();
   const errors: string[] = [];
