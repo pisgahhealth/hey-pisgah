@@ -125,7 +125,10 @@ async function healthy(ms = 120_000): Promise<boolean> { const end = Date.now() 
 async function restartServe(signal: "SIGKILL" | "SIGTERM"): Promise<{ ms: number; ok: boolean; pids: number[] }> {
   const at = Date.now();
   const pids = killServe(signal);
-  for (let i = 0; i < 40 && pidsOnPort().length; i++) await wait(250);
+  // The old serve frees its port before it has let go of its store, so the new one starts only once the old process is gone.
+  const alive = () => pids.filter((p) => { try { process.kill(p, 0); return true; } catch { return false; } });
+  for (let i = 0; i < 240 && (pidsOnPort().length || alive().length); i++) await wait(250);
+  if (alive().length) { log(`restart: the old serve (pids ${alive().join(",")}) was still stopping after 60 s, so it was killed`); for (const p of alive()) { try { process.kill(p, "SIGKILL"); } catch { /* gone */ } } await wait(500); }
   restarts += 1;
   startServe();
   const ok = await healthy();
