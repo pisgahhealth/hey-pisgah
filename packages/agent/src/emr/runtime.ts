@@ -13,7 +13,7 @@ import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite }
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
 import { DOCUMENTATION_KINDS, ORDER_KINDS, lineVerdict, recordOf, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
-import { EMERGENCY_KIND, EMERGENCY_LINE, RULE_ONLY_KINDS, emergencyReason, identityFrom, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
+import { EMERGENCY_KIND, EMERGENCY_LINE, RULE_ONLY_KINDS, emergencyHeardLoosely, emergencyReason, identityFrom, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
 import { screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
 import {
   ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_ARGS, DELEGATION_RULE_KINDS, DISPENSE_KIND, ESCALATE_KIND, NUDGE_KIND, PREPARE_KIND, REGISTER_KIND, WARD_REVIEW_KIND,
@@ -374,6 +374,9 @@ export function percentile(xs: readonly number[], p: number): number | null {
   return s[Math.min(s.length - 1, Math.max(0, Math.ceil((p / 100) * s.length) - 1))]!;
 }
 // p50 and p90 from the end of the words to the verified record, per kind and in all, with the actions that did not verify beside them.
+// The names a task's patient answers to: the label it opened with and every name said for it since, so a named arrival is found by that name.
+export const knownNames = (t: Pick<EmrTask, "label" | "identities">): string[] => [...new Set([t.label, ...t.identities.filter((i) => i.state !== "cancelled").map((i) => i.name)].filter(Boolean))];
+
 export function speedSummary(t: EmrTask): EmrTaskView["speed"] {
   const kinds = [...new Set(t.speed.map((r) => r.kind))];
   const acts = [...t.actions.values()];
@@ -471,7 +474,8 @@ export const emrIntentKey = (taskId: string, actionId: string, args: unknown) =>
 // A spoken pause and a spoken return; both are handled by rule, with no model call.
 export const SPOKEN_PAUSE = /^(?:(?:ok(?:ay)?|right|sorry|wait)[,.!]?\s+)?(?:stop|hold on|hang on|pause)\b(?:[\s,.!-]+(?:i'?ll|i will|we'?ll|let me)\s+come back to (?:this|that|it|her|him)(?:\s+later)?)?[\s.!]*$|\bi'?ll come back to (?:this|that|it)\b/i;
 // "Sign everything" asks for the read-back of the owner's voice orders awaiting countersign; the yes that follows signs that batch.
-export const SIGN_EVERYTHING = /^(?:(?:ok(?:ay)?|right|now|and)\s+)?(?:please\s+)?(?:countersign|sign)\s+(?:everything|it all|them all|all of (?:it|them)|all (?:the )?(?:voice )?orders|the orders)(?:\s+please)?$/;
+// Said the way clinicians say it: "let me sign everything for her", "I'll sign them all now", "sign that one too".
+export const SIGN_EVERYTHING = /^(?:(?:ok(?:ay)?|right|now|and|so)\s+)?(?:(?:let me|let's|lemme|i'll|i will|i want to|i'd like to)\s+)?(?:please\s+)?(?:countersign|sign)\s+(?:everything|it all|them all|all of (?:it|them)|all (?:the )?(?:voice )?orders|the orders|that one|this one|that|the new one|that last one)(?:\s+(?:too|to|as well|also))?(?:\s+for (?:her|him|them|this patient|the patient))?(?:\s+(?:now|please))?$/;
 // Work that needs the owner's explicit spoken confirmation of what was read back from the record (R-3).
 export const CONFIRM_KINDS: ReadonlySet<string> = new Set(["release_home"]);
 
@@ -487,7 +491,8 @@ export function paperworkAsk(summary: string, rb: PaperworkReadBack): string {
 
 export const PAY_LINK_VERIFIED_NOTE = "Pay link request verified: the bill shows it recorded. This does not show that an SMS arrived or that anyone paid; payment is simulated.";
 
-export const OWNER_YES = /^(?:yes|yeah|yes please|yes sign(?: them| it| everything)?|sign(?: them| it)?|go ahead|send it|do it|confirm(?:ed)?|i confirm|yes confirm)$/;
+// "Yes, confirm the morphine" names what is confirmed; up to two words after the, that or this, so a new sentence after confirm is never a yes.
+export const OWNER_YES = /^(?:yes|yeah|yes please|yes sign(?: them| it| everything)?|sign(?: them| it)?|go ahead|send it|do it|(?:(?:yes|yeah|okay|ok) )?(?:i )?confirm(?:ed)?(?: (?:the|that|this|it)(?: [a-z']+){0,2})?)$/;
 export const OWNER_NO = /^(?:no|nope|don'?t|do not|cancel(?: it| that)?|leave it)$/;
 // The owner's natural yes to a countersign batch read back on screen, within the answer window; never a controlled-drug, diagnosis or discharge confirm, and never a held order from an unmatched voice.
 export const READ_BACK_YES = /^(?:(?:ok(?:ay)?|yeah|yes)\s+)?(?:go on|go ahead|sign (?:them|it|those)(?: all)?)$/;
@@ -748,7 +753,8 @@ export class EmrRuntime {
       ctx = await this.o.port.resolve(this.subjectOf(l.task), prov);
     } else {
       // "hey Pisgah, emergency" heard in a transcript opens an arrival, unless the device already did within the last ten seconds.
-      if (EMERGENCY_LINE.test(text) && this.kinds(s.owner).includes(EMERGENCY_KIND)) {
+      // Heard audio may carry the phrase the way the local ear writes it ("Heape is the emergency"); typed lines keep the strict phrase.
+      if ((EMERGENCY_LINE.test(text) || (s.source === "audio" && emergencyHeardLoosely(text) && !/^\W*(?:hey|hi|hay|okay|ok)\W*emergency/i.test(text))) && this.kinds(s.owner).includes(EMERGENCY_KIND)) {
         const recent = [...this.live.values()].some((x) => x.task.owner === s.owner && x.task.unidentified && Date.now() - Date.parse(x.task.created_at) < 10_000);
         if (!recent) {
           const r = await this.emergency(s.owner, { text, spoken_at: s.ambient?.ended_at ?? spokenAt, source: s.source ?? "text", args: { unidentified_ref: unidentifiedRef(new Date(spokenAt)), reason: emergencyReason(text), ...(this.o.emergencyClinicId ? { clinic_id: this.o.emergencyClinicId } : {}) } });
@@ -756,8 +762,8 @@ export class EmrRuntime {
         }
       }
       // A line naming another of the owner's open patients moves the agent to that patient, never silently stopping.
-      const known = [...this.live.values()].map((x) => x.task).filter((t) => t.owner === s.owner && !CLOSED_TASK.has(t.state) && t.label && (t.admission_id || t.patient_id))
-        .map((t) => ({ label: t.label, target: t.admission_id ? { admission_id: t.admission_id } : { patient_id: t.patient_id! } }));
+      const known = [...this.live.values()].map((x) => x.task).filter((t) => t.owner === s.owner && !CLOSED_TASK.has(t.state) && (t.admission_id || t.patient_id))
+        .flatMap((t) => knownNames(t).map((label) => ({ label, target: t.admission_id ? { admission_id: t.admission_id } : { patient_id: t.patient_id! } })));
       const moved = spokenPatient(text, known);
       const target = moved && JSON.stringify(moved.target) !== JSON.stringify(s.target) ? moved.target : s.target;
       if (target !== s.target) this.o.onSubject?.(s.owner, target, "spoken", spokenAt);
@@ -2630,9 +2636,15 @@ export class EmrRuntime {
     const atHand = waiting.filter((x) => target && ((target.admission_id && x.l.task.admission_id === target.admission_id) || (target.patient_id && x.l.task.patient_id === target.patient_id)));
     const acc = acceptedTask(text, atHand.length ? atHand : waiting);
     if (acc) {
-      const home = "hit" in acc ? acc.hit.l : open.at(-1)!.l;
+      const home = "hit" in acc ? acc.hit.l : "ambiguous" in acc && acc.ambiguous.length ? acc.ambiguous[0]!.l : open.at(-1)!.l;
       const lineId = this.ruledLine(home, owner, text, spokenAt, source, "accept", vp, unverifiedReason);
       if ("hit" in acc) { const hit = acc.hit; this.whenAttributed(home, lineId, () => { this.ruleAct(home, lineId, ACK_KIND, { delegation_id: hit.d.delegation_id, title: hit.d.title, evidence: `transcript:${lineId}` }); this.settle(home, "accept_line"); }); }
+      // Several tasks with the same name for the same patient (three tests from one line) are one piece of work to accept, so the words take them all.
+      else if ("ambiguous" in acc && new Set(acc.ambiguous.map((x) => x.title)).size === 1 && new Set(acc.ambiguous.map((x) => x.l.task.task_id)).size === 1) {
+        const same = acc.ambiguous;
+        const at = same[0]!.l;
+        this.whenAttributed(home, lineId, () => { for (const x of same) this.ruleAct(at, lineId, ACK_KIND, { delegation_id: x.d.delegation_id, title: x.d.title, evidence: `transcript:${lineId}` }); this.settle(at, "accept_line"); });
+      }
       else if ("ambiguous" in acc) this.ask(home, lineId, `Which task do you accept? ${acc.ambiguous.map((x) => x.title).join("; ")}. Say accepted and its name.`);
       else this.note(home, `No task waiting for you matches that. Waiting: ${waiting.map((x) => x.title).join("; ") || "none"}.`);
       this.settle(home, "accept_line");

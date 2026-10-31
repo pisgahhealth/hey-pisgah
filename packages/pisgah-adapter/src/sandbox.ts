@@ -81,3 +81,10 @@ export function sandboxQuery(s: SandboxBlock, name: string, vars: Record<string,
   });
   return JSON.parse(out.trim()) as Record<string, unknown>[];
 }
+
+// Mints a person's own web session cookie for a step only the web offers; it is returned and never printed.
+export function mintPersonCookie(s: SandboxBlock, who: { login: string; clinic?: string | undefined }): string {
+  const m = /^cookie: (\S+)$/m.exec(runMint(s, mintArgs(s, who, false)));
+  if (!m || m[1]!.length < 30) throw new Error("the mint script printed no cookie");
+  return m[1]!;
+}

@@ -8,7 +8,7 @@ import { sparkEar, type SecondEar } from "./ears.js";
 import { allEars, parakeetEar, sherpaStreamAsr, transcriberEar, type ReadingLedger, type StreamAsr } from "./local-ears.js";
 import { StreamListener, StreamRefused } from "./stream-listen.js";
 import { META_STREAM_MODEL, MetaStreamFailed, MetaStreamListener, probeRealtime } from "./meta-stream.js";
-import { EmrRuntime, type EmrRuntimeOptions } from "./runtime.js";
+import { EmrRuntime, knownNames, type EmrRuntimeOptions } from "./runtime.js";
 import { ListenError, ListenSessions, parallelReadings, type ListenOptions, type ListenUtterance, type Transcriber } from "./listen.js";
 import { decodeWav, parseWav } from "@hey-pisgah/voice";
 import { printWav, type Embedder, type LivenessMarker } from "./speaker.js";
@@ -362,7 +362,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const handed = text ? rt.delegationLine(owner, text, spokenAt, "audio", undefined, print ? await print : undefined) : null;
     if (handed) setStatus(owner, sessionId, seq, { status: "completed", task_id: handed.task_id, line_id: handed.line_id });
     if (handed) return { session_id: sessionId, seq, accepted: true, utterances: [{ id: handed.line_id, line_id: handed.line_id, task_id: handed.task_id, text, class: "instruction", classes: ["instruction"] }], partial: null, entry: "delegation" };
-    const known = rt.openSubjects(owner).map((x) => ({ label: rt.task(x.task_id)?.label ?? "", target: x.target })).filter((k) => k.label);
+    const known = rt.openSubjects(owner).flatMap((x) => { const t = rt.task(x.task_id); return t ? knownNames(t).map((label) => ({ label, target: x.target })) : []; });
     const moved = spokenPatient(text, known);
     if (moved) onSubject(owner, moved.target, "spoken", spokenAt);
     // Words that receive a new patient open the same pending arrival as the phrase, so the lines after them are bound to it.

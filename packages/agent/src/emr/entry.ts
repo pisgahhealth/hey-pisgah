@@ -31,7 +31,9 @@ export function emergencyHeardLoosely(line: string): boolean {
   const m = /^\W*((?:\S+\W+){0,4}?)emergency\b/i.exec(line);
   if (!m) return false;
   const before = m[1]!.trim();
-  return /h[aeiy]{0,2}\W*p[iy]\W*[sz]?\W*[gk]|pisg|pizg|pisk|pesk/i.test(before.replace(/\s+/g, "")) || /^(?:hey|hi|hay|okay|ok)\W*$/i.test(before);
+  // The local streaming ear writes "hey Pisgah" as "Heape is the", so an h-word then a p and an s or z close behind also counts.
+  const joined = before.replace(/\W+/g, "").toLowerCase();
+  return /h[aeiy]{0,2}\W*p[iy]\W*[sz]?\W*[gk]|pisg|pizg|pisk|pesk/i.test(before.replace(/\s+/g, "")) || /^h[aeiy]{1,3}p\w{0,3}[sz]/.test(joined) || /^(?:hey|hi|hay|okay|ok)\W*$/i.test(before);
 }
 
 // The line an Emergency press leaves as its evidence: what happened, not words nobody said.
@@ -52,7 +54,8 @@ export function unidentifiedRef(at: Date, timeZone = "Africa/Lagos"): string {
 
 export type SpokenIdentity = { name: string; phone: string | null; words: string };
 // The words that introduce a name, as people say them, Nigerian English included ("her name na").
-const NAMING = /\b(?:(?:her|his|their|the patient'?s|patient'?s)\s+name\s+(?:is|na)|(?:she|he)\s+(?:is called|is named|says (?:she|he) is|says (?:her|his) name is)|(?:she|he)'s called|(?:they|people) call (?:her|him)|the patient is(?:\s+called)?)\b/i;
+// "now" and "no" are how the local streaming ear hears the Nigerian "na" after "her name".
+const NAMING = /\b(?:(?:her|his|their|the patient'?s|patient'?s)\s+name\s+(?:is|na|now|no)|(?:she|he)\s+(?:is called|is named|says (?:she|he) is|says (?:her|his) name is)|(?:she|he)'s called|(?:they|people) call (?:her|him)|the patient is(?:\s+called)?)\b/i;
 const NAME_RUN = /[A-Z][a-z'-]+(?:\s+[A-Z][a-z'-]+){1,3}/g;
 const NOT_NAME = /^(?:And|Phone|Her|His|She|He|The|Number|Em|Eh|Er|Um|Uh)$/;
 const PHONE = /(?:\+?234|0)\s*[789]\s*[01](?:[\s-]*\d){8}/;
@@ -61,8 +64,13 @@ const PHONE = /(?:\+?234|0)\s*[789]\s*[01](?:[\s-]*\d){8}/;
 export function identityFrom(line: string): SpokenIdentity | null {
   const m = NAMING.exec(line);
   if (!m) return null;
-  const rest = line.slice(m.index + m[0].length).replace(/\.{2,}|…/g, ",").split(/[.!?;]\s|\bnumber\b|\bphone\b/i)[0]!;
-  const runs = [...rest.matchAll(NAME_RUN)].map((r) => r[0].split(/\s+/).filter((w) => !NOT_NAME.test(w)).join(" ")).filter((n) => n.split(" ").length >= 2);
+  // The name is in the first sentence after the naming words, or the next one when an ear broke the sentence after a lone first name.
+  const parts = line.slice(m.index + m[0].length).replace(/\.{2,}|…/g, ",").split(/\bnumber\b|\bphone\b/i)[0]!.split(/[.!?;]\s/);
+  const runsIn = (t: string) => [...t.matchAll(NAME_RUN)].map((r) => r[0].split(/\s+/).filter((w) => !NOT_NAME.test(w)).join(" ")).filter((n) => n.split(" ").length >= 2);
+  const runs = runsIn(parts[0] ?? "").length ? runsIn(parts[0] ?? "") : runsIn(parts[1] ?? "");
+  // "Amika, Emikonvosu" is a first name and a surname with a pause between, when no longer run was heard.
+  const paused = /([A-Z][a-z'-]+),\s+([A-Z][a-z'-]+)\b/.exec(parts[0] ?? "");
+  if (!runs.length && paused && paused[1] !== paused[2] && !NOT_NAME.test(paused[1]!) && !NOT_NAME.test(paused[2]!)) runs.push(`${paused[1]} ${paused[2]}`);
   const name = runs.sort((x, y) => y.length - x.length)[0];
   if (!name) return null;
   const p = PHONE.exec(digitsSpoken(line));
@@ -71,10 +79,11 @@ export function identityFrom(line: string): SpokenIdentity | null {
   return { name, phone: phone && /^0[789][01]\d{8}$/.test(phone) ? phone : null, words: `${m[0]} ${name}` };
 }
 
-const DIGIT_WORDS: Record<string, string> = { zero: "0", oh: "0", o: "0", one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9" };
+// "over" is how the local streaming ear hears a spoken "oh" inside a phone number; it counts only inside a run of four or more digit words.
+const DIGIT_WORDS: Record<string, string> = { zero: "0", oh: "0", o: "0", over: "0", one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9" };
 // Spoken digits as digits, so "zero eight zero three" reads as 0803; "double" repeats the next digit.
 export function digitsSpoken(line: string): string {
-  return line.replace(/\b(?:(?:zero|one|two|three|four|five|six|seven|eight|nine|double|triple|oh|o)\b[\s,-]*){4,}/gi, (run) => {
+  return line.replace(/\b(?:(?:zero|one|two|three|four|five|six|seven|eight|nine|double|triple|oh|o|over)\b[\s,-]*){4,}/gi, (run) => {
     const out: string[] = [];
     let times = 1;
     for (const w of run.toLowerCase().split(/[\s,-]+/).filter(Boolean)) {

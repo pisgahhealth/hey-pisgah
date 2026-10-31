@@ -58,8 +58,8 @@ describe("hands-free entry rules", () => {
   });
 
   it("accepts a loose transcript only for audio the device heard as emergency", () => {
-    for (const yes of ["Hypiska,Hey, emergency!", "Hey Pisgah emergency", "hi pizga, emergency", "Hey, emergency."]) expect(emergencyHeardLoosely(yes)).toBe(true);
-    for (const no of ["page the emergency team", "this is an emergency admission", "emergency", "the patient is stable", "hey nurse, emergency bay three"]) expect(emergencyHeardLoosely(no)).toBe(false);
+    for (const yes of ["Hypiska,Hey, emergency!", "Hey Pisgah emergency", "hi pizga, emergency", "Hey, emergency.", "Heape is the emergency"]) expect(emergencyHeardLoosely(yes)).toBe(true);
+    for (const no of ["page the emergency team", "this is an emergency admission", "emergency", "the patient is stable", "hey nurse, emergency bay three", "help us, emergency", "happy that it is not an emergency"]) expect(emergencyHeardLoosely(no)).toBe(false);
   });
 
   it("takes a spoken name and phone only from a naming phrase", () => {
@@ -74,6 +74,13 @@ describe("hands-free entry rules", () => {
   it("takes a name and phone said the way people say them, hesitations and repeats included", () => {
     expect(identityFrom("Her name is Grace, Grace Okafor, the number is oh-eight-oh-three, one two three, four five six seven.")).toMatchObject({ name: "Grace Okafor", phone: "08031234567" });
     expect(identityFrom("Em, her name na Grace Okafor, her number na zero eight zero three one two three four five six seven")).toMatchObject({ name: "Grace Okafor", phone: "08031234567" });
+    // The local streaming ear hears "her name na" as "her name now" (rehearsal, 30 Oct).
+    expect(identityFrom("She's talking small now. Her name now blessing. Blessing Adie me. The number is over eight oh three")).toMatchObject({ name: "Blessing Adie" });
+    expect(identityFrom("She's talking small now. Her name no Blessing Adimi. The number is over eight over three, one two three four five six seven.")).toMatchObject({ name: "Blessing Adimi", phone: "08031234567" });
+    expect(identityFrom("His name is Amika, Emikonvosu. Phone is zero eight zero six")).toMatchObject({ name: "Amika Emikonvosu" });
+    expect(identityFrom("Her name is Grace, Grace Okafor")).toMatchObject({ name: "Grace Okafor" });
+    // "over" alone, or in a short run, is never a digit.
+    expect(identityFrom("Her name is Grace Okafor, she has been ill over three days")).toMatchObject({ name: "Grace Okafor", phone: null });
     expect(identityFrom("the bystander said she's called, eh, Blessing... Blessing Adeyemi")).toMatchObject({ name: "Blessing Adeyemi", phone: null });
     expect(identityFrom("They call him Chukwuemeka Obi, he no get phone")).toMatchObject({ name: "Chukwuemeka Obi", phone: null });
     // A first name alone, or a name nobody gave for this patient, is not taken.
