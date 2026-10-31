@@ -138,6 +138,8 @@ export type AccResult = {
   unaccounted: { owner: string; kind: string; action_id: string; completed_at: string | null }[];
   // Errors of the harness itself (driver, browser, a missing person step), kept apart from what the hospital or the agent did.
   harness_errors: string[];
+  // The serve's presence mode from /health: heartbeat means audio without a fresh signed beat was refused (D30); observed means the replay defence was not enforced.
+  presence: string | null;
   completion: { complete: boolean; reasons: string[] };
   countersign: { batches: number; batch_orders: number; batch_signed_by_voice: boolean; changed_after_batch_unsigned: boolean | null; unmatched_voice_orders: number };
   model: { calls: number; usd: number; rate_limited: number };

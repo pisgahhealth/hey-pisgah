@@ -806,7 +806,7 @@ async function finish(): Promise<void> {
     faults, delegations, speakers, unaccounted,
     countersign: { batches: signs.length, batch_orders: firstBatch.size, batch_signed_by_voice: signs.some((a) => transcriptLine(a.line_id)?.source === "audio"), changed_after_batch_unsigned: signs[0] ? later.every((a) => !firstBatch.has(a.proof?.record_id ?? "")) && later.length > 0 : null, unmatched_voice_orders: unmatchedOrders.length },
     model: { calls, usd: Number(usd.toFixed(4)), rate_limited: rateLimited },
-    harness_errors: harnessErrors, completion: { complete: false, reasons: [] }
+    harness_errors: harnessErrors, presence: (await getJson<{ presence?: string }>("/health"))?.presence ?? null, completion: { complete: false, reasons: [] }
   };
   result.completion = completion(result, script.lines.filter((l) => l.mode === "fault" || l.interrupt).length + (PROXY_PORT ? new Set(script.lines.filter((l) => l.lose_ack).map((l) => l.lose_ack!.path)).size : 0) + (page ? script.lines.filter((l) => l.offline_s || l.muted || (l.reload && (DRIVER !== "fake" || process.env["ACC_FAKE_RELOAD"] !== "0"))).length : 0));
   void signedIds;

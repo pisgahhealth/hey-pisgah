@@ -11,7 +11,7 @@ const step = (over: Partial<StepOutcome> = {}): StepOutcome => ({ line: "A01", p
 function result(over: Partial<AccResult> = {}): AccResult {
   const rows = [{ kind: "record_observation", ms: 4100, owner: "doctor", line_id: "l2", action_id: "a1" }, { kind: "order_test", ms: 6000, owner: "doctor", line_id: "l3", action_id: "a2" }];
   return {
-    measured_at: "2026-10-30T10:10:00.000Z", run_id: "t", kind: "rehearsal", driver: "say", browser: "launched", script_sha256: "0", engine_commit: "x", pisgah: "frozen", payment: "simulated",
+    measured_at: "2026-10-30T10:10:00.000Z", run_id: "t", kind: "rehearsal", driver: "say", browser: "launched", script_sha256: "0", engine_commit: "x", pisgah: "frozen", payment: "simulated", presence: "heartbeat",
     steps: [step()], touches: { emr: 1, strip: 1, source: "strip counter read from the browser", by_line: {}, other_people: [] }, touches_allowed: 4, confirmations_spoken: 3,
     speed: { rows, table: speedTable(rows, [], [600]), wake_ms: [600] }, errors: [], error_rows: [], faults: [], unaccounted: [],
     delegations: [{ id: "d1", team: "surgery", acknowledged: true, acknowledged_by_voice: true, completed_from_record: true, acknowledged_counted_as_done: false }],
