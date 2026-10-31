@@ -36,6 +36,9 @@ export type PisgahPortOptions = {
   now?: () => Date;
   // The door's request budget for one agent session: a burst and a steady rate per second; reads wait behind a reserve kept for writes.
   budget?: DoorBudget | null;
+  // Mints the owner a fresh agent bearer after a 401; null when it cannot, so the 401 stands.
+  refresh?: (owner: string) => Promise<string | null>;
+  sleep?: (ms: number) => Promise<void>;
 };
 export type DoorBudget = { capacity: number; perSecond: number; writeReserve: number; readWaitMs: number };
 // Pisgah's door gives an agent session 60 requests at once and one a second after that (rate-limit.ts).
@@ -77,7 +80,7 @@ export class PisgahPort implements EmrPort {
   readonly refusals: Refusal[] = [];
   private readonly allow: { method: string; re: RegExp }[];
   // Ids the door gave back, so a patient's later words reach the admission and arrival the agent saw.
-  private readonly learned = { admission_by_patient: new Map<string, string>(), visit_by_patient: new Map<string, string>(), patient_by_admission: new Map<string, string>(), label: new Map<string, string>() };
+  private readonly learned = { admission_by_patient: new Map<string, string>(), visit_by_patient: new Map<string, string>(), visit_by_admission: new Map<string, string>(), patient_by_admission: new Map<string, string>(), label: new Map<string, string>() };
 
   // Present only when the profile names the hospital's speaker match and read-back, so an older profile keeps attribution off.
   readonly speaker?: (owner: string, voice: SpeakerInput, prov: Provenance) => Promise<SpeakerVerdict>;
@@ -133,7 +136,7 @@ export class PisgahPort implements EmrPort {
   // Each order on the visit by its record id, its test key by the hospital's own test name, and its state now.
   private async resultsFor(subject: EmrTarget & { visit_id?: string | null }, prov: Provenance): Promise<OrderResult[]> {
     const spec = this.profile.result_orders!;
-    const visit = subject.visit_id ?? (subject.patient_id ? this.learned.visit_by_patient.get(subject.patient_id) : undefined);
+    const visit = subject.visit_id ?? (subject.patient_id ? this.learned.visit_by_patient.get(subject.patient_id) : undefined) ?? (subject.admission_id ? this.learned.visit_by_admission.get(subject.admission_id) : undefined);
     if (!visit) return [];
     const json = await this.read(spec, { visit_id: visit, patient_id: subject.patient_id, admission_id: subject.admission_id || undefined }, prov);
     const byName = new Map(Object.entries(this.profile.orders?.tests ?? {}).map(([k, v]) => [v.name.toLowerCase(), k]));
@@ -158,7 +161,10 @@ export class PisgahPort implements EmrPort {
     const op = this.profile.ops.speaker!;
     if ("pcm16k" in voice && voice.pcm16k.length > 1 && !this.profile.headers.audio_segments) return { speaker: "unverified", reason: "segments_unsupported" };
     const audio = "pcm16k" in voice ? { bytes: concatBytes(voice.pcm16k), segments: voice.pcm16k.map((p) => p.byteLength) } : null;
-    const r = await this.request("POST", op.path, prov, audio ?? { body: { embedding: voice, model: "nemo_en_titanet_small" } });
+    const send = () => this.request("POST", op.path, prov, audio ?? { body: { embedding: voice, model: "nemo_en_titanet_small" } });
+    let r = await send();
+    // The door's rate limit says to ask again, so the match is asked once more after a second.
+    if (r.kind === "response" && r.status === 429) { await (this.o.sleep ?? ((ms: number) => new Promise<void>((ok) => setTimeout(ok, ms))))(1000); r = await send(); }
     if (r.kind !== "response" || r.status !== 200) return { speaker: "unverified", reason: r.kind === "response" ? `door_${r.status}` : r.reason };
     const j = r.json as Record<string, unknown> | null;
     const sp = j?.["speaker"];
@@ -250,8 +256,7 @@ export class PisgahPort implements EmrPort {
     const query = Object.entries(init.query ?? {});
     if (query.some(([k, v]) => !/^[A-Za-z][A-Za-z0-9_]{0,40}$/.test(k) || !QUERY_VALUE.test(v))) return this.refuse(method, clean, "bad_header");
     const qs = query.length ? `?${new URLSearchParams(query).toString()}` : "";
-    const bearer = this.o.bearers[prov.owner];
-    if (!bearer) return this.refuse(method, clean, "no_bearer_for_owner");
+    if (!this.o.bearers[prov.owner]) return this.refuse(method, clean, "no_bearer_for_owner");
     if (!EVIDENCE.test(prov.evidence) || Number.isNaN(Date.parse(prov.spoken_at)) || (init.idempotencyKey !== undefined && !IDEM.test(init.idempotencyKey))) return this.refuse(method, clean, "bad_header");
     if ([prov.voice?.authorisation, prov.voice?.confirmation].some((v) => v !== undefined && !VOICE.test(v))) return this.refuse(method, clean, "bad_header");
     if (prov.read_back_digest !== undefined && !DIGEST.test(prov.read_back_digest)) return this.refuse(method, clean, "bad_header");
@@ -275,12 +280,19 @@ export class PisgahPort implements EmrPort {
     const at = this.now().toISOString();
     const log = (status: number | null, replayed: boolean, outcome: DoorLog["outcome"], reason?: string) =>
       this.o.onRequest?.({ at, method, path: clean, status, ms: Math.round(performance.now() - t0), replayed, headers: { authorization: "Bearer <redacted>", ...redactVoice(shown, h) }, body: clean === this.profile.ops.speaker?.path ? { [init.bytes ? "audio" : "embedding"]: init.bytes ? "<audio withheld>" : "<voiceprint withheld>" } : init.bytes ? "<bytes withheld>" : init.body ?? null, outcome, ...(reason ? { reason } : {}) });
+    const send = (bearer: string) => (this.o.fetch ?? fetch)(`${this.profile.base_url.replace(/\/+$/, "")}/${clean}${qs}`, {
+      method, headers: { authorization: `Bearer ${bearer}`, ...shown }, ...(init.bytes ? { body: new Uint8Array(init.bytes) } : init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
+      signal: AbortSignal.timeout(this.profile.timeout_ms)
+    });
     let res: Response;
     try {
-      res = await (this.o.fetch ?? fetch)(`${this.profile.base_url.replace(/\/+$/, "")}/${clean}${qs}`, {
-        method, headers: { authorization: `Bearer ${bearer}`, ...shown }, ...(init.bytes ? { body: new Uint8Array(init.bytes) } : init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
-        signal: AbortSignal.timeout(this.profile.timeout_ms)
-      });
+      const bearer = this.o.bearers[prov.owner]!;
+      res = await send(bearer);
+      // The door refuses an expired bearer before it claims the key, so the same request goes once more under a fresh one.
+      if (res.status === 401 && this.o.refresh) {
+        const fresh = await this.freshBearer(prov.owner, bearer);
+        if (fresh) { await res.body?.cancel(); if (pacer) pacer.write(); res = await send(fresh); }
+      }
     } catch (e) {
       const reason = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError") ? "timeout" : "unreachable";
       log(null, false, "network_error", reason);
@@ -293,6 +305,18 @@ export class PisgahPort implements EmrPort {
     // A refused write keeps the door's own words in the log, for the private trace only.
     log(res.status, replayed, "response", res.status >= 300 ? text.slice(0, 300) : undefined);
     return { kind: "response", status: res.status, json: body, replayed };
+  }
+
+  // One mint per owner at a time: requests refused together wait on the same mint, and one sent before it finished takes its bearer.
+  private readonly minting = new Map<string, Promise<string | null>>();
+  private async freshBearer(owner: string, used: string): Promise<string | null> {
+    if (this.o.bearers[owner] && this.o.bearers[owner] !== used) return this.o.bearers[owner]!;
+    let p = this.minting.get(owner);
+    if (!p) {
+      p = this.o.refresh!(owner).catch(() => null).then((b) => { if (b) this.o.bearers[owner] = b; return b; }).finally(() => this.minting.delete(owner));
+      this.minting.set(owner, p);
+    }
+    return p;
   }
 
   private admissionFor(target: EmrTarget): string {
@@ -358,8 +382,11 @@ export class PisgahPort implements EmrPort {
     const patient = target.patient_id ?? Object.entries(this.profile.targets.admission_by_patient).find(([, a]) => a === admissionId)?.[0] ?? this.learned.patient_by_admission.get(admissionId) ?? null;
     if (patient) { this.learned.patient_by_admission.set(admissionId, patient); this.learned.admission_by_patient.set(patient, admissionId); }
     this.learned.label.set(admissionId, label);
+    // The stay's visit, when the read names it, so results on a patient the agent did not open still reach the task.
+    const visit = op.visit ? str(pick(json, op.visit)) : null;
+    if (visit && EmrId.safeParse(visit).success) { this.learned.visit_by_admission.set(admissionId, visit); if (patient) this.learned.visit_by_patient.set(patient, visit); }
     const keywords = [label, ...Object.values(facts).filter((v): v is string => v !== null && v.length <= 60 && !v.startsWith("{") && /[A-Za-z]{2}/.test(v)), ...this.profile.vocabulary];
-    return { admission_id: admissionId, patient_id: patient, visit_id: patient ? this.learned.visit_by_patient.get(patient) ?? null : null, label, facts, keywords };
+    return { admission_id: admissionId, patient_id: patient, visit_id: (patient ? this.learned.visit_by_patient.get(patient) : undefined) ?? this.learned.visit_by_admission.get(admissionId) ?? null, label, facts, keywords };
   }
 
   async commit(kind: EmrWriteKind, rawArgs: WorkArgs, intentKey: string, prov: Provenance): Promise<EmrCommit> {
