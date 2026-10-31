@@ -22,8 +22,8 @@ const ProofSpec = ReadSpec.extend({
   // A check is "$name" (equal), "@nonnull", "@startswith:$name" or "@contains:$name".
   checks: z.record(z.string(), z.string()).refine((c) => Object.keys(c).length > 0, "a proof needs a check")
 });
-// A read before a write that picks values for it, such as the first free slot of a day.
-const BeforeSpec = ReadSpec.extend({ list: z.string().regex(/^[A-Za-z0-9_]+((\.|\[\]\.|,)[A-Za-z0-9_]+)*$/), where: z.record(z.string(), z.json()), field: Dotted, split: z.string().max(2).optional(), vars: z.array(z.string().regex(/^[a-z_]+$/)).min(1) });
+// A read before a write that picks values for it, such as the first free slot of a day; with no list the answer itself is the one row.
+const BeforeSpec = ReadSpec.extend({ list: z.string().regex(/^[A-Za-z0-9_]+((\.|\[\]\.|,)[A-Za-z0-9_]+)*$/).optional(), where: z.record(z.string(), z.json()), field: Dotted, split: z.string().max(2).optional(), vars: z.array(z.string().regex(/^[a-z_]+$/)).min(1) });
 const WriteOp = z.strictObject({
   method: z.literal("POST"), path: PathTpl, body: z.record(z.string(), z.json()),
   // Where the record id is in the answer; store names the event; positive names a count that must be above zero.

@@ -51,6 +51,8 @@ export const SCREENS: Record<string, Spec> = {
   prepare_bill: { page: "accounts_desk", section: "bill", values: () => ({}) },
   prepare_order: { page: "pharmacy_queue", section: "queue", values: (a) => pick(a, { task: "title" }) },
   dispense_order: { page: "pharmacy_queue", section: "queue", values: (a) => pick(a, { task: "title" }) },
+  receive_specimen: { page: "lab_board", section: "worklist", values: (a) => pick(a, { test: "test" }) },
+  cancel_test: { page: "lab_board", section: "worklist", values: (a) => pick(a, { test: "test", reason: "reason" }) },
   acknowledge_task: { page: null, section: "worklist", values: (a) => pick(a, { task: "title" }) }
 };
 // Kinds with no page of their own: the strip reports them, and the record they leave is someone else's page or none.

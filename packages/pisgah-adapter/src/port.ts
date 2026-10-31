@@ -532,7 +532,7 @@ export class PisgahPort implements EmrPort {
     for (const b of op.before ?? []) {
       let json: unknown;
       try { json = await this.read(b, vars, prov); } catch (e) { return { ok: false, reason: e instanceof EmrPortError ? `before_${e.code}` : "before_failed", status: null, retryable: false, counted: false }; }
-      const hit = pickAll(json, b.list).find((x) => Object.entries(b.where).every(([k, want]) => pick(x, k) === want));
+      const hit = (b.list ? pickAll(json, b.list) : [json]).find((x) => Object.entries(b.where).every(([k, want]) => pick(x, k) === want));
       if (!hit) return { ok: false, reason: "nothing_free", status: null, retryable: false, counted: false };
       const value = String(pick(hit, b.field) ?? "");
       const parts = b.split ? value.split(b.split) : [value];
