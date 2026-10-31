@@ -121,7 +121,7 @@ export type EmrIdentityHold = {
 };
 
 // Words in a label that never tell two patients apart.
-const NOT_DISTINCT = new Set(["unknown", "arrival", "zz-test", "test", "patient", "baby", "master", "miss", "mrs", "the", "and"]);
+const NOT_DISTINCT = new Set(["unknown", "unnamed", "arrival", "zz-test", "test", "patient", "baby", "master", "miss", "mrs", "the", "and"]);
 const tokensOf = (s: string) => norm(s).split(" ").map((w) => w.replace(/'s$/, ""));
 const distinct = (labels: readonly string[], not: ReadonlySet<string> = new Set()) => labels.flatMap(tokensOf).filter((p) => p.length >= 3 && !/\d/.test(p) && !NOT_DISTINCT.has(p) && !not.has(p));
 // The other open patients a line names by a word only their name has, when it uses no switch phrase; the patient in context is never among them.

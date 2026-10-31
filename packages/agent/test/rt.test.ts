@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { ORDER_REFERENCE_KINDS } from "../src/emr/gate.js";
 import type { EmrContext, EmrTarget, Orderables, Provenance } from "../src/emr/port.js";
 import type { SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
-import { naturalYes, noteKind } from "../src/emr/runtime.js";
+import { naturalYes, noteKind, patientNames } from "../src/emr/runtime.js";
+import { otherPatientsNamed } from "../src/emr/entry.js";
 import { prescriptionSaid } from "../src/emr/work.js";
 import { ADMIT, ClerkFake, DOC, PAT, VISIT, clerkBoot, ins, type W } from "./clerking-helpers.js";
 
@@ -341,6 +342,14 @@ describe("RT 5: the other patient named without a switch phrase", () => {
     expect(of(port, "order_test").map((w) => w.args)).toEqual([{ visit_id: VISIT, patient_id: PAT, test: "fbc" }]);
     expect(rt.view(emeka)!.questions).toEqual([]);
     await rt.stop();
+  });
+
+  // Sandbox rt-proof-2: a task opened for a delegation carries its title as label, and "emergency" in it held an admission line.
+  it("never reads a delegation task's title as a patient's name", () => {
+    const handed = { entry: "delegation", label: "Register the emergency arrival", identities: [] };
+    expect(patientNames(handed)).toEqual([]);
+    expect(otherPatientsNamed("Admit him to A and E as an emergency, put him on a bed.", [{ labels: patientNames(handed) }], ["Unnamed arrival"])).toEqual([]);
+    expect(otherPatientsNamed("Admit him to A and E as an emergency.", [{ labels: ["Register the emergency arrival"] }], ["Unnamed arrival"])).toHaveLength(1);
   });
 
   it("negative control: with no other patient open the line proceeds as before", async () => {

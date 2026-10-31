@@ -101,6 +101,8 @@ export type EmrTask = {
   obligations: EmrObligation[]; speed: SpeedRow[];
   // Spoken identities held for the front desk, and whether the patient is still unnamed.
   identities: EmrIdentityHold[]; unidentified: boolean; label: string;
+  // How the task was opened; a task opened for a delegation is labelled with the task's title, not the patient's name.
+  entry?: string | null;
   // Work this owner's agent handed on or was handed, each state as the record showed it.
   delegations: EmrDelegation[];
   prefs: { applied: PrefUse[]; withheld: PrefUse[]; candidates: string[] };
@@ -212,7 +214,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       run_id: String(x["run_id"]), goal: "", state: "running", reason: null, actions: new Map(), order: [], lines: [], questions: [], notes: [], refusals: [],
       calls: 0, usd: 0, fallbacks: 0, created_at: e.wall_at, updated_at: e.wall_at,
       watch: null, changes: [], offered: [], pages: [], pause: null, digests: [], ears: [], version: null, obligations: [], speed: [],
-      identities: [], unidentified: !!x["unidentified"], label: String(x["label"] ?? ""), delegations: [], prefs: { applied: [], withheld: [], candidates: [] }, madeOffers: []
+      identities: [], unidentified: !!x["unidentified"], label: String(x["label"] ?? ""), entry: (x["entry"] as string | undefined) ?? null, delegations: [], prefs: { applied: [], withheld: [], candidates: [] }, madeOffers: []
     };
   }
   if (!t) return null;
@@ -404,6 +406,8 @@ export function percentile(xs: readonly number[], p: number): number | null {
 // The held work that only tells the clinician something came back; no record is written for it.
 export const TELL_ME_KIND = "tell_me";
 
+// The names a line may use for a task's patient: a delegation's task carries its title as label, so only the names said for its patient count.
+export const patientNames = (t: Pick<EmrTask, "entry" | "label" | "identities">): string[] => (t.entry === "delegation" ? t.identities.filter((i) => i.state !== "cancelled").map((i) => i.name) : knownNames(t));
 // The value that names what a request is about; a long line with a different one is a new request.
 const PRIMARY_FIELD: Readonly<Record<string, string>> = { prescribe: "drug", order_test: "test", page_staff: "to", schedule_follow_up: "clinic", record_allergy: "substance" };
 // A bare count said as the answer to "how many" ("nine", "3 doses"), or null.
@@ -931,8 +935,8 @@ export class EmrRuntime {
   private holdForWhom(l: Live, lineId: string, s: SayInput, text: string, spokenAt: string): boolean {
     const t = l.task;
     const others = [...this.live.values()].map((x) => x.task).filter((x) => x !== t && x.owner === s.owner && !CLOSED_TASK.has(x.state) && (x.admission_id || x.patient_id) && (!t.patient_id || x.patient_id !== t.patient_id))
-      .map((x) => ({ labels: knownNames(x), task_id: x.task_id, label: x.label }));
-    const mine = knownNames(t);
+      .map((x) => ({ labels: patientNames(x), task_id: x.task_id, label: x.label }));
+    const mine = patientNames(t);
     const hit = others.length ? otherPatientsNamed(text, others, mine) : [];
     if (!hit.length || currentPatientNamed(text, mine)) return false;
     const choices = [{ label: t.label || "this patient", task_id: t.task_id }, ...hit.map((h) => ({ label: h.label, task_id: h.task_id }))];
@@ -953,7 +957,7 @@ export class EmrRuntime {
       if (t.owner !== s.owner || CLOSED_TASK.has(t.state)) continue;
       const q = t.questions.filter((y) => y.answered_by === null && y.whom).at(-1);
       if (!q || Date.parse(spokenAt) - Date.parse(q.at) > (this.o.answerWindowMs ?? 120_000)) continue;
-      const choices = q.whom!.choices.map((c) => ({ ...c, labels: [c.label, ...(this.live.get(c.task_id) ? knownNames(this.live.get(c.task_id)!.task) : [])] }));
+      const choices = q.whom!.choices.map((c) => ({ ...c, labels: this.live.get(c.task_id) ? patientNames(this.live.get(c.task_id)!.task) : [c.label] }));
       const picks = otherPatientsNamed(text, choices, []);
       if (picks.length !== 1) continue;
       const lineId = this.nextLineId(s.owner, text);
