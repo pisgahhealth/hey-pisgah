@@ -70,6 +70,13 @@ export const ROUTES: Record<ProviderId, Route> = {
   }
 };
 
+// The second Spark Open route a serve may fall back to, by name, only when its key is set; Modal stays the first route.
+export function secondSparkRoute(name: string | undefined, keys: Record<string, string>): { provider: ProviderId; model: string } | null {
+  if (name !== "baseten" && name !== "fireworks") return null;
+  const r = ROUTES[name];
+  return r.apiKey(keys) && r.baseURL(keys) ? { provider: r.provider, model: r.models[0]! } : null;
+}
+
 export function routeFor(provider: string, model: string): Route {
   const r = (ROUTES as Record<string, Route | undefined>)[provider];
   if (!r) throw new ModelError("unknown_provider", "no such route", { provider });
