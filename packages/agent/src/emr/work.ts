@@ -141,6 +141,31 @@ export function cadenceSaid(code: string, line: string): boolean {
 }
 
 // True when an enum value was said in the line, with underscores read as spaces.
+// Edit distance between two short strings, for the ear's own spellings of a catalogue word.
+function editDistance(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j]! + 1, cur[j - 1]! + 1, prev[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length]!;
+}
+// True when a run of the line's words, letters only, is within a quarter of a long catalogue word's letters of it ("IV pay rasitamol" for "IV paracetamol").
+export function wordHeardLike(value: string, line: string): boolean {
+  const want = value.toLowerCase().replace(/[^a-z]+/g, "");
+  if (want.length < 8) return false;
+  const words = line.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean);
+  const room = Math.floor(want.length / 4);
+  for (let i = 0; i < words.length; i++) {
+    let run = "";
+    for (let j = i; j < words.length && run.length < want.length + room; j++) {
+      run += words[j]!.replace(/[^a-z]+/g, "");
+      if (Math.abs(run.length - want.length) <= room && editDistance(run, want) <= room) return true;
+    }
+  }
+  return false;
+}
 export const wordSaid = (value: string, line: string): boolean => ` ${line.toLowerCase().replace(/[^a-z0-9]+/g, " ")} `.includes(` ${value.toLowerCase().replace(/_/g, " ")} `);
 
 // A plain line for the strip, built from the arguments rather than from model text.

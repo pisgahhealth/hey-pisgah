@@ -8,7 +8,7 @@ import { primaryClass } from "./classes.js";
 import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
-import { BATCH_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
+import { BATCH_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordHeardLike, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
@@ -1799,7 +1799,11 @@ export class EmrRuntime {
   private orderableSaid(m: Record<string, readonly string[]>, named: string | null | undefined, line: string): string | null {
     if (named && m[named]?.some((w) => wordSaid(w, line))) return named;
     const hit = Object.entries(m).filter(([, ws]) => ws.some((w) => wordSaid(w, line)));
-    return hit.length === 1 ? hit[0]![0] : null;
+    if (hit.length === 1) return hit[0]![0];
+    // The ear's own spelling of the one entry the gate named counts only when no entry is said outright and no other entry is heard alike.
+    if (hit.length || !named || !m[named]) return null;
+    const alike = Object.entries(m).filter(([, ws]) => ws.some((w) => wordHeardLike(w, line)));
+    return alike.length === 1 && alike[0]![0] === named ? named : null;
   }
 
   // What a short line says to the voice-order rules: sign everything, or a yes or no to the latest open order question.
