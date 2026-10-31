@@ -44,6 +44,9 @@ describe("acceptance harness", () => {
     expect(stepStatus([heldName, { expect: { arrival: "A" }, ok: true, optional: false, detail: "" }], false)).toBe("held");
     expect(stepStatus([heldName, { expect: { arrival: "A" }, ok: false, optional: false, detail: "" }], false)).toBe("failed");
     expect(completion(result({ steps: [step({ line: "B02", status: "held" })] }), 0).reasons).toEqual(["B02 held"]);
+    // Harness audit F1 and F3: a harness error or a code change during the run keeps it from completing.
+    expect(completion({ ...result(), harness_errors: ["B04M: no Mute button"] }, 0).reasons).toEqual(["harness error: B04M: no Mute button"]);
+    expect(completion({ ...result(), trees_changed: "at serve restart 1: engine b+2" }, 0).complete).toBe(false);
   });
   it("names who did each step", () => {
     expect(didBy({ who: "doctor", mode: "speak" }, "human")).toMatch(/Samuel's own voice/);

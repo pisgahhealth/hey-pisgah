@@ -1,7 +1,8 @@
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync, writeSync, appendFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { createHash } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import { createServer, request as httpRequest } from "node:http";
 import type { EmrTaskView } from "@hey-pisgah/agent";
@@ -87,7 +88,9 @@ async function refreshBound(): Promise<void> {
     if (!b.admission && b.visit && HOSPITAL === "sandbox" && hospital.hasQuery("admission_for_visit")) { try { const a = (await hospital.query("admission_for_visit", { visit: b.visit }))[0]?.["id"]; if (a) b.admission = String(a); } catch { /* not admitted yet */ } }
   }
 }
-const resolveVar = (v: string): string => v.replace(/\$(A|B)\.(patient|visit|admission)/g, (_m, r: "A" | "B", f: "patient" | "visit" | "admission") => String(bound[r]?.[f] ?? ""));
+// $since is the start of the step being checked, so a check can ask for rows that step made.
+let stepStartedAt = new Date(0).toISOString();
+const resolveVar = (v: string): string => v.replace(/\$since\b/g, () => stepStartedAt).replace(/\$(A|B)\.(patient|visit|admission)/g, (_m, r: "A" | "B", f: "patient" | "visit" | "admission") => String(bound[r]?.[f] ?? ""));
 const ofPatient = (ref: "A" | "B" | null, owner?: string) => allActions(owner).filter((a) => !ref || (bound[ref] && (a.patient_id === bound[ref]!.patient || bound[ref]!.tasks.has(a.task_id))));
 const doctorTasks = (ref: "A" | "B" | null) => (views.get(DOCTOR) ?? []).filter((t) => !ref || (bound[ref] && (t.patient_id === bound[ref]!.patient || bound[ref]!.tasks.has(t.task_id))));
 
@@ -107,7 +110,7 @@ if (PROXY_PORT) {
     });
     up.on("error", () => { res.writeHead(502); res.end(); });
     req.pipe(up);
-  }).listen(PROXY_PORT, "127.0.0.1");
+  }).on("error", (e) => { log(`the door proxy could not listen on :${PROXY_PORT} (${e.message}); stop whatever holds that port and run again`); process.exit(2); }).listen(PROXY_PORT, "127.0.0.1");
 }
 
 // Serve control by port and the documented start script only.
@@ -130,6 +133,7 @@ async function restartServe(signal: "SIGKILL" | "SIGTERM"): Promise<{ ms: number
   for (let i = 0; i < 240 && (pidsOnPort().length || alive().length); i++) await wait(250);
   if (alive().length) { log(`restart: the old serve (pids ${alive().join(",")}) was still stopping after 60 s, so it was killed`); for (const p of alive()) { try { process.kill(p, "SIGKILL"); } catch { /* gone */ } } await wait(500); }
   restarts += 1;
+  recordTrees(`at serve restart ${restarts}`);
   const stoppedMs = Date.now() - at;
   startServe();
   const ok = await healthy();
@@ -273,8 +277,10 @@ async function deliver(line: Line): Promise<{ lineEnd: string | null; note: stri
   }
   const voice = line.mode === "play" ? script.voices[line.who] ?? "Samantha" : script.voices["doctor"] ?? "Rishi";
   if (line.mode === "speak" && DRIVER === "human") {
-    process.stdout.write(`\n\x1b[1m  SAY (${line.id}): ${text}\x1b[0m\n  (the harness moves on when it hears you; Enter moves on if it does not)\n`);
+    process.stdout.write(`\n\x1b[1m  SAY (${line.id}): ${text}\x1b[0m\n  (the harness moves on when it hears you; press Enter only once you have said it)\n`);
     const promptAt = now();
+    // An offline line goes back online on the harness's own clock from the prompt, whatever Samuel does, so his words are heard once the network returns.
+    if (line.offline_s && page) setTimeout(() => { void setOffline(false).then(() => log(`${line.id}: back online ${line.offline_s} s after the prompt`)); }, line.offline_s * 1000);
     const ac = new AbortController();
     // Whichever comes first: the line appears in the doctor's transcript, or Samuel presses Enter.
     const heardIt = (async () => { while (!ac.signal.aborted && !lineAfter(promptAt)) await wait(300); return "heard"; })();
@@ -298,7 +304,7 @@ async function deliver(line: Line): Promise<{ lineEnd: string | null; note: stri
 const nudgedOwner = (who: Who, ref: "A" | "B" | null): string | null => ownersOf(who).find((o) => ofPatient(ref, o).some((a) => a.kind === "nudge_owner" && a.state === "completed")) ?? null;
 
 // The browser the doctor works in, launched headed so the strip's own counter can be read; the person signs in and grants the microphone.
-type Page = { evaluate: <T>(fn: (arg: string) => T, arg: string) => Promise<T>; screenshot: (o: { path: string }) => Promise<unknown>; click: (s: string) => Promise<void>; goto: (u: string, o?: unknown) => Promise<unknown>; fill: (s: string, v: string) => Promise<void>; waitForURL: (f: (u: URL) => boolean, o?: unknown) => Promise<void>; waitForSelector: (s: string, o?: unknown) => Promise<unknown>; getByRole: (r: string, o?: unknown) => { waitFor: (o?: unknown) => Promise<void>; click: () => Promise<void>; locator: (s: string, o?: unknown) => { first: () => { click: () => Promise<void> } } }; waitForLoadState: (s: string) => Promise<void>; waitForFunction: (f: (a: string) => boolean, a: string, o?: unknown) => Promise<unknown>; locator: (s: string) => { count: () => Promise<number> } };
+type Page = { evaluate: <T>(fn: (arg: string) => T, arg: string) => Promise<T>; screenshot: (o: { path: string }) => Promise<unknown>; click: (s: string, o?: unknown) => Promise<void>; goto: (u: string, o?: unknown) => Promise<unknown>; fill: (s: string, v: string) => Promise<void>; waitForURL: (f: (u: URL) => boolean, o?: unknown) => Promise<void>; waitForSelector: (s: string, o?: unknown) => Promise<unknown>; getByRole: (r: string, o?: unknown) => { waitFor: (o?: unknown) => Promise<void>; click: () => Promise<void>; locator: (s: string, o?: unknown) => { first: () => { click: () => Promise<void> } } }; waitForLoadState: (s: string) => Promise<void>; waitForFunction: (f: (a: string) => boolean, a: string, o?: unknown) => Promise<unknown>; locator: (s: string) => { count: () => Promise<number> } };
 let page: Page | null = null;
 let browserClose: (() => Promise<void>) | null = null;
 const STRIP = 'section[aria-label^="Agent for"]';
@@ -338,7 +344,13 @@ async function openBrowser(): Promise<void> {
   pg.on("framenavigated", (f) => {
     const fr = f as { parentFrame: () => unknown; url: () => string; evaluate: (fn: () => unknown) => Promise<unknown> };
     if (fr.parentFrame() !== null) return;
-    void fr.evaluate(() => (window as unknown as { __accDoc?: number }).__accDoc).then((d) => { const fresh = d !== doc; doc = d; if (fresh) realignFakeMic(fr.url().replace(/^https?:\/\/[^/]+/, "").slice(0, 60)); }, () => undefined);
+    void fr.evaluate(() => (window as unknown as { __accDoc?: number }).__accDoc).then((d) => {
+      const fresh = d !== doc; doc = d;
+      if (!fresh) return;
+      // A new document the harness did not ask for (a dev-server memory restart) is recorded as a harness error under every driver.
+      if (listeningSince && !reloading) { harnessErrors.push(`the doctor's page reloaded by itself at ${now()}`); log("the doctor's page reloaded by itself"); }
+      realignFakeMic(fr.url().replace(/^https?:\/\/[^/]+/, "").slice(0, 60));
+    }, () => undefined);
   });
   pg.on("response", (r) => { const x = r as { url: () => string; status: () => number; request: () => { method: () => string } }; const u = x.url(); if (x.request().method() === "POST" && u.includes(`:${SERVE_PORT}/tasks/`)) appendFileSync(join(OUT, "strip-posts.log"), `${now()} ${u.replace(/^.*\/tasks/, "/tasks").slice(0, 80)} ${x.status()}\n`); });
   pg.on("requestfailed", (r) => { const x = r as { url: () => string; failure: () => { errorText: string } | null }; if (x.url().includes(`:${SERVE_PORT}/`)) appendFileSync(join(OUT, "strip-posts.log"), `${now()} FAILED ${x.url().replace(/^.*\/tasks/, "/tasks").slice(0, 80)} ${x.failure()?.errorText ?? ""}\n`); });
@@ -360,8 +372,8 @@ async function openBrowser(): Promise<void> {
   await page.waitForSelector(STRIP, { timeout: 120_000 });
   log(`browser: signed in as ${script.people["doctor"]!.login}; the strip is mounted`);
   if (DRIVER === "human") {
-    process.stdout.write("\n  In the Chrome window: press the ear button once to grant the microphone, then once more to start listening. Press Enter here when it says Listening.\n");
-    await rl!.question("");
+    process.stdout.write("\n  In the Chrome window: press the ear button once to grant the microphone, then once more to start listening. Type done here when it says Listening.\n");
+    await typedDone();
   } else {
     // The first press grants the microphone and arms the wake spotter; once it says so, a second press starts listening, as F1's walks do.
     // A press before the strip hydrates is lost, so the harness waits, presses, and presses again only if nothing changed.
@@ -374,6 +386,7 @@ async function openBrowser(): Promise<void> {
     await page.waitForSelector(`${STRIP} button[aria-label="Stop listening"]`, { timeout: 30_000 }).catch(() => { log("browser: the strip did not start listening"); harnessErrors.push("browser: the strip did not start listening"); });
     log("browser: the harness pressed Listen (the one microphone grant, and a start if the strip asked for one)");
   }
+  listeningSince = now();
 }
 let setOffline: (on: boolean) => Promise<void> = async () => undefined;
 let reloadBack = false;
@@ -401,8 +414,10 @@ async function check(e: Expect, line: Line, lineId: string | null, before: Set<s
     const first = norm(e.name).split(" ")[0]!;
     const fresh = ids.filter((i) => during(i.at) || (e.established && i.state === "done"));
     // Only the script's own name passes; the ear's other spelling is held and uncertain, never an established identity.
-    const exact = fresh.find((i) => norm(i.name) === norm(e.name) && (!e.established || i.state === "done"));
-    if (exact) return { ok: true, detail: `${e.established ? "established" : "held"} ${exact.name} ${exact.phone ?? "no phone"} (${exact.state})` };
+    // The script's spelling, or a spelling the ear is known to write for this name, listed in the script and on the run sheet.
+    const names = new Set([e.name, ...(e.spellings ?? [])].map(norm));
+    const exact = fresh.find((i) => names.has(norm(i.name)) && (!e.established || i.state === "done"));
+    if (exact) return { ok: true, detail: `${e.established ? "established" : "held"} ${exact.name}${norm(exact.name) === norm(e.name) ? "" : ` (a known ear spelling of ${e.name})`} ${exact.phone ?? "no phone"} (${exact.state})` };
     const like = fresh.find((i) => norm(i.name).startsWith(`${first} `)) ?? fresh[0];
     return { ok: false, held: !!like, detail: like ? `held, uncertain: ${like.name} (said ${e.name}) ${like.phone ?? "no phone"} (${like.state})` : `held: ${ids.map((i) => i.name).join(", ") || "none"}` };
   }
@@ -419,13 +434,24 @@ async function check(e: Expect, line: Line, lineId: string | null, before: Set<s
     return { ok: vals.length >= n, detail: `${e.act}: ${xs.map((a) => `${a.state}${a.reason ? `(${a.reason.slice(0, 60)})` : ""}`).join(", ") || "none"}${e.values ? `; values ${JSON.stringify(xs.map((a) => a.args)).slice(0, 160)}` : ""}` };
   }
   if ("awaits" in e) { const a = ofPatient(ref, DOCTOR).find((x) => x.kind === e.awaits && x.state === "proposed" && x.awaiting && during(x.proposed_at)); return { ok: !!a, detail: a ? `awaiting ${a.awaiting}` : "not awaiting" }; }
-  if ("question" in e) { const q = doctorTasks(ref).flatMap((t) => t.asked).filter((x) => during(x.at)).map((x) => x.text); const hit = q.find((x) => x.toLowerCase().includes(e.question.toLowerCase())); return { ok: !!hit, detail: hit?.slice(0, 160) ?? `questions: ${q.slice(-2).join(" | ").slice(0, 160) || "none"}` }; }
-  if ("no_write_from_line" in e) { const xs = ofPatient(ref, DOCTOR).filter((a) => a.kind === e.no_write_from_line && a.line_id === lineId && a.state === "completed"); return { ok: xs.length === 0, detail: `${xs.length} ${e.no_write_from_line} from this line` }; }
-  if ("no_order_from_line" in e) { const xs = allActions().filter((a) => ["order_test", "prescribe"].includes(a.kind) && a.line_id === lineId && ["sent", "acknowledged", "completed"].includes(a.state)); return { ok: lineId !== null && xs.length === 0, detail: lineId ? `${xs.length} orders from this line` : "line not found in any transcript" }; }
+  if ("question" in e) { const q = doctorTasks(ref).flatMap((t) => t.asked).filter((x) => during(x.at)).map((x) => x.text); const want = new RegExp(`\\b${e.question.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`); const hit = q.find((x) => want.test(x.toLowerCase())); return { ok: !!hit, detail: hit?.slice(0, 160) ?? `questions: ${q.slice(-2).join(" | ").slice(0, 160) || "none"}` }; }
+  // A negative check holds only once its own line was heard and decided and 10 s have passed, and any write from that line in flight counts.
+  if ("no_write_from_line" in e) {
+    if (!lineId) return { ok: false, detail: "this step's words were not heard, so nothing can be said about them" };
+    const xs = ofPatient(ref, DOCTOR).filter((a) => a.kind === e.no_write_from_line && a.line_id === lineId && ["proposed", "sent", "acknowledged", "completed"].includes(a.state));
+    const settledLine = settledFor(lineId);
+    return { ok: xs.length === 0 && settledLine, detail: `${xs.length} ${e.no_write_from_line} from this line${settledLine ? "" : " (line not yet decided and settled)"}` };
+  }
+  if ("no_order_from_line" in e) {
+    if (!lineId) return { ok: false, detail: "line not found in any transcript" };
+    const xs = allActions().filter((a) => ["order_test", "prescribe"].includes(a.kind) && a.line_id === lineId && ["proposed", "sent", "acknowledged", "completed"].includes(a.state) && !a.awaiting);
+    const settledLine = settledFor(lineId);
+    return { ok: xs.length === 0 && settledLine, detail: `${xs.length} orders from this line${settledLine ? "" : " (line not yet decided and settled)"}` };
+  }
   if ("class" in e) { const l = transcriptLine(lineId); return { ok: !!l && (l.class === e.class || l.classes.includes(e.class as never)), detail: l ? `class ${l.class} ${JSON.stringify(l.classes)}` : "line not found" }; }
   if ("speaker" in e) { const l = transcriptLine(lineId); return { ok: l?.speaker?.speaker === e.speaker, detail: l ? `speaker ${l.speaker?.speaker ?? "none"} ${l.speaker?.label ?? ""}` : "line not found" }; }
   if ("delegation" in e) {
-    const ds = doctorTasks(ref).flatMap((t) => t.delegations).filter((d) => d.side === "delegator" && (d.team === e.delegation.team || d.task_kind === e.delegation.team));
+    const ds = [...new Map(doctorTasks(ref).flatMap((t) => t.delegations).filter((d) => d.side === "delegator" && (d.team === e.delegation.team || d.task_kind === e.delegation.team)).map((d) => [d.delegation_id || d.key, d])).values()];
     const st = e.delegation.state;
     const ok = ds.filter((d) => during(!st ? d.at : st === "assigned" ? d.assigned_at : st === "acknowledged" ? d.acknowledged_at : d.completed_at));
     return { ok: ok.length >= (e.delegation.n ?? 1), detail: `${e.delegation.team}: ${ds.map((d) => (d.completed_at ? "completed" : d.acknowledged_at ? "acknowledged" : d.assigned_at ? "assigned" : "asked")).join(", ") || "none"}` };
@@ -435,10 +461,14 @@ async function check(e: Expect, line: Line, lineId: string | null, before: Set<s
   if ("tasks_survive" in e) return { ok: survived, detail: survivedDetail };
   if ("not_heard" in e) {
     const words = (line.text ?? "").toLowerCase().replace(/[^a-z ]/g, "").split(" ").filter((w) => w.length > 4);
-    const leaked = [...views.values()].flat().flatMap((t) => t.transcript).filter((l) => l.at >= started && words.filter((w) => l.text.toLowerCase().includes(w)).length >= Math.min(3, words.length));
-    return { ok: leaked.length === 0, detail: leaked.length ? `heard while muted: ${leaked[0]!.text.slice(0, 80)}` : "nothing said while muted reached any transcript" };
+    const from = muteAt ?? started, to = unmuteAt ? new Date(Date.parse(unmuteAt) + 10_000).toISOString() : now();
+    // Every row heard while muted counts, its words kept or withheld, plus any later row carrying the private words.
+    const rowsIn = [...views.values()].flat().flatMap((t) => t.transcript).filter((l) => l.at >= from && l.at <= to);
+    const later = [...views.values()].flat().flatMap((t) => t.transcript).filter((l) => l.at > to && words.filter((w) => l.text.toLowerCase().includes(w)).length >= Math.min(3, words.length));
+    const leaked = [...rowsIn, ...later];
+    return { ok: leaked.length === 0 && !muteFailed, detail: muteFailed ? "the mute was never applied" : leaked.length ? `heard while muted: ${leaked[0]!.text.slice(0, 80) || `a withheld line at ${leaked[0]!.at}`}` : "nothing said while muted reached any transcript" };
   }
-  if ("wake" in e) { const rows = wakeRows(); return { ok: rows.length > 0, detail: `${rows.length} wakes measured` }; }
+  if ("wake" in e) { const rows = wakeRows().filter((r) => during(r.at)); return { ok: rows.length > 0, detail: `${rows.length} wakes in this step` }; }
   if ("query" in e) {
     if (!hospital.hasQuery(e.query)) return { ok: false, detail: `query ${e.query} is not in the profile` };
     try {
@@ -449,12 +479,21 @@ async function check(e: Expect, line: Line, lineId: string | null, before: Set<s
   }
   return { ok: false, detail: "unknown expectation" };
 }
+// When each heard line was first seen decided, so a negative check waits 10 s past the decision.
+const decidedSeen = new Map<string, number>();
+function settledFor(lineId: string): boolean {
+  const l = transcriptLine(lineId) as { decided?: boolean } | null;
+  if (!l || l.decided === false) return false;
+  const at = decidedSeen.get(lineId) ?? Date.now();
+  decidedSeen.set(lineId, at);
+  return Date.now() - at >= 10_000;
+}
 const transcriptLine = (lineId: string | null) => (lineId ? [...views.values()].flat().flatMap((t) => t.transcript).find((l) => l.line_id === lineId) ?? null : null);
 let trackingTarget: string | null = null;
 async function readTracking(): Promise<void> { const t = await getJson<{ target: { patient_id?: string; admission_id?: string } | null }>(`/tasks/tracking?owner=${DOCTOR}`); trackingTarget = t?.target?.patient_id ?? t?.target?.admission_id ?? null; }
 let survived = false;
 let survivedDetail = "no restart yet";
-const wakeRows = (): { latency_ms: number; keyword: string }[] => { const f = join(OUT, "store", "wake.jsonl"); return existsSync(f) ? readFileSync(f, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as { latency_ms: number; keyword: string; owner: string }).filter((r) => r.owner === DOCTOR) : []; };
+const wakeRows = (): { latency_ms: number; keyword: string; at: string }[] => { const f = join(OUT, "store", "wake.jsonl"); return existsSync(f) ? readFileSync(f, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as { latency_ms: number; keyword: string; owner: string; at: string }).filter((r) => r.owner === DOCTOR) : []; };
 
 // The new doctor's line this script line became: the first transcript line heard after the line started, in any of the doctor's tasks.
 function lineAfter(since: string, owners: string[] = [DOCTOR]): { line_id: string; text: string; at: string; ended: string | null } | null {
@@ -472,8 +511,11 @@ function lineFor(text: string, since: string, owners: string[]): ReturnType<type
 }
 
 // Reloads the doctor's page and waits for the strip to say it is listening again with no touch.
+let listeningSince: string | null = null, reloading = false;
 async function reloadPage(line: Line): Promise<void> {
   if (!page) return;
+  reloading = true;
+  setTimeout(() => { reloading = false; }, 15_000);
   const pg = page as unknown as { reload: (o?: unknown) => Promise<unknown> };
   await pg.reload({ timeout: 120_000 }).catch(() => harnessErrors.push(`${line.id}: the page did not reload`));
   const back = await page.waitForFunction((st: string) => /Listening|Hearing you/.test(document.querySelector(`${st} header`)?.textContent ?? ""), STRIP, { timeout: 60_000 }).then(() => true, () => false);
@@ -486,15 +528,23 @@ const steps: StepOutcome[] = [];
 const harnessErrors: string[] = [];
 const faults: Fault[] = [];
 const otherTouches: AccResult["touches"]["other_people"] = [];
+// The mute fault's own moments, set by the step that mutes and read by its not_heard check.
+let muteAt: string | null = null, unmuteAt: string | null = null, muteFailed = false;
+// In Samuel's run a person step waits for a typed "done", so a stray Enter never skips a step at the screen.
+async function typedDone(): Promise<void> {
+  for (;;) { const a = (await rl!.question("  type done: ")).trim().toLowerCase(); if (a === "done") return; process.stdout.write("  (only done moves on)\n"); }
+}
 // A lost-acknowledgement fault is judged once per path, on the line where its write was seen or on the last line that could carry it.
 const lostAckJudged = new Set<string>();
 async function runLine(line: Line): Promise<void> {
   // Under the fake microphone each line runs in its slot of the file, so the room's timing never depends on the agent.
   const slot = DRIVER === "fake" ? fakeSlots.get(line.id) : undefined;
+  muteAt = null; unmuteAt = null; muteFailed = false;
   // Under the fake microphone a reload runs in the quiet before its line, so the file is cut before the words and they play whole once listening is back.
   if (line.reload && page && DRIVER === "fake" && process.env["ACC_FAKE_RELOAD"] !== "0") { if (slot) plannedCutMs = FAKE_LEAD_MS + slot.at - 3000; await reloadPage(line); }
   if (slot) await untilFake(FAKE_LEAD_MS + slot.at);
   const started = now();
+  stepStartedAt = started;
   const errors: string[] = [];
   // A line whose precondition never came is failed, whatever its own checks say, since it ran on a state the script did not expect.
   let unmet = false;
@@ -527,25 +577,34 @@ async function runLine(line: Line): Promise<void> {
     if (overran && page && slot) { log(`${line.id}: the restart outlasted its slot; the fake microphone is cut back to the next line`); plannedCutMs = FAKE_LEAD_MS + slot.end - 3000; await reloadPage(line); }
   } else if (line.mode === "person") {
     const vars = Object.fromEntries(Object.entries(line.vars ?? {}).map(([k, v]) => [k, resolveVar(v)]));
-    // A step that names a test gets that test's order id from the record, as the person would see it on screen.
-    if (vars["order_test"] && HOSPITAL === "sandbox") { const o = (await hospital.query("acc_order_for_test", { visit: vars["visit"] ?? "", test: vars["order_test"] }))[0]; vars["order_id"] = String(o?.["order_id"] ?? ""); }
-    // A settle names the amount owed, so the stay's bill is read first, as the accounts person reads it on screen.
-    if (line.op === "settle" && !vars["outstanding"] && hospital.hasPerson("bill")) { const b = await hospital.person("bill", vars); vars["outstanding"] = String((b.json as { bill?: { outstandingNgn?: string } } | null)?.bill?.outstandingNgn ?? "0.00"); }
-    // In Samuel's run his own attestations are his, at the screen; the harness only waits for them.
-    if (DRIVER === "human" && line.who === "doctor") { process.stdout.write(`\n  AT THE SCREEN (${line.id}): ${line.note ?? line.op}\n  Press Enter here when done.\n`); await rl!.question(""); note = "done by Samuel at the screen"; }
-    else if (HOSPITAL === "sandbox" && line.op === "acc_lab_result") { const r = await labResult(vars); note = r.note; if (!r.ok) errors.push(r.note); }
-    else if (HOSPITAL === "sandbox" && line.op === "acc_lab_cancel") { const r = await labCancelOnScreen(vars); note = r.note; if (!r.ok) errors.push(r.note); }
-    else if (HOSPITAL === "sandbox" && line.op === "acc_pay_test") { const r = await payTestAtDesk(vars); note = r.note; if (!r.ok) errors.push(r.note); }
-    else if (!hospital.hasPerson(line.op!)) { blocked = true; errors.push(`person op ${line.op} is not in the profile`); }
-    else { const r = await hospital.person(line.op!, vars); note = `person ${line.op}: ${r.status} ${r.note ?? ""}`.trim(); if (!r.ok) errors.push(note); }
+    // Any network failure in a person step waits for the app and tries again, and a step that still cannot reach it is blocked, never the end of the run.
+    const out = await persistently(line.id, async () => {
+      // A step that names a test gets that test's order id from the record, as the person would see it on screen.
+      if (vars["order_test"] && HOSPITAL === "sandbox") { const o = (await hospital.query("acc_order_for_test", { visit: vars["visit"] ?? "", test: vars["order_test"] }))[0]; vars["order_id"] = String(o?.["order_id"] ?? ""); }
+      // A settle names the amount owed, so the stay's bill is read first, as the accounts person reads it on screen.
+      if (line.op === "settle" && !vars["outstanding"] && hospital.hasPerson("bill")) { const b = await hospital.person("bill", vars); vars["outstanding"] = String((b.json as { bill?: { outstandingNgn?: string } } | null)?.bill?.outstandingNgn ?? "0.00"); }
+      // In Samuel's run his own attestations are his, at the screen; the harness only waits for them.
+      if (DRIVER === "human" && line.who === "doctor") { process.stdout.write(`\n  AT THE SCREEN (${line.id}): ${line.note ?? line.op}\n  Type done here when you have signed.\n`); await typedDone(); return { ok: true, note: "done by Samuel at the screen" }; }
+      if (HOSPITAL === "sandbox" && line.op === "acc_lab_result") return labResult(vars);
+      if (HOSPITAL === "sandbox" && line.op === "acc_lab_cancel") return labCancelOnScreen(vars);
+      if (HOSPITAL === "sandbox" && line.op === "acc_pay_test") return payTestAtDesk(vars);
+      if (!hospital.hasPerson(line.op!)) return { ok: false, note: `person op ${line.op} is not in the profile`, blocked: true };
+      const r = await hospital.person(line.op!, vars);
+      return { ok: r.ok, note: `person ${line.op}: ${r.status} ${r.note ?? ""}`.trim() };
+    });
+    note = out.note;
+    if (out.blocked) blocked = true;
+    // A person step whose own call or screen step failed is failed, whatever an older row would say to its checks.
+    if (!out.ok) { errors.push(out.note); unmet = true; }
     otherTouches.push({ line: line.id, who: line.who, what: `person step ${line.op} at that person's screen` });
     lineEnd = now();
   } else if (line.mode !== "wait") {
     if (line.mode === "type") otherTouches.push({ line: line.id, who: line.who, what: "typed stand-in line at that person's strip" });
     if (line.mode === "remote") otherTouches.push({ line: line.id, who: line.who, what: "spoken stand-in through that person's strip (no touch, listed so it is not mistaken for the doctor's)" });
     if (line.lose_ack && PROXY_PORT && !lostAckJudged.has(line.lose_ack.path) && dropNext?.path !== line.lose_ack.path) dropNext = { path: line.lose_ack.path, hit: null };
-    if (line.muted && page && DRIVER === "human") { process.stdout.write("\n  MUTE: press the strip's mute button (the crossed microphone), then press Enter here.\n"); await rl!.question(""); }
-    else if (line.muted && page) { await page.click(`${STRIP} button[aria-label="Mute the agent"]`).catch(() => harnessErrors.push(`${line.id}: no Mute button`)); await wait(800); }
+    if (line.muted && page && DRIVER === "human") { process.stdout.write("\n  MUTE: press the strip's mute button (the crossed microphone, top right of the strip), then type done here.\n"); await typedDone(); }
+    else if (line.muted && page) { if (!(await page.click(`${STRIP} button[aria-label="Mute the agent"]`, { timeout: 10_000 }).then(() => true, () => false))) { harnessErrors.push(`${line.id}: no Mute button`); muteFailed = true; blocked = true; } await wait(800); }
+    if (line.muted) muteAt = now();
     // Chrome's fake microphone reads its file afresh on a reload, so the harness cuts the file at the reload (realignFakeMic); ACC_FAKE_RELOAD=0 skips the reload.
     if (line.reload && page && DRIVER === "fake" && process.env["ACC_FAKE_RELOAD"] === "0") log(`${line.id}: reload not run under the fake microphone; see the reload probe`);
     else if (line.reload && page && DRIVER !== "fake") await reloadPage(line);
@@ -553,9 +612,11 @@ async function runLine(line: Line): Promise<void> {
     const d = await deliver(line).catch((e: unknown) => ({ lineEnd: null, note: `delivery failed: ${e instanceof Error ? e.message.slice(0, 160) : String(e)}` }));
     lineEnd = d.lineEnd; note = d.note;
     if (!lineEnd || /refused|delivery failed/.test(note ?? "")) harnessErrors.push(`${line.id}: ${note}`);
-    if (line.offline_s && page) { await wait(line.offline_s * 1000); await setOffline(false); log(`${line.id}: the browser was offline ${line.offline_s} s while the line was said`); }
-    if (line.muted && page && DRIVER === "human") { process.stdout.write("\n  UNMUTE: press the mute button again, then press Enter here.\n"); await rl!.question(""); }
-    else if (line.muted && page) { await wait(1500); await page.click(`${STRIP} button[aria-label="Unmute the agent"]`).catch(() => harnessErrors.push(`${line.id}: could not unmute`)); }
+    if (line.offline_s && page && DRIVER !== "human") { await wait(line.offline_s * 1000); await setOffline(false); log(`${line.id}: the browser was offline ${line.offline_s} s while the line was said`); }
+    if (line.muted && page && DRIVER === "human") { process.stdout.write("\n  UNMUTE: press the mute button again, then type done here.\n"); await typedDone(); }
+    else if (line.muted && page) { await wait(1500); if (!(await page.click(`${STRIP} button[aria-label="Unmute the agent"]`, { timeout: 10_000 }).then(() => true, () => false))) { harnessErrors.push(`${line.id}: could not unmute`); muteFailed = true; blocked = true; } }
+    // Words the strip held back while muted would arrive just after unmute, so the check waits 10 s past it.
+    if (line.muted) { unmuteAt = now(); await wait(10_000); }
     if (!lineEnd) blocked = true;
   }
   // Each check is tried until it holds or the line's time runs out; nothing passes by default.
@@ -598,7 +659,7 @@ async function runLine(line: Line): Promise<void> {
   }
   if (line.reload && page && (DRIVER !== "fake" || process.env["ACC_FAKE_RELOAD"] !== "0")) faults.push({ kind: "reload", line: line.id, at: started, killed_during: null, restarted_in_ms: null, outcome: `listening again with no touch: ${reloadBack}; ${outcomes.map((c) => c.detail).join("; ").slice(0, 240)}`, ok: reloadBack && outcomes.filter((c) => !c.optional).every((c) => c.ok) });
   if (line.offline_s && page) faults.push({ kind: "offline", line: line.id, at: started, killed_during: null, restarted_in_ms: null, outcome: outcomes.map((c) => c.detail).join("; ").slice(0, 300), ok: outcomes.filter((c) => !c.optional).every((c) => c.ok) });
-  if (line.muted && page) faults.push({ kind: "mute", line: line.id, at: started, killed_during: null, restarted_in_ms: null, outcome: outcomes.map((c) => c.detail).join("; ").slice(0, 300), ok: outcomes.filter((c) => !c.optional).every((c) => c.ok) });
+  if (line.muted && page) faults.push({ kind: "mute", line: line.id, at: started, killed_during: null, restarted_in_ms: null, outcome: `${muteFailed ? "the mute was never applied; " : ""}${outcomes.map((c) => c.detail).join("; ")}`.slice(0, 300), ok: !muteFailed && outcomes.filter((c) => !c.optional).every((c) => c.ok) });
   const lineIds = new Set([heard?.line_id].filter(Boolean) as string[]);
   const verified = allActions().filter((a) => a.state === "completed" && (lineIds.has(a.line_id) || (seen.get(`${a.action_id}:completed`) ?? "") >= started)).map((a) => {
     const at = seen.get(`${a.action_id}:completed`) ?? null;
@@ -626,7 +687,7 @@ async function labResult(vars: Record<string, string>): Promise<{ ok: boolean; n
     if (!need()) continue;
     // Receipt and processing have no door; lab.grace presses Accept on her worklist, which records both.
     if (op === "accept") {
-      const a = await labAcceptOnScreen(String(o["order_id"]), vars["test"] ?? "the test");
+      const a = await labAcceptOnScreen(String(o["order_id"]), vars["test"] ?? "the test", vars["visit"] ?? "");
       steps.push(a.note);
       if (!a.ok) return { ok: false, note: steps.join("; ") };
       o = (await read()) ?? o;
@@ -647,11 +708,40 @@ function webStep(envName: "ACC_CANCEL_CASE" | "ACC_ACCEPT_ORDER" | "ACC_PAY_ORDE
   return new RegExp(`${label}: (\\{.*)`).exec(out)?.[1] ?? out.replace(/\s+/g, " ").slice(-200);
 }
 
+// A person step's calls, tried again while the app is unreachable: each try is capped at 60 s, the app must answer its login page again within 3 minutes, then the step is blocked.
+async function persistently(id: string, f: () => Promise<{ ok: boolean; note: string; blocked?: boolean }>): Promise<{ ok: boolean; note: string; blocked?: boolean }> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      // A person typing at the screen has no time limit; a call the harness makes does.
+      return DRIVER === "human" ? await f() : await Promise.race([f(), new Promise<never>((_, j) => setTimeout(() => j(new Error("no answer in 60 s")), 60_000))]);
+    } catch (e) {
+      const why = e instanceof Error ? e.message.slice(0, 120) : String(e);
+      if (attempt >= 3) { harnessErrors.push(`${id}: ${why}`); return { ok: false, note: `the app did not answer: ${why}`, blocked: true }; }
+      log(`${id}: ${why}; waiting for the app`);
+      process.stdout.write(`  waiting for the app (${id})\n`);
+      const end = Date.now() + 180_000;
+      while (Date.now() < end && !(await fetch(`${APP}/login`).then((r) => r.ok, () => false))) await wait(3000);
+    }
+  }
+}
+
+// After a person's screen step the record is read for 30 s; if it is not there, Samuel may have the harness run that person's own action, recorded as a stand-in.
+async function standInIfMissing(there: () => Promise<boolean>, standIn: () => string): Promise<{ ok: boolean; by: string }> {
+  for (let i = 0; i < 30; i++) { if (await there()) return { ok: true, by: "a person" }; await wait(1000); }
+  const a = (await rl!.question("  Not on the record after 30 s. Type s to have the harness run that person's own action for her (recorded as a stand-in), or done to leave it: ")).trim().toLowerCase();
+  if (a !== "s") return { ok: false, by: "a person, not seen on the record" };
+  const line = standIn();
+  return { ok: await there(), by: `a stand-in run by the harness: ${line.slice(0, 120)}` };
+}
+const who = (visit: string): string => { const b = (["A", "B"] as const).find((r) => bound[r]?.visit === visit); return b ? (b === "A" ? "Blessing" : "Emeka") : "the patient"; };
+
 // lab.grace accepts the sample on her worklist (receipt and both processing steps); Samuel's run asks for the press in her window.
-async function labAcceptOnScreen(orderId: string, test: string): Promise<{ ok: boolean; note: string }> {
+async function labAcceptOnScreen(orderId: string, test: string, visit: string): Promise<{ ok: boolean; note: string }> {
   if (DRIVER === "human") {
-    process.stdout.write(`\n  LAB STEP: in lab.grace's window open ${APP}/lab, find the ${test} sample under To receive and press Accept. Press Enter here when done.\n`);
-    await rl!.question("");
+    process.stdout.write(`\n  LAB STEP: in lab.grace's own browser (Safari or your everyday Chrome, never a tab of the run's Chrome) open ${APP}/lab, find the ${test} sample for ${who(visit)} under To receive (order ${orderId.slice(0, 8)}) and press Accept. Type done here when done.\n`);
+    await typedDone();
+    const seenIt = await standInIfMissing(() => hospital.query("acc_specimen_processed", { order: orderId }).then((r) => r.length > 0, () => false), () => webStep("ACC_ACCEPT_ORDER", orderId, "lab accept"));
+    return { ok: seenIt.ok, note: `lab.grace's Accept on the worklist (${seenIt.by}): ${seenIt.ok ? "received and processed" : "not processed"}` };
   } else if (process.env["ACC_LAB_CANCEL_SCRIPT"]) {
     const line = webStep("ACC_ACCEPT_ORDER", orderId, "lab accept");
     const after = (await hospital.query("acc_specimen_processed", { order: orderId })).length > 0;
@@ -678,8 +768,10 @@ async function labCancelOnScreen(vars: Record<string, string>): Promise<{ ok: bo
   if (!o?.["order_id"]) return { ok: false, note: `no ${vars["test"]} order on the visit` };
   const url = `${APP}/lab/orders/${String(o["order_id"])}`;
   if (DRIVER === "human") {
-    process.stdout.write(`\n  LAB STEP: in a second browser window, sign in as lab.grace and open ${url}; under "Cancel before testing" pick "Requester cancelled", tick the box, press Cancel diagnostic case. Press Enter here when done.\n`);
-    await rl!.question("");
+    process.stdout.write(`\n  LAB STEP: in lab.grace's own browser (Safari or your everyday Chrome, never a tab of the run's Chrome) sign in as lab.grace and open ${url}; under "Cancel before testing" pick "Requester cancelled", tick the box, press Cancel diagnostic case. Type done here when done.\n`);
+    await typedDone();
+    const seenIt = await standInIfMissing(() => hospital.query("acc_case_cancelled", { visit: vars["visit"] ?? "", test: vars["test"] ?? "" }).then((r) => r.length > 0, () => false), () => webStep("ACC_CANCEL_CASE", String(o["case_id"]), "lab cancel"));
+    if (seenIt.by !== "a person") return { ok: seenIt.ok, note: `lab.grace's cancel (${seenIt.by}): ${seenIt.ok ? "cancelled" : "not cancelled"}` };
   } else if (process.env["ACC_LAB_CANCEL_SCRIPT"]) {
     // The lab screen does not offer the cancel on an arrival with no identifiers, so the rehearsal runs the lab's own action as lab.grace.
     const line = webStep("ACC_CANCEL_CASE", String(o["case_id"]), "lab cancel");
@@ -741,18 +833,49 @@ async function watchInterrupt(line: Line): Promise<void> {
   faults.push({ kind: "interrupt", line: line.id, at, killed_during: hit.state, restarted_in_ms: r.ms, outcome: `after restart the write is ${final ?? "gone"}; ${same.length} completed ${kind} for this patient`, ok: final === "completed" && same.length === 1 });
 }
 
+// What code ran: each tree's commit and a hash of its uncommitted state (engine packages and apps; Pisgah src and drizzle), at the start, at every serve restart and at the end.
+const PISGAH_ROOT = dirname(env("ACC_PISGAH_PKG", "/Users/samuel/Documents/Pisgah/Pisgah/package.json"));
+function treeOf(cwd: string, paths: string[]): string {
+  const git = (args: string[]) => { try { return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", maxBuffer: 1 << 29 }); } catch { return "?"; } };
+  return `${git(["rev-parse", "--short", "HEAD"]).trim()}+${createHash("sha256").update(git(["status", "--porcelain", "--", ...paths])).update(git(["diff", "--", ...paths])).digest("hex").slice(0, 12)}`;
+}
+const trees: { at: string; why: string; engine: string; pisgah: string }[] = [];
+function recordTrees(why: string): void {
+  const t = { at: now(), why, engine: treeOf(process.cwd(), ["packages", "apps"]), pisgah: treeOf(PISGAH_ROOT, ["src", "drizzle"]) };
+  trees.push(t);
+  log(`code ${why}: engine ${t.engine}, Pisgah ${t.pisgah}`);
+}
+function treesChanged(): string | null {
+  const first = trees[0];
+  const moved = trees.filter((t) => t.engine !== first?.engine || t.pisgah !== first?.pisgah);
+  return first && moved.length ? moved.map((t) => `${t.why} at ${t.at}: engine ${t.engine}, Pisgah ${t.pisgah} (start: ${first.engine}, ${first.pisgah})`).join("; ") : null;
+}
+// A resumed run takes its two patients from the stopped run's folder and starts at ACC_FROM.
+const BOUND_FILE = join(OUT, "bound.json");
+function saveBound(): void { writeFileSync(BOUND_FILE, `${JSON.stringify(Object.fromEntries(Object.entries(bound).map(([k, b]) => [k, { ...b!, tasks: [...b!.tasks] }])), null, 1)}\n`); }
+function loadBound(file: string): void {
+  const raw = JSON.parse(readFileSync(file, "utf8")) as Record<"A" | "B", { patient: string; visit: string | null; admission: string | null; tasks: string[] }>;
+  for (const ref of ["A", "B"] as const) if (raw[ref]) bound[ref] = { ...raw[ref], tasks: new Set(raw[ref].tasks) };
+}
+
 async function main(): Promise<void> {
   log(`acceptance ${KIND} run ${OUT}: driver ${DRIVER}, browser ${BROWSER}, serve ${SERVE}, script ${sha256.slice(0, 12)}`);
+  recordTrees("at the start");
+  // Samuel's final run starts only on the code the coordinator froze, named as ACC_FROZEN="<engine tree> <Pisgah tree>".
+  if (KIND === "final" && process.env["ACC_FROZEN"] && process.env["ACC_FROZEN"] !== `${trees[0]!.engine} ${trees[0]!.pisgah}`) throw new Error(`the code is not the frozen code: ${trees[0]!.engine} ${trees[0]!.pisgah}, frozen ${process.env["ACC_FROZEN"]}`);
+  if (process.env["ACC_RESUME_BOUND"]) { loadBound(process.env["ACC_RESUME_BOUND"]); log(`resumed with patients ${JSON.stringify(Object.fromEntries(Object.entries(bound).map(([k, b]) => [k, b!.patient.slice(0, 8)])))}`); }
   // A serve already on the port holds another run's store, so the harness starts its own unless told to reuse that one.
   if ((await healthy(2000)) && process.env["ACC_REUSE_SERVE"] !== "1") throw new Error(`a serve is already listening on ${SERVE}; stop it by its port or set ACC_REUSE_SERVE=1`);
   if (!(await healthy(2000))) { startServe(); if (!(await healthy())) throw new Error(`the serve did not come up on ${SERVE}; see ${serveLog()}`); }
   if (DRIVER === "fake") buildFakeMic();
   if (BROWSER === "launch") await openBrowser();
   const only = process.env["ACC_ONLY"] ? new Set(process.env["ACC_ONLY"].split(",")) : null;
-  for (const line of script.lines) {
+  const from = process.env["ACC_FROM"] ? script.lines.findIndex((l) => l.id === process.env["ACC_FROM"]) : 0;
+  for (const line of script.lines.slice(Math.max(0, from))) {
     if (only && !only.has(line.id)) continue;
     if (DRIVER === "text" && line.mode === "play") { steps.push({ line: line.id, patient: line.patient, step: line.step, who: line.who, mode: line.mode, did_by: didBy(line, DRIVER), text: line.text ?? null, heard: null, line_id: null, line_end_at: null, verified: [], checks: [], status: "skipped", confirm: null, touches_during: 0, errors: ["needs audio"], started_at: now(), ended_at: now() }); continue; }
     await runLine(line);
+    saveBound();
   }
   await pollOnce();
   await finish();
@@ -760,10 +883,17 @@ async function main(): Promise<void> {
 
 async function finish(): Promise<void> {
   polling = false;
+  recordTrees("at the end");
   const acts = allActions();
-  const rows: SpeedRowIn[] = [...views.entries()].flatMap(([o, vs]) => vs.flatMap((t) => t.speed.rows.map((r) => ({ kind: r.kind, ms: r.ms, owner: whoOf(o), line_id: r.line_id, action_id: r.action_id, ...(r.from_record ? { from_record: true } : {}) }))));
+  // Speed counts only the run's own patients and lines a step bound; an order that waited for its spoken confirm is timed in its own group, since the wait is the clinician's.
+  const boundLines = new Set(steps.map((x) => x.line_id).filter((x): x is string => !!x));
+  const waitsForConfirm = new Set(steps.filter((x) => script.lines[script.lines.findIndex((l) => l.id === x.line) + 1]?.confirm === "r3").map((x) => x.line_id).filter((x): x is string => !!x));
+  const ourTask = (t: { task_id: string; patient_id: string | null }) => (["A", "B"] as const).some((r) => bound[r] && (t.patient_id === bound[r]!.patient || bound[r]!.tasks.has(t.task_id)));
+  const rows: SpeedRowIn[] = [...views.entries()].flatMap(([o, vs]) => vs.filter(ourTask).flatMap((t) => t.speed.rows.filter((r) => r.from_record || boundLines.has(r.line_id)).map((r) => ({ kind: waitsForConfirm.has(r.line_id) ? "confirm_wait" : r.kind, ms: r.ms, owner: whoOf(o), line_id: r.line_id, action_id: r.action_id, ...(r.from_record ? { from_record: true } : {}) }))));
   const errRows: SpeedErr[] = acts.filter((a) => a.state === "failed" || a.state === "refused" || a.unverified).map((a) => ({ kind: a.kind, owner: whoOf(a.owner), action_id: a.action_id, state: a.unverified ? "unverified" : a.state, reason: a.reason }));
-  const wake = wakeRows().map((r) => r.latency_ms);
+  // Wake latency only from the lines that are the wake phrase, never "emergency" inside a sentence.
+  const wakeSteps = steps.filter((x) => script.lines.find((l) => l.id === x.line)?.expect.some((e) => "wake" in e));
+  const wake = wakeRows().filter((r) => wakeSteps.some((x) => r.at >= x.started_at && r.at <= x.ended_at)).map((r) => r.latency_ms);
   const t = await touchesNow();
   let emr: number | null = t?.emr ?? null, strip: number | null = t?.strip ?? null;
   let source: AccResult["touches"]["source"] = t ? "strip counter read from the browser" : "not counted";
@@ -794,10 +924,10 @@ async function finish(): Promise<void> {
   const unmatchedOrders = acts.filter((a) => ["order_test", "prescribe"].includes(a.kind) && ["sent", "acknowledged", "completed"].includes(a.state) && transcriptLine(a.line_id)?.speaker?.speaker !== "owner" && !a.authorised_by_line);
   const usd = [...views.values()].flat().reduce((s, x) => s + x.usd, 0), calls = [...views.values()].flat().reduce((s, x) => s + x.calls, 0);
   const rateLimited = [...Array(restarts + 1).keys()].map((i) => join(OUT, `serve-${i}.log`)).filter(existsSync).reduce((n, f) => n + (readFileSync(f, "utf8").match(/\b429\b/g)?.length ?? 0), 0);
-  const commit = (() => { try { return execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim(); } catch { return "unknown"; } })();
+  const commit = trees.map((t) => `${t.why}: ${t.engine}`).join("; ");
   const result: AccResult = {
     measured_at: now(), run_id: OUT.split("/").filter(Boolean).at(-1)!, kind: KIND, driver: DRIVER, browser: page ? "launched" : "none", script_sha256: sha256, engine_commit: commit,
-    pisgah: env("ACC_PISGAH_STATE", "Samuel's working tree, uncommitted, frozen by the coordinator for this run"),
+    pisgah: `${trees.map((t) => `${t.why}: ${t.pisgah}`).join("; ")}; `+env("ACC_PISGAH_STATE", "Samuel's working tree, uncommitted, frozen by the coordinator for this run"),
     payment: "simulated: every payment is a cash entry the accounts person records on the door; no money moves and no provider is called",
     steps, touches: { emr, strip, source, by_line: Object.fromEntries(steps.filter((s) => s.touches_during).map((s) => [s.line, s.touches_during])), other_people: otherTouches },
     // The grant, each explicit confirmation (which the screen may give instead), and each attestation the doctor makes at the screen, such as signing the consultation.
@@ -808,16 +938,18 @@ async function finish(): Promise<void> {
     model: { calls, usd: Number(usd.toFixed(4)), rate_limited: rateLimited },
     harness_errors: harnessErrors, presence: (await getJson<{ presence?: string }>("/health"))?.presence ?? null, completion: { complete: false, reasons: [] }
   };
-  result.completion = completion(result, script.lines.filter((l) => l.mode === "fault" || l.interrupt).length + (PROXY_PORT ? new Set(script.lines.filter((l) => l.lose_ack).map((l) => l.lose_ack!.path)).size : 0) + (page ? script.lines.filter((l) => l.offline_s || l.muted || (l.reload && (DRIVER !== "fake" || process.env["ACC_FAKE_RELOAD"] !== "0"))).length : 0));
+  result.completion = completion({ ...result, trees_changed: treesChanged() }, script.lines.filter((l) => l.mode === "fault" || l.interrupt).length + (PROXY_PORT ? new Set(script.lines.filter((l) => l.lose_ack).map((l) => l.lose_ack!.path)).size : 0) + (page ? script.lines.filter((l) => l.offline_s || l.muted || (l.reload && (DRIVER !== "fake" || process.env["ACC_FAKE_RELOAD"] !== "0"))).length : 0));
   void signedIds;
   const root = KIND === "final" ? env("ACC_PUBLISH_ROOT") : OUT;
-  const files = writeAccResults(root, result, { previews_with_names: Number(process.env["ACC_PREVIEWS_WITH_NAMES"] ?? "0"), privilege_gained: 0 });
+  const files = writeAccResults(root, result, { previews_with_names: null, privilege_gained: null });
   writeFileSync(join(OUT, "door-requests.json"), `${JSON.stringify(doorLog.map((r) => ({ at: r.at, path: r.path, status: r.status, ms: r.ms })), null, 1)}\n`);
   log(`complete: ${result.completion.complete ? "yes" : `no (${result.completion.reasons.length}: ${result.completion.reasons.slice(0, 6).join("; ")})`}; harness errors ${harnessErrors.length}`);
   log(`done: ${steps.filter((s) => s.status === "verified").length} verified, ${steps.filter((s) => s.status === "partial").length} partial, ${steps.filter((s) => s.status === "held").length} held, ${steps.filter((s) => s.status === "failed").length} failed, ${steps.filter((s) => s.status === "blocked").length} blocked of ${steps.length}; touches ${emr ?? "?"} (allowed ${result.touches_allowed}); calls ${calls} $${usd.toFixed(3)}; 429s ${rateLimited}`);
   log(`wrote ${files.join(", ")}`);
   rl?.close();
   if (browserClose) await browserClose();
+  // The run stops the serve it started and its door proxy, so the next run finds both ports free.
+  if (process.env["ACC_KEEP_SERVE"] !== "1") { const pids = killServe("SIGTERM"); if (pids.length) log(`stopped the run's serve (pids ${pids.join(",")})`); }
 }
 
-main().catch(async (e: unknown) => { log(`harness error: ${e instanceof Error ? e.message : String(e)}`); await finish().catch(() => undefined); process.exit(1); });
+main().then(() => process.exit(0), async (e: unknown) => { log(`harness error: ${e instanceof Error ? e.message : String(e)}`); await finish().catch(() => undefined); process.exit(1); });

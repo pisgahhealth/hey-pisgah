@@ -13,7 +13,7 @@ const Vars = z.record(z.string(), z.string());
 export const Expect = z.union([
   z.strictObject({ arrival: Ref }),
   // established: the registration wrote the record with this name; without it the name need only be held, and either way a different spelling is held, never passed.
-  z.strictObject({ identity: Ref, name: z.string().min(3), established: z.literal(true).optional() }),
+  z.strictObject({ identity: Ref, name: z.string().min(3), spellings: z.array(z.string().min(3)).max(5).optional(), established: z.literal(true).optional() }),
   z.strictObject({ act: z.string().min(1), owner: z.enum(WHO).optional(), state: z.enum(["proposed", "sent", "acknowledged", "completed", "refused", "failed", "cancelled"]), from_line: z.boolean().optional(), from_step: z.string().regex(/^[A-Z][A-Z0-9]{1,5}$/).optional(), n: z.number().int().min(1).optional(), values: z.record(z.string(), z.union([z.string(), z.number()])).optional(), optional: z.boolean().optional() }),
   z.strictObject({ awaits: z.string().min(1), optional: z.boolean().optional() }),
   z.strictObject({ question: z.string().min(1), optional: z.boolean().optional() }),
@@ -146,8 +146,11 @@ export type AccResult = {
 };
 
 // The run is complete only when every mandatory step verified, every fault the script injects ran and recovered, and no agent write went unaccounted; green claim cards alone never make it complete.
-export function completion(r: Pick<AccResult, "steps" | "faults" | "unaccounted">, expectedFaults: number): { complete: boolean; reasons: string[] } {
+export function completion(r: Pick<AccResult, "steps" | "faults" | "unaccounted"> & { harness_errors?: readonly string[]; trees_changed?: string | null }, expectedFaults: number): { complete: boolean; reasons: string[] } {
   const reasons = [
+    // A harness error means the run did not do what it claims to have tested, so it never completes.
+    ...(r.harness_errors ?? []).map((e) => `harness error: ${e}`),
+    ...(r.trees_changed ? [`the code changed during the run: ${r.trees_changed}`] : []),
     ...r.steps.filter((s) => s.status !== "verified" && s.status !== "partial").map((s) => `${s.line} ${s.status}`),
     ...r.faults.filter((f) => !f.ok).map((f) => `${f.kind} at ${f.line} did not recover: ${f.outcome}`),
     ...(r.faults.length < expectedFaults ? [`${expectedFaults - r.faults.length} of ${expectedFaults} faults never ran`] : []),
@@ -172,19 +175,20 @@ export function claimFields(r: AccResult): Record<"C-20" | "C-21" | "C-22" | "C-
     "C-21": c21,
     "C-22": { batch_signed_by_voice: r.countersign.batch_signed_by_voice, unmatched_voice_orders: r.countersign.unmatched_voice_orders, batch_orders: r.countersign.batch_orders, batches: r.countersign.batches, ...(r.countersign.changed_after_batch_unsigned === null ? {} : { changed_after_batch_unsigned: r.countersign.changed_after_batch_unsigned }) },
     "C-23": { false_authority: speakers.filter((s) => s.who !== "doctor" && s.acted_as_owner).length, unmatched_orders: speakers.filter((s) => s.heard_as === "unverified" && s.order_written).length, other_clinician_recorded: speakers.filter((s) => s.heard_as === "other_clinician").length, lines: speakers.length },
-    "C-24": { accepted_by_voice: r.delegations.filter((d) => d.acknowledged_by_voice).length, accepted: r.delegations.filter((d) => d.acknowledged).length, completed_from_record: r.delegations.filter((d) => d.completed_from_record).length, acknowledged_counted_as_done: r.delegations.filter((d) => d.acknowledged_counted_as_done).length, previews_with_names: 0, privilege_gained: 0, delegations: r.delegations.length }
+    "C-24": { accepted_by_voice: r.delegations.filter((d) => d.acknowledged_by_voice).length, accepted: r.delegations.filter((d) => d.acknowledged).length, completed_from_record: r.delegations.filter((d) => d.completed_from_record).length, acknowledged_counted_as_done: r.delegations.filter((d) => d.acknowledged_counted_as_done).length, delegations: r.delegations.length }
   };
 }
 
 const CLAIM_FILES = { "C-20": "touches.json", "C-22": "countersign.json", "C-23": "speaker.json", "C-24": "delegation.json" } as const;
 
 // Writes acceptance.json and the four claim files under <root>/evaluation/results, and adds the acceptance fields to speed.json beside the lane floor already there.
-export function writeAccResults(root: string, r: AccResult, extra: { previews_with_names: number; privilege_gained: number }): string[] {
+// previews_with_names and privilege_gained stay out (not measured) unless a run measured them; a constant would make C-24 green by construction.
+export function writeAccResults(root: string, r: AccResult, extra: { previews_with_names: number | null; privilege_gained: number | null }): string[] {
   const dir = join(root, "evaluation", "results");
   mkdirSync(dir, { recursive: true });
   const fields = claimFields(r);
-  fields["C-24"]["previews_with_names"] = extra.previews_with_names;
-  fields["C-24"]["privilege_gained"] = extra.privilege_gained;
+  if (extra.previews_with_names !== null) fields["C-24"]["previews_with_names"] = extra.previews_with_names;
+  if (extra.privilege_gained !== null) fields["C-24"]["privilege_gained"] = extra.privilege_gained;
   const head = { measured_at: r.measured_at, source: `acceptance ${r.kind} run ${r.run_id} (${r.driver} voice, browser ${r.browser}); payment simulated`, run_id: r.run_id, kind: r.kind };
   const written: string[] = [];
   const put = (name: string, v: unknown) => { const f = join(dir, name); writeFileSync(f, `${JSON.stringify(v, null, 2)}\n`); written.push(f); };
