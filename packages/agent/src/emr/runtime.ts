@@ -8,7 +8,7 @@ import { primaryClass } from "./classes.js";
 import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
-import { BATCH_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
+import { BATCH_KINDS, NEW_RECORD_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
@@ -37,11 +37,14 @@ export type EmrAction = {
   // Saved by the door but not yet found by its verification read; reconciled by the record id or the same key, never marked failed for it.
   awaiting_verification: { since: string; attempts: number; reason: string } | null;
   // Sent with no answer that says whether it was saved, and when its intent was journaled, so the record can be read for it.
-  uncertain: { since: string; attempts: number; reason: string } | null; intent_at: string | null;
+  // committed marks a write the hospital said it saved without naming the record, which is only ever read for.
+  uncertain: { since: string; attempts: number; reason: string; committed?: true } | null; intent_at: string | null;
   // Vitals heard from audio wait for the second ear to agree before the write.
   ears: boolean;
-  // A voice order waits for the owner's own matched voice, or for the spoken confirmation a controlled drug needs; the lines that gave them.
-  awaiting: "owner_voice" | "confirm" | null; authorised_by_line: string | null; confirmed_by_line: string | null;
+  // A voice order waits for the owner's own matched voice, the owner's yes to a repeated order, or the spoken confirmation a controlled drug needs; the lines that gave them.
+  awaiting: "owner_voice" | "repeat" | "confirm" | null; authorised_by_line: string | null; confirmed_by_line: string | null;
+  // The earlier order of this patient's encounter that this one repeats, held until the owner says to order it again (D35).
+  repeat_of: { action_id: string; at: string } | null;
   // The page that shows this work, bound to the action's encounter and command id.
   screen: ScreenPlan | null;
   // The paperwork read back from the record before a discharge, which the owner's confirmation covers.
@@ -101,9 +104,9 @@ export type EmrTaskView = {
     action_id: string; kind: string; state: EmrActionState; summary: string; reason: string | null; corrects_action_id: string | null;
     line_id: string; args: Record<string, unknown>; proposed_at: string; written_at: string | null;
     proof?: { record_id: string; record_version: number; event_ids: string[] };
-    report?: string; draft?: string; unverified?: true; awaiting?: "owner_voice" | "confirm"; authorised_by_line?: string;
+    report?: string; draft?: string; unverified?: true; awaiting?: "owner_voice" | "repeat" | "confirm"; authorised_by_line?: string;
     awaiting_verification?: { since: string; attempts: number; reason: string };
-    uncertain?: { since: string; attempts: number; reason: string };
+    uncertain?: { since: string; attempts: number; reason: string; committed?: true };
     // The page the strip opens and fills for this action; command_id and owner_id bind it through navigation.
     screen?: ScreenPlan & { command_id: string; owner_id: string };
   }[];
@@ -232,7 +235,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
     case "intent.failed": { const l = t.lines.find((y) => y.id === x["line_id"]); if (l) l.decided = true; break; }
     case "question.asked": t.questions.push({ question_id: String(x["question_id"]), text: String(x["text"]), line_id: String(x["line_id"]), answered_by: null, at: e.wall_at, choice: (x["choice"] as QuestionChoice | undefined) ?? null, rule: (x["rule"] as OrderRule | undefined) ?? null, pref_id: (x["pref_id"] as string | undefined) ?? null }); break;
     case "speaker.attributed": { const l = t.lines.find((y) => y.id === x["line_id"]); if (l) l.speaker = x["speaker"] as SpeakerRecord; break; }
-    case "action.authorised": if (act) { act.awaiting = x["awaiting"] === "confirm" ? "confirm" : null; if (x["as"] === "confirm") act.confirmed_by_line = String(x["line_id"]); else act.authorised_by_line = String(x["line_id"]); } break;
+    case "action.authorised": if (act) { act.awaiting = x["awaiting"] === "confirm" || x["awaiting"] === "repeat" ? x["awaiting"] : null; if (x["as"] === "confirm") act.confirmed_by_line = String(x["line_id"]); else if (x["as"] !== "repeat") act.authorised_by_line = String(x["line_id"]); } break;
     case "preference.applied": t.prefs.applied.push({ ...(x as PrefUse), at: e.wall_at }); break;
     case "preference.withheld": t.prefs.withheld.push({ ...(x as PrefUse), at: e.wall_at }); break;
     case "preference.candidate_noted": t.prefs.candidates.push(String(x["pref_id"])); break;
@@ -257,13 +260,13 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
         corrects_action_id: (x["corrects_action_id"] as string | null) ?? null, state: "proposed", intent_key: null, written: null, proof: null, reason: null,
         proposed_at: e.wall_at, written_at: null, completed_at: null, report: null, draft: null, unverified: false, awaiting_verification: null, uncertain: null, intent_at: null, ears: !!x["ears"],
         awaiting: (x["awaiting"] as EmrAction["awaiting"] | undefined) ?? null, authorised_by_line: (x["authorised_by_line"] as string | null | undefined) ?? null, confirmed_by_line: null,
-        screen: (x["screen"] as ScreenPlan | undefined) ?? null, read_back: null
+        repeat_of: (x["repeat_of"] as EmrAction["repeat_of"] | undefined) ?? null, screen: (x["screen"] as ScreenPlan | undefined) ?? null, read_back: null
       });
       t.order.push(String(x["action_id"]));
       break;
     case "action.read_back": if (act) act.read_back = x["read_back"] as PaperworkReadBack; break;
     case "action.intent": if (act) { act.state = "sent"; act.intent_key = String(x["intent_key"]); act.intent_at = e.wall_at; if (x["args"]) act.args = x["args"] as WorkArgs; } break;
-    case "action.uncertain": if (act) { act.state = "uncertain"; act.uncertain = { since: act.uncertain?.since ?? e.wall_at, attempts: Number(x["attempts"]), reason: String(x["reason"]) }; } break;
+    case "action.uncertain": if (act) { act.state = "uncertain"; act.uncertain = { since: act.uncertain?.since ?? e.wall_at, attempts: Number(x["attempts"]), reason: String(x["reason"]), ...(act.uncertain?.committed || x["committed"] ? { committed: true as const } : {}) }; } break;
     case "action.written": if (act) { act.state = "acknowledged"; act.written = x["written"] as EmrAction["written"]; act.written_at = e.wall_at; } break;
     case "action.completed": if (act) { act.state = "completed"; act.proof = x["proof"] as EmrProof; act.completed_at = e.wall_at; } break;
     case "action.cancelled": if (act) { act.state = "cancelled"; act.reason = String(x["reason"]); } break;
@@ -496,6 +499,24 @@ export const PAY_LINK_VERIFIED_NOTE = "Pay link request verified: the bill shows
 
 // "Yes, confirm the morphine" names what is confirmed; up to two words after the, that or this, so a new sentence after confirm is never a yes.
 export const OWNER_YES = /^(?:yes|yeah|yes please|yes sign(?: them| it| everything)?|sign(?: them| it)?|go ahead|send it|do it|(?:(?:yes|yeah|okay|ok) )?(?:i )?confirm(?:ed)?(?: (?:the|that|this|it)(?: [a-z']+){0,2})?)$/;
+// A line that asks for a further order on purpose, so it is never held as a repeat.
+export const DELIBERATE_REPEAT = /\b(?:another|again)\b/i;
+// The states of an order that was requested or sent; a declined, refused or failed order is not repeated by saying it again.
+const REQUESTED: ReadonlySet<EmrActionState> = new Set(["proposed", "sent", "uncertain", "acknowledged", "completed"]);
+// The question for a repeated order, with the local time the first was asked for.
+export function repeatAsk(summary: string, at: string): string {
+  const hm = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Africa/Lagos" }).format(new Date(at));
+  return `${summary}. Already ordered at ${hm}. Order again?`;
+}
+// Two orders are the same when they name the same test, or the same medicine for the same patient and encounter with no differing dose or route.
+export function sameOrder(kind: string, a: WorkArgs, b: WorkArgs): boolean {
+  if (a["patient_id"] !== b["patient_id"] || a["visit_id"] !== b["visit_id"]) return false;
+  if (kind === "order_test") return a["test"] === b["test"];
+  if (a["drug"] !== b["drug"]) return false;
+  if (typeof a["route"] === "string" && typeof b["route"] === "string" && a["route"] !== b["route"]) return false;
+  if (typeof a["dose"] === "string" && typeof b["dose"] === "string") return doseAgrees(a["dose"], b["dose"]) && doseAgrees(b["dose"], a["dose"]);
+  return true;
+}
 export const OWNER_NO = /^(?:no|nope|don'?t|do not|cancel(?: it| that)?|leave it)$/;
 // The owner's natural yes to a countersign batch read back on screen, within the answer window; never a controlled-drug, diagnosis or discharge confirm, and never a held order from an unmatched voice.
 export const READ_BACK_YES = /^(?:(?:ok(?:ay)?|yeah|yes)\s+)?(?:go on|go ahead|sign (?:them|it|those)(?: all)?)$/;
@@ -544,6 +565,8 @@ export class EmrRuntime {
   private readonly timers = new Set<NodeJS.Timeout>();
   private readonly recon = new Set<NodeJS.Timeout>();
   private readonly reconRound = new Map<string, number>();
+  // Lines whose order the gate was unsure of, sent on only when they repeat an order, with the question asked otherwise.
+  private readonly unsureRepeat = new Map<string, string>();
   private lineCounter = 0;
   private stopped = false;
   private poller: NodeJS.Timeout | null = null;
@@ -1244,7 +1267,13 @@ export class EmrRuntime {
       return;
     }
     if ((c.confidence ?? 0) < floor) {
-      this.ask(l, lineId, c.question ?? `Did you want me to chart this: "${c.words.slice(0, 160)}"?`);
+      const unsure = c.question ?? `Did you want me to chart this: "${c.words.slice(0, 160)}"?`;
+      // A repeated order the gate is unsure of is asked as the repeat it is, under the owner's bound yes; anything else is asked as before.
+      if (c.class === "instruction" && c.kind && this.mayRepeat(t, lineId, c)) {
+        this.unsureRepeat.set(lineId, unsure);
+        try { return this.applyWork(l, lineId, c, c.kind); } finally { this.unsureRepeat.delete(lineId); }
+      }
+      this.ask(l, lineId, unsure);
       return;
     }
     // Work for a later time or a record event is held as an obligation; the clinician is never asked to say it again.
@@ -1749,6 +1778,10 @@ export class EmrRuntime {
     const bySession = kind === REGISTER_KIND && who?.speaker === "unverified" && who.reason === "owner_not_enrolled";
     let awaiting: EmrAction["awaiting"] = needsOwner && who?.speaker !== "owner" && !bySession ? "owner_voice" : null;
     const controlled = (kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(args["drug"])]?.controlled) || OWNER_CONFIRM_KINDS.has(kind);
+    const repeat = this.repeatOf(t, lineId, kind, args);
+    const unsure = this.unsureRepeat.get(lineId);
+    if (unsure !== undefined && !repeat) { this.ask(l, lineId, unsure); return; }
+    if (!awaiting && repeat) awaiting = "repeat";
     if (!awaiting && (controlled || CONFIRM_KINDS.has(kind))) awaiting = "confirm";
     const authorisedBy = kind === "countersign" || ((ORDER_KINDS.has(kind) || kind === VERBAL_ORDER_KIND) && who?.speaker === "owner") ? lineId : null;
     const actionId = `a-${shortHash(t.task_id, lineId, t.order.length + 1)}`;
@@ -1756,13 +1789,32 @@ export class EmrRuntime {
     if (kind === "prescribe" && typeof args["dose"] === "string") this.startDoseCheck(l, actionId, lineId, args["dose"]);
     const anchor = awaiting ? null : this.anchorOf(t, lineId);
     const screen = this.screenOf(t, kind, args);
-    this.append(l, "action.proposed", { action_id: actionId, kind, args, summary, line_id: lineId, corrects_action_id: correctsId, hold_ms: this.o.holdMs ?? 0, ...this.holdUntil(anchor), ...(ears ? { ears: true } : {}), ...(awaiting ? { awaiting } : {}), ...(authorisedBy ? { authorised_by_line: authorisedBy } : {}), ...(screen ? { screen } : {}) });
+    this.append(l, "action.proposed", { action_id: actionId, kind, args, summary, line_id: lineId, corrects_action_id: correctsId, hold_ms: this.o.holdMs ?? 0, ...this.holdUntil(anchor), ...(ears ? { ears: true } : {}), ...(awaiting ? { awaiting } : {}), ...(authorisedBy ? { authorised_by_line: authorisedBy } : {}), ...(repeat ? { repeat_of: repeat } : {}), ...(screen ? { screen } : {}) });
+    if (awaiting === "repeat") this.ask(l, lineId, repeatAsk(summary, repeat!.at), null, { kind: "confirm", action_id: actionId });
     if (awaiting === "owner_voice") this.ask(l, lineId, `Held: ${summary}. ${who ? "I could not match the voice to you" : "I heard no voice to match"}, so it waits until you say yes yourself.`, null, { kind: "authorise", action_id: actionId });
     if (awaiting === "confirm" && !CONFIRM_KINDS.has(kind)) this.ask(l, lineId, confirmAsk(kind, summary), null, { kind: "confirm", action_id: actionId });
     this.settle(l, "proposed");
     if (CONFIRM_KINDS.has(kind)) void this.readBackPaperwork(l, lineId, actionId);
     this.noteHold(actionId, anchor);
     if (t.state === "running" && !awaiting) this.hold(l, actionId, anchor);
+  }
+
+  // Whether an order the gate named may repeat one this owner already asked for, by its kind, test or medicine and patient, before its arguments are built.
+  private mayRepeat(t: EmrTask, lineId: string, c: AnyClause): boolean {
+    if (!c.kind || !BATCH_KINDS.has(c.kind) || DELIBERATE_REPEAT.test(t.lines.find((x) => x.id === lineId)?.text ?? "")) return false;
+    const key = c.kind === "order_test" ? (c as { test?: unknown }).test : (c as { drug?: unknown }).drug;
+    return [...this.live.values()].some((x) => x.task.owner === t.owner && [...x.task.actions.values()].some((a) => a.kind === c.kind && a.line_id !== lineId && REQUESTED.has(a.state) && a.awaiting !== "owner_voice" && a.args["patient_id"] === t.patient_id && a.args[c.kind === "order_test" ? "test" : "drug"] === key));
+  }
+
+  // The order of this owner's for the same patient and encounter that a new order repeats: the same test, or the same medicine at the same dose and route where both say one; a line saying another or again asks for a new one.
+  private repeatOf(t: EmrTask, lineId: string, kind: string, args: WorkArgs): { action_id: string; at: string } | null {
+    if (!BATCH_KINDS.has(kind)) return null;
+    const text = t.lines.find((x) => x.id === lineId)?.text ?? "";
+    if (DELIBERATE_REPEAT.test(text)) return null;
+    const prior = [...this.live.values()].filter((x) => x.task.owner === t.owner).flatMap((x) => [...x.task.actions.values()].map((a) => ({ a, at: x.task.lines.find((y) => y.id === a.line_id)?.at ?? a.proposed_at })))
+      .filter(({ a }) => a.kind === kind && a.line_id !== lineId && REQUESTED.has(a.state) && a.awaiting !== "owner_voice" && sameOrder(kind, a.args, args))
+      .sort((p, q) => Date.parse(q.at) - Date.parse(p.at))[0];
+    return prior ? { action_id: prior.a.action_id, at: prior.at } : null;
   }
 
   // The line's matched speaker, once the hospital answered; null when the line had no voice to match.
@@ -1879,13 +1931,18 @@ export class EmrRuntime {
     const controlled = (a.kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(a.args["drug"])]?.controlled) || OWNER_CONFIRM_KINDS.has(a.kind);
     const confirmKind = CONFIRM_KINDS.has(a.kind);
     if (a.awaiting === "owner_voice") {
-      this.append(l, "action.authorised", { action_id: a.action_id, line_id: lineId, as: "authorise", awaiting: controlled || confirmKind ? "confirm" : null });
+      this.append(l, "action.authorised", { action_id: a.action_id, line_id: lineId, as: "authorise", awaiting: a.repeat_of ? "repeat" : controlled || confirmKind ? "confirm" : null });
+      if (a.repeat_of) { this.ask(l, lineId, repeatAsk(a.summary, a.repeat_of.at), null, { kind: "confirm", action_id: a.action_id }); this.settle(l, "asked"); return true; }
       if (controlled) { this.ask(l, lineId, confirmAsk(a.kind, a.summary), null, { kind: "confirm", action_id: a.action_id }); this.settle(l, "asked"); return true; }
       if (confirmKind) {
         if (a.read_back) this.ask(l, lineId, paperworkAsk(a.summary, a.read_back), null, { kind: "confirm", action_id: a.action_id });
         this.settle(l, "asked");
         return true;
       }
+    } else if (a.awaiting === "repeat") {
+      // The owner's yes to a repeated order releases this one order only; a controlled drug still needs its own confirm after it.
+      this.append(l, "action.authorised", { action_id: a.action_id, line_id: lineId, as: "repeat", awaiting: controlled ? "confirm" : null });
+      if (controlled) { this.ask(l, lineId, confirmAsk(a.kind, a.summary), null, { kind: "confirm", action_id: a.action_id }); this.settle(l, "asked"); return true; }
     } else if (confirmKind && (!a.read_back || lineId === a.line_id)) {
       // A discharge is confirmed only on its read-back, by a line after the instruction.
       this.note(l, "The paperwork has not been read back yet, so nothing was confirmed. Say confirm once it shows.");
@@ -2321,9 +2378,16 @@ export class EmrRuntime {
           this.append(l, "action.written", { action_id: a.action_id, written: { ...found, replayed: true } });
           return true;
         }
+        // The hospital said this one was saved, so it is only read for; sending it again could only replay the same answer or make a second record.
+        if (a.uncertain?.committed) return this.holdUncertain(l, a, first);
         this.append(l, "action.retry", { action_id: a.action_id, reason: a.uncertain?.reason ?? "uncertain", status: null, same_key: true });
       }
       const c = await this.o.port.commit(a.kind, a.args, a.intent_key!, prov);
+      // A success that names the visit or stay for work that makes its own record named no record at all.
+      if ((!c.ok && c.committed) || (c.ok && NEW_RECORD_KINDS.has(a.kind) && this.encounterIds(t, a).has(c.record_id))) {
+        this.append(l, "action.uncertain", { action_id: a.action_id, attempts: (a.uncertain?.attempts ?? 0) + 1, reason: "saved, but the hospital's answer named no record", status: c.ok ? null : c.status, next_in_ms: null, committed: true });
+        continue;
+      }
       if (c.ok) {
         this.append(l, "action.written", { action_id: a.action_id, written: { record_id: c.record_id, record_version: c.record_version, event_ids: c.event_ids, replayed: c.replayed } });
         if (c.report || c.draft) this.append(l, "action.reported", { action_id: a.action_id, report: c.report ?? null, draft: c.draft ?? null });
@@ -2341,6 +2405,11 @@ export class EmrRuntime {
       return false;
     }
     return this.holdUncertain(l, a, first);
+  }
+
+  // The patient, visit and stay ids this action's encounter is known by, none of which is ever a new order's own id.
+  private encounterIds(t: EmrTask, a: EmrAction): Set<string> {
+    return new Set([a.args["visit_id"], a.args["admission_id"], a.args["patient_id"], t.visit_id, t.admission_id, t.patient_id].filter((x): x is string => typeof x === "string" && x.length > 0));
   }
 
   // The record this write made, found by the port's own read of the hospital; null when nothing is found or several could be it, "unread" when the read failed.
@@ -2366,7 +2435,7 @@ export class EmrRuntime {
     const round = (this.reconRound.get(key) ?? 0) + 1;
     this.reconRound.set(key, round);
     const next = round <= waits.length ? waits[round - 1]! : null;
-    if (first) this.note(l, `${a.summary}: the hospital's answer was lost, so it may be saved. I will read the record and ask again under the same request before anything depends on it.`);
+    if (first) this.note(l, a.uncertain?.committed ? `${a.summary}: the hospital says it was saved but did not name the record. Checking the save: I will read the record before anything depends on it, and I will not send it again.` : `${a.summary}: the hospital's answer was lost, so it may be saved. I will read the record and ask again under the same request before anything depends on it.`);
     this.settle(l, "uncertain");
     if (next === null || this.stopped) return false;
     const timer = setTimeout(() => {
