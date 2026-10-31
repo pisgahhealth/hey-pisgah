@@ -1,14 +1,15 @@
 import { EMERGENCY_KIND } from "./entry.js";
 
 // What the strip can show for a kind of work: the page and section that hold it, where that page lives, and the values it displays before the commit.
-export type ScreenPage = "triage" | "doctor_workspace" | "admissions" | "reception_identity" | "stay";
+export type ScreenPage = "triage" | "doctor_workspace" | "admissions" | "reception_identity" | "stay" | "lab_board" | "pharmacy_queue" | "accounts_desk";
 export type ScreenPlan = {
   page: ScreenPage; section: string; href: string;
   encounter: { patient_id: string | null; visit_id: string | null; admission_id: string | null };
   values: Record<string, string>;
 };
 type Subject = { patient_id: string | null; visit_id: string | null; admission_id: string };
-type Spec = { page: ScreenPage; section: string; values: (a: Record<string, unknown>) => Record<string, string> };
+// A null page is background work unless the owner's profile names the page it lands on.
+type Spec = { page: ScreenPage | null; section: string; values: (a: Record<string, unknown>) => Record<string, string> };
 
 const str = (v: unknown): string | null => (v === undefined || v === null || v === "" ? null : Array.isArray(v) ? v.join(", ") : String(v));
 const pick = (a: Record<string, unknown>, keys: Record<string, string>): Record<string, string> =>
@@ -16,7 +17,7 @@ const pick = (a: Record<string, unknown>, keys: Record<string, string>): Record<
 const bp = (a: Record<string, unknown>): Record<string, string> => (typeof a["bp"] === "string" ? { bp_sys: a["bp"].split("/")[0]!, bp_dia: a["bp"].split("/")[1] ?? "" } : {});
 const VITALS = { temp_c: "temp_c", pulse: "pulse", resp_rate: "resp_rate", spo2: "spo2", weight_kg: "weight_kg", note: "note" };
 
-export const SCREEN_PAGES: readonly ScreenPage[] = ["triage", "doctor_workspace", "admissions", "reception_identity", "stay"];
+export const SCREEN_PAGES: readonly ScreenPage[] = ["triage", "doctor_workspace", "admissions", "reception_identity", "stay", "lab_board", "pharmacy_queue", "accounts_desk"];
 // The ids a page route may name; the strip opens the page only once every one it names is known.
 export const HREF_IDS = ["admission_id", "patient_id", "visit_id"] as const;
 
@@ -25,7 +26,8 @@ export const SCREENS: Record<string, Spec> = {
   [EMERGENCY_KIND]: { page: "triage", section: "arrival", values: (a) => pick(a, { reason: "reason" }) },
   record_triage_vitals: { page: "triage", section: "vitals", values: (a) => ({ ...pick(a, VITALS), ...bp(a) }) },
   complete_registration: { page: "reception_identity", section: "identity", values: (a) => pick(a, { surname: "surname", other_names: "other_names", phone: "phone", consent: "consent_purposes" }) },
-  record_identity: { page: "reception_identity", section: "identity", values: (a) => pick(a, { full_name: "name", phone: "phone" }) },
+  // The clinician who names an emergency arrival sees the name where the arrival sits on their own encounter panel.
+  record_identity: { page: "doctor_workspace", section: "arrival", values: (a) => pick(a, { full_name: "name" }) },
   open_consult: { page: "doctor_workspace", section: "note", values: () => ({}) },
   draft_consult_note: { page: "doctor_workspace", section: "note", values: (a) => pick(a, { note: "text" }) },
   record_clerking: { page: "doctor_workspace", section: "note", values: (a) => pick(a, { note: "text", part: "section" }) },
@@ -45,9 +47,14 @@ export const SCREENS: Record<string, Spec> = {
   record_note: { page: "stay", section: "notes", values: (a) => pick(a, { note: "text" }) },
   request_ward_review: { page: "stay", section: "notes", values: (a) => pick(a, { review: "reason", team: "team" }) },
   release_home: { page: "stay", section: "discharge", values: () => ({}) },
-  send_pay_link: { page: "stay", section: "bill", values: (a) => pick(a, { amount: "amount" }) },
-  prepare_bill: { page: "stay", section: "bill", values: () => ({}) }
+  send_pay_link: { page: "accounts_desk", section: "bill", values: (a) => pick(a, { amount: "amount" }) },
+  prepare_bill: { page: "accounts_desk", section: "bill", values: () => ({}) },
+  prepare_order: { page: "pharmacy_queue", section: "queue", values: (a) => pick(a, { task: "title" }) },
+  dispense_order: { page: "pharmacy_queue", section: "queue", values: (a) => pick(a, { task: "title" }) },
+  acknowledge_task: { page: null, section: "worklist", values: (a) => pick(a, { task: "title" }) }
 };
+// Kinds with no page of their own: the strip reports them, and the record they leave is someone else's page or none.
+export const BACKGROUND_KINDS: ReadonlySet<string> = new Set(["page_staff", "draft_stay_summary", "draft_handover", "nudge_owner"]);
 
 // Fills "{admission_id}" style ids in a page route; an id not yet known stays named, so the route is not opened until it is.
 export function fillHref(tpl: string, e: ScreenPlan["encounter"]): string {
@@ -64,6 +71,7 @@ export function screenFor(kind: string, args: Record<string, unknown>, s: Subjec
   const base = SCREENS[kind];
   if (!base) return null;
   const spec = page && page !== base.page ? { ...base, page } : base;
+  if (!spec.page) return null;
   const patient = str(args["patient_id"]) ?? s.patient_id;
   const visit = str(args["visit_id"]) ?? s.visit_id;
   const admission = str(args["admission_id"]) ?? (s.admission_id || null);
