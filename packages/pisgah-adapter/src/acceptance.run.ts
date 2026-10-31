@@ -165,9 +165,6 @@ let fakeT0 = 0;
 // The whole fake microphone file in memory, so a reloaded page's microphone can be given the rest of it from the moment of the reload.
 let fakeBytes: Uint8Array | null = null;
 let fakeRealigning: Promise<void> | null = null;
-// The strip session the doctor's page last posted under, and who waits for the first post of a new one.
-let lastStripSid: string | null = null;
-let newSidSeen: ((sid: string) => void) | null = null;
 // A planned reload cuts the file in the quiet before its line, wherever the reload itself lands.
 let plannedCutMs: number | null = null;
 // Waits until the fake microphone file reaches an offset, following the file's zero when a reload moves it.
@@ -193,14 +190,19 @@ function realignFakeMic(why: string): void {
   const fd = openSync(`${file}.next`, "w"); writeSync(fd, head); writeSync(fd, data); closeSync(fd);
   renameSync(`${file}.next`, file);
   log(`fake microphone: the doctor's page reloaded (${why}); the file now plays on from ${(cut / 1000).toFixed(1)} s`);
-  // The file starts again when the new page's microphone opens, which is when its first post reaches the serve under a new session; the header shows Listening earlier.
-  const before = lastStripSid;
-  fakeRealigning = new Promise<boolean>((resolve) => {
-    const t = setTimeout(() => { newSidSeen = null; resolve(false); }, 180_000);
-    newSidSeen = (sid) => { if (sid === before) return; clearTimeout(t); newSidSeen = null; resolve(true); };
-  }).then((back) => {
-    fakeT0 = fakeRealign(fakeT0, reloadAt, Date.now() - 100).fakeT0;
-    log(`fake microphone: listening ${back ? "came back" : "did not come back"} ${((Date.now() - reloadAt) / 1000).toFixed(1)} s after the reload; the script's slots moved with it`);
+  // The file starts again when the new page first opens the microphone (its wake spotter, before listening resumes), which the page stamps; the header shows Listening later.
+  const p = page;
+  fakeRealigning = (async (): Promise<number | null> => {
+    for (let i = 0; i < 1800; i++) {
+      const at = await p.evaluate(() => (window as unknown as { __accMicAt?: number }).__accMicAt ?? null, "").catch(() => null);
+      if (typeof at === "number" && at >= reloadAt) return at;
+      await wait(100);
+    }
+    return null;
+  })().then((micAt) => {
+    const back = micAt !== null;
+    fakeT0 = fakeRealign(fakeT0, reloadAt, micAt ?? Date.now()).fakeT0;
+    log(`fake microphone: ${back ? `the new page opened the microphone ${((micAt! - reloadAt) / 1000).toFixed(1)} s after the reload` : "no microphone open was seen in 180 s"}; the script's slots moved with it`);
     fakeRealigning = null;
   });
 }
@@ -298,7 +300,11 @@ async function openBrowser(): Promise<void> {
   const browser = await chromium.launch({ channel: "chrome", headless: false, ignoreDefaultArgs: ["--enable-automation"], args: ["--window-size=1400,960", ...fakeArgs] });
   const ctx = await browser.newContext({ viewport: { width: 1380, height: 860 } });
   await ctx.grantPermissions(["microphone"], { origin: APP });
-  await ctx.addInitScript((serve) => { try { window.localStorage.setItem("pisgah-agent-serve", serve); } catch { /* storage off */ } (window as unknown as { __accDoc?: number }).__accDoc = Date.now() + Math.random(); }, `http://localhost:${SERVE_PORT}`);
+  await ctx.addInitScript((serve) => { try { window.localStorage.setItem("pisgah-agent-serve", serve); } catch { /* storage off */ } (window as unknown as { __accDoc?: number }).__accDoc = Date.now() + Math.random();
+    // The moment this page's first microphone opens, which is when Chrome starts its fake microphone file from the top.
+    const md = navigator.mediaDevices;
+    if (md?.getUserMedia) { const g = md.getUserMedia.bind(md); md.getUserMedia = (c?: MediaStreamConstraints) => { const p = g(c); p.then(() => { const w = window as unknown as { __accMicAt?: number }; w.__accMicAt ??= Date.now(); }, () => undefined); return p; }; }
+  }, `http://localhost:${SERVE_PORT}`);
   page = await ctx.newPage();
   setOffline = (on) => ctx.setOffline(on);
   // The lab's own window, its own sign-in, opened now so the lab page is compiled before the run needs it.
@@ -325,7 +331,7 @@ async function openBrowser(): Promise<void> {
     if (fr.parentFrame() !== null) return;
     void fr.evaluate(() => (window as unknown as { __accDoc?: number }).__accDoc).then((d) => { const fresh = d !== doc; doc = d; if (fresh) realignFakeMic(fr.url().replace(/^https?:\/\/[^/]+/, "").slice(0, 60)); }, () => undefined);
   });
-  pg.on("response", (r) => { const x = r as { url: () => string; status: () => number; request: () => { method: () => string } }; const u = x.url(); if (x.request().method() === "POST" && u.includes(`:${SERVE_PORT}/tasks/listen`)) { const sid = /session_id=([^&]+)/.exec(u)?.[1] ?? null; if (sid) { newSidSeen?.(sid); lastStripSid = sid; } } if (x.request().method() === "POST" && u.includes(`:${SERVE_PORT}/tasks/`)) appendFileSync(join(OUT, "strip-posts.log"), `${now()} ${u.replace(/^.*\/tasks/, "/tasks").slice(0, 80)} ${x.status()}\n`); });
+  pg.on("response", (r) => { const x = r as { url: () => string; status: () => number; request: () => { method: () => string } }; const u = x.url(); if (x.request().method() === "POST" && u.includes(`:${SERVE_PORT}/tasks/`)) appendFileSync(join(OUT, "strip-posts.log"), `${now()} ${u.replace(/^.*\/tasks/, "/tasks").slice(0, 80)} ${x.status()}\n`); });
   pg.on("requestfailed", (r) => { const x = r as { url: () => string; failure: () => { errorText: string } | null }; if (x.url().includes(`:${SERVE_PORT}/`)) appendFileSync(join(OUT, "strip-posts.log"), `${now()} FAILED ${x.url().replace(/^.*\/tasks/, "/tasks").slice(0, 80)} ${x.failure()?.errorText ?? ""}\n`); });
   pg.on("console", (m) => { const x = m as { type: () => string; text: () => string }; if (x.type() === "error") appendFileSync(join(OUT, "strip-posts.log"), `${now()} console ${x.text().slice(0, 200)}\n`); });
   browserClose = () => browser.close();
@@ -447,7 +453,7 @@ function lineAfter(since: string, owners: string[] = [DOCTOR]): { line_id: strin
 const claimed = new Set<string>();
 function lineFor(text: string, since: string, owners: string[]): ReturnType<typeof lineAfter> {
   const rows = owners.flatMap((o) => (views.get(o) ?? []).flatMap((t) => t.transcript));
-  const hit = bindLine(text, since, rows.map((l) => ({ line_id: l.line_id, text: l.text, at: l.at, kept: l.kept, ...(l.ambient ? { ambient: { raw_text: l.ambient.raw_text, ended_at: l.ambient.ended_at } } : {}) })), claimed);
+  const hit = bindLine(text, since, rows.map((l) => ({ line_id: l.line_id, text: l.text, at: l.at, kept: l.kept, decided: l.decided, ...(l.ambient ? { ambient: { raw_text: l.ambient.raw_text, ended_at: l.ambient.ended_at } } : {}) })), claimed);
   return hit ? { line_id: hit.line_id, text: hit.text, at: hit.at, ended: hit.ambient?.ended_at ?? null } : null;
 }
 

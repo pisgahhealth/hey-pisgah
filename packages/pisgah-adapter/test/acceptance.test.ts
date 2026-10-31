@@ -80,13 +80,14 @@ describe("acceptance harness", () => {
     const at = (s: number) => new Date(Date.parse("2026-10-31T01:19:00.000Z") + s * 1000).toISOString();
     const rows: HeardRow[] = [
       { line_id: "u-a06", text: "blood pressure is 90 over 60, pulse 112. Tammed is 38.9", at: at(8), kept: true, ambient: { raw_text: "BP is ninety over sixty, pulse one hundred and twelve. Tammed is thirty eight point nine" } },
-      { line_id: "u-a13", text: "", at: at(118), kept: false },
+      { line_id: "u-a14", text: "", at: at(111), kept: false, decided: false },
+      { line_id: "u-a13", text: "", at: at(118), kept: false, decided: true },
       { line_id: "u-a07", text: "Suffs 96 on room air. Respirate 22", at: at(40), kept: true, ambient: { raw_text: "Suffs ninety six on room air. Respirate twenty two" } }
     ];
     const claimed = new Set<string>();
     expect(bindLine("BP is ninety over sixty, pulse one hundred and twelve, temp is thirty eight point nine.", at(0), rows, claimed)?.line_id).toBe("u-a06");
     expect(bindLine("Sats ninety six on room air, resp rate twenty two.", at(30), rows, claimed)?.line_id).toBe("u-a07");
-    // A refused or unacted line keeps no words in the store, so the step takes the first withheld line heard after it began.
+    // A refused or unacted line keeps no words in the store, so the step takes the first decided, withheld line heard after it began; one still being decided may yet show its words.
     expect(bindLine("Let's cancel the urinalysis for now, we'll do it on the ward later.", at(110), rows, claimed)?.line_id).toBe("u-a13");
     // Nothing heard after the step began is nothing bound, and a claimed line is never bound twice.
     expect(bindLine("When the malaria result comes back, let me know.", at(200), rows, claimed)).toBeNull();
