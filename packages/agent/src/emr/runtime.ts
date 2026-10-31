@@ -8,7 +8,7 @@ import { primaryClass } from "./classes.js";
 import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
-import { BATCH_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
+import { BATCH_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
@@ -1232,6 +1232,8 @@ export class EmrRuntime {
       this.ask(l, lineId, c.question ?? `I did not catch what to record from "${c.words.slice(0, 120)}". Please say it again.`);
       return;
     }
+    // The gate may call the whole of "when the result comes back, let me know" conditional; a line that only asks to be told when a result is back is the same tell.
+    if (c.class === "conditional" && tellMeSaid(lineText) && afterSaid("result", lineText) && !/\bif\b/i.test(lineText) && !measuresIn(lineText).length) return this.holdObligation(l, lineId, TELL_ME_KIND, c, { after: "result", due_at: null, reason: "tell_me" });
     if (c.class !== "instruction" && c.class !== "correction") return;
     // "When the result comes back, let me know" asks only to be told: held on the result, and fired as a note to the clinician, never as work.
     if (c.class === "instruction" && !c.kind && c.after === "result" && afterSaid("result", lineText)) return this.holdObligation(l, lineId, TELL_ME_KIND, c, { after: "result", due_at: null, reason: "tell_me" });

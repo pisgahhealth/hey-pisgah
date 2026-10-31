@@ -189,3 +189,26 @@ export function writeAccResults(root: string, r: AccResult, extra: { previews_wi
   put("speed.json", { ...prior, ...fields["C-21"], measured_at: r.measured_at, source: `${head.source}; the lane floor fields beside it are G6's integration runs, not this run`, acceptance: { ...head, table: r.speed.table, errors: r.error_rows } });
   return written;
 }
+
+// One heard line as the serve's views show it: a kept line carries its words and the ear's raw words, a withheld line only its time.
+export type HeardRow = { line_id: string; text: string; at: string; kept?: boolean; decided?: boolean; ambient?: { raw_text?: string; ended_at?: string } };
+const wordsOf = (t: string) => t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2);
+// The utterance a script line became: the unclaimed heard line whose words, as written or as the ear first wrote them, best match the script's, from a little before the step on.
+// A line the agent did not act on keeps no words in the store, so with no match the step takes the first decided, withheld line heard after it began, as pass 8 did; a line still being decided may yet show its words.
+export function bindLine(text: string, since: string, rows: readonly HeardRow[], claimed: Set<string>): HeardRow | null {
+  const want = new Set(wordsOf(text));
+  const from = new Date(Date.parse(since) - 60_000).toISOString();
+  const open = rows.filter((l) => l.at >= from && !claimed.has(l.line_id));
+  const score = (t: string | undefined) => { const w = wordsOf(t ?? ""); return w.length && want.size ? w.filter((x) => want.has(x)).length / Math.max(1, Math.min(want.size, w.length)) : 0; };
+  const best = open.filter((l) => l.text).map((l) => ({ l, n: Math.max(score(l.text), score(l.ambient?.raw_text)) })).filter((x) => x.n >= 0.5).sort((a, b) => b.n - a.n || (a.l.at < b.l.at ? -1 : 1))[0]?.l;
+  const withheld = open.filter((l) => !l.text && l.kept === false && l.decided !== false && l.at >= since).sort((a, b) => (a.at < b.at ? -1 : 1))[0];
+  const hit = best ?? withheld ?? null;
+  if (hit) claimed.add(hit.line_id);
+  return hit;
+}
+
+// Where a reloaded page's fake microphone must start so it plays on from the moment of the reload, and the file's new zero once listening is back.
+export function fakeRealign(fakeT0: number, reloadAt: number, listeningAt: number): { cutMs: number; fakeT0: number } {
+  const cutMs = Math.max(0, reloadAt - fakeT0);
+  return { cutMs, fakeT0: listeningAt - cutMs };
+}

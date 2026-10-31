@@ -7,10 +7,12 @@ import { ModelClient } from "@hey-pisgah/model";
 import { encodeWav, type FinalTranscript } from "@hey-pisgah/voice";
 import { EmrRuntime } from "../src/emr/runtime.js";
 import { ListenSessions, recordingTranscriber, replayTranscriber, type Transcriber } from "../src/emr/listen.js";
-import { gateCommitment, gateCommitmentBody, gateMessage, gatePrompt, denyHits } from "../src/emr/gate.js";
+import { ROUND_RULE, gateCommitment, gateCommitmentBody, gateMessage, gatePrompt, denyHits } from "../src/emr/gate.js";
+import { createHash } from "node:crypto";
 import { GATE_COMMITMENT_FILE, committedGateHash } from "../src/emr/gate.commit.js";
 import { startEmrServe } from "../src/emr/serve.js";
 import { ADM, FakeEmr, OWNER, emrRoot, gater, type C } from "./emr-helpers.js";
+const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
 const RATE = 16_000;
 // A chunk the way the strip sends it: tone for speech, then an optional quiet tail.
@@ -51,20 +53,26 @@ describe("speech gate", () => {
     // The observation gate the labelled talk was scored on is unchanged by the clerking revision.
     const rev2 = JSON.parse(readFileSync(GATE_COMMITMENT_FILE, "utf8")).revisions[1].body;
     expect([last.prompt_sha256, last.tool_sha256]).toEqual([rev2.prompt_sha256, rev2.tool_sha256]);
-    // The clerking owner's full prompt is still revision 3's bytes; the first stage added in revision 4 is scanned too.
+    // Revision 11 adds only the round-entry rule to every owner who clerks and holds record_note; without that line each prompt is its earlier revision's bytes.
+    const before11 = (prompt: string) => sha256(prompt.replace(`\n${ROUND_RULE}`, ""));
+    expect(last.clerking.prompt).toContain(ROUND_RULE);
+    // The clerking owner's full prompt is otherwise still revision 3's bytes; the first stage added in revision 4 is scanned too.
     const rev3 = JSON.parse(readFileSync(GATE_COMMITMENT_FILE, "utf8")).revisions[2].body;
-    expect([last.clerking.prompt_sha256, last.clerking.tool_sha256]).toEqual([rev3.clerking.prompt_sha256, rev3.clerking.tool_sha256]);
+    expect([before11(last.clerking.prompt), last.clerking.tool_sha256]).toEqual([rev3.clerking.prompt_sha256, rev3.clerking.tool_sha256]);
     expect(last.first_stage.deny_hits).toEqual([]);
     // Revision 6 adds the home owners only; the clerking and order owners' prompts without release_home stay revision 5's bytes.
     const rev5 = JSON.parse(readFileSync(GATE_COMMITMENT_FILE, "utf8")).revisions[4].body;
-    expect([last.orders.prompt_sha256, last.orders.tool_sha256]).toEqual([rev5.orders.prompt_sha256, rev5.orders.tool_sha256]);
+    expect([before11(last.orders.prompt), last.orders.tool_sha256]).toEqual([rev5.orders.prompt_sha256, rev5.orders.tool_sha256]);
     for (const k of ["plain", "orders"]) {
       expect(last.home[k].deny_hits).toEqual([]);
       expect(last.home[k].prompt).not.toMatch(/sending the patient home[^.]*stay with staff/);
     }
     // Revision 7 adds the owner who may state the diagnosis; the home owners stay revision 6's bytes.
     const rev6 = JSON.parse(readFileSync(GATE_COMMITMENT_FILE, "utf8")).revisions[5].body;
-    expect(last.home).toEqual(rev6.home);
+    for (const k of ["plain", "orders"]) expect([before11(last.home[k].prompt), last.home[k].tool_sha256]).toEqual([rev6.home[k].prompt_sha256, rev6.home[k].tool_sha256]);
+    const rev10 = JSON.parse(readFileSync(GATE_COMMITMENT_FILE, "utf8")).revisions[9].body;
+    expect([before11(last.diagnosis.prompt), last.diagnosis.tool_sha256]).toEqual([rev10.diagnosis.prompt_sha256, rev10.diagnosis.tool_sha256]);
+    expect(last.summary).toEqual(rev10.summary);
     expect(last.diagnosis.deny_hits).toEqual([]);
     expect(gateCommitmentBody().prompt_sha256).toBe(rev2.prompt_sha256);
     expect(denyHits(gatePrompt(["record_observation"]))).toEqual([]);

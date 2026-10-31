@@ -196,6 +196,8 @@ export function minutesSaid(line: string): number | null {
 }
 
 // True when the line names what held work waits for: the admission, or a result coming back.
+// Words that ask only to be told, said in any of the ways a clinician asks a colleague to let them know.
+export const tellMeSaid = (line: string): boolean => /\b(let me know|tell me|call me|inform me|notify me|alert me|update me|ping me|let me hear)\b/i.test(line);
 export function afterSaid(after: string, line: string): boolean {
   const low = line.toLowerCase();
   return after === "admission" ? /\badmit(ted|s)?\b|\badmission\b|\bon the ward\b/.test(low) : after === "result" ? /\bresults?\b|\bcomes? back\b|\bare back\b|\bis back\b/.test(low) : false;

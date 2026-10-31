@@ -120,6 +120,29 @@ describe("hand-offs keyed by the order, conditions keyed by the result", () => {
     await a.rt.stop();
   });
 
+  // Acceptance pass 9, 31 Oct: the gate classed the whole of "When the malaria result comes back, let me know" as conditional, so nothing was held.
+  it("holds 'let me know when the result comes back' when the gate calls the whole line conditional, and holds no tell for a plan on what the result shows", async () => {
+    const conditional = (s: string) => (/let me know|call me/i.test(s) ? [{ class: "conditional" as const, confidence: 0.8 }] : script(s));
+    const port = new LabFake();
+    const a = clerkBoot(conditional, { port, watchMs: 20 });
+    const sent = await say(a.rt, "Send a full blood count and a malaria test.");
+    await a.rt.settled();
+    await say(a.rt, "When the malaria result comes back, let me know.", sent.task_id);
+    await a.rt.settled();
+    expect(a.rt.view(sent.task_id)!.obligations[0]).toMatchObject({ kind: "tell_me", after: "result", state: "held" });
+    // A plan that waits on what the result shows, or on a value, stays conditional and holds nothing.
+    await say(a.rt, "If the malaria result comes back positive, call me.", sent.task_id);
+    await say(a.rt, "If her temperature goes above thirty nine, call me.", sent.task_id);
+    await a.rt.settled();
+    expect(a.rt.view(sent.task_id)!.obligations).toHaveLength(1);
+    port.resultFor("malaria", "resulted");
+    for (let i = 0; i < 100 && a.rt.view(sent.task_id)!.obligations[0]!.state === "held"; i++) await wait(20);
+    await a.rt.settled();
+    expect(a.rt.view(sent.task_id)!.obligations[0]).toMatchObject({ state: "done", fired_by: "condition" });
+    expect(port.of("record_note")).toHaveLength(0);
+    await a.rt.stop();
+  });
+
   it("keeps the bound order across a restart, fires once on its result, and hands nothing on twice", async () => {
     const clock = { now: Date.now() };
     const port = new LabFake();

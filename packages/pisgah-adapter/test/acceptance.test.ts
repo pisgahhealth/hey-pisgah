@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { claimStatus, parseClaimPredicate } from "@hey-pisgah/evaluator";
-import { Script, claimFields, completion, didBy, percentile, speedTable, stepStatus, writeAccResults, type AccResult, type StepOutcome } from "../src/acceptance.js";
+import { Script, bindLine, claimFields, completion, didBy, fakeRealign, percentile, speedTable, stepStatus, writeAccResults, type AccResult, type HeardRow, type StepOutcome } from "../src/acceptance.js";
 
 const claims = (JSON.parse(readFileSync(join(__dirname, "../../../evaluation/claims.json"), "utf8")) as { claims: { claim_id: string; acceptance: { predicate: string } }[] }).claims;
 const status = (id: string, data: unknown) => claimStatus(parseClaimPredicate(claims.find((c) => c.claim_id === id)!.acceptance.predicate), data).status;
@@ -75,5 +75,30 @@ describe("acceptance harness", () => {
     const speed = JSON.parse(readFileSync(join(root, "evaluation", "results", "speed.json"), "utf8")) as Record<string, unknown>;
     expect(speed).toMatchObject({ floor_vitals_p50_ms: 7420, wake_p50_ms: 600, vitals_p50_ms: 4100, order_p50_ms: 6000, errors_listed: true });
     expect(JSON.parse(readFileSync(join(root, "evaluation", "results", "touches.json"), "utf8"))).toMatchObject({ touches: 1, touches_allowed: 4, silent_steps: 0 });
+  });
+  it("binds a step to its heard line when the ear wrote the numbers as digits or the line was withheld (pass 9: A06, A13, B07)", () => {
+    const at = (s: number) => new Date(Date.parse("2026-10-31T01:19:00.000Z") + s * 1000).toISOString();
+    const rows: HeardRow[] = [
+      { line_id: "u-a06", text: "blood pressure is 90 over 60, pulse 112. Tammed is 38.9", at: at(8), kept: true, ambient: { raw_text: "BP is ninety over sixty, pulse one hundred and twelve. Tammed is thirty eight point nine" } },
+      { line_id: "u-a14", text: "", at: at(111), kept: false, decided: false },
+      { line_id: "u-a13", text: "", at: at(118), kept: false, decided: true },
+      { line_id: "u-a07", text: "Suffs 96 on room air. Respirate 22", at: at(40), kept: true, ambient: { raw_text: "Suffs ninety six on room air. Respirate twenty two" } }
+    ];
+    const claimed = new Set<string>();
+    expect(bindLine("BP is ninety over sixty, pulse one hundred and twelve, temp is thirty eight point nine.", at(0), rows, claimed)?.line_id).toBe("u-a06");
+    expect(bindLine("Sats ninety six on room air, resp rate twenty two.", at(30), rows, claimed)?.line_id).toBe("u-a07");
+    // A refused or unacted line keeps no words in the store, so the step takes the first decided, withheld line heard after it began; one still being decided may yet show its words.
+    expect(bindLine("Let's cancel the urinalysis for now, we'll do it on the ward later.", at(110), rows, claimed)?.line_id).toBe("u-a13");
+    // Nothing heard after the step began is nothing bound, and a claimed line is never bound twice.
+    expect(bindLine("When the malaria result comes back, let me know.", at(200), rows, claimed)).toBeNull();
+    expect(bindLine("Sats ninety six on room air, resp rate twenty two.", at(30), rows, claimed)).toBeNull();
+  });
+  it("plays a reloaded page's fake microphone on from the reload, with the file's zero moved by the time listening took to return", () => {
+    // Pass 9: listening started at t0, the page reloaded 1370 s later and listened again 12 s after that.
+    const r = fakeRealign(1_000_000, 1_000_000 + 1_370_000, 1_000_000 + 1_382_000);
+    expect(r.cutMs).toBe(1_370_000);
+    // A line due at 1400 s into the original file now plays 12 s later on the wall clock.
+    expect(r.fakeT0 + 1_400_000).toBe(1_000_000 + 1_412_000);
+    expect(fakeRealign(5000, 1000, 2000).cutMs).toBe(0);
   });
 });

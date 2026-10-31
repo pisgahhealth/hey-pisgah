@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync, writeSync, appendFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -11,7 +11,7 @@ import { personCaller } from "./journey.sandbox.js";
 import type { DoorLog } from "./port.js";
 import { SandboxBlock, mintPersonCookie, sandboxQuery } from "./sandbox.js";
 import { FAKE_OWNERS } from "./acceptance.fake.js";
-import { completion, didBy, loadScript, speedTable, stepStatus, writeAccResults, type AccResult, type CheckOutcome, type DelegationRow, type Expect, type Fault, type Line, type SpeakerRow, type SpeedErr, type SpeedRowIn, type StepOutcome, type Who } from "./acceptance.js";
+import { bindLine, completion, didBy, fakeRealign, loadScript, speedTable, stepStatus, writeAccResults, type AccResult, type CheckOutcome, type DelegationRow, type Expect, type Fault, type Line, type SpeakerRow, type SpeedErr, type SpeedRowIn, type StepOutcome, type Who } from "./acceptance.js";
 
 // Runs the acceptance script against a serve on the loopback sandbox: says or plays each line, waits for the record after it, injects the faults, and writes the result files.
 const env = (k: string, d?: string): string => { const v = process.env[k] ?? d; if (v === undefined) throw new Error(`set ${k}`); return v; };
@@ -125,7 +125,10 @@ async function healthy(ms = 120_000): Promise<boolean> { const end = Date.now() 
 async function restartServe(signal: "SIGKILL" | "SIGTERM"): Promise<{ ms: number; ok: boolean; pids: number[] }> {
   const at = Date.now();
   const pids = killServe(signal);
-  for (let i = 0; i < 40 && pidsOnPort().length; i++) await wait(250);
+  // The old serve frees its port before it has let go of its store, so the new one starts only once the old process is gone.
+  const alive = () => pids.filter((p) => { try { process.kill(p, 0); return true; } catch { return false; } });
+  for (let i = 0; i < 240 && (pidsOnPort().length || alive().length); i++) await wait(250);
+  if (alive().length) { log(`restart: the old serve (pids ${alive().join(",")}) was still stopping after 60 s, so it was killed`); for (const p of alive()) { try { process.kill(p, "SIGKILL"); } catch { /* gone */ } } await wait(500); }
   restarts += 1;
   startServe();
   const ok = await healthy();
@@ -142,10 +145,11 @@ function render(voice: string, text: string, id: string): { file: string; ms: nu
   return { file, ms: info.ok ? Math.round(info.durationMs) : 0 };
 }
 // The words and voice ride as extra form fields the real serve ignores, so the in-memory hospital can stand in for its ear.
-async function postChunk(owner: string, file: string, ms: number, text: string, voice: string, patientId?: string): Promise<unknown> {
+async function postChunk(owner: string, file: string, ms: number, text: string, voice: string, patientId?: string, admissionId?: string): Promise<unknown> {
   const form = new FormData();
-  // A stand-in's own strip is on that patient's page, as the person answering would be.
+  // A stand-in's own strip is on that patient's page, and on the stay once there is one, as the person answering would be.
   if (patientId) form.set("patientId", patientId);
+  if (admissionId) form.set("admissionId", admissionId);
   form.set("acc_text", text); form.set("acc_voice", voice);
   form.set("owner", owner); form.set("session_id", session); form.set("seq", String(seq++)); form.set("captured_at", String(Date.now() - ms));
   // No presence marker, as the strip sends none today; a marker with no recent input would mark every line not present.
@@ -155,6 +159,7 @@ async function postChunk(owner: string, file: string, ms: number, text: string, 
   end.set("owner", owner); end.set("session_id", session); end.set("seq", String(seq++)); end.set("end", "1");
   // The end marker names the same page, or the service has no patient to finish the words for.
   if (patientId) end.set("patientId", patientId);
+  if (admissionId) end.set("admissionId", admissionId);
   await fetch(`${SERVE}/tasks/listen`, { method: "POST", body: end }).catch(() => undefined);
   return r.json().catch(() => null);
 }
@@ -162,6 +167,50 @@ const rl = DRIVER === "human" ? createInterface({ input: process.stdin, output: 
 // The fake microphone: one file with every line said in the room at its own time, silence between, played by Chrome from the microphone grant on.
 const FAKE_LEAD_MS = 150_000;
 let fakeT0 = 0;
+// The whole fake microphone file in memory, so a reloaded page's microphone can be given the rest of it from the moment of the reload.
+let fakeBytes: Uint8Array | null = null;
+let fakeRealigning: Promise<void> | null = null;
+// A planned reload cuts the file in the quiet before its line, wherever the reload itself lands.
+let plannedCutMs: number | null = null;
+// Waits until the fake microphone file reaches an offset, following the file's zero when a reload moves it.
+async function untilFake(offsetMs: number): Promise<void> {
+  for (;;) {
+    if (fakeRealigning) await fakeRealigning;
+    const left = fakeT0 + offsetMs - Date.now();
+    if (left <= 0) return;
+    await wait(Math.min(left, 1000));
+  }
+}
+// Chrome reads its fake microphone file afresh whenever a page opens the microphone, so on any reload of the doctor's page the file is cut to play on from that moment.
+function realignFakeMic(why: string): void {
+  if (DRIVER !== "fake" || !fakeBytes || !fakeT0 || !page || fakeRealigning) return;
+  const reloadAt = Date.now();
+  const cut = plannedCutMs ?? fakeRealign(fakeT0, reloadAt, reloadAt).cutMs;
+  plannedCutMs = null;
+  const file = join(OUT, "fake-mic.wav");
+  // The rest of the file after the cut, under a header that says its new length; written beside and renamed so Chrome never reads half a file.
+  const data = fakeBytes.subarray(Math.min(fakeBytes.length, 44 + Math.round((cut / 1000) * 16_000) * 2));
+  const head = Buffer.from(fakeBytes.subarray(0, 44));
+  head.writeUInt32LE(36 + data.length, 4); head.writeUInt32LE(data.length, 40);
+  const fd = openSync(`${file}.next`, "w"); writeSync(fd, head); writeSync(fd, data); closeSync(fd);
+  renameSync(`${file}.next`, file);
+  log(`fake microphone: the doctor's page reloaded (${why}); the file now plays on from ${(cut / 1000).toFixed(1)} s`);
+  // The file starts again when the new page first opens the microphone (its wake spotter, before listening resumes), which the page stamps; the header shows Listening later.
+  const p = page;
+  fakeRealigning = (async (): Promise<number | null> => {
+    for (let i = 0; i < 1800; i++) {
+      const at = await p.evaluate(() => (window as unknown as { __accMicAt?: number }).__accMicAt ?? null, "").catch(() => null);
+      if (typeof at === "number" && at >= reloadAt) return at;
+      await wait(100);
+    }
+    return null;
+  })().then((micAt) => {
+    const back = micAt !== null;
+    fakeT0 = fakeRealign(fakeT0, reloadAt, micAt ?? Date.now()).fakeT0;
+    log(`fake microphone: ${back ? `the new page opened the microphone ${((micAt! - reloadAt) / 1000).toFixed(1)} s after the reload` : "no microphone open was seen in 180 s"}; the script's slots moved with it`);
+    fakeRealigning = null;
+  });
+}
 const fakeSlots = new Map<string, { at: number; clipMs: number; end: number }>();
 const heardInRoom = (l: Line) => l.mode === "speak" || l.mode === "play";
 function slotGap(l: Line, next: Line | undefined): number {
@@ -193,7 +242,8 @@ function buildFakeMic(): void {
   const all = new Float32Array(parts.reduce((n, p) => n + p.length, 0));
   let o = 0;
   for (const p of parts) { all.set(p, o); o += p.length; }
-  writeFileSync(join(OUT, "fake-mic.wav"), encodeWav(all, rate));
+  fakeBytes = encodeWav(all, rate);
+  writeFileSync(join(OUT, "fake-mic.wav"), fakeBytes);
   writeFileSync(join(OUT, "fake-mic.schedule.json"), `${JSON.stringify(Object.fromEntries(fakeSlots), null, 1)}\n`);
   log(`fake microphone: ${lines.length} slots, ${Math.round(at / 60_000)} min after a ${FAKE_LEAD_MS / 1000} s lead-in`);
 }
@@ -208,13 +258,15 @@ async function deliver(line: Line): Promise<{ lineEnd: string | null; note: stri
   if (line.mode === "type" || line.mode === "remote") {
     const owner = nudgedOwner(line.who, line.patient) ?? ownersOf(line.who)[0]!;
     const patientId = line.patient ? bound[line.patient]?.patient : undefined;
+    // The ward nurse reads the stay, not the arrival list, so her stand-in names the stay once there is one (pass 9 N01: her agent could not find the arrival).
+    const admissionId = line.patient && line.who === "nurse" ? bound[line.patient]?.admission ?? undefined : undefined;
     if (line.mode === "remote") {
       const clip = render(script.voices[line.who] ?? "Daniel", text, `${line.id}-${seq}`);
-      const r = await postChunk(owner, clip.file, clip.ms, text, script.voices[line.who] ?? "Daniel", patientId);
+      const r = await postChunk(owner, clip.file, clip.ms, text, script.voices[line.who] ?? "Daniel", patientId, admissionId);
       return { lineEnd: now(), note: `posted ${script.voices[line.who] ?? "Daniel"} through ${line.who}'s strip: ${JSON.stringify(r).slice(0, 160)}` };
     }
     const at = now();
-    const r = await fetch(`${SERVE}/tasks/say`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ owner, text, spokenAt: at, ...(patientId ? { patientId } : {}) }) });
+    const r = await fetch(`${SERVE}/tasks/say`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ owner, text, spokenAt: at, ...(patientId ? { patientId } : {}), ...(admissionId ? { admissionId } : {}) }) });
     return { lineEnd: at, note: `typed as ${line.who} (${owner.slice(0, 8)}): ${r.status}` };
   }
   const voice = line.mode === "play" ? script.voices[line.who] ?? "Samantha" : script.voices["doctor"] ?? "Rishi";
@@ -235,7 +287,7 @@ async function deliver(line: Line): Promise<{ lineEnd: string | null; note: stri
     return { lineEnd: at, note: `typed: ${r.status} ${(await r.text()).slice(0, 160)}` };
   }
   // Under the fake microphone the words are already in the file Chrome plays; the harness waits for them to end.
-  if (DRIVER === "fake") { const slot = fakeSlots.get(line.id); if (!slot) return { lineEnd: null, note: "no slot in the fake microphone file" }; await wait(Math.max(0, fakeT0 + FAKE_LEAD_MS + slot.at + slot.clipMs - Date.now())); return { lineEnd: now(), note: `in the fake microphone file at ${((FAKE_LEAD_MS + slot.at) / 1000).toFixed(1)} s, ${voice} ${slot.clipMs} ms` }; }
+  if (DRIVER === "fake") { const slot = fakeSlots.get(line.id); if (!slot) return { lineEnd: null, note: "no slot in the fake microphone file" }; await untilFake(FAKE_LEAD_MS + slot.at + slot.clipMs); return { lineEnd: now(), note: `in the fake microphone file at ${((FAKE_LEAD_MS + slot.at) / 1000).toFixed(1)} s, ${voice} ${slot.clipMs} ms` }; }
   const clip = render(voice, text, `${line.id}-${seq}`);
   if (DRIVER === "post") { const r = await postChunk(DOCTOR, clip.file, clip.ms, text, voice); return { lineEnd: now(), note: JSON.stringify(r).slice(0, 200) }; }
   execFileSync("afplay", [clip.file], { timeout: 60_000 });
@@ -255,7 +307,11 @@ async function openBrowser(): Promise<void> {
   const browser = await chromium.launch({ channel: "chrome", headless: false, ignoreDefaultArgs: ["--enable-automation"], args: ["--window-size=1400,960", ...fakeArgs] });
   const ctx = await browser.newContext({ viewport: { width: 1380, height: 860 } });
   await ctx.grantPermissions(["microphone"], { origin: APP });
-  await ctx.addInitScript((serve) => { try { window.localStorage.setItem("pisgah-agent-serve", serve); } catch { /* storage off */ } }, `http://localhost:${SERVE_PORT}`);
+  await ctx.addInitScript((serve) => { try { window.localStorage.setItem("pisgah-agent-serve", serve); } catch { /* storage off */ } (window as unknown as { __accDoc?: number }).__accDoc = Date.now() + Math.random();
+    // The moment this page first asks for the microphone: Chrome starts its fake microphone file from the top as the device opens, before the promise answers.
+    const md = navigator.mediaDevices;
+    if (md?.getUserMedia) { const g = md.getUserMedia.bind(md); md.getUserMedia = (c?: MediaStreamConstraints) => { const w = window as unknown as { __accMicAt?: number }; w.__accMicAt ??= Date.now(); return g(c); }; }
+  }, `http://localhost:${SERVE_PORT}`);
   page = await ctx.newPage();
   setOffline = (on) => ctx.setOffline(on);
   // The lab's own window, its own sign-in, opened now so the lab page is compiled before the run needs it.
@@ -274,6 +330,14 @@ async function openBrowser(): Promise<void> {
   }
   // What the strip sends the serve and any page error, so a stopped ear shows in the log rather than as silence.
   const pg = page as unknown as { on: (ev: string, f: (x: unknown) => void) => void };
+  // Any reload of the doctor's page, the harness's own or the dev server's after a memory restart, moves the fake microphone with it.
+  // A same-page route change keeps the microphone, so only a new document (its init-script stamp changed) counts as a reload.
+  let doc: unknown = null;
+  pg.on("framenavigated", (f) => {
+    const fr = f as { parentFrame: () => unknown; url: () => string; evaluate: (fn: () => unknown) => Promise<unknown> };
+    if (fr.parentFrame() !== null) return;
+    void fr.evaluate(() => (window as unknown as { __accDoc?: number }).__accDoc).then((d) => { const fresh = d !== doc; doc = d; if (fresh) realignFakeMic(fr.url().replace(/^https?:\/\/[^/]+/, "").slice(0, 60)); }, () => undefined);
+  });
   pg.on("response", (r) => { const x = r as { url: () => string; status: () => number; request: () => { method: () => string } }; const u = x.url(); if (x.request().method() === "POST" && u.includes(`:${SERVE_PORT}/tasks/`)) appendFileSync(join(OUT, "strip-posts.log"), `${now()} ${u.replace(/^.*\/tasks/, "/tasks").slice(0, 80)} ${x.status()}\n`); });
   pg.on("requestfailed", (r) => { const x = r as { url: () => string; failure: () => { errorText: string } | null }; if (x.url().includes(`:${SERVE_PORT}/`)) appendFileSync(join(OUT, "strip-posts.log"), `${now()} FAILED ${x.url().replace(/^.*\/tasks/, "/tasks").slice(0, 80)} ${x.failure()?.errorText ?? ""}\n`); });
   pg.on("console", (m) => { const x = m as { type: () => string; text: () => string }; if (x.type() === "error") appendFileSync(join(OUT, "strip-posts.log"), `${now()} console ${x.text().slice(0, 200)}\n`); });
@@ -392,18 +456,23 @@ function lineAfter(since: string, owners: string[] = [DOCTOR]): { line_id: strin
   return l ? { line_id: l.line_id, text: l.text, at: l.at, ended: l.ambient?.ended_at ?? null } : null;
 }
 
-// The utterance a script line became: the heard line, not yet claimed by another step, whose words best match the script's, from a little before the step on; the room's timing and the ear's spelling may both drift, the words do not.
+// The utterance a script line became, bound by its words or, for a line the agent kept no words of, by when it was heard (acceptance.ts bindLine).
 const claimed = new Set<string>();
-const wordsOf = (t: string) => t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2);
 function lineFor(text: string, since: string, owners: string[]): ReturnType<typeof lineAfter> {
-  const want = new Set(wordsOf(text));
-  const from = new Date(Date.parse(since) - 60_000).toISOString();
-  const ls = owners.flatMap((o) => (views.get(o) ?? []).flatMap((t) => t.transcript)).filter((l) => l.at >= from && !claimed.has(l.line_id) && l.text);
-  const score = (t: string) => { const w = wordsOf(t); return w.length && want.size ? w.filter((x) => want.has(x)).length / Math.max(1, Math.min(want.size, w.length)) : 0; };
-  const best = ls.map((l) => ({ l, n: score(l.text) })).filter((x) => x.n >= 0.5).sort((a, b) => b.n - a.n || (a.l.at < b.l.at ? -1 : 1))[0];
-  if (!best) return null;
-  claimed.add(best.l.line_id);
-  return { line_id: best.l.line_id, text: best.l.text, at: best.l.at, ended: best.l.ambient?.ended_at ?? null };
+  const rows = owners.flatMap((o) => (views.get(o) ?? []).flatMap((t) => t.transcript));
+  const hit = bindLine(text, since, rows.map((l) => ({ line_id: l.line_id, text: l.text, at: l.at, kept: l.kept, decided: l.decided, ...(l.ambient ? { ambient: { raw_text: l.ambient.raw_text, ended_at: l.ambient.ended_at } } : {}) })), claimed);
+  return hit ? { line_id: hit.line_id, text: hit.text, at: hit.at, ended: hit.ambient?.ended_at ?? null } : null;
+}
+
+// Reloads the doctor's page and waits for the strip to say it is listening again with no touch.
+async function reloadPage(line: Line): Promise<void> {
+  if (!page) return;
+  const pg = page as unknown as { reload: (o?: unknown) => Promise<unknown> };
+  await pg.reload({ timeout: 120_000 }).catch(() => harnessErrors.push(`${line.id}: the page did not reload`));
+  const back = await page.waitForFunction((st: string) => /Listening|Hearing you/.test(document.querySelector(`${st} header`)?.textContent ?? ""), STRIP, { timeout: 60_000 }).then(() => true, () => false);
+  log(`${line.id}: page reloaded; listening again with no touch: ${back}`);
+  reloadBack = back;
+  if (fakeRealigning) await fakeRealigning;
 }
 
 const steps: StepOutcome[] = [];
@@ -413,15 +482,18 @@ const otherTouches: AccResult["touches"]["other_people"] = [];
 async function runLine(line: Line): Promise<void> {
   // Under the fake microphone each line runs in its slot of the file, so the room's timing never depends on the agent.
   const slot = DRIVER === "fake" ? fakeSlots.get(line.id) : undefined;
-  if (slot) await wait(Math.max(0, fakeT0 + FAKE_LEAD_MS + slot.at - Date.now()));
+  // Under the fake microphone a reload runs in the quiet before its line, so the file is cut before the words and they play whole once listening is back.
+  if (line.reload && page && DRIVER === "fake" && process.env["ACC_FAKE_RELOAD"] !== "0") { if (slot) plannedCutMs = FAKE_LEAD_MS + slot.at - 3000; await reloadPage(line); }
+  if (slot) await untilFake(FAKE_LEAD_MS + slot.at);
   const started = now();
   const errors: string[] = [];
   // A line whose precondition never came is failed, whatever its own checks say, since it ran on a state the script did not expect.
   let unmet = false;
   await readTracking();
   for (const a of line.after ?? []) {
-    const end = slot ? fakeT0 + FAKE_LEAD_MS + slot.end - 1500 : Date.now() + 180_000;
-    while (!nudgedOwner(a.nudged, line.patient) && Date.now() < end) await wait(500);
+    const end0 = Date.now() + 180_000;
+    const end = () => (slot ? fakeT0 + FAKE_LEAD_MS + slot.end - 1500 : end0);
+    while (!nudgedOwner(a.nudged, line.patient) && Date.now() < end()) await wait(500);
     if (!nudgedOwner(a.nudged, line.patient)) { errors.push(`${a.nudged} was never nudged for this patient`); unmet = true; }
   }
   const before = new Set((views.get(DOCTOR) ?? []).map((t) => t.task_id));
@@ -459,9 +531,9 @@ async function runLine(line: Line): Promise<void> {
     if (line.lose_ack && PROXY_PORT) dropNext = { path: line.lose_ack.path, hit: null };
     if (line.muted && page && DRIVER === "human") { process.stdout.write("\n  MUTE: press the strip's mute button (the crossed microphone), then press Enter here.\n"); await rl!.question(""); }
     else if (line.muted && page) { await page.click(`${STRIP} button[aria-label="Mute the agent"]`).catch(() => harnessErrors.push(`${line.id}: no Mute button`)); await wait(800); }
-    // Chrome's fake microphone restarts its file when a reloaded page opens it again, so under the fake driver the reload is proven by its own probe instead.
-    if (line.reload && page && DRIVER === "fake" && process.env["ACC_FAKE_RELOAD"] !== "1") log(`${line.id}: reload not run under the fake microphone; see the reload probe`);
-    else if (line.reload && page) { const pg = page as unknown as { reload: (o?: unknown) => Promise<unknown> }; await pg.reload({ timeout: 120_000 }).catch(() => harnessErrors.push(`${line.id}: the page did not reload`)); const back = await page.waitForFunction((st: string) => /Listening|Hearing you/.test(document.querySelector(`${st} header`)?.textContent ?? ""), STRIP, { timeout: 60_000 }).then(() => true, () => false); log(`${line.id}: page reloaded; listening again with no touch: ${back}`); reloadBack = back; if (DRIVER === "fake") fakeT0 = Date.now(); }
+    // Chrome's fake microphone reads its file afresh on a reload, so the harness cuts the file at the reload (realignFakeMic); ACC_FAKE_RELOAD=0 skips the reload.
+    if (line.reload && page && DRIVER === "fake" && process.env["ACC_FAKE_RELOAD"] === "0") log(`${line.id}: reload not run under the fake microphone; see the reload probe`);
+    else if (line.reload && page && DRIVER !== "fake") await reloadPage(line);
     if (line.offline_s && page) await setOffline(true);
     const d = await deliver(line).catch((e: unknown) => ({ lineEnd: null, note: `delivery failed: ${e instanceof Error ? e.message.slice(0, 160) : String(e)}` }));
     lineEnd = d.lineEnd; note = d.note;
@@ -472,7 +544,8 @@ async function runLine(line: Line): Promise<void> {
     if (!lineEnd) blocked = true;
   }
   // Each check is tried until it holds or the line's time runs out; nothing passes by default.
-  const limit = slot ? fakeT0 + FAKE_LEAD_MS + slot.end - 1500 : Date.now() + (line.timeout_s ?? 90) * 1000;
+  const limit0 = Date.now() + (line.timeout_s ?? 90) * 1000;
+  const limit = () => (slot ? fakeT0 + FAKE_LEAD_MS + slot.end - 1500 : limit0);
   let heard: ReturnType<typeof lineAfter> = null;
   let outcomes: CheckOutcome[] = [];
   for (;;) {
@@ -483,7 +556,7 @@ async function runLine(line: Line): Promise<void> {
     const from = heard && heard.at < started ? new Date(Date.parse(heard.at) - 2000).toISOString() : started;
     outcomes = [];
     for (const e of line.expect) outcomes.push({ expect: e, optional: "optional" in e && e.optional === true, ...(await check(e, line, heard?.line_id ?? null, before, from)) });
-    if (blocked || outcomes.every((c) => c.ok) || Date.now() > limit) break;
+    if (blocked || outcomes.every((c) => c.ok) || Date.now() > limit()) break;
   }
   if (interruptWatch) await interruptWatch;
   if (line.lose_ack && PROXY_PORT) {
@@ -492,7 +565,7 @@ async function runLine(line: Line): Promise<void> {
     faults.push({ kind: "lost_ack", line: line.id, at: started, killed_during: hit, restarted_in_ms: null, outcome: hit ? `reply to ${hit} dropped; ${kinds.map((c) => c.detail).join("; ")}` : "no matching write was seen", ok: !!hit && kinds.every((c) => c.ok) });
     dropNext = null;
   }
-  if (line.reload && page && (DRIVER !== "fake" || process.env["ACC_FAKE_RELOAD"] === "1")) faults.push({ kind: "reload", line: line.id, at: started, killed_during: null, restarted_in_ms: null, outcome: `listening again with no touch: ${reloadBack}; ${outcomes.map((c) => c.detail).join("; ").slice(0, 240)}`, ok: reloadBack && outcomes.filter((c) => !c.optional).every((c) => c.ok) });
+  if (line.reload && page && (DRIVER !== "fake" || process.env["ACC_FAKE_RELOAD"] !== "0")) faults.push({ kind: "reload", line: line.id, at: started, killed_during: null, restarted_in_ms: null, outcome: `listening again with no touch: ${reloadBack}; ${outcomes.map((c) => c.detail).join("; ").slice(0, 240)}`, ok: reloadBack && outcomes.filter((c) => !c.optional).every((c) => c.ok) });
   if (line.offline_s && page) faults.push({ kind: "offline", line: line.id, at: started, killed_during: null, restarted_in_ms: null, outcome: outcomes.map((c) => c.detail).join("; ").slice(0, 300), ok: outcomes.filter((c) => !c.optional).every((c) => c.ok) });
   if (line.muted && page) faults.push({ kind: "mute", line: line.id, at: started, killed_during: null, restarted_in_ms: null, outcome: outcomes.map((c) => c.detail).join("; ").slice(0, 300), ok: outcomes.filter((c) => !c.optional).every((c) => c.ok) });
   const lineIds = new Set([heard?.line_id].filter(Boolean) as string[]);
@@ -666,7 +739,7 @@ async function finish(): Promise<void> {
     model: { calls, usd: Number(usd.toFixed(4)), rate_limited: rateLimited },
     harness_errors: harnessErrors, completion: { complete: false, reasons: [] }
   };
-  result.completion = completion(result, script.lines.filter((l) => l.mode === "fault" || l.interrupt).length + (PROXY_PORT ? script.lines.filter((l) => l.lose_ack).length : 0) + (page ? script.lines.filter((l) => l.offline_s || l.muted || (l.reload && DRIVER !== "fake")).length : 0));
+  result.completion = completion(result, script.lines.filter((l) => l.mode === "fault" || l.interrupt).length + (PROXY_PORT ? script.lines.filter((l) => l.lose_ack).length : 0) + (page ? script.lines.filter((l) => l.offline_s || l.muted || (l.reload && (DRIVER !== "fake" || process.env["ACC_FAKE_RELOAD"] !== "0"))).length : 0));
   void signedIds;
   const root = KIND === "final" ? env("ACC_PUBLISH_ROOT") : OUT;
   const files = writeAccResults(root, result, { previews_with_names: Number(process.env["ACC_PREVIEWS_WITH_NAMES"] ?? "0"), privilege_gained: 0 });
