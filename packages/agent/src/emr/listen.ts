@@ -436,8 +436,10 @@ export class ListenSessions {
     const present = this.guard.lineOf(sessionId, h.seqs, s.owner);
     const tooLong = h.audio_ms > LINE_MATCH_MAX_MS ? { voiceprint: null, unverified_reason: "too_long_to_match" } : null;
     const absent = present.live === false ? { voiceprint: null, unverified_reason: `not_present:${present.reason}` } : tooLong;
+    // A patient with no admission yet (or none the port knows after a restart) is named by the patient, so the line still reaches that patient's tasks.
+    const target: EmrTarget = { admission_id: s.ctx.admission_id, ...(!s.ctx.admission_id && s.ctx.patient_id ? { patient_id: s.ctx.patient_id } : {}) };
     const r = await this.rt.say({
-      owner: s.owner, target: { admission_id: s.ctx.admission_id }, text: h.text, source: "audio", spoken_at: new Date(h.arrived - h.audio_ms).toISOString(),
+      owner: s.owner, target, text: h.text, source: "audio", spoken_at: new Date(h.arrived - h.audio_ms).toISOString(),
       audio: { audio_ms: h.audio_ms, cost_usd: h.cost_usd, session_id: sessionId },
       ambient: { session_id: sessionId, seqs: h.seqs, raw_text: h.raw.slice(0, 2000), ended_at: new Date(h.arrived - h.trailing_ms).toISOString(), final_at: new Date(h.arrived).toISOString(), trailing_silence_ms: h.trailing_ms, finished_by: finished, ...(why === "released_whole" ? { released: true } : {}), ...(h.continues ? { continues: h.continues } : {}) },
       context: s.ctx, clip: encodeWav(concat(h.samples), h.rate), rewrites: h.rewrites, heard_at: h.heard_at, ...(h.alternates ? { alternates: h.alternates } : {}), ...(this.o.embed ? absent ?? { voiceprint: h.voiceprint } : {})
