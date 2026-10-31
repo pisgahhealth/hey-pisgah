@@ -10,17 +10,21 @@ export type WatchCondition = { fact: string; equals: string };
 export type Counterparts = {
   steps: Record<string, WatchCondition>;
   events: Record<string, WatchCondition>;
-  documents: Record<string, { kind: string; ask: string }>;
+  documents: Record<string, { kind: string; ask: string; asks?: Record<string, string> | undefined }>;
 };
 export type TriggerStatus = "offer" | "not_applicable" | "no_counterpart" | "not_agent_work";
 export type TriggerReading = {
   step_id: string; document_id: string | null; stage: string | null; changed: boolean;
   status: TriggerStatus; reason: string; when: WatchCondition[]; kind: string | null; unmet: { fact: string; wanted: string; is: string | null }[];
+  // Each way the trigger can be met in this EMR, in the definition's order; when is the first.
+  alternatives?: Alternative[];
 };
+// One way a trigger is met: the watches that must all hold, and the workflow steps or events they stand for.
+export type Alternative = { when: WatchCondition[]; via: string[] };
 export type VersionOffer = { key: string; version: number; step_id: string; document_id: string; stage: string; when: WatchCondition[]; kind: string; ask: string; changed: boolean };
 // An offer the newest adopted version would make here that its scope keeps from this patient, with the reason the strip and the record show.
 export type WithheldOffer = { key: string; version: number; in_force: number; step_id: string; document_id: string; stage: string; when: WatchCondition[]; kind: string; reason: string };
-export type VersionRules = { version: number; definition_hash: string; parent_version: number | null; readings: TriggerReading[]; offers: VersionOffer[]; lines: string[]; withheld?: WithheldOffer[]; ward_id?: string };
+export type VersionRules = { version: number; definition_hash: string; parent_version: number | null; readings: TriggerReading[]; offers: VersionOffer[]; lines: string[]; withheld?: WithheldOffer[]; ward_id?: string; log_hash?: string | null };
 // The ward requirement data the monitor reads at each offer.
 export type RequirementsNow = { ward_id: string; requirement_version: string; facts: Facts };
 export type OfferCheck =
@@ -29,16 +33,17 @@ export type OfferCheck =
 
 const docKey = (documentId: string, stage: string) => `${documentId}.${stage}`;
 
-// Every watch a trigger's predicate needs, or null when one leaf has no counterpart or the predicate offers a choice.
-function watchesFor(p: EventPredicate, c: Counterparts): WatchCondition[] | null {
-  if ("after" in p) return c.steps[p.after.step] ? [c.steps[p.after.step]!] : null;
-  if ("on" in p) return c.events[p.on] ? [c.events[p.on]!] : null;
-  if ("all_of" in p) {
-    const parts = p.all_of.map((x) => watchesFor(x, c));
-    return parts.every((x) => x !== null) ? parts.flat() as WatchCondition[] : null;
-  }
-  return null;
+// Every way a trigger's predicate can be met in this EMR, or null when any leaf has no counterpart, so a choice is never narrowed by a missing watch.
+export function alternativesFor(p: EventPredicate, c: Counterparts): Alternative[] | null {
+  if ("after" in p) return c.steps[p.after.step] ? [{ when: [c.steps[p.after.step]!], via: [p.after.step] }] : null;
+  if ("on" in p) return c.events[p.on] ? [{ when: [c.events[p.on]!], via: [p.on] }] : null;
+  const parts = ("all_of" in p ? p.all_of : p.any_of).map((x) => alternativesFor(x, c));
+  if (parts.some((x) => x === null)) return null;
+  const ps = parts as Alternative[][];
+  if ("any_of" in p) return ps.flat();
+  return ps.reduce<Alternative[]>((acc, alts) => acc.flatMap((a) => alts.map((b) => ({ when: [...a.when, ...b.when], via: [...a.via, ...b.via] }))), [{ when: [], via: [] }]);
 }
+const watchesFor = (p: EventPredicate, c: Counterparts): WatchCondition[] | null => alternativesFor(p, c)?.[0]?.when ?? null;
 
 const describePredicate = (p: EventPredicate): string =>
   "after" in p ? `after ${p.after.step}` : "on" in p ? `on ${p.on}` : "all_of" in p ? p.all_of.map(describePredicate).join(" and ") : p.any_of.map(describePredicate).join(" or ");
@@ -89,15 +94,21 @@ export function readVersion(def: WD, parent: WD | null, c: Counterparts, facts: 
     if (unmet.length) {
       return { ...base, unmet, status: "not_applicable" as const, reason: `${ref.document_id} ${ref.stage} applies when ${unmet.map((u) => `${u.fact} is ${u.wanted}`).join(" and ")}; this patient has ${unmet.map((u) => `${u.fact} ${u.is ?? "unknown"}`).join(", ")}` };
     }
-    const when = watchesFor(t.when, c);
-    if (!when) return { ...base, status: "no_counterpart" as const, reason: `no watched fact in this EMR shows ${describePredicate(t.when)}` };
+    const alternatives = alternativesFor(t.when, c);
+    if (!alternatives) return { ...base, status: "no_counterpart" as const, reason: `no watched fact in this EMR shows ${describePredicate(t.when)}` };
+    const when = alternatives[0]!.when;
     const doc = c.documents[docKey(ref.document_id, ref.stage)];
-    if (!doc) return { ...base, when, status: "no_counterpart" as const, reason: `no work kind in this EMR prepares the ${ref.document_id} ${ref.stage}` };
-    return { ...base, when, kind: doc.kind, status: "offer" as const, reason: `offer ${doc.kind} when ${when.map((w) => `${w.fact} is ${w.equals}`).join(" and ")}` };
+    if (!doc) return { ...base, when, alternatives, status: "no_counterpart" as const, reason: `no work kind in this EMR prepares the ${ref.document_id} ${ref.stage}` };
+    const said = (a: Alternative) => a.when.map((w) => `${w.fact} is ${w.equals}`).join(" and ");
+    return { ...base, when, alternatives, kind: doc.kind, status: "offer" as const, reason: `offer ${doc.kind} when ${alternatives.map(said).join(", or when ")}` };
   });
-  const offers: VersionOffer[] = readings.filter((r) => r.status === "offer").map((r) => ({
-    key: `v${def.version}:${r.step_id}:${r.when.map((w) => `${w.fact}=${w.equals}`).join("&")}:${r.kind}`,
-    version: def.version, step_id: r.step_id, document_id: r.document_id!, stage: r.stage!, when: r.when, kind: r.kind!, ask: c.documents[docKey(r.document_id!, r.stage!)]!.ask, changed: r.changed
+  // One offer per way the trigger is met; the runtime makes only the first that happens for a step.
+  const offers: VersionOffer[] = readings.filter((r) => r.status === "offer").flatMap((r) => (r.alternatives ?? [{ when: r.when, via: [] }]).map((alt) => {
+    const doc = c.documents[docKey(r.document_id!, r.stage!)]!;
+    return {
+      key: `v${def.version}:${r.step_id}:${alt.when.map((w) => `${w.fact}=${w.equals}`).join("&")}:${r.kind}`,
+      version: def.version, step_id: r.step_id, document_id: r.document_id!, stage: r.stage!, when: alt.when, kind: r.kind!, ask: doc.asks?.[alt.via.join("+")] ?? doc.ask, changed: r.changed
+    };
   }));
   return { version: def.version, definition_hash: def.definition_hash, parent_version: parent?.version ?? null, readings, offers, lines: changeLines(def.version, readings) };
 }
@@ -170,8 +181,15 @@ export type Encounter = Readonly<Record<string, string | null>>;
 export type VersionWiring = {
   rulesFor(owner: string, kinds: readonly string[], encounter?: Encounter): VersionRules | null;
   check(o: VersionOffer, encounter?: Encounter): OfferCheck;
+  // Why an offer made under this version may no longer go ahead for this encounter, read from the version history now; null while that version is still in force here.
+  withdrawReason?(version: number, encounter?: Encounter): string | null;
 };
 export type VersionPick = { def: WD; parent: WD | null };
+// The version history as it stands now: the version in force per encounter, the newest version a person adopted (standing or not), any version by number, why a version is not in force, and the log's content hash.
+export type VersionSource = {
+  resolve: (facts: Facts) => VersionPick; newest: VersionPick; get: (version: number) => WD | null;
+  reason?: (def: WD, inForce: WD, now: RequirementsNow) => string | null; log_hash?: string | null;
+};
 
 // Why a version's scope keeps it from this patient, in the record's own terms.
 export function scopeReason(def: WD, inForce: WD, now: RequirementsNow): string {
@@ -182,36 +200,74 @@ export function scopeReason(def: WD, inForce: WD, now: RequirementsNow): string 
 }
 
 // requirements may return null while the record has not named the patient's ward, and then nothing is read or offered; resolve picks the version per encounter, and newest is the adopted version whose withheld offers are recorded.
-export function versionWiring(o: { def: WD; parent: WD | null; counterparts: Counterparts; requirements: (encounter?: Encounter) => RequirementsNow | null; checks?: readonly RequirementCheck[]; resolve?: (facts: Facts) => VersionPick; newest?: VersionPick }): VersionWiring {
-  const pick = (now: RequirementsNow): VersionPick => (o.resolve ? o.resolve(now.facts) : { def: o.def, parent: o.parent });
+// source, when given, is read on every call, so a person's adoption or suspension in the history takes effect on the next reading; a source that cannot be read offers nothing.
+export function versionWiring(o: { def: WD; parent: WD | null; counterparts: Counterparts; requirements: (encounter?: Encounter) => RequirementsNow | null; checks?: readonly RequirementCheck[]; resolve?: (facts: Facts) => VersionPick; newest?: VersionPick; source?: () => VersionSource | null }): VersionWiring {
+  const fixed: VersionSource = { resolve: o.resolve ?? (() => ({ def: o.def, parent: o.parent })), newest: o.newest ?? { def: o.def, parent: o.parent }, get: (v) => (v === o.def.version ? o.def : v === o.parent?.version ? o.parent : null) };
+  const read = (): VersionSource | null => (o.source ? o.source() : fixed);
+  const why = (src: VersionSource, def: WD, inForce: WD, now: RequirementsNow) => src.reason?.(def, inForce, now) ?? scopeReason(def, inForce, now);
   return {
     rulesFor: (_owner, kinds, encounter) => {
       const now = o.requirements(encounter);
-      if (!now) return null;
-      const p = pick(now);
+      const src = read();
+      if (!now || !src) return null;
+      const p = src.resolve(now.facts);
       const r = readVersion(p.def, p.parent, o.counterparts, now.facts);
-      const newest = o.newest ?? { def: o.def, parent: o.parent };
+      const newest = src.newest;
       const withheld: WithheldOffer[] = newest.def.version === p.def.version ? [] : readVersion(newest.def, newest.parent, o.counterparts, now.facts).offers
         .filter((x) => x.changed && kinds.includes(x.kind))
-        .map((x) => ({ key: `withheld:${x.key}`, version: x.version, in_force: p.def.version, step_id: x.step_id, document_id: x.document_id, stage: x.stage, when: x.when, kind: x.kind, reason: scopeReason(newest.def, p.def, now) }));
-      return { ...r, offers: r.offers.filter((x) => kinds.includes(x.kind)), withheld, ward_id: now.ward_id };
+        .map((x) => ({ key: `withheld:${x.key}`, version: x.version, in_force: p.def.version, step_id: x.step_id, document_id: x.document_id, stage: x.stage, when: x.when, kind: x.kind, reason: why(src, newest.def, p.def, now) }));
+      return { ...r, offers: r.offers.filter((x) => kinds.includes(x.kind)), withheld, ward_id: now.ward_id, log_hash: src.log_hash ?? null };
     },
     check: (offer, encounter) => {
       const now = o.requirements(encounter);
+      const src = read();
+      if (!src) return { ok: false, requirement_version: "unknown", failures: [], revision_ops: [], conflict: "Not offered: the version history cannot be read now." };
       if (!now) return { ok: false, requirement_version: "unknown", failures: [], revision_ops: [], conflict: "Not offered: the record does not name this patient's ward yet." };
-      return checkOffer(pick(now).def, offer, now, o.checks);
+      return checkOffer(src.resolve(now.facts).def, offer, now, o.checks);
+    },
+    withdrawReason: (version, encounter) => {
+      const src = read();
+      if (!src) return `the version history cannot be read now, so version ${version} is not used until it can`;
+      const now = o.requirements(encounter);
+      if (!now) return `the record no longer names a ward version ${version} covers`;
+      const inForce = src.resolve(now.facts).def;
+      if (inForce.version === version) return null;
+      const def = src.get(version);
+      return def ? why(src, def, inForce, now) : `version ${version} is no longer in the version history, so version ${inForce.version} is in force`;
     }
   };
 }
 
-// The replayed registry for per-encounter resolution, and the newest adopted version with its parent; each logged version must rebuild to its hash.
-export function adoptedRegistry(storeRoot: string): { resolve: (facts: Facts) => VersionPick; newest: VersionPick; log: ReturnType<VersionDesk["records"]> } {
+const lagos = (iso: unknown) => { const d = new Date(String(iso)); return Number.isNaN(d.getTime()) ? "a time not recorded" : d.toLocaleString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }); };
+
+// Why a person's standing change keeps a version from being used: who suspended or reverted it, when, and their reason, read from the log record.
+export function standingReason(log: readonly { record_type: string; payload: unknown }[], def: WD, inForce: WD): string | null {
+  if (def.status !== "suspended" && def.status !== "reverted") return null;
+  const type = def.status === "suspended" ? "version.suspended" : "version.reverted";
+  const rec = log.filter((r) => r.record_type === type && Number((r.payload as Record<string, unknown>)["version"]) === def.version).at(-1)?.payload as Record<string, unknown> | undefined;
+  const by = (rec?.["by"] ?? {}) as Record<string, unknown>;
+  const who = String(by["display_name"] ?? by["staff_id"] ?? "a person");
+  const when = lagos(((rec?.["at"] ?? {}) as Record<string, unknown>)["wall_at"]);
+  return `version ${def.version} was ${def.status} by ${who} on ${when} (${String(rec?.["reason"] ?? "no reason recorded")}), so version ${inForce.version} is in force`;
+}
+
+// The replayed registry for per-encounter resolution, the newest version standing adopted with its parent, and the latest a person adopted whether it still stands; each logged version must rebuild to its hash.
+export function adoptedRegistry(storeRoot: string): VersionSource & { latest: VersionPick; log: ReturnType<VersionDesk["records"]> } {
   const desk = new VersionDesk(storeRoot, Registry.load([loadV1()]));
   try {
     const reg = desk.registry;
+    const log = desk.records();
     const withParent = (def: WD): VersionPick => ({ def, parent: def.parent_version === null ? null : reg.get(def.parent_version) });
     const top = reg.adoptedVersions().at(-1) ?? reg.get(1);
-    return { resolve: (facts) => withParent(reg.current(facts)), newest: withParent(top), log: desk.records() };
+    const ever = reg.list().filter((v) => v.adopted_at !== null).map((v) => reg.get(v.version))
+      .sort((a, b) => (a.metadata.adopted_at!.occurred_at - b.metadata.adopted_at!.occurred_at) || (a.metadata.adopted_at!.recorded_at - b.metadata.adopted_at!.recorded_at) || a.version - b.version);
+    const lastAdoption = log.filter((r) => r.record_type === "version.adopted").at(-1);
+    const latest = lastAdoption ? reg.get(Number((lastAdoption.payload as Record<string, unknown>)["version"])) : ever.at(-1) ?? top;
+    return {
+      resolve: (facts) => withParent(reg.current(facts)), newest: withParent(top), latest: withParent(latest), log,
+      get: (v) => { try { return reg.get(v); } catch { return null; } },
+      reason: (def, inForce) => standingReason(log, def, inForce)
+    };
   } finally {
     desk.close();
   }
