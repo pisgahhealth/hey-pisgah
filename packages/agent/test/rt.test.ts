@@ -110,6 +110,20 @@ describe("RT 2 and 8: a request asked about is finished by the answer, never re-
     await rt.stop();
   });
 
+  it("another clinician's line never answers the owner's question, and the owner's own answer still finishes it", async () => {
+    const { rt, port } = boot((s) => (/paracetamol/i.test(s) ? ward(s) : ASIDE));
+    const a = await say(rt, "Paracetamol one gram.");
+    await rt.settled();
+    await say(rt, "Paracetamol, three doses.", DRB, { task: a.task_id });
+    await rt.settled();
+    expect(of(port, "prescribe")).toHaveLength(0);
+    expect(rt.view(a.task_id)!.questions.some((q) => /^How many should the pharmacy give for paracetamol/.test(q.text))).toBe(true);
+    await say(rt, "Three doses.", OWNER, { task: a.task_id });
+    await rt.settled();
+    expect(of(port, "prescribe").map((w) => w.args)).toEqual([{ visit_id: VISIT, patient_id: PAT, drug: "paracetamol_iv", dose: "1 g", quantity: 3 }]);
+    await rt.stop();
+  });
+
   it("negative control: a long new instruction for another medicine is a new request, not the answer", async () => {
     const { rt, port } = boot((s) => (/^Paracetamol/.test(s) ? ward(s) : /^Give him morphine/.test(s) ? [ins("prescribe", { drug: "morphine", dose: "5 mg" })] : ASIDE));
     const a = await say(rt, "Paracetamol one gram.");

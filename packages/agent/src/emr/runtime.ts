@@ -1566,7 +1566,9 @@ export class EmrRuntime {
     const used = new Set<AnyClause>();
     const t = l.task;
     const line = t.lines.find((x) => x.id === lineId);
-    if (!line) return used;
+    // Another voice never answers the owner's question about the owner's own request.
+    const who = this.speakerOf(t, lineId)?.speaker;
+    if (!line || (who && who !== "owner")) return used;
     const win = this.o.answerWindowMs ?? 120_000;
     const open = t.questions.filter((q) => q.answered_by === null && q.pending && Date.parse(line.at) - Date.parse(q.at) <= win);
     if (!open.length) return used;
