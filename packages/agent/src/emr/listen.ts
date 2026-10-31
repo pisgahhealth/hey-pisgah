@@ -225,8 +225,11 @@ export class ListenSessions {
     return this.keywordsOf(await this.sessionFor(owner, target, sessionId, at));
   }
 
+  // The drug and test words the owner may order come after the staff names, so the cap trims them before anything sent before.
   private keywordsOf(s: Session): string[] {
-    return buildKeywords({ vitals: VITALS_KEYWORDS, wards: [], documents: s.ctx.keywords, staff: this.o.staff ?? [], beds: [] });
+    const o = this.rt.port.orderables?.();
+    const orders = o ? [...Object.values(o.drugs).flatMap((d) => d.words), ...Object.values(o.tests).flat()] : [];
+    return buildKeywords({ vitals: VITALS_KEYWORDS, wards: [], documents: s.ctx.keywords, staff: [...(this.o.staff ?? []), ...orders], beds: [] });
   }
 
   // One finished stretch from the streaming ear: its words are already heard, so only the join and delivery rules run; a number wait counts the quiet already heard.
