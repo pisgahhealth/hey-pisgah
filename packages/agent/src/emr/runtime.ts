@@ -16,8 +16,8 @@ import { DOCUMENTATION_KINDS, ORDER_KINDS, lineVerdict, recordOf, type SpeakerRe
 import { EMERGENCY_KIND, EMERGENCY_LINE, IDENTITY_KIND, IdentityArgs, RULE_ONLY_KINDS, currentPatientNamed, emergencyHeardLoosely, emergencyReason, identityFrom, otherPatientsNamed, selfNamed, spelledName, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
 import { openableHref, screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
 import {
-  ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_ARGS, DELEGATION_RULE_KINDS, DISPENSE_KIND, ESCALATE_KIND, NUDGE_KIND, PREPARE_KIND, REGISTER_KIND, WARD_REVIEW_KIND,
-  ACCEPT_LINE, CONSENT_PURPOSES, acceptedTask, consentSaid, consentScope, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
+  ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_ARGS, DELEGATION_RULE_KINDS, DISPENSE_KIND, ESCALATE_KIND, NUDGE_KIND, PREPARE_KIND, REGISTER_KIND, WARD_REVIEW_KIND, RECEIVE_KIND, CANCEL_TEST_KIND,
+  ACCEPT_LINE, cancelReason, labAsked, CONSENT_PURPOSES, acceptedTask, consentSaid, consentScope, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
   type ConsentPurpose, type DelegationRead, type EmrDelegation
 } from "./delegate.js";
 import { VERBAL_LINE, VERBAL_ORDER_ARGS, VERBAL_ORDER_KIND, verbalMissingNote, verbalOrderSaid } from "./verbal.js";
@@ -2854,6 +2854,8 @@ export class EmrRuntime {
       }
       this.append(l, "action.refused", { action_id: a.action_id, reason: c.reason, status: c.status, counted: c.counted });
       if (a.kind === EMERGENCY_KIND) this.o.onArrivalFailed?.(t.owner, t.task_id, c.reason);
+      // A lab refusal is said and never sent again: a 409 means the case moved or the test started, and a sample not waiting is never posted.
+      if (a.kind === RECEIVE_KIND || a.kind === CANCEL_TEST_KIND) this.note(l, `${a.summary}: not done. ${/^door_409/.test(c.reason) ? "The lab record changed or the test has started, so I did not try again. Check the worklist." : c.reason === "nothing_free" ? "The sample is not waiting to be received: not collected yet, or already received." : `The lab door refused it (${c.reason}).`}`, "refusal");
       if (a.kind === "countersign") this.note(l, "Nothing was signed: the orders changed after they were read back, or one is not yours to sign now. Say sign everything to read them back again.");
       this.settle(l, "write_refused");
       return false;
@@ -3134,14 +3136,17 @@ export class EmrRuntime {
     const h = this.o.port.delegationHandoffs?.(t.owner)[a.kind];
     if (!h || !t.patient_id || !EmrId.safeParse(recordId).success || !this.kinds(t.owner).includes(DELEGATE_KIND)) return;
     const spec = (this.o.port.delegationTeams?.(t.owner) ?? {})[h.team];
+    // The subject is the record of the hand-off's own table when the write names one, such as the lab order behind a sent voice order.
+    const named = (a.written?.event_ids ?? []).find((e) => e.startsWith(`${h.subject_table}:`))?.slice(h.subject_table.length + 1);
+    const subject = named && EmrId.safeParse(named).success ? named : recordId;
     // One hand-off per source action and record, so several orders said in one line each reach the team once.
-    if (!spec || t.delegations.some((d) => d.side === "delegator" && d.team === h.team && (d.source_action_id === a.action_id || d.subject_id === recordId))) return;
+    if (!spec || t.delegations.some((d) => d.side === "delegator" && d.team === h.team && (d.source_action_id === a.action_id || d.subject_id === subject))) return;
     const id = this.ruleAct(l, a.line_id, DELEGATE_KIND, {
       task_kind: spec.task_kind, team: h.team, patient_id: t.patient_id, ...(t.admission_id ? { admission_id: t.admission_id } : {}), ...(t.visit_id ? { visit_id: t.visit_id } : {}),
-      subject_table: h.subject_table, subject_id: recordId, title: spec.title, instruction: `${a.summary}`.slice(0, 2000),
+      subject_table: h.subject_table, subject_id: subject, title: spec.title, instruction: `${a.summary}`.slice(0, 2000),
       ...(spec.escalate_after_minutes !== undefined ? { escalate_after_minutes: spec.escalate_after_minutes } : {}), evidence: `transcript:${a.line_id}`
     });
-    if (id) this.append(l, "delegation.made", { delegation: this.newDelegation(id, a.line_id, spec.task_kind, spec.title, h.team, null, "none", { subject_id: recordId, source_action_id: a.action_id }) });
+    if (id) this.append(l, "delegation.made", { delegation: this.newDelegation(id, a.line_id, spec.task_kind, spec.title, h.team, null, "none", { subject_id: subject, source_action_id: a.action_id }) });
   }
 
   private onBed(t: EmrTask): boolean {
@@ -3188,6 +3193,44 @@ export class EmrRuntime {
     return true;
   }
 
+  // "Received the FBC, running it" or "cancel the urinalysis, the doctor cancelled it": the one open lab task whose test the line names, on the scientist's own voice.
+  private labLine(owner: string, text: string, spokenAt: string, source: "text" | "audio", open: { l: Live; d: EmrDelegation }[], target?: EmrTarget, vp?: Voiceprint | null, unverifiedReason?: string): { task_id: string; line_id: string } | null {
+    const asked = labAsked(text);
+    const kind = asked === "cancel" ? CANCEL_TEST_KIND : RECEIVE_KIND;
+    const all = open.filter((x) => x.d.task_kind === "lab_order" && x.d.subject_id && x.d.delegation_id);
+    if (!asked || !all.length || !this.kinds(owner).includes(kind)) return null;
+    const tests = this.o.port.orderables?.().tests ?? {};
+    const low = ` ${text.toLowerCase().replace(/[^a-z0-9]+/g, " ")} `;
+    const said = Object.entries(tests).filter(([, ws]) => ws.some((w) => low.includes(` ${w.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `))).map(([k]) => k);
+    const testOf = (d: EmrDelegation) => Object.keys(tests).find((k) => new RegExp(`\\btest: ${k.replace(/_/g, " ")}(,|$)`, "i").test(d.instruction ?? "")) ?? null;
+    const here = all.filter((x) => target && ((target.patient_id && x.l.task.patient_id === target.patient_id) || (target.admission_id && x.l.task.admission_id === target.admission_id)));
+    const pool = (here.length ? here : all).filter((x) => !this.attempts(x.l.task, kind, x.d.delegation_id).live);
+    const hits = said.length === 1 ? pool.filter((x) => testOf(x.d) === said[0]) : [];
+    const home = (hits[0] ?? (here.length ? here : all).at(-1)!).l;
+    const lineId = this.ruledLine(home, owner, text, spokenAt, source, "lab", vp, unverifiedReason);
+    const name = (k: string | null) => (k ? tests[k]?.[0] ?? k : "a test");
+    // The test is never guessed: none named, none matching, or the same test for two patients is asked, not picked.
+    if (hits.length !== 1) {
+      this.ask(home, lineId, hits.length > 1 ? `The ${name(said[0]!)} is waiting for more than one patient. Open the patient and say it again.` : `Which test? Waiting: ${pool.map((x) => name(testOf(x.d))).join(", ") || "none"}. Say it again with the test.`);
+      this.settle(home, "lab_line");
+      return { task_id: home.task.task_id, line_id: lineId };
+    }
+    const { l, d } = hits[0]!;
+    const reason = asked === "cancel" ? cancelReason(text) : null;
+    if (asked === "cancel" && !reason) {
+      this.ask(l, lineId, `Why is the ${name(said[0]!)} cancelled? Say it again with the reason, such as "the doctor cancelled it" or "the patient declined".`);
+      this.settle(l, "lab_line");
+      return { task_id: l.task.task_id, line_id: lineId };
+    }
+    this.whenAttributed(l, lineId, (who) => {
+      if (this.notOwnersWords(l, lineId, who, kind)) return this.settle(l, "needs_owner_voice");
+      if (!d.acknowledged_at && !this.attempts(l.task, ACK_KIND, d.delegation_id).live) this.ruleAct(l, lineId, ACK_KIND, { delegation_id: d.delegation_id, title: d.title, evidence: `transcript:${lineId}` });
+      this.ruleAct(l, lineId, kind, { delegation_id: d.delegation_id, order_id: d.subject_id, title: d.title, test: said[0], ...(reason ? { reason } : {}), evidence: `transcript:${lineId}` });
+      this.settle(l, "lab_line");
+    });
+    return { task_id: l.task.task_id, line_id: lineId };
+  }
+
   // A spoken "accepted <task>" acknowledges the one open task it names, and the desk's phone or consent words fill a registration; anything else is not a delegation line.
   delegationLine(owner: string, text: string, spokenAt: string, source: "text" | "audio", target?: EmrTarget, vp?: Voiceprint | null, unverifiedReason?: string): { task_id: string; line_id: string } | null {
     const open = [...this.live.values()].filter((l) => l.task.owner === owner && !CLOSED_TASK.has(l.task.state))
@@ -3215,6 +3258,8 @@ export class EmrRuntime {
       this.settle(home, "accept_line");
       return { task_id: home.task.task_id, line_id: lineId };
     }
+    const lab = this.labLine(owner, text, spokenAt, source, open, target, vp, unverifiedReason);
+    if (lab) return lab;
     // "Prepare and dispense it" on a sent order: the words that ask are the pharmacist's own, and acting on a task takes it.
     const asked = orderAsked(text);
     const orders = open.filter((x) => x.d.task_kind === "dispense" && x.d.subject_id && (!target || !(target.admission_id || target.patient_id) || x.l.task.admission_id === target.admission_id || x.l.task.patient_id === target.patient_id));
@@ -3310,7 +3355,7 @@ export class EmrRuntime {
     const l = this.taskFor(owner, ctx) ?? this.openTask(owner, ctx, { entry: "delegation" });
     const reg = d.kind === "registration" ? { ...registrationFrom(d.instruction), consent_line: null } : null;
     const lineId = `rec-${d.id}`;
-    this.append(l, "delegation.received", { delegation: { ...this.newDelegation(d.id, lineId, d.kind, d.title, null, d.due_at, "none", { registration: reg, subject_id: d.subject_id }), delegation_id: d.id, side: "assignee", action_id: null, assigned_at: at, acknowledged_at: d.acknowledged_at, escalated_at: d.escalated_at } });
+    this.append(l, "delegation.received", { delegation: { ...this.newDelegation(d.id, lineId, d.kind, d.title, null, d.due_at, "none", { registration: reg, subject_id: d.subject_id, instruction: d.instruction }), delegation_id: d.id, side: "assignee", action_id: null, assigned_at: at, acknowledged_at: d.acknowledged_at, escalated_at: d.escalated_at } });
     const needs = reg ? registrationNeeds(reg) : [];
     const id = this.ruleAct(l, lineId, NUDGE_KIND, { delegation_id: d.id, title: d.title, needs, nudge_key: `nudge:${needs.length ? [...needs].sort().join("+") : "new"}` });
     if (!id) this.note(l, `New task for you: ${d.title}. Say accepted ${d.title.toLowerCase()} to take it.`);

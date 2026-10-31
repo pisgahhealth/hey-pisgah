@@ -12,8 +12,12 @@ export const WARD_REVIEW_KIND = "request_ward_review" as const;
 export const REGISTER_KIND = "complete_registration" as const;
 export const PREPARE_KIND = "prepare_order" as const;
 export const DISPENSE_KIND = "dispense_order" as const;
+// The lab scientist's own acts on a test handed to the lab: receive the collected sample through to processed, or cancel a test nobody started.
+export const RECEIVE_KIND = "receive_specimen" as const;
+export const CANCEL_TEST_KIND = "cancel_test" as const;
+export const CANCEL_REASONS = ["patient_no_show", "patient_declined", "unable_to_contact", "requester_cancelled", "duplicate_order", "entered_in_error"] as const;
 // Every delegation kind is taken by rule from the record or a spoken acceptance, never from the speech gate.
-export const DELEGATION_RULE_KINDS: ReadonlySet<string> = new Set([DELEGATE_KIND, ACK_KIND, NUDGE_KIND, COMPLETE_KIND, ESCALATE_KIND, WARD_REVIEW_KIND, REGISTER_KIND, PREPARE_KIND, DISPENSE_KIND]);
+export const DELEGATION_RULE_KINDS: ReadonlySet<string> = new Set([DELEGATE_KIND, ACK_KIND, NUDGE_KIND, COMPLETE_KIND, ESCALATE_KIND, WARD_REVIEW_KIND, REGISTER_KIND, PREPARE_KIND, DISPENSE_KIND, RECEIVE_KIND, CANCEL_TEST_KIND]);
 
 export const TASK_KINDS = ["review", "dispense", "lab_order", "registration", "nursing", "accounts", "operational"] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
@@ -39,6 +43,8 @@ export const DELEGATION_ARGS: Record<string, z.ZodType<Record<string, unknown>>>
   [WARD_REVIEW_KIND]: z.strictObject({ delegation_id: EmrId, admission_id: EmrId, team: z.string().regex(/^[a-z_]{1,30}$/), reason: z.string().trim().min(1).max(1000) }),
   [PREPARE_KIND]: z.strictObject({ delegation_id: EmrId, prescription_id: EmrId, title: Title, evidence: Evidence }),
   [DISPENSE_KIND]: z.strictObject({ delegation_id: EmrId, prescription_id: EmrId, title: Title, evidence: Evidence }),
+  [RECEIVE_KIND]: z.strictObject({ delegation_id: EmrId, order_id: EmrId, title: Title, test: z.string().regex(/^[a-z0-9_]{1,40}$/), evidence: Evidence }),
+  [CANCEL_TEST_KIND]: z.strictObject({ delegation_id: EmrId, order_id: EmrId, title: Title, test: z.string().regex(/^[a-z0-9_]{1,40}$/), reason: z.enum(CANCEL_REASONS), evidence: Evidence }),
   [REGISTER_KIND]: z.strictObject({
     delegation_id: EmrId, patient_id: EmrId, surname: z.string().min(1).max(200), other_names: z.string().min(1).max(200), phone: z.string().regex(/^0[789][01]\d{8}$/), evidence: Evidence,
     consent_purposes: z.array(z.enum(CONSENT_PURPOSES)).min(1).max(CONSENT_PURPOSES.length), consent_spoken_at: z.iso.datetime({ offset: true })
@@ -78,6 +84,8 @@ export type EmrDelegation = {
   subject_id?: string | null; asked?: "prepare" | "dispense" | null; asked_line?: string | null; waiting?: string | null; prepared_seen?: boolean;
   // The verified write a hand-off came from, so each order said in one line is handed on once.
   source_action_id?: string | null;
+  // What the delegating agent wrote for the task, such as the test it sent, so a spoken test name finds its own task.
+  instruction?: string | null;
 };
 
 export function delegationSummary(kind: string, a: Record<string, unknown>): string | null {
@@ -92,8 +100,29 @@ export function delegationSummary(kind: string, a: Record<string, unknown>): str
     case REGISTER_KIND: return "Complete the registration at the front desk";
     case PREPARE_KIND: return `Prepare the order (pharmacist's review): ${t}`;
     case DISPENSE_KIND: return `Dispense the order: ${t}`;
+    case RECEIVE_KIND: return `Receive the ${String(a["test"]).replace(/_/g, " ")} sample and process it`;
+    case CANCEL_TEST_KIND: return `Cancel the ${String(a["test"]).replace(/_/g, " ")} test that was never started: ${String(a["reason"]).replace(/_/g, " ")}`;
     default: return null;
   }
+}
+
+// What a lab scientist's line asks of a test handed to the lab: receive it, cancel it, or neither.
+export function labAsked(line: string): "receive" | "cancel" | null {
+  const low = line.toLowerCase();
+  if (/\bcancel(l?ed|l?ing)?\b/.test(low) && !/\b(do not|don'?t) cancel\b/.test(low)) return "cancel";
+  return /\b(received|receiving|is in|came in|running it|run it|processing it)\b/.test(low) ? "receive" : null;
+}
+
+// The cancellation reason a line states, or null when it states none, so the scientist is asked rather than a reason guessed.
+export function cancelReason(line: string): (typeof CANCEL_REASONS)[number] | null {
+  const low = line.toLowerCase();
+  if (/\b(doctor|requester|clinician|consultant)\b.{0,30}\b(cancel(l?ed)?|stopped|withdrew|does not want)\b|\bcancelled by the (doctor|requester)\b/.test(low)) return "requester_cancelled";
+  if (/\b(declined|refused|does not want|doesn'?t want)\b/.test(low)) return "patient_declined";
+  if (/\bno[- ]show\b|\b(did not|didn'?t|never) (come|turn up|show)\b/.test(low)) return "patient_no_show";
+  if (/\b(can ?not|cannot|unable to|could not|couldn'?t) (reach|contact|find|get hold of)\b/.test(low)) return "unable_to_contact";
+  if (/\bduplicate\b|\bordered twice\b|\bdouble order(ed)?\b/.test(low)) return "duplicate_order";
+  if (/\bin error\b|\bby mistake\b|\bwrong(ly)? (ordered|entered)\b/.test(low)) return "entered_in_error";
+  return null;
 }
 
 const STOP = new Set(["the", "a", "an", "task", "for", "of", "to", "and", "please", "that", "this", "it", "in", "on", "now"]);
