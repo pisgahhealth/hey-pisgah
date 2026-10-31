@@ -1,4 +1,5 @@
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
+import { promisify } from "node:util";
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { parseEnvText } from "@hey-pisgah/model";
@@ -42,13 +43,15 @@ export function mintArgs(s: SandboxBlock, who: { login: string; clinic?: string 
   return out;
 }
 
-function runMint(s: SandboxBlock, args: string[]): string {
+function mintEnv(s: SandboxBlock): { cwd: string; env: NodeJS.ProcessEnv; timeout: number } {
   const env = envOf(s);
   const db = env[s.db_url_var];
   if (!db || !loopback(db)) throw new Error("the sandbox database is not on loopback");
-  return execFileSync(s.mint.command, args, {
-    cwd: s.mint.cwd, env: { ...process.env, ...env, DATABASE_URL: db, NODE_OPTIONS: s.mint.node_options }, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 180_000
-  });
+  return { cwd: s.mint.cwd, env: { ...process.env, ...env, DATABASE_URL: db, NODE_OPTIONS: s.mint.node_options }, timeout: 180_000 };
+}
+
+function runMint(s: SandboxBlock, args: string[]): string {
+  return execFileSync(s.mint.command, args, { ...mintEnv(s), encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
 }
 
 // Mints a person's own bearer for a step the person does in the journey; it is returned and never printed.
@@ -60,7 +63,17 @@ export function mintPersonBearer(s: SandboxBlock, who: { login: string; clinic?:
 
 // Mints an agent bearer for the sandbox owner, or for another login, through the platform's own script; the bearer is returned and never printed.
 export function mintAgentBearer(s: SandboxBlock, who: { login: string; clinic?: string | undefined } | null = null): { bearer: string; owner: string; agent: string | null } {
-  const out = runMint(s, mintArgs(s, who, true));
+  return agentOf(s, runMint(s, mintArgs(s, who, true)));
+}
+
+// The same mint without blocking, so a serve re-minting an expired bearer keeps answering meanwhile.
+export async function mintAgentBearerAsync(s: SandboxBlock, who: { login: string; clinic?: string | undefined } | null = null): Promise<{ bearer: string; owner: string; agent: string | null }> {
+  const run = promisify(execFile)(s.mint.command, mintArgs(s, who, true), { ...mintEnv(s), encoding: "utf8" });
+  run.child.stdin?.end();
+  return agentOf(s, (await run).stdout);
+}
+
+function agentOf(s: SandboxBlock, out: string): { bearer: string; owner: string; agent: string | null } {
   const line = out.trim().split("\n").filter((l) => l.startsWith("{")).at(-1);
   const j = z.record(z.string(), z.unknown()).parse(JSON.parse(line ?? "null"));
   const bearer = j[s.mint.output.bearer], owner = j[s.mint.output.owner], agent = j[s.mint.output.agent];

@@ -1,10 +1,11 @@
 import { join } from "node:path";
 import { languageBiasFrom, nodeSocket, recordingSocket, replaySocket } from "@hey-pisgah/voice";
-import { KEPT_LEVERS, asrSwitch, earSwitch, keepingContext, leversFrom, localDirs, recordingTranscriber, sherpaEmbedder, startEmrServe, voiceTranscriber, voiceprintAt, withDoorAudio } from "@hey-pisgah/agent";
+import { DEFAULT_INTENT_ROUTE, GATE_SETTINGS, KEPT_LEVERS, asrSwitch, earSwitch, keepingContext, leversFrom, localDirs, recordingTranscriber, sherpaEmbedder, startEmrServe, voiceTranscriber, voiceprintAt, withDoorAudio } from "@hey-pisgah/agent";
+import { loadKeys, secondSparkRoute } from "@hey-pisgah/model";
 import { loadProfile, staffHintsOf } from "./profile.js";
 import { PisgahPort } from "./port.js";
 import { adoptedForEmr } from "./versions.js";
-import { SandboxBlock, mintAgentBearer, sandboxQuery } from "./sandbox.js";
+import { SandboxBlock, mintAgentBearer, mintAgentBearerAsync, sandboxQuery } from "./sandbox.js";
 
 // Starts the EMR-facing serve over the agent door on HEY_PISGAH_EMR_PORT (default 4100); the bearer comes from the environment or a sandbox mint.
 async function main(): Promise<void> {
@@ -21,13 +22,30 @@ async function main(): Promise<void> {
   if (!owner) throw new Error("set HEY_PISGAH_AGENT_OWNER");
   // One agent bearer per owner: the sandbox block's other logins are minted the same way, each for its own owner.
   const bearers: Record<string, string> = { [owner]: bearer };
+  const loginOf = new Map<string, SandboxBlock["owners"][number] | null>([[owner, null]]);
   for (const who of sandbox?.owners ?? []) {
     const m = mintAgentBearer(sandbox!, who);
     bearers[m.owner] = m.bearer;
+    loginOf.set(m.owner, who);
   }
+  // A bearer the door no longer takes is minted again for the same login, at most once a minute per owner, and kept only when it names the same owner.
+  const failedAt = new Map<string, number>();
+  const refresh = sandbox ? async (o: string): Promise<string | null> => {
+    if (!loginOf.has(o) || Date.now() - (failedAt.get(o) ?? 0) < 60_000) return null;
+    try {
+      const m = await mintAgentBearerAsync(sandbox, loginOf.get(o) ?? null);
+      if (m.owner !== o) throw new Error("the mint named another owner");
+      process.stderr.write("agent bearer re-minted after a 401\n");
+      return m.bearer;
+    } catch {
+      failedAt.set(o, Date.now());
+      process.stderr.write("agent bearer re-mint failed; the door's 401 stands\n");
+      return null;
+    }
+  } : undefined;
   const store = process.env["HEY_PISGAH_EMR_STORE"] ?? join(process.cwd(), ".hey-pisgah", "emr-store");
   const port = new PisgahPort(profile, {
-    bearers,
+    bearers, ...(refresh ? { refresh } : {}),
     ...(sandbox ? { episodeFor: async (admission: string) => String(sandboxQuery(sandbox, "episode_for_admission", { admission })[0]?.["id"] ?? "") || null } : {}),
     onRequest: (l) => process.stderr.write(`door ${l.method} ${l.status ?? l.outcome} ${l.ms}ms${l.replayed ? " replayed" : ""}${l.reason ? ` ${l.reason}` : ""}\n`)
   });
@@ -41,6 +59,10 @@ async function main(): Promise<void> {
   const at = voiceprintAt(process.env["HEY_PISGAH_VOICEPRINT"]);
   const embed = local && at === "door" ? withDoorAudio(local) : local;
   const asr = asrSwitch(process.env["HEY_PISGAH_ASR"]);
+  // HEY_PISGAH_SPARK_SECOND=baseten or fireworks makes that Spark Open route the gate's fallback after Modal once its key is set; off by default.
+  const secondName = process.env["HEY_PISGAH_SPARK_SECOND"];
+  const second = secondName ? secondSparkRoute(secondName, loadKeys()) : null;
+  if (secondName && !second) process.stderr.write(`HEY_PISGAH_SPARK_SECOND=${secondName.slice(0, 20)} has no key or is not a Spark Open route, so the fallback stays as committed\n`);
   // With HEY_PISGAH_VERSION_LOG naming a person's version log and a profile versions block, the adopted version's offers run on every encounter it applies to.
   const versionLog = process.env["HEY_PISGAH_VERSION_LOG"];
   if (versionLog && !profile.versions) throw new Error("HEY_PISGAH_VERSION_LOG is set but the profile has no versions block");
@@ -65,12 +87,13 @@ async function main(): Promise<void> {
     listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4100),
     // The wake-phrase spotter's files for the strip, and the A&E clinic an emergency opened by voice lands on.
     ...(process.env["HEY_PISGAH_KWS_DIR"] ? { kwsDir: process.env["HEY_PISGAH_KWS_DIR"] } : {}),
-    ...(process.env["HEY_PISGAH_EMERGENCY_CLINIC"] ? { emergencyClinicId: process.env["HEY_PISGAH_EMERGENCY_CLINIC"] } : {}), runtime: { holdMs: Number(process.env["HEY_PISGAH_HOLD_MS"] ?? 4000), speed: leversFrom(process.env["HEY_PISGAH_SPEED"] ?? KEPT_LEVERS), keepHeard: process.env["HEY_PISGAH_KEEP_HEARD"] === "1", ...(profile.owners.length ? { watchMs: Number(process.env["HEY_PISGAH_WATCH_MS"] ?? 5000) } : {}), ...(adopted ? { versions: adopted.wiring } : {}) },
+    ...(process.env["HEY_PISGAH_EMERGENCY_CLINIC"] ? { emergencyClinicId: process.env["HEY_PISGAH_EMERGENCY_CLINIC"] } : {}), runtime: { holdMs: Number(process.env["HEY_PISGAH_HOLD_MS"] ?? 4000), speed: leversFrom(process.env["HEY_PISGAH_SPEED"] ?? KEPT_LEVERS), keepHeard: process.env["HEY_PISGAH_KEEP_HEARD"] === "1", ...(profile.owners.length ? { watchMs: Number(process.env["HEY_PISGAH_WATCH_MS"] ?? 5000) } : {}), ...(adopted ? { versions: adopted.wiring } : {}), ...(second ? { gate: { ...GATE_SETTINGS, fallback: second }, routes: { primary: DEFAULT_INTENT_ROUTE, fallback: second } } : {}) },
     log: (l) => process.stderr.write(`${l}\n`)
   });
-  process.stdout.write(`emr serve on ${s.urls.join(" ")} (mode ${s.client.mode}, ${Object.keys(bearers).length} owner${Object.keys(bearers).length > 1 ? "s" : ""}, speaker model ${embed ? `on, voiceprint at ${at}` : "off"}, ears ${earSwitch(process.env["HEY_PISGAH_EAR"])}/${asr}${adopted ? `, workflow version ${adopted.def.version} adopted` : ""})\n`);
-  // A stop that has not finished in 10 s exits anyway, as a kill would, so a restart never waits on a slow door call.
-  const stop = () => { setTimeout(() => process.exit(0), 10_000).unref(); void s.close().then(() => process.exit(0)); };
+  process.stdout.write(`emr serve on ${s.urls.join(" ")} (mode ${s.client.mode}, ${Object.keys(bearers).length} owner${Object.keys(bearers).length > 1 ? "s" : ""}, speaker model ${embed ? `on, voiceprint at ${at}` : "off"}, ears ${earSwitch(process.env["HEY_PISGAH_EAR"])}/${asr}${second ? `, fallback ${second.provider}` : ""}${adopted ? `, workflow version ${adopted.def.version} adopted` : ""})\n`);
+  // A stop that has not finished in 10 s exits anyway with code 1 and says so, so a restart never waits on a slow door call.
+  const forced = (why: string) => { process.stderr.write(`serve stop ${why}; exiting with code 1\n`); process.exit(1); };
+  const stop = () => { setTimeout(() => forced("did not finish in 10 s"), 10_000).unref(); void s.close().then(() => process.exit(0), () => forced("failed")); };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
 }
