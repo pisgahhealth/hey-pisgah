@@ -19,7 +19,7 @@ export { CONFIRM_KINDS, OWNER_NO, OWNER_YES, PAY_LINK_VERIFIED_NOTE, SIGN_EVERYT
 export { ORDER_REFERENCE_KINDS, ORDER_RULES, OrderClause, OrderOutput, holdsOrders } from "./gate.js";
 export type { OrderResult, Orderables, PaperworkReadBack, ReadBack } from "./port.js";
 export { EMERGENCY_KIND, EMERGENCY_LINE, EmergencyArgs, RULE_ONLY_KINDS, WAKE_LINE, emergencyReason, identityFrom, spokenPatient, unidentifiedRef, type EmrIdentityHold, type KnownPatient, type SpokenIdentity } from "./entry.js";
-export { SCREENS, SCREEN_PAGES, screenFor, type ScreenPage, type ScreenPlan } from "./screens.js";
+export { SCREENS, SCREEN_PAGES, fillHref, openableHref, screenFor, type ScreenPage, type ScreenPlan } from "./screens.js";
 export { KWS_KEYWORDS, KWS_MODEL_FILES, KWS_SOURCES, kwsReady, prepareKwsAssets } from "./kws.js";
 export { ACCEPT_LINE, ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_ARGS, DELEGATION_RULE_KINDS, DISPENSE_KIND, ESCALATE_KIND, NEEDS, NUDGE_KIND, PREPARE_KIND, REGISTER_KIND, TASK_KINDS, WARD_REVIEW_KIND, acceptedTask, consentSaid, delegationSummary, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid, type DelegationHandoff, type DelegationRead, type DelegationTeam, type EmrDelegation, type Need, type TaskKind } from "./delegate.js";
 export { FROM_NOW_ON, PREFERENCES_STREAM, PREF_FIELDS, PreferenceError, PreferenceMemory, SCOPE_KINDS, choosePreference, describePref, describeScope, describeSource, readRule, scopeAnswer, wardKey, type PrefAt, type PrefChoice, type PrefField, type PrefScope, type PrefSource, type Preference, type RuleReading, type ScopeKind } from "./preferences.js";
