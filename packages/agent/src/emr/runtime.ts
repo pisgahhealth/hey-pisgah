@@ -374,6 +374,9 @@ export function percentile(xs: readonly number[], p: number): number | null {
   return s[Math.min(s.length - 1, Math.max(0, Math.ceil((p / 100) * s.length) - 1))]!;
 }
 // p50 and p90 from the end of the words to the verified record, per kind and in all, with the actions that did not verify beside them.
+// The held work that only tells the clinician something came back; no record is written for it.
+export const TELL_ME_KIND = "tell_me";
+
 // The names a task's patient answers to: the label it opened with and every name said for it since, so a named arrival is found by that name.
 export const knownNames = (t: Pick<EmrTask, "label" | "identities">): string[] => [...new Set([t.label, ...t.identities.filter((i) => i.state !== "cancelled").map((i) => i.name)].filter(Boolean))];
 
@@ -1230,6 +1233,8 @@ export class EmrRuntime {
       return;
     }
     if (c.class !== "instruction" && c.class !== "correction") return;
+    // "When the result comes back, let me know" asks only to be told: held on the result, and fired as a note to the clinician, never as work.
+    if (c.class === "instruction" && !c.kind && c.after === "result" && afterSaid("result", lineText)) return this.holdObligation(l, lineId, TELL_ME_KIND, c, { after: "result", due_at: null, reason: "tell_me" });
     if (c.class === "instruction" && (!c.kind || !kinds.includes(c.kind))) {
       const asked = (c.asked_for ?? c.words).slice(0, 200);
       this.append(l, "gate.refused", { line_id: lineId, kind: c.kind ?? null, asked_for: asked, ...(t.lines.find((x) => x.id === lineId)?.kept ? { words: c.words } : {}) });
@@ -1598,7 +1603,7 @@ export class EmrRuntime {
     const condition = w.after === "result" ? this.resultCondition(t, lineId) : null;
     this.append(l, "obligation.held", { obligation_id, line_id: lineId, kind, clause, title, due_at: w.due_at, after: w.after, reason: w.reason, ...(condition ? { condition } : {}) });
     const when = [w.due_at ? `at ${w.due_at.slice(11, 16)} UTC` : null, w.after === "admission" ? "once the patient is admitted" : w.after === "result" ? "when the result is back" : null].filter(Boolean).join(", ");
-    this.note(l, `Held ${when}: ${kind === "schedule_review" ? `review, ${title}` : summariseWork(kind, clause)}. I will do it then without being asked again.`);
+    this.note(l, `Held ${when}: ${kind === "schedule_review" ? `review, ${title}` : kind === TELL_ME_KIND ? `telling you, ${title}` : summariseWork(kind, clause)}. I will do it then without being asked again.`);
     this.anchorReviews(l);
     if (kind === "schedule_review") this.delegateReview(l, lineId, `${title} ${String(c.words ?? "")}`, w.due_at);
   }
@@ -1705,6 +1710,12 @@ export class EmrRuntime {
     const o = t.obligations.find((x) => x.obligation_id === obligationId);
     if (!o || o.state !== "held" || t.state === "paused" || CLOSED_TASK.has(t.state)) return;
     this.append(l, "obligation.fired", { obligation_id: o.obligation_id, by });
+    if (o.kind === TELL_ME_KIND) {
+      const tests = o.condition?.tests.length ? o.condition.tests.join(", ") : "the result";
+      this.note(l, `The ${tests} result is back in the record, as you asked to be told.`);
+      this.append(l, "obligation.done", { obligation_id: o.obligation_id, action_id: null });
+      return this.settle(l, "told");
+    }
     if (o.kind === "schedule_review") {
       this.note(l, `Review due now: ${o.title}.${o.anchor_action_id ? " It is on the ward board." : ""}`);
       this.append(l, "obligation.done", { obligation_id: o.obligation_id, action_id: o.anchor_action_id });
