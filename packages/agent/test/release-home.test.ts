@@ -92,6 +92,22 @@ describe("discharge by voice behind the confirmation word", () => {
     await rt.stop();
   });
 
+  it("cancels a spoken discharge awaiting confirm after a restart, so a later confirm sends nothing (codex review 4)", async () => {
+    const port = new HomeFake();
+    const script = (s: string) => (/go home/i.test(s) ? [ins("release_home", { text: "rest and drink water" })] : []);
+    const first = clerkBoot(script, { port });
+    const a = await say(first.rt, "She can go home today, rest and drink water.", OWNER);
+    await first.rt.settled();
+    await first.rt.stop();
+    const again = clerkBoot(script, { port, root: first.root, clock: first.clock });
+    await again.rt.settled();
+    expect(again.rt.view(a.task_id)!.actions.find((x) => x.kind === "release_home")!.state).toBe("cancelled");
+    await say(again.rt, "Confirm the discharge.", OWNER, a.task_id);
+    await again.rt.settled();
+    expect(port.writes.filter((w) => w.kind === "release_home")).toHaveLength(0);
+    await again.rt.stop();
+  });
+
   it("asks no confirmation when the record has no diagnosis, and writes nothing", async () => {
     const { rt, port } = boot();
     port.paper = { ...PAPER, diagnosis: null };

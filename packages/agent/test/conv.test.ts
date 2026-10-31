@@ -15,6 +15,9 @@ const ARRIVAL = "dddddddd-1111-4222-8333-444444444444", ARRIVAL_VISIT = "eeeeeee
 // A doctor who orders, with a voice match (5 is the owner, 4 is Dr B) and two paracetamols the ear can mix up.
 class ConvFake extends ClerkFake {
   private n = 0;
+  // Loses the hospital's answer to a prescription, so the write is left uncertain.
+  lose = false;
+  commits = 0;
   kinds: string[] = [...ORDER_REFERENCE_KINDS, EMERGENCY_KIND, IDENTITY_KIND, "record_triage_vitals"];
   readBackAnswer: ReadBack | null = null;
   override kindsFor(): readonly string[] { return this.kinds; }
@@ -24,6 +27,8 @@ class ConvFake extends ClerkFake {
   readonly readBack = async (): Promise<ReadBack> => this.readBackAnswer!;
   // The unnamed arrival is saved as its own patient and visit, as the door answers.
   override async commit(kind: string, args: WorkArgs, key: string, prov: Provenance): Promise<EmrCommit> {
+    if (kind === "prescribe") this.commits += 1;
+    if (kind === "prescribe" && this.lose) return { ok: false, reason: "timeout", status: null, retryable: true, counted: false };
     if (kind !== EMERGENCY_KIND) return super.commit(kind, args, key, prov);
     if (!this.writes.some((w) => w.key === key)) this.writes.push({ kind, args, key, prov, id: ARRIVAL });
     return { ok: true, record_id: ARRIVAL, record_version: 1, event_ids: [`patient:${ARRIVAL}`, `visit:${ARRIVAL_VISIT}`], replayed: false };
@@ -187,7 +192,7 @@ describe("CONV 1: the owner's agent writes the name said for an emergency arriva
     const [first, second] = v.actions.filter((a) => a.kind === IDENTITY_KIND);
     expect(second).toMatchObject({ line_id: c.line_id, corrects_action_id: first!.action_id });
     expect(v.identities).toEqual([expect.objectContaining({ name: "Blessing Adeyemi", amended: [{ from: "Blessing Adeyemu", line_id: c.line_id }] })]);
-    expect(spelledName("No, A D E Y E M I", "Blessing Adeyemu")).toBe("Blessing Adeyemi");
+    expect(spelledName("No, A D E Y E M I", "Blessing Adeyemu")).toEqual({ name: "Blessing Adeyemi" });
     expect(spelledName("Give IV fluids", "Blessing Adeyemu")).toBeNull();
     expect(identityFrom("Her name is Mrs Blessing Adeyemi")?.name).toBe("Blessing Adeyemi");
     await b.rt.stop();
@@ -325,6 +330,82 @@ describe("CONV 2: no line ends in silence, and a bound answer ignores the window
     await b.rt.say({ owner: DOC, target: { patient_id: PAT }, text: "3", source: "text", question_id: q.question_id, spoken_at: new Date(Date.now() + 130_000).toISOString() }, a.task_id);
     await b.rt.settled();
     expect(b.rt.view(a.task_id)!.actions.find((x) => x.kind === "prescribe")).toMatchObject({ state: "proposed", awaiting: "owner_voice", args: { quantity: 3 } });
+    await b.rt.stop();
+  });
+});
+
+describe("CONV review fixes (codex review of ce4de52)", () => {
+  it("1: the owner's bare count never releases a prescription Dr B asked about, though the owner's own question is open", async () => {
+    const b = boot((s) => (/^Send a test/.test(s) ? [ins("order_test", {})] : /^IV paracetamol one gram/.test(s) ? [ins("prescribe", { drug: "paracetamol_iv", dose: "1 g" })] : ASIDE));
+    const a = await say(b.rt, "Send a test.");
+    await b.rt.settled();
+    await say(b.rt, "IV paracetamol one gram.", DRB, { task: a.task_id });
+    await b.rt.settled();
+    expect(b.rt.view(a.task_id)!.questions.at(-1)!.text).toMatch(/How many/);
+    await say(b.rt, "Three.", OWNER, { task: a.task_id });
+    await b.rt.settled();
+    expect(rx(b.port)).toHaveLength(0);
+    await b.rt.stop();
+  });
+
+  it("4b: an uncertain prescription whose voice match a restart lost is read for once and never sent again", async () => {
+    const b = boot((s) => (/^IV paracetamol one gram/.test(s) ? [ins("prescribe", { drug: "paracetamol_iv", dose: "1 g" })] : ASIDE));
+    b.port.lose = true;
+    const a = await say(b.rt, "IV paracetamol one gram, three doses.");
+    await b.rt.settled();
+    expect(b.rt.view(a.task_id)!.actions.find((x) => x.kind === "prescribe")!.state).toBe("uncertain");
+    await b.rt.stop();
+    const sent = b.port.commits;
+    const again = clerkBoot(() => ASIDE, { root: b.root, port: b.port, clock: b.clock });
+    await again.rt.settled();
+    expect(b.port.commits).toBe(sent);
+    const v = again.rt.view(a.task_id)!;
+    expect(v.actions.find((x) => x.kind === "prescribe")!.state).toBe("cancelled");
+    expect(v.notes.some((n) => /was not sent again\. Check the record/.test(n.text))).toBe(true);
+    await again.rt.stop();
+  });
+
+  it("5: a spelling amends the part it names, and asks when two parts are as close", async () => {
+    expect(spelledName("Bassey, spelt B-A-S-S-E-Y", "Blessing Bassei")).toEqual({ name: "Blessing Bassey" });
+    expect(spelledName("spelt A-D-U", "Ada Ade")).toEqual({ ask: ["Ada", "Ade"], word: "Adu" });
+    const b = boot(() => ASIDE);
+    const task = await arrival(b);
+    await sayOn(b.rt, task, "Her name is Ada Ade.");
+    await b.rt.settled();
+    await sayOn(b.rt, task, "It is spelt A-D-U.");
+    await b.rt.settled();
+    expect(of(b.port, IDENTITY_KIND).map((w) => w.args["name"])).toEqual(["Ada Ade"]);
+    expect(b.rt.view(task)!.questions.at(-1)!.text).toBe("Which part of Ada Ade is Adu? Say the full name.");
+    await b.rt.stop();
+  });
+
+  it("7: a countersign yes after the 60 s window signs nothing and reads the batch back again", async () => {
+    const b = boot(() => ASIDE);
+    (b.rt as unknown as { o: { confirmWindowMs?: number } }).o.confirmWindowMs = 800;
+    b.port.readBackAnswer = { items: [{ stateId: "dddddddd-1111-4222-8333-444444444441", label: "Full Blood Count", kind: "lab", controlled: false, sentAt: null }], itemsDigest: "a".repeat(64), readBackAt: "2026-10-29T10:05:00.000Z", seal: "S".repeat(43), awaitingSecond: [], changed: [] };
+    const a = await say(b.rt, "Sign everything.");
+    await b.rt.settled();
+    const first = b.rt.view(a.task_id)!.questions.at(-1)!.question_id;
+    await new Promise((r) => setTimeout(r, 900));
+    // Question times are the journal's wall clock, so the yes is dated by it too.
+    await b.rt.say({ owner: DOC, target: { patient_id: PAT }, text: "Yes.", source: "audio", voiceprint: OWNER, spoken_at: new Date().toISOString() }, a.task_id);
+    await b.rt.settled();
+    expect(of(b.port, "countersign")).toHaveLength(0);
+    const v = b.rt.view(a.task_id)!;
+    expect(v.notes.some((n) => /^Not signed: that yes came more than 1 seconds after the read-back/.test(n.text))).toBe(true);
+    expect(v.questions.at(-1)!.question_id).not.toBe(first);
+    await b.rt.say({ owner: DOC, target: { patient_id: PAT }, text: "Yes.", source: "audio", voiceprint: OWNER, spoken_at: new Date().toISOString() }, a.task_id);
+    await b.rt.settled();
+    expect(of(b.port, "countersign")).toHaveLength(1);
+    await b.rt.stop();
+  });
+
+  it("8: a finding that comes back after a pause is said, never dropped", async () => {
+    const b = boot((s) => (/^Chest/.test(s) ? [{ class: "finding", section: "examination", text: s, confidence: 0.9 }] : ASIDE));
+    const a = await say(b.rt, "Chest is clear on both sides.");
+    await say(b.rt, "Stop, I'll come back to this.");
+    await b.rt.settled();
+    expect(b.rt.view(a.task_id)!.notes.some((n) => /came while this task was paused/.test(n.text))).toBe(true);
     await b.rt.stop();
   });
 });

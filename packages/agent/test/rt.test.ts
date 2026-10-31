@@ -335,16 +335,35 @@ describe("RT 5: the other patient named without a switch phrase", () => {
     await rt.stop();
   });
 
-  it("a tap of Blessing on Emeka's task, bound to the whom question, sends the held line to Blessing even past the window (CONV 2.8, D40)", async () => {
+  it("a tap of Blessing on Emeka's task, bound to the whom question, moves the held order to Blessing past the window and waits for the owner's spoken yes (CONV 2.8, D40)", async () => {
     const { rt, port, emeka, blessing } = await two();
     await say(rt, "For Blessing, send a full blood count.");
     await rt.settled();
     const q = rt.view(emeka)!.questions[0]!;
     await rt.say({ owner: DOC, target: { patient_id: PAT }, text: "Blessing Okon", source: "text", question_id: q.question_id, spoken_at: later(130_000) }, emeka);
     await rt.settled();
-    expect(of(port, "order_test").map((w) => w.args)).toEqual([{ visit_id: VISIT_B, patient_id: PAT_B, test: "fbc" }]);
+    expect(of(port, "order_test")).toHaveLength(0);
     expect(rt.view(emeka)!.questions).toEqual([]);
-    expect(rt.view(blessing)!.actions.map((x) => x.kind)).toEqual(["order_test"]);
+    expect(rt.view(blessing)!.actions).toMatchObject([{ kind: "order_test", state: "proposed", awaiting: "owner_voice", args: { patient_id: PAT_B } }]);
+    await say(rt, "Yes.", OWNER, { task: blessing, patient: PAT_B });
+    await rt.settled();
+    expect(of(port, "order_test").map((w) => w.args)).toEqual([{ visit_id: VISIT_B, patient_id: PAT_B, test: "fbc" }]);
+    await rt.stop();
+  });
+
+  it("holds a task-scoped line naming the other patient, and Dr B's spoken choice moves nothing (codex review 2, 3)", async () => {
+    const { rt, port, emeka } = await two();
+    await say(rt, "For Blessing, send a full blood count.", OWNER, { task: emeka });
+    await rt.settled();
+    expect(of(port, "order_test")).toHaveLength(0);
+    expect(rt.view(emeka)!.questions.map((x) => x.text)).toEqual(["For Emeka Obi or for Blessing Okon? I have not written it anywhere yet."]);
+    await say(rt, "Blessing.", DRB, { task: emeka });
+    await rt.settled();
+    expect(of(port, "order_test")).toHaveLength(0);
+    expect(rt.view(emeka)!.questions).toHaveLength(1);
+    await say(rt, "Blessing.", OWNER, { task: emeka });
+    await rt.settled();
+    expect(of(port, "order_test").map((w) => w.args)).toEqual([{ visit_id: VISIT_B, patient_id: PAT_B, test: "fbc" }]);
     await rt.stop();
   });
 
