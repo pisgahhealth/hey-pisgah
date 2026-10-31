@@ -945,7 +945,15 @@ async function finish(): Promise<void> {
   const stepWindow = (at: string | null) => steps.find((s) => at && at >= s.started_at && at <= s.ended_at);
   // Only the run's own two patients count: agents also work through tasks other runs left open in the sandbox, which no step of this script asked for.
   const ours = (a: (typeof acts)[number]) => (["A", "B"] as const).some((r) => bound[r] && (a.patient_id === bound[r]!.patient || bound[r]!.tasks.has(a.task_id)));
-  const unaccounted = acts.filter((a) => a.state === "completed" && ours(a) && !stepWindow(seen.get(`${a.action_id}:completed`) ?? null)).map((a) => ({ owner: whoOf(a.owner), kind: a.kind, action_id: a.action_id, completed_at: seen.get(`${a.action_id}:completed`) ?? null }));
+  // A write is accounted for by its cause, never by its clock: a step's own heard line, a line that authorised or confirmed it, or the hand-off record a step's work created; anything else is unaccounted wherever it lands, and a doctor's write in a step where nobody spoke is too.
+  const causes = new Set(steps.map((x) => x.line_id).filter((x): x is string => !!x));
+  // A spoken line the ear split in two is still that step's speech: every row heard while a step that speaks was open is its cause too.
+  const speaking = steps.filter((x) => ["speak", "play", "type", "remote"].includes(x.mode));
+  for (const row of [...views.values()].flat().flatMap((t) => t.transcript)) if (speaking.some((x) => row.at >= x.started_at && row.at <= x.ended_at)) causes.add(row.line_id);
+  const caused = (a: (typeof acts)[number]) => { const b = a as unknown as { line_id: string; authorised_by_line?: string | null; confirmed_by_line?: string | null }; return causes.has(b.line_id) || (!!b.authorised_by_line && causes.has(b.authorised_by_line)) || (!!b.confirmed_by_line && causes.has(b.confirmed_by_line)) || b.line_id.startsWith("rec-"); };
+  const inWait = (a: (typeof acts)[number]) => a.owner === DOCTOR && !!steps.find((x) => x.mode === "wait" && (seen.get(`${a.action_id}:completed`) ?? "") >= x.started_at && (seen.get(`${a.action_id}:completed`) ?? "") <= x.ended_at) && !caused(a);
+  void stepWindow;
+  const unaccounted = acts.filter((a) => a.state === "completed" && ours(a) && (!caused(a) || inWait(a))).map((a) => ({ owner: whoOf(a.owner), kind: a.kind, action_id: a.action_id, completed_at: seen.get(`${a.action_id}:completed`) ?? null }));
   const delegations: DelegationRow[] = (views.get(DOCTOR) ?? []).flatMap((v) => v.delegations).filter((d) => d.side === "delegator").map((d) => {
     const acks = acts.filter((a) => a.kind === "acknowledge_task" && a.state === "completed" && a.args["delegation_id"] === d.delegation_id);
     const ackLine = acks[0] ? transcriptLine(acks[0].line_id) : null;
