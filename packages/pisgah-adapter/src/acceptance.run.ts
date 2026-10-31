@@ -145,10 +145,11 @@ function render(voice: string, text: string, id: string): { file: string; ms: nu
   return { file, ms: info.ok ? Math.round(info.durationMs) : 0 };
 }
 // The words and voice ride as extra form fields the real serve ignores, so the in-memory hospital can stand in for its ear.
-async function postChunk(owner: string, file: string, ms: number, text: string, voice: string, patientId?: string): Promise<unknown> {
+async function postChunk(owner: string, file: string, ms: number, text: string, voice: string, patientId?: string, admissionId?: string): Promise<unknown> {
   const form = new FormData();
-  // A stand-in's own strip is on that patient's page, as the person answering would be.
+  // A stand-in's own strip is on that patient's page, and on the stay once there is one, as the person answering would be.
   if (patientId) form.set("patientId", patientId);
+  if (admissionId) form.set("admissionId", admissionId);
   form.set("acc_text", text); form.set("acc_voice", voice);
   form.set("owner", owner); form.set("session_id", session); form.set("seq", String(seq++)); form.set("captured_at", String(Date.now() - ms));
   // No presence marker, as the strip sends none today; a marker with no recent input would mark every line not present.
@@ -158,6 +159,7 @@ async function postChunk(owner: string, file: string, ms: number, text: string, 
   end.set("owner", owner); end.set("session_id", session); end.set("seq", String(seq++)); end.set("end", "1");
   // The end marker names the same page, or the service has no patient to finish the words for.
   if (patientId) end.set("patientId", patientId);
+  if (admissionId) end.set("admissionId", admissionId);
   await fetch(`${SERVE}/tasks/listen`, { method: "POST", body: end }).catch(() => undefined);
   return r.json().catch(() => null);
 }
@@ -256,13 +258,15 @@ async function deliver(line: Line): Promise<{ lineEnd: string | null; note: stri
   if (line.mode === "type" || line.mode === "remote") {
     const owner = nudgedOwner(line.who, line.patient) ?? ownersOf(line.who)[0]!;
     const patientId = line.patient ? bound[line.patient]?.patient : undefined;
+    // The ward nurse reads the stay, not the arrival list, so her stand-in names the stay once there is one (pass 9 N01: her agent could not find the arrival).
+    const admissionId = line.patient && line.who === "nurse" ? bound[line.patient]?.admission ?? undefined : undefined;
     if (line.mode === "remote") {
       const clip = render(script.voices[line.who] ?? "Daniel", text, `${line.id}-${seq}`);
-      const r = await postChunk(owner, clip.file, clip.ms, text, script.voices[line.who] ?? "Daniel", patientId);
+      const r = await postChunk(owner, clip.file, clip.ms, text, script.voices[line.who] ?? "Daniel", patientId, admissionId);
       return { lineEnd: now(), note: `posted ${script.voices[line.who] ?? "Daniel"} through ${line.who}'s strip: ${JSON.stringify(r).slice(0, 160)}` };
     }
     const at = now();
-    const r = await fetch(`${SERVE}/tasks/say`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ owner, text, spokenAt: at, ...(patientId ? { patientId } : {}) }) });
+    const r = await fetch(`${SERVE}/tasks/say`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ owner, text, spokenAt: at, ...(patientId ? { patientId } : {}), ...(admissionId ? { admissionId } : {}) }) });
     return { lineEnd: at, note: `typed as ${line.who} (${owner.slice(0, 8)}): ${r.status}` };
   }
   const voice = line.mode === "play" ? script.voices[line.who] ?? "Samantha" : script.voices["doctor"] ?? "Rishi";
@@ -304,9 +308,9 @@ async function openBrowser(): Promise<void> {
   const ctx = await browser.newContext({ viewport: { width: 1380, height: 860 } });
   await ctx.grantPermissions(["microphone"], { origin: APP });
   await ctx.addInitScript((serve) => { try { window.localStorage.setItem("pisgah-agent-serve", serve); } catch { /* storage off */ } (window as unknown as { __accDoc?: number }).__accDoc = Date.now() + Math.random();
-    // The moment this page's first microphone opens, which is when Chrome starts its fake microphone file from the top.
+    // The moment this page first asks for the microphone: Chrome starts its fake microphone file from the top as the device opens, before the promise answers.
     const md = navigator.mediaDevices;
-    if (md?.getUserMedia) { const g = md.getUserMedia.bind(md); md.getUserMedia = (c?: MediaStreamConstraints) => { const p = g(c); p.then(() => { const w = window as unknown as { __accMicAt?: number }; w.__accMicAt ??= Date.now(); }, () => undefined); return p; }; }
+    if (md?.getUserMedia) { const g = md.getUserMedia.bind(md); md.getUserMedia = (c?: MediaStreamConstraints) => { const w = window as unknown as { __accMicAt?: number }; w.__accMicAt ??= Date.now(); return g(c); }; }
   }, `http://localhost:${SERVE_PORT}`);
   page = await ctx.newPage();
   setOffline = (on) => ctx.setOffline(on);
