@@ -1,4 +1,4 @@
-import { LedgerRow, type HypothesisRecord, type WorkflowChangeProposal } from "@hey-pisgah/contracts";
+import { LedgerRow, canonical, type HypothesisRecord, type WorkflowChangeProposal } from "@hey-pisgah/contracts";
 import { readStream } from "@hey-pisgah/store";
 import { loadV1 } from "@hey-pisgah/hospital";
 import { outcomeComparison } from "./outcomes.js";
@@ -120,6 +120,11 @@ export function citedEventCount(storeRoot: string, runId: string): number {
   return new Set(readStream(storeRoot, STREAMS.hypotheses).filter((e) => e.record_type === "hypothesis.recorded" && (e.payload as Row)["session_id"] === runId).flatMap((e) => (e.payload as HypothesisRecord).evidence.map((x) => x.event_id))).size;
 }
 
+// Whether a proposal carries every adopted operation, compared on the whole operation with its nested fields.
+export function repeatsAdopted(ops: readonly unknown[], adoptedOps: readonly unknown[]): boolean {
+  return adoptedOps.every((a) => ops.some((b) => canonical(b) === canonical(a)));
+}
+
 export type PairResponse = "rollback_proposed" | "insufficient_evidence" | "proposed_revision" | "declined" | "re_proposed_adopted" | "no_change_warranted" | "other_proposal" | "no_response";
 // The answers that end a second cycle in a declared result on its outcomes: a rollback for a person to decide, a revision, or a result that keeps the version while citing the outcomes it weighed.
 export const DECLARED_RESPONSES: ReadonlySet<PairResponse> = new Set(["rollback_proposed", "proposed_revision", "no_change_warranted", "insufficient_evidence"]);
@@ -134,8 +139,7 @@ export function cycleResponse(storeRoot: string, runId: string, o: { observed: r
   const hyps = readStream(storeRoot, STREAMS.hypotheses).filter((e) => e.record_type === "hypothesis.recorded" && (e.payload as Row)["session_id"] === runId).map((e) => e.payload as unknown as HypothesisRecord);
   const adopted = r.outcome_comparison.after.filter((x) => x.workflow_version !== null && x.workflow_version !== 1).map((x) => x.case_id);
   const onAdopted = (id: string) => adopted.includes(pool.event(id)?.case_id ?? "");
-  const key = (x: unknown) => JSON.stringify(x, Object.keys(x as object).sort());
-  const repeats = (p: WorkflowChangeProposal) => o.adoptedOps.every((a) => p.ops.some((b) => key(b) === key(a)));
+  const repeats = (p: WorkflowChangeProposal) => repeatsAdopted(p.ops, o.adoptedOps);
   const citing = hyps.flatMap((h) => h.evidence.filter((e) => onAdopted(e.event_id)).map((e) => ({ hypothesis_id: h.hypothesis_id, event_id: e.event_id, stance: e.stance, status: h.status })));
   const propCites = props.flatMap((p) => p.evidence.event_ids.filter(onAdopted));
   const declaredCites = ((declared?.["evidence_event_ids"] as string[] | undefined) ?? []).filter(onAdopted);
