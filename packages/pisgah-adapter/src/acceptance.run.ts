@@ -28,6 +28,8 @@ const SEED = (HOSPITAL === "memory" ? { owners: FAKE_OWNERS } : JSON.parse(readF
 const APP = env("ACC_APP", SEED.app_url ?? "http://localhost:3311");
 const START = env("ACC_SERVE_START");
 const STOP_ON_FAIL = process.env["ACC_STOP_ON_FAIL"] === "1";
+// A rehearsal of the human driver: every prompt is printed and answered as in Samuel's run, and the harness also makes the presses a person would make at the doctor's screen.
+const HANDS = DRIVER === "human" && process.env["ACC_HUMAN_HANDS"] === "1";
 const RATE = Number(env("ACC_SAY_RATE", "175"));
 if (KIND === "final" && DRIVER !== "human") throw new Error("the final run is Samuel's: ACC_DRIVER=human");
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -373,6 +375,7 @@ async function openBrowser(): Promise<void> {
   log(`browser: signed in as ${script.people["doctor"]!.login}; the strip is mounted`);
   if (DRIVER === "human") {
     process.stdout.write("\n  In the Chrome window: press the ear button once to grant the microphone, then once more to start listening. Type done here when it says Listening.\n");
+    if (HANDS) { await wait(5000); await page.click(`${STRIP} button[aria-label="Listen"]`).catch(() => undefined); await wait(3000); if (!(await page.locator(`${STRIP} button[aria-label="Stop listening"]`).count())) await page.click(`${STRIP} button[aria-label="Listen"]`).catch(() => undefined); }
     await typedDone();
   } else {
     // The first press grants the microphone and arms the wake spotter; once it says so, a second press starts listening, as F1's walks do.
@@ -584,7 +587,13 @@ async function runLine(line: Line): Promise<void> {
       // A settle names the amount owed, so the stay's bill is read first, as the accounts person reads it on screen.
       if (line.op === "settle" && !vars["outstanding"] && hospital.hasPerson("bill")) { const b = await hospital.person("bill", vars); vars["outstanding"] = String((b.json as { bill?: { outstandingNgn?: string } } | null)?.bill?.outstandingNgn ?? "0.00"); }
       // In Samuel's run his own attestations are his, at the screen; the harness only waits for them.
-      if (DRIVER === "human" && line.who === "doctor") { process.stdout.write(`\n  AT THE SCREEN (${line.id}): ${line.note ?? line.op}\n  Type done here when you have signed.\n`); await typedDone(); return { ok: true, note: "done by Samuel at the screen" }; }
+      if (DRIVER === "human" && line.who === "doctor") {
+        process.stdout.write(`\n  AT THE SCREEN (${line.id}): ${line.note ?? line.op}\n  Type done here when you have signed.\n`);
+        await typedDone();
+        // In the hands rehearsal the sign is the doctor's own door call, as the screen's Sign does.
+        if (HANDS && hospital.hasPerson(line.op!)) { const r = await hospital.person(line.op!, vars); return { ok: r.ok, note: `signed for the rehearsal through dr.edikan's own session: ${r.status}` }; }
+        return { ok: true, note: "done by Samuel at the screen" };
+      }
       if (HOSPITAL === "sandbox" && line.op === "acc_lab_result") return labResult(vars);
       if (HOSPITAL === "sandbox" && line.op === "acc_lab_cancel") return labCancelOnScreen(vars);
       if (HOSPITAL === "sandbox" && line.op === "acc_pay_test") return payTestAtDesk(vars);
@@ -602,7 +611,7 @@ async function runLine(line: Line): Promise<void> {
     if (line.mode === "type") otherTouches.push({ line: line.id, who: line.who, what: "typed stand-in line at that person's strip" });
     if (line.mode === "remote") otherTouches.push({ line: line.id, who: line.who, what: "spoken stand-in through that person's strip (no touch, listed so it is not mistaken for the doctor's)" });
     if (line.lose_ack && PROXY_PORT && !lostAckJudged.has(line.lose_ack.path) && dropNext?.path !== line.lose_ack.path) dropNext = { path: line.lose_ack.path, hit: null };
-    if (line.muted && page && DRIVER === "human") { process.stdout.write("\n  MUTE: press the strip's mute button (the crossed microphone, top right of the strip), then type done here.\n"); await typedDone(); }
+    if (line.muted && page && DRIVER === "human") { process.stdout.write("\n  MUTE: press the strip's mute button (the crossed microphone, top right of the strip), then type done here.\n"); if (HANDS && !(await page.click(`${STRIP} button[aria-label="Mute the agent"]`, { timeout: 10_000 }).then(() => true, () => false))) { harnessErrors.push(`${line.id}: no Mute button`); muteFailed = true; blocked = true; } await typedDone(); }
     else if (line.muted && page) { if (!(await page.click(`${STRIP} button[aria-label="Mute the agent"]`, { timeout: 10_000 }).then(() => true, () => false))) { harnessErrors.push(`${line.id}: no Mute button`); muteFailed = true; blocked = true; } await wait(800); }
     if (line.muted) muteAt = now();
     // Chrome's fake microphone reads its file afresh on a reload, so the harness cuts the file at the reload (realignFakeMic); ACC_FAKE_RELOAD=0 skips the reload.
@@ -613,7 +622,7 @@ async function runLine(line: Line): Promise<void> {
     lineEnd = d.lineEnd; note = d.note;
     if (!lineEnd || /refused|delivery failed/.test(note ?? "")) harnessErrors.push(`${line.id}: ${note}`);
     if (line.offline_s && page && DRIVER !== "human") { await wait(line.offline_s * 1000); await setOffline(false); log(`${line.id}: the browser was offline ${line.offline_s} s while the line was said`); }
-    if (line.muted && page && DRIVER === "human") { process.stdout.write("\n  UNMUTE: press the mute button again, then type done here.\n"); await typedDone(); }
+    if (line.muted && page && DRIVER === "human") { process.stdout.write("\n  UNMUTE: press the mute button again, then type done here.\n"); if (HANDS && !(await page.click(`${STRIP} button[aria-label="Unmute the agent"]`, { timeout: 10_000 }).then(() => true, () => false))) { harnessErrors.push(`${line.id}: could not unmute`); muteFailed = true; blocked = true; } await typedDone(); }
     else if (line.muted && page) { await wait(1500); if (!(await page.click(`${STRIP} button[aria-label="Unmute the agent"]`, { timeout: 10_000 }).then(() => true, () => false))) { harnessErrors.push(`${line.id}: could not unmute`); muteFailed = true; blocked = true; } }
     // Words the strip held back while muted would arrive just after unmute, so the check waits 10 s past it.
     if (line.muted) { unmuteAt = now(); await wait(10_000); }
