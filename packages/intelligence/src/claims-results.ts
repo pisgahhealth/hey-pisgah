@@ -32,7 +32,14 @@ export function discoveryClaims(discovery: Row): Row {
 }
 
 // The second cycle as a result: what it read, how it ended, and whether any earlier hypothesis was cited as evidence.
-export function cycle2Result(storeRoot: string, runId: string, o: { observed: readonly OutcomeCase[]; outcomes: readonly OutcomeCase[] }): Row {
+// How C-10's wording says each second-cycle result.
+const RESULT_SAID: Record<string, string> = {
+  new_proposal: "a new proposal", revision: "a revision of a proposal", re_proposed_adopted: "the adopted change proposed again, so it kept the change",
+  rollback_proposed: "a rollback proposed for a person to decide", no_change_warranted: "no change warranted", insufficient_evidence: "insufficient evidence", no_result: "no result"
+};
+
+// With the adopted operations given, a dev-valid proposal that carries them again is labelled re_proposed_adopted rather than new_proposal.
+export function cycle2Result(storeRoot: string, runId: string, o: { observed: readonly OutcomeCase[]; outcomes: readonly OutcomeCase[]; adoptedOps?: readonly unknown[] }): Row {
   const log = readStream(storeRoot, sessionStreamId(runId));
   const opened = (log.find((e) => e.record_type === "session.opened")?.payload ?? null) as Row | null;
   const stopped = (log.find((e) => e.record_type === "session.stopped")?.payload ?? null) as Row | null;
@@ -60,7 +67,8 @@ export function cycle2Result(storeRoot: string, runId: string, o: { observed: re
   const readOf = (s: string) => bySource(s).filter((id) => read.has(id));
   const cited = (s: string) => new Set(citedEvents.filter((id) => pool.event(id) && pool.get(pool.event(id)!.case_id)!.source === s)).size;
   const valid = reports.some((r) => r["status"] === "dev_validated");
-  const result = valid ? (props.some((p) => p.parent_proposal_id) ? "revision" : "new_proposal") : declared?.["result"] === "rollback_proposed" ? "rollback_proposed" : declared?.["result"] === "no_change_warranted" ? "no_change_warranted" : declared?.["result"] === "insufficient_evidence" ? "insufficient_evidence" : "no_result";
+  const again = !!o.adoptedOps?.length && props.some((p) => repeatsAdopted(p.ops, o.adoptedOps!));
+  const result = valid ? (props.some((p) => p.parent_proposal_id) ? "revision" : again ? "re_proposed_adopted" : "new_proposal") : declared?.["result"] === "rollback_proposed" ? "rollback_proposed" : declared?.["result"] === "no_change_warranted" ? "no_change_warranted" : declared?.["result"] === "insufficient_evidence" ? "insufficient_evidence" : "no_result";
   const rows = readStream(storeRoot, `ledger/${runId}`).filter((e) => e.record_type === "model.call").map((e) => LedgerRow.parse(e.payload));
   return {
     measured_at: new Date().toISOString(), measured: true, source: "cycle2_run", set: "dev", run_id: runId,
@@ -80,7 +88,7 @@ export function cycle2Result(storeRoot: string, runId: string, o: { observed: re
       return declared?.["result"] === "insufficient_evidence" || declared?.["result"] === "rollback_proposed" || (valid && cites);
     })(),
     hypotheses: hyps.length, proposals: props.length, validations: reports.map((r) => r["status"]),
-    result, declared: declared ? { result: declared["result"], note: declared["note"] } : null,
+    result, result_said: RESULT_SAID[result] ?? result, declared: declared ? { result: declared["result"], note: declared["note"] } : null,
     stop: stopped ? `${String(stopped["stop"])} (${String(stopped["detail"])})` : "not stopped",
     cycle2_result_recorded: result !== "no_result",
     no_hypothesis_cited_as_evidence: notEvents.length === 0 && foreignHyps.length === 0,
