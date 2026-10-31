@@ -576,6 +576,14 @@ async function runLine(line: Line): Promise<void> {
     if (blocked || outcomes.every((c) => c.ok) || Date.now() > limit()) break;
   }
   if (interruptWatch) await interruptWatch;
+  // The screen check: the doctor's main page, outside the strip, and the strip itself name the step's patient; required once ACC_SCREEN_REQUIRED=1 (with VIS's screen mapping merged).
+  const named = line.patient ? script.lines.slice(0, script.lines.findIndex((x) => x.id === line.id)).flatMap((x) => x.expect).find((e): e is Extract<Expect, { identity: "A" | "B" }> => "identity" in e && e.identity === line.patient) : undefined;
+  if (page && named && line.who === "doctor" && line.mode !== "person") {
+    const first = named.name.split(" ")[0]!.toLowerCase();
+    const seenOn = await page.evaluate((st: string) => { const s = document.querySelector(st); const strip = s?.textContent ?? ""; const all = document.body.innerText; return { strip: strip.toLowerCase(), main: (s ? all.replace((s as HTMLElement).innerText, "") : all).toLowerCase() }; }, STRIP).catch(() => ({ strip: "", main: "" }));
+    const ok = seenOn.main.includes(first) && seenOn.strip.includes(first);
+    outcomes.push({ expect: { screen: line.patient!, optional: process.env["ACC_SCREEN_REQUIRED"] !== "1" }, optional: process.env["ACC_SCREEN_REQUIRED"] !== "1", ok, detail: `page ${seenOn.main.includes(first) ? "shows" : "does not show"} ${named.name.split(" ")[0]}; strip ${seenOn.strip.includes(first) ? "shows" : "does not show"} it` });
+  }
   // A write a clarification finishes on the next line keeps the dropped reply armed for that line, and the fault is judged there.
   const nextLine = script.lines[script.lines.findIndex((x) => x.id === line.id) + 1];
   const judged = !!line.lose_ack && lostAckJudged.has(line.lose_ack.path);

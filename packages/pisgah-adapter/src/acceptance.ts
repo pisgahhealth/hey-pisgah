@@ -23,6 +23,8 @@ export const Expect = z.union([
   z.strictObject({ speaker: z.enum(["owner", "other_clinician", "unverified"]) }),
   z.strictObject({ delegation: z.strictObject({ team: z.string().min(1), state: z.enum(["assigned", "acknowledged", "completed"]).optional(), n: z.number().int().min(1).optional() }), optional: z.boolean().optional() }),
   z.strictObject({ obligation: z.strictObject({ state: z.enum(["held", "fired", "done", "cancelled"]), after: z.enum(["admission", "result"]).optional() }), optional: z.boolean().optional() }),
+  // The main EMR page and the strip both show this patient after the step (review 4 item 6); the harness adds it to every patient step once the name is said.
+  z.strictObject({ screen: Ref, optional: z.boolean().optional() }),
   z.strictObject({ tracking: Ref }),
   z.strictObject({ tasks_survive: z.literal(true) }),
   z.strictObject({ wake: z.literal(true) }),
