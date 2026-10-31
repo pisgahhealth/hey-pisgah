@@ -55,8 +55,22 @@ function collapseRepeats(text: string): string {
   return kept.join(" ");
 }
 
-// Cleans one finished transcript: one copy of a word the recogniser repeated, digits for spoken numbers, and one closing full stop.
+// The pause words of Nigerian English as the ears write them, matched as a whole word with a capital only at its start, so "EM" and "'em" stay.
+const PAUSE_WORD = /^[Ee](?:h|hn|hm|m)([,.;:?!]*)$/;
+// Drops each pause word with the commas that marked its pause, moving a full stop or question mark it carried onto the word before it.
+function dropPauseWords(text: string): string {
+  const kept: string[] = [];
+  for (const w of text.split(" ")) {
+    const m = PAUSE_WORD.exec(w);
+    if (!m) { kept.push(w); continue; }
+    const end = m[1]!.replace(/[,;]/g, "");
+    if (kept.length && (end || m[1]!.length)) kept[kept.length - 1] = kept.at(-1)!.replace(/[,;:]+$/, "") + end;
+  }
+  return kept.join(" ");
+}
+
+// Cleans one finished transcript: no pause words, one copy of a word the recogniser repeated, digits for spoken numbers, and one closing full stop.
 export function cleanTranscript(raw: string): string {
-  const once = collapseRepeats(raw.replace(/\s+/g, " ").trim());
+  const once = collapseRepeats(dropPauseWords(raw.replace(/\s+/g, " ").trim()));
   return collapseRepeats(spokenDigits(once)).replace(/\.{2,}$/, ".").trim();
 }

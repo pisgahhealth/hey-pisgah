@@ -61,3 +61,23 @@ describe("where a listen cut may fall", () => {
     expect(numbersIn("blood pressure 128/76, pulse 96.")).toEqual(["128", "76", "96"]);
   });
 });
+
+// The pause words a Nigerian English speaker says between words, which the ears write down as heard.
+describe("Nigerian fillers in a line", () => {
+  it("keeps eh, ehn, em and ehm out of the number and out of the note text", () => {
+    const pulse = cleanTranscript("pulse ehn one twenty");
+    expect(pulse).toBe("pulse 120");
+    expect(readVitals(pulse)).toEqual({ pulse: ["120"] });
+    expect(cleanTranscript("Temperature thirty seven point ehm nine.")).toBe("Temperature 37.9.");
+    expect(cleanTranscript("Eh, the patient em slept well, ehn.")).toBe("the patient slept well.");
+    expect(cleanTranscript("Pulse, ehn, one twenty.")).toBe("Pulse 120.");
+    expect(cleanTranscript("The patient is stable, em the fever has settled.")).toBe("The patient is stable, the fever has settled.");
+    expect(danglingEnd("Temperature thirty-seven point ehm")).toBe("strong");
+    expect(continuesNumber("ehn point six")).toBe(true);
+  });
+
+  it("never cuts a filler out of a longer word, an abbreviation or a shortened them", () => {
+    const line = "Give them the embolism stockings, mehn, EM said tell 'em the hen ehnna eh-eh.";
+    expect(cleanTranscript(line)).toBe(line);
+  });
+});

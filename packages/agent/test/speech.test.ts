@@ -32,7 +32,7 @@ describe("every utterance finishes", () => {
     const end = await listen.end({ owner: OWNER, target: { admission_id: ADM }, session_id: "s1", seq: 1 }, true);
     expect(end.outcome).toMatchObject({ final: true, why: "end_marker", utterance: { seqs: [0] } });
     await rt.settled();
-    expect(seen).toEqual(["Okay chart his pulse, em, 96, he's settling now"]);
+    expect(seen).toEqual(["Okay chart his pulse 96, he's settling now"]);
     listen.close();
     await rt.stop();
   });
@@ -80,7 +80,7 @@ describe("the words after the wake phrase", () => {
     const { rt, listen, seen } = boot(earOf({ 1700: "Hey Pisgah, she's had, em, chest pain since morning time." }));
     await chunk(listen, 0, chunkWav(1000, 700));
     await rt.settled();
-    expect(seen).toEqual(["she's had, em, chest pain since morning time."]);
+    expect(seen).toEqual(["she's had chest pain since morning time."]);
     listen.close();
     await rt.stop();
   });
