@@ -8,4 +8,5 @@ coverage/
 *.log
 .DS_Store
 .claude/
-docs/
+docs/*
+!docs/CONTRIBUTIONS.md

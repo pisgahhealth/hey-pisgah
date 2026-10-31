@@ -8,7 +8,7 @@ import { readStream } from "@hey-pisgah/store";
 import { Registry, type Facts } from "@hey-pisgah/workflow";
 import { PROPOSALS_STREAM, runValidationStream } from "@hey-pisgah/evaluator";
 import { openStream } from "@hey-pisgah/store";
-import { adoptionApproval } from "./approval.js";
+import { adoptedByPerson, adoptionApproval } from "./approval.js";
 import { adoptionLive } from "./adoption-live.js";
 import { adverseCase } from "./adverse.js";
 import { devDistribution, devFields } from "./dev-distribution.js";
@@ -174,8 +174,8 @@ if (argv[0] === "child") {
       measured_at: new Date().toISOString(), measured: true, source: "simulator_demo_cases", set: "demo", measured_in: "simulator",
       proposal: { adopted: (created["meta"] as Row)["proposal_id"], parent: flag("parent") ?? null, ops: created["ops"], scope: created["scope"], trade_offs: flag("trade-offs") ? JSON.parse(flag("trade-offs")!) : null },
       version: v, definition_hash: def.definition_hash, fallback_version: def.fallback_version,
-      // The record names a person in the ward manager role; whether that person decided themselves is human_approval below.
-      adopted_by_person: approver["kind"] === "person" && approver["role"] === "ward_manager", approver: approver["display_name"], approver_id: approver["staff_id"],
+      // The ward manager role and a person's own adoption are read apart; whether that person's approval still stands is human_approval below.
+      ...adoptedByPerson(approver), approver: approver["display_name"], approver_id: approver["staff_id"],
       ...adoptionApproval(log, v),
       fresh_applicable: {
         ...app, resolved_version: desk.registry.current(facts(String(app["case_id"]))).version,
@@ -285,6 +285,17 @@ if (argv[0] === "child") {
   };
   writeFileSync(file, `${JSON.stringify(next, null, 1)}\n`);
   console.log(JSON.stringify({ adverse: adverse["case_id"], adverse_min: adverse["wait_delta_min"], rev: [dist["shorter"], dist["longer"], unchanged], status: report.status, deploy }));
+} else if (argv[0] === "approval") {
+  // Re-reads who adopted the version and whether a person approved it from the adoption record into improve.json; the measured fields stay as they are.
+  const file = need("file");
+  const cur = JSON.parse(readFileSync(file, "utf8")) as Row;
+  const log = readStream(need("store"), VERSIONS_STREAM).map((e) => ({ record_type: e.record_type, wall_at: e.wall_at, payload: e.payload }));
+  const v = Number(cur["version"]);
+  const adopted = log.find((r) => r.record_type === "version.adopted" && Number((r.payload as Row)["version"]) === v);
+  if (!adopted) throw new Error(`no adoption record for version ${v}`);
+  const next: Row = { ...cur, ...adoptedByPerson(((adopted.payload as Row)["approver"] ?? {}) as Row), ...adoptionApproval(log, v) };
+  writeFileSync(file, `${JSON.stringify(next, null, 1)}\n`);
+  console.log(JSON.stringify({ adopted_by_person: next["adopted_by_person"], adopted_by_person_role: next["adopted_by_person_role"], human_approval: next["human_approval"] }));
 } else if (argv[0] === "dev") {
   // Adds the dev-case distribution to an existing improve.json without touching its measured fields.
   const store = need("store");
@@ -295,6 +306,6 @@ if (argv[0] === "child") {
   writeFileSync(file, `${JSON.stringify({ ...cur, measured_in: "simulator", dev_distribution: dev, ...devFields(dev) }, null, 1)}\n`);
   console.log(JSON.stringify(devFields(dev)));
 } else {
-  console.log("improve child --parent-file f --parent id --wards A --note text --out f | improve report --store dir --applicable task --withheld task [--profile f] [--journey-version f] [--stay-offer f --stay-offer-v1 f] [--journey-blocked reason] --out f | improve dev --store dir --file improve.json");
+  console.log("improve child --parent-file f --parent id --wards A --note text --out f | improve report --store dir --applicable task --withheld task [--profile f] [--journey-version f] [--stay-offer f --stay-offer-v1 f] [--journey-blocked reason] --out f | improve approval --store dir --file improve.json | improve dev --store dir --file improve.json");
   process.exit(2);
 }

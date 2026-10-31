@@ -665,7 +665,7 @@
       "acceptance": {
         "command": "version adopt through serve, two live demo tasks, the version offer read on a live stay and the fresh EMR journey, then npx tsx apps/cli/src/improve.ts report --profile <EMR profile> --stay-offer f --stay-offer-v1 f [--journey-version f | --journey-blocked reason]; then the fresh-stay loop (packages/pisgah-adapter/test/f5loop.sandbox.test.ts) and npx tsx apps/cli/src/improve.ts loop --file evaluation/results/improve.json --store <version store> --applicable-run f --withheld-run f",
         "result_path": "evaluation/results/improve.json",
-        "predicate": "adopted_by_person == true && human_approval == true && deployable == true && emr_offers_made >= 1 && fresh_applicable.executed_differently == true && fresh_applicable.actions_open == 0 && fresh_applicable.state == 'done' && withheld.version_withheld == true && withheld.actions_open == 0 && withheld.state == 'done' && emr_loop_complete == true ; amber: adopted_by_person == true && deployable == true && emr_offer_seen == true && fresh_applicable.executed_differently == true && withheld.version_withheld == true && emr_loop_complete == true",
+        "predicate": "adopted_by_person == true && human_approval == true && deployable == true && emr_offers_made >= 1 && fresh_applicable.executed_differently == true && fresh_applicable.actions_open == 0 && fresh_applicable.state == 'done' && withheld.version_withheld == true && withheld.actions_open == 0 && withheld.state == 'done' && emr_loop_complete == true ; amber: adopted_by_person_role == true && deployable == true && emr_offer_seen == true && fresh_applicable.executed_differently == true && withheld.version_withheld == true && emr_loop_complete == true",
         "measured_on": "dev"
       },
       "wording": {
@@ -1198,6 +1198,19 @@
         }
       },
       "reason": "Review 4 item 7: the dev distribution now names its adverse case and why (c-ad742d69: the round entry reached the record 226 minutes after the round, after sign-off, and version 2 starts the draft only after the round entry is in the record, so the wait grew 167 minutes), and the scope change the dev gate validated as revision p-0ff1535c (parent p-494e0f14): the draft starts at the round entry or at sign-off, whichever the record shows first; 4 shorter, 0 longer, 11 unchanged, not adopted. The EMR loop reason now says the nurse's lines were typed and names a reused ward B stay. The predicate is unchanged."
+    },
+    {
+      "date": "2026-10-31",
+      "by": "STAGE1",
+      "claims": [
+        "C-27"
+      ],
+      "previous_predicate": {
+        "result_path": "evaluation/results/improve.json",
+        "predicate": "adopted_by_person == true && human_approval == true && deployable == true && emr_offers_made >= 1 && fresh_applicable.executed_differently == true && fresh_applicable.actions_open == 0 && fresh_applicable.state == 'done' && withheld.version_withheld == true && withheld.actions_open == 0 && withheld.state == 'done' && emr_loop_complete == true ; amber: adopted_by_person == true && deployable == true && emr_offer_seen == true && fresh_applicable.executed_differently == true && withheld.version_withheld == true && emr_loop_complete == true",
+        "command": "version adopt through serve, two live demo tasks, the version offer read on a live stay and the fresh EMR journey, then npx tsx apps/cli/src/improve.ts report --profile <EMR profile> --stay-offer f --stay-offer-v1 f [--journey-version f | --journey-blocked reason]; then the fresh-stay loop (packages/pisgah-adapter/test/f5loop.sandbox.test.ts) and npx tsx apps/cli/src/improve.ts loop --file evaluation/results/improve.json --store <version store> --applicable-run f --withheld-run f"
+      },
+      "reason": "improve.json now keeps the ward manager role (adopted_by_person_role) apart from a person's own adoption (adopted_by_person), which is false when a build lane played the role. Amber reads the role, as its wording already says the adoption was the disclosed synthetic ward manager's; green still needs adopted_by_person and human_approval. Nothing was loosened."
     }
   ]
 }
