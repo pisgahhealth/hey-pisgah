@@ -27,7 +27,9 @@ const cyc = flag("cycle-run");
 if (cyc && flag("cycle2")) {
   const [storeRoot, runId] = cyc.split("=");
   const load = (f: string | undefined) => (f && existsSync(f) ? loadObserved(f) : []);
-  write(flag("cycle2"), cycle2Result(storeRoot!, runId!, { observed: load(flag("observed")), outcomes: load(flag("outcomes")) }));
+  const improve = flag("improve") ?? "evaluation/results/improve.json";
+  const adoptedOps = existsSync(improve) ? ((JSON.parse(readFileSync(improve, "utf8")) as { proposal?: { ops?: unknown[] } }).proposal?.ops ?? []) : [];
+  write(flag("cycle2"), cycle2Result(storeRoot!, runId!, { observed: load(flag("observed")), outcomes: load(flag("outcomes")), adoptedOps }));
 }
 if (flag("adoption") && flag("demo-runs") && flag("emr-version") && flag("version-log")) {
   const adopted = readFileSync(flag("version-log")!, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as { record_type: string; payload: Row }).find((e) => e.record_type === "version.adopted");

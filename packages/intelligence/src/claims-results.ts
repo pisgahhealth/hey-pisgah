@@ -1,4 +1,4 @@
-import { LedgerRow, type HypothesisRecord, type WorkflowChangeProposal } from "@hey-pisgah/contracts";
+import { LedgerRow, canonical, type HypothesisRecord, type WorkflowChangeProposal } from "@hey-pisgah/contracts";
 import { readStream } from "@hey-pisgah/store";
 import { loadV1 } from "@hey-pisgah/hospital";
 import { outcomeComparison } from "./outcomes.js";
@@ -32,7 +32,14 @@ export function discoveryClaims(discovery: Row): Row {
 }
 
 // The second cycle as a result: what it read, how it ended, and whether any earlier hypothesis was cited as evidence.
-export function cycle2Result(storeRoot: string, runId: string, o: { observed: readonly OutcomeCase[]; outcomes: readonly OutcomeCase[] }): Row {
+// How C-10's wording says each second-cycle result.
+const RESULT_SAID: Record<string, string> = {
+  new_proposal: "a new proposal", revision: "a revision of a proposal", re_proposed_adopted: "the adopted change proposed again, so it kept the change",
+  rollback_proposed: "a rollback proposed for a person to decide", no_change_warranted: "no change warranted", insufficient_evidence: "insufficient evidence", no_result: "no result"
+};
+
+// With the adopted operations given, a dev-valid proposal that carries them again is labelled re_proposed_adopted rather than new_proposal.
+export function cycle2Result(storeRoot: string, runId: string, o: { observed: readonly OutcomeCase[]; outcomes: readonly OutcomeCase[]; adoptedOps?: readonly unknown[] }): Row {
   const log = readStream(storeRoot, sessionStreamId(runId));
   const opened = (log.find((e) => e.record_type === "session.opened")?.payload ?? null) as Row | null;
   const stopped = (log.find((e) => e.record_type === "session.stopped")?.payload ?? null) as Row | null;
@@ -60,7 +67,8 @@ export function cycle2Result(storeRoot: string, runId: string, o: { observed: re
   const readOf = (s: string) => bySource(s).filter((id) => read.has(id));
   const cited = (s: string) => new Set(citedEvents.filter((id) => pool.event(id) && pool.get(pool.event(id)!.case_id)!.source === s)).size;
   const valid = reports.some((r) => r["status"] === "dev_validated");
-  const result = valid ? (props.some((p) => p.parent_proposal_id) ? "revision" : "new_proposal") : declared?.["result"] === "rollback_proposed" ? "rollback_proposed" : declared?.["result"] === "no_change_warranted" ? "no_change_warranted" : declared?.["result"] === "insufficient_evidence" ? "insufficient_evidence" : "no_result";
+  const again = !!o.adoptedOps?.length && props.some((p) => repeatsAdopted(p.ops, o.adoptedOps!));
+  const result = valid ? (props.some((p) => p.parent_proposal_id) ? "revision" : again ? "re_proposed_adopted" : "new_proposal") : declared?.["result"] === "rollback_proposed" ? "rollback_proposed" : declared?.["result"] === "no_change_warranted" ? "no_change_warranted" : declared?.["result"] === "insufficient_evidence" ? "insufficient_evidence" : "no_result";
   const rows = readStream(storeRoot, `ledger/${runId}`).filter((e) => e.record_type === "model.call").map((e) => LedgerRow.parse(e.payload));
   return {
     measured_at: new Date().toISOString(), measured: true, source: "cycle2_run", set: "dev", run_id: runId,
@@ -80,7 +88,7 @@ export function cycle2Result(storeRoot: string, runId: string, o: { observed: re
       return declared?.["result"] === "insufficient_evidence" || declared?.["result"] === "rollback_proposed" || (valid && cites);
     })(),
     hypotheses: hyps.length, proposals: props.length, validations: reports.map((r) => r["status"]),
-    result, declared: declared ? { result: declared["result"], note: declared["note"] } : null,
+    result, result_said: RESULT_SAID[result] ?? result, declared: declared ? { result: declared["result"], note: declared["note"] } : null,
     stop: stopped ? `${String(stopped["stop"])} (${String(stopped["detail"])})` : "not stopped",
     cycle2_result_recorded: result !== "no_result",
     no_hypothesis_cited_as_evidence: notEvents.length === 0 && foreignHyps.length === 0,
@@ -120,6 +128,11 @@ export function citedEventCount(storeRoot: string, runId: string): number {
   return new Set(readStream(storeRoot, STREAMS.hypotheses).filter((e) => e.record_type === "hypothesis.recorded" && (e.payload as Row)["session_id"] === runId).flatMap((e) => (e.payload as HypothesisRecord).evidence.map((x) => x.event_id))).size;
 }
 
+// Whether a proposal carries every adopted operation, compared on the whole operation with its nested fields.
+export function repeatsAdopted(ops: readonly unknown[], adoptedOps: readonly unknown[]): boolean {
+  return adoptedOps.every((a) => ops.some((b) => canonical(b) === canonical(a)));
+}
+
 export type PairResponse = "rollback_proposed" | "insufficient_evidence" | "proposed_revision" | "declined" | "re_proposed_adopted" | "no_change_warranted" | "other_proposal" | "no_response";
 // The answers that end a second cycle in a declared result on its outcomes: a rollback for a person to decide, a revision, or a result that keeps the version while citing the outcomes it weighed.
 export const DECLARED_RESPONSES: ReadonlySet<PairResponse> = new Set(["rollback_proposed", "proposed_revision", "no_change_warranted", "insufficient_evidence"]);
@@ -134,8 +147,7 @@ export function cycleResponse(storeRoot: string, runId: string, o: { observed: r
   const hyps = readStream(storeRoot, STREAMS.hypotheses).filter((e) => e.record_type === "hypothesis.recorded" && (e.payload as Row)["session_id"] === runId).map((e) => e.payload as unknown as HypothesisRecord);
   const adopted = r.outcome_comparison.after.filter((x) => x.workflow_version !== null && x.workflow_version !== 1).map((x) => x.case_id);
   const onAdopted = (id: string) => adopted.includes(pool.event(id)?.case_id ?? "");
-  const key = (x: unknown) => JSON.stringify(x, Object.keys(x as object).sort());
-  const repeats = (p: WorkflowChangeProposal) => o.adoptedOps.every((a) => p.ops.some((b) => key(b) === key(a)));
+  const repeats = (p: WorkflowChangeProposal) => repeatsAdopted(p.ops, o.adoptedOps);
   const citing = hyps.flatMap((h) => h.evidence.filter((e) => onAdopted(e.event_id)).map((e) => ({ hypothesis_id: h.hypothesis_id, event_id: e.event_id, stance: e.stance, status: h.status })));
   const propCites = props.flatMap((p) => p.evidence.event_ids.filter(onAdopted));
   const declaredCites = ((declared?.["evidence_event_ids"] as string[] | undefined) ?? []).filter(onAdopted);

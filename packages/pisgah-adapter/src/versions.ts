@@ -1,10 +1,16 @@
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { VERSIONS_STREAM, adoptedRegistry, caseFacts, versionWiring, type Encounter, type RequirementsNow, type VersionWiring } from "@hey-pisgah/agent";
+import { VERSIONS_STREAM, adoptedRegistry, caseFacts, versionWiring, type Encounter, type RequirementsNow, type VersionPick, type VersionSource, type VersionWiring } from "@hey-pisgah/agent";
 import type { WorkflowDefinition as WD } from "@hey-pisgah/contracts";
 import type { VersionsSpec } from "./profile.js";
 
-export type AdoptedForEmr = { def: WD; parent: WD | null; wiring: VersionWiring; log: { record_type: string; payload: unknown }[] };
+export type VersionRead = { log_hash: string; newest: VersionPick; latest: VersionPick; log: { record_type: string; payload: unknown }[]; source: VersionSource };
+export type AdoptedForEmr = {
+  readonly def: WD; readonly parent: WD | null; readonly log: { record_type: string; payload: unknown }[]; readonly log_hash: string | null; wiring: VersionWiring;
+  // Reads the person's version log again and returns what stands now, or null when it cannot be read.
+  refresh(): VersionRead | null;
+};
 
 // The workflow ward an encounter is on: from the watched ward fact through the profile's ward map, or the profile's one ward when it maps none; null while the record names no mapped ward.
 export function wardFor(v: VersionsSpec, encounter?: Encounter): string | null {
@@ -21,15 +27,36 @@ export const requirementsNow = (spec: () => VersionsSpec): ((encounter?: Encount
   return { ward_id: ward, requirement_version: v.requirement_version, facts: caseFacts({ ...v, ward_id: ward }) };
 };
 
-// Copies a person's version log into the run's store, replays it, and wires the version in force per encounter for this EMR, with the newest adopted version's withheld offers.
+// The person's version log is the authority: it is read on every use, mirrored into the run's store when its content changes, and replayed; a log that cannot be read leaves no version in use.
 export function adoptedForEmr(storeRoot: string, versionLog: string, spec: () => VersionsSpec): AdoptedForEmr {
-  const target = join(storeRoot, `${VERSIONS_STREAM}.jsonl`);
-  if (!existsSync(target)) {
-    mkdirSync(dirname(target), { recursive: true });
-    copyFileSync(versionLog, target);
-  }
-  const now = requirementsNow(spec);
-  const reg = adoptedRegistry(storeRoot);
+  const mirror = join(storeRoot, `${VERSIONS_STREAM}.jsonl`);
+  let last: VersionRead | null = null;
+  const refresh = (): VersionRead | null => {
+    let bytes: Buffer;
+    try { bytes = readFileSync(versionLog); } catch { last = null; return null; }
+    const hash = createHash("sha256").update(bytes).digest("hex");
+    if (last?.log_hash === hash) return last;
+    try {
+      mkdirSync(dirname(mirror), { recursive: true });
+      const tmp = `${mirror}.${process.pid}.tmp`;
+      writeFileSync(tmp, bytes);
+      renameSync(tmp, mirror);
+      const reg = adoptedRegistry(storeRoot);
+      last = { log_hash: hash, newest: reg.newest, latest: reg.latest, log: reg.log, source: { resolve: reg.resolve, newest: reg.latest, get: reg.get, reason: reg.reason!, log_hash: hash } };
+    } catch {
+      last = null;
+    }
+    return last;
+  };
+  const first = refresh();
+  if (!first) throw new Error(`the version log ${versionLog} cannot be read or replayed`);
   const v = spec();
-  return { def: reg.newest.def, parent: reg.newest.parent, log: reg.log, wiring: versionWiring({ def: reg.newest.def, parent: reg.newest.parent, counterparts: { steps: v.steps, events: v.events, documents: v.documents }, requirements: now, resolve: reg.resolve, newest: reg.newest }) };
+  const wiring = versionWiring({ def: first.newest.def, parent: first.newest.parent, counterparts: { steps: v.steps, events: v.events, documents: v.documents }, requirements: requirementsNow(spec), source: () => refresh()?.source ?? null });
+  return {
+    get def() { return (last ?? first).newest.def; },
+    get parent() { return (last ?? first).newest.parent; },
+    get log() { return (last ?? first).log; },
+    get log_hash() { return last?.log_hash ?? null; },
+    wiring, refresh
+  };
 }

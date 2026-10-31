@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -49,6 +49,64 @@ describe("the adopted version wired for an EMR", () => {
     expect(a.wiring.check(offer).ok).toBe(true);
     current = { ...current, requirement_version: "r2" };
     expect(a.wiring.check(offer)).toMatchObject({ ok: false, requirement_version: "r2" });
+  });
+});
+
+// The summary draft after the round entry, adopted for ward A only, then suspended in the source by a person.
+const ROUND_OPS = [{ op: "remove_soft_edge", edge_id: "e04" }, { op: "set_prep_trigger", target: { step: "st06" }, when: { after: { step: "st01" } } }];
+const WARD_A = { wards: ["A"], condition: null };
+function wardLog(): { root: string; file: string; suspend: (reason: string) => void } {
+  const root = mkdtempSync(join(tmpdir(), "vlog-a-"));
+  const v2 = Registry.load([loadV1()]).propose(1, ROUND_OPS as never, meta, { scope: WARD_A, fallback: 1 }).version!;
+  const s = openStream(root, VERSIONS_STREAM, { writer: true });
+  s.append("version.created", { version: 2, base_version: 1, ops: ROUND_OPS, scope: WARD_A, meta, definition_hash: v2.definition_hash }, { recorded_at: 0, occurred_at: 0 });
+  s.append("version.adopted", { version: 2, approver, at: { occurred_at: 0, recorded_at: 0, wall_at: "2026-10-31T07:00:00.000Z" }, scope: WARD_A, definition_hash: v2.definition_hash }, { recorded_at: 0, occurred_at: 0 });
+  s.close();
+  const suspend = (reason: string) => {
+    const w = openStream(root, VERSIONS_STREAM, { writer: true });
+    w.append("version.suspended", { version: 2, by: approver, reason, at: { occurred_at: 1, recorded_at: 1, wall_at: "2026-10-31T08:15:00.000Z" }, proposal: null }, { recorded_at: 1, occurred_at: 1 });
+    w.close();
+  };
+  return { root, file: join(root, `${VERSIONS_STREAM}.jsonl`), suspend };
+}
+const wardSpec = (): VersionsSpec => spec({
+  ward_fact: "stay.ward", wards: { "Children's Ward": "A", "Private Ward": "B" },
+  steps: { st01: { fact: "stay.round", equals: "recorded" }, st05: { fact: "discharge.stage", equals: "clinical_done" } },
+  documents: { "discharge_summary.draft": { kind: "draft_stay_summary", ask: "Say draft the summary." } }
+});
+const WARD_A_STAY = { "stay.ward": "Children's Ward", "stay.round": "recorded", "discharge.stage": "awaiting_sign_off" };
+
+describe("the version history is the authority for the running EMR", () => {
+  it("resolves version 1 on the next reading after a person suspends version 2 in the source, says why, and a restart agrees", () => {
+    const log = wardLog();
+    const store = mkdtempSync(join(tmpdir(), "emr-store-"));
+    const a = adoptedForEmr(store, log.file, wardSpec);
+    expect(a.wiring.rulesFor("nurse", ["draft_stay_summary"], WARD_A_STAY)).toMatchObject({ version: 2, offers: [{ step_id: "st06", kind: "draft_stay_summary" }] });
+    const before = a.log_hash;
+    log.suspend("drafts waited past sign-off on a late round entry");
+    const after = a.wiring.rulesFor("nurse", ["draft_stay_summary"], WARD_A_STAY)!;
+    expect(after.version).toBe(1);
+    // Version 1 offers the draft only at sign-off, not at the round entry.
+    expect(after.offers.map((o) => o.key)).toEqual(["v1:st06:discharge.stage=clinical_done:draft_stay_summary"]);
+    expect(after.log_hash).not.toBe(before);
+    const why = "version 2 was suspended by Synthetic ward manager (test) on 31 Oct, 09:15 (drafts waited past sign-off on a late round entry), so version 1 is in force";
+    expect(after.withheld).toMatchObject([{ version: 2, in_force: 1, step_id: "st06", reason: why }]);
+    expect(a.wiring.withdrawReason?.(2, WARD_A_STAY)).toBe(why);
+    // A restart reads the same source again rather than the copy it kept.
+    const b = adoptedForEmr(store, log.file, wardSpec);
+    expect(b.wiring.rulesFor("nurse", ["draft_stay_summary"], WARD_A_STAY)).toMatchObject({ version: 1, offers: [{ when: [{ fact: "discharge.stage" }] }] });
+    expect(b.wiring.withdrawReason?.(2, WARD_A_STAY)).toBe(why);
+  });
+
+  it("offers nothing while the source cannot be read, and resumes when it can", () => {
+    const log = wardLog();
+    const a = adoptedForEmr(mkdtempSync(join(tmpdir(), "emr-store-")), log.file, wardSpec);
+    const kept = readFileSync(log.file);
+    rmSync(log.file);
+    expect(a.wiring.rulesFor("nurse", ["draft_stay_summary"], WARD_A_STAY)).toBeNull();
+    expect(a.wiring.withdrawReason?.(2, WARD_A_STAY)).toMatch(/cannot be read/);
+    writeFileSync(log.file, kept);
+    expect(a.wiring.rulesFor("nurse", ["draft_stay_summary"], WARD_A_STAY)).toMatchObject({ version: 2 });
   });
 });
 

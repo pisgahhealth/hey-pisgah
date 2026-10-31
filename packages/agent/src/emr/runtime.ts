@@ -57,7 +57,9 @@ export type EmrRefusal = { line_id: string; kind: string | null; asked_for: stri
 export type QuestionChoice = Choice & { kind: string; base: Record<string, unknown>; corrects_action_id: string | null };
 // A question about a voice order is settled by the owner's own matched "yes" or "confirm", never by a model.
 export type OrderRule = { kind: "countersign"; args: WorkArgs } | { kind: "confirm" | "authorise"; action_id: string };
-export type EmrQuestion = { question_id: string; text: string; line_id: string; answered_by: string | null; at: string; choice: QuestionChoice | null; rule: OrderRule | null; pref_id: string | null };
+export type EmrQuestion = { question_id: string; text: string; line_id: string; answered_by: string | null; at: string; choice: QuestionChoice | null; rule: OrderRule | null; pref_id: string | null; offer: string | null };
+// One offer an adopted version made on this task, kept so it can be withdrawn while its work is still pending.
+export type MadeOffer = { offer: string; version: number; step_id: string; kind: string; at: string; withdrawn: string | null };
 // One use of a remembered preference in this task, or one it did not use and why, each with its source for the strip.
 export type PrefUse = { pref_id: string; field: string; value: string; text: string; scope: string; source: string; line_id: string; action_id: string | null; reason: string | null; at: string };
 // One comparison of the two readings before a vitals write.
@@ -66,7 +68,7 @@ export type EarsRecord = { action_id: string; line_id: string; session_id: strin
 export type WatchChange = { fact: string; label: string; from: string | null; to: string | null; at: string };
 export type EmrPause = { line_id: string | null; reason: string; at: string; pending: string[]; facts: Record<string, string | null> };
 // The adopted version as this task reads it: the offers it may make, what it says instead, and offers the monitor blocked.
-export type EmrVersionView = { version: number; definition_hash: string; offers: string[]; lines: string[]; blocked: { offer: string; requirement_version: string; conflict: string }[]; withheld?: { offer: string; version: number; reason: string }[] };
+export type EmrVersionView = { version: number; definition_hash: string; offers: string[]; lines: string[]; blocked: { offer: string; requirement_version: string; conflict: string }[]; withheld?: { offer: string; version: number; reason: string }[]; withdrawn?: { offer: string; version: number; reason: string; actions: string[] }[]; log_hash?: string | null };
 // Work held for a time or a record event; it fires once from the runtime's own timer and survives a restart because it lives in the task stream.
 export type EmrObligation = {
   obligation_id: string; line_id: string; kind: string; clause: Record<string, unknown>; title: string;
@@ -93,6 +95,7 @@ export type EmrTask = {
   // Work this owner's agent handed on or was handed, each state as the record showed it.
   delegations: EmrDelegation[];
   prefs: { applied: PrefUse[]; withheld: PrefUse[]; candidates: string[] };
+  madeOffers: MadeOffer[];
 };
 // The strip's view of one task.
 export type EmrTaskView = {
@@ -197,7 +200,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       run_id: String(x["run_id"]), goal: "", state: "running", reason: null, actions: new Map(), order: [], lines: [], questions: [], notes: [], refusals: [],
       calls: 0, usd: 0, fallbacks: 0, created_at: e.wall_at, updated_at: e.wall_at,
       watch: null, changes: [], offered: [], pages: [], pause: null, digests: [], ears: [], version: null, obligations: [], speed: [],
-      identities: [], unidentified: !!x["unidentified"], label: String(x["label"] ?? ""), delegations: [], prefs: { applied: [], withheld: [], candidates: [] }
+      identities: [], unidentified: !!x["unidentified"], label: String(x["label"] ?? ""), delegations: [], prefs: { applied: [], withheld: [], candidates: [] }, madeOffers: []
     };
   }
   if (!t) return null;
@@ -230,7 +233,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       break;
     }
     case "intent.failed": { const l = t.lines.find((y) => y.id === x["line_id"]); if (l) l.decided = true; break; }
-    case "question.asked": t.questions.push({ question_id: String(x["question_id"]), text: String(x["text"]), line_id: String(x["line_id"]), answered_by: null, at: e.wall_at, choice: (x["choice"] as QuestionChoice | undefined) ?? null, rule: (x["rule"] as OrderRule | undefined) ?? null, pref_id: (x["pref_id"] as string | undefined) ?? null }); break;
+    case "question.asked": t.questions.push({ question_id: String(x["question_id"]), text: String(x["text"]), line_id: String(x["line_id"]), answered_by: null, at: e.wall_at, choice: (x["choice"] as QuestionChoice | undefined) ?? null, rule: (x["rule"] as OrderRule | undefined) ?? null, pref_id: (x["pref_id"] as string | undefined) ?? null, offer: (x["offer"] as string | undefined) ?? null }); break;
     case "speaker.attributed": { const l = t.lines.find((y) => y.id === x["line_id"]); if (l) l.speaker = x["speaker"] as SpeakerRecord; break; }
     case "action.authorised": if (act) { act.awaiting = x["awaiting"] === "confirm" ? "confirm" : null; if (x["as"] === "confirm") act.confirmed_by_line = String(x["line_id"]); else act.authorised_by_line = String(x["line_id"]); } break;
     case "preference.applied": t.prefs.applied.push({ ...(x as PrefUse), at: e.wall_at }); break;
@@ -283,9 +286,19 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       for (const c of (x["changes"] as Omit<WatchChange, "at">[]) ?? []) t.changes.push({ ...c, at: e.wall_at });
       break;
     }
-    case "offer.made": t.offered.push(String(x["offer"])); break;
+    case "offer.made":
+      t.offered.push(String(x["offer"]));
+      if (x["version"] !== undefined) t.madeOffers.push({ offer: String(x["offer"]), version: Number(x["version"]), step_id: String(x["step_id"] ?? ""), kind: String(x["kind"] ?? String(x["offer"]).split(":").at(-1)), at: e.wall_at, withdrawn: null });
+      break;
+    case "version.offer_withdrawn": {
+      const o = t.madeOffers.find((y) => y.offer === x["offer"] && !y.withdrawn);
+      if (o) o.withdrawn = String(x["reason"]);
+      for (const q of t.questions) if (q.answered_by === null && q.offer === x["offer"]) q.answered_by = `withdrawn:${String(x["offer"])}`;
+      t.version?.withdrawn?.push({ offer: String(x["offer"]), version: Number(x["version"]), reason: String(x["reason"]), actions: (x["actions"] as string[] | undefined) ?? [] });
+      break;
+    }
     case "version.offer_withheld": t.offered.push(String(x["offer"])); t.version?.withheld?.push({ offer: String(x["offer"]), version: Number(x["version"]), reason: String(x["reason"]) }); break;
-    case "version.rules": t.version = { version: Number(x["version"]), definition_hash: String(x["definition_hash"]), offers: (x["offers"] as string[]) ?? [], lines: (x["lines"] as string[]) ?? [], blocked: [], withheld: [] }; break;
+    case "version.rules": t.version = { version: Number(x["version"]), definition_hash: String(x["definition_hash"]), offers: (x["offers"] as string[]) ?? [], lines: (x["lines"] as string[]) ?? [], blocked: [], withheld: [], withdrawn: [], log_hash: (x["log_hash"] as string | null | undefined) ?? null }; break;
     case "version.check_failed": {
       t.offered.push(String(x["offer"]));
       t.version?.blocked.push({ offer: String(x["offer"]), requirement_version: String(x["requirement_version"]), conflict: String(x["conflict"]) });
@@ -1921,8 +1934,8 @@ export class EmrRuntime {
   private note(l: Live, text: string): void {
     this.append(l, "task.note", { note_id: `n-${shortHash(l.task.task_id, l.task.notes.length + 1)}`, text });
   }
-  private ask(l: Live, lineId: string, text: string, choice: QuestionChoice | null = null, rule: OrderRule | null = null): void {
-    this.append(l, "question.asked", { question_id: `q-${shortHash(l.task.task_id, l.task.questions.length + 1)}`, line_id: lineId, text: text.slice(0, rule ? 900 : 300), ...(choice ? { choice } : {}), ...(rule ? { rule } : {}) });
+  private ask(l: Live, lineId: string, text: string, choice: QuestionChoice | null = null, rule: OrderRule | null = null, offer: string | null = null): void {
+    this.append(l, "question.asked", { question_id: `q-${shortHash(l.task.task_id, l.task.questions.length + 1)}`, line_id: lineId, text: text.slice(0, rule ? 900 : 300), ...(choice ? { choice } : {}), ...(rule ? { rule } : {}), ...(offer ? { offer } : {}) });
   }
 
   private applyDecision(l: Live, lineId: string, d: Decide, _prov: Provenance): void {
@@ -2157,13 +2170,20 @@ export class EmrRuntime {
     if (!v) return;
     const t = l.task;
     const rules = v.rulesFor(t.owner, kinds, facts);
-    if (!rules) return;
-    if (!t.version || t.version.version !== rules.version) {
-      this.append(l, "version.rules", { version: rules.version, definition_hash: rules.definition_hash, parent_version: rules.parent_version, offers: rules.offers.map((o) => o.key), lines: rules.lines, readings: rules.readings });
+    if (rules && (!t.version || t.version.version !== rules.version)) {
+      this.append(l, "version.rules", { version: rules.version, definition_hash: rules.definition_hash, parent_version: rules.parent_version, offers: rules.offers.map((o) => o.key), lines: rules.lines, readings: rules.readings, log_hash: rules.log_hash ?? null });
       for (const line of rules.lines) this.note(l, line);
     }
+    // An offer made under a version the history no longer puts in force here is withdrawn while its work is pending.
+    for (const e of t.madeOffers.filter((x) => !x.withdrawn && this.offerPending(t, x))) {
+      const why = v.withdrawReason ? v.withdrawReason(e.version, facts) : rules && rules.version !== e.version ? `version ${e.version} is no longer in force here` : null;
+      if (why) this.withdraw(l, e, why, rules?.version ?? null);
+    }
+    if (!rules) return;
     for (const o of rules.offers) {
       if (t.offered.includes(o.key) || !o.when.every((w) => facts[w.fact] === w.equals)) continue;
+      // A trigger met more than one way offers once per step.
+      if (t.madeOffers.some((e) => e.version === o.version && e.step_id === o.step_id)) continue;
       if (t.order.some((id) => t.actions.get(id)!.kind === o.kind && t.actions.get(id)!.state !== "cancelled")) continue;
       const c = v.check(o, facts);
       if (!c.ok) {
@@ -2172,16 +2192,54 @@ export class EmrRuntime {
         this.note(l, c.conflict);
         continue;
       }
-      this.append(l, "offer.made", { offer: o.key, version: o.version, step_id: o.step_id, requirement_version: c.requirement_version });
-      this.ask(l, t.lines.at(-1)?.id ?? "watch", o.ask);
+      this.append(l, "offer.made", { offer: o.key, version: o.version, step_id: o.step_id, kind: o.kind, requirement_version: c.requirement_version });
+      this.ask(l, t.lines.at(-1)?.id ?? "watch", o.ask, null, null, o.key);
       this.settle(l, "offered");
     }
-    // The newest adopted version's offer at its own trigger point, kept from this patient by its scope, is recorded once with the reason.
+    // The newest adopted version's offer at its own trigger point, kept from this patient by its scope or a person's suspension, is recorded once with the reason.
     for (const w of rules.withheld ?? []) {
       if (t.offered.includes(w.key) || !w.when.every((x) => facts[x.fact] === x.equals)) continue;
+      // An offer this task already had, since withdrawn, or another way of meeting the same step, is not told again.
+      if (t.madeOffers.some((e) => e.version === w.version && e.step_id === w.step_id) || t.offered.some((k) => k.startsWith(`withheld:v${w.version}:${w.step_id}:`))) continue;
       this.append(l, "version.offer_withheld", { offer: w.key, version: w.version, in_force: w.in_force, step_id: w.step_id, document_id: w.document_id, stage: w.stage, kind: w.kind, ward_id: rules.ward_id ?? null, reason: w.reason });
       this.note(l, `Not offered: ${w.reason}.`);
     }
+  }
+
+  // The live version offer an action answers: the offered kind, or the save of its draft, proposed after the offer.
+  private offerOf(t: EmrTask, a: EmrAction): MadeOffer | null {
+    const at = Date.parse(a.proposed_at);
+    for (const e of [...t.madeOffers].reverse()) {
+      if (e.withdrawn || at < Date.parse(e.at) || !this.offerKind(e, a)) continue;
+      // Once the offered work is done, later work of that kind is the clinician's own.
+      const done = this.offerDoneAt(t, e);
+      if (done !== null && at > done) continue;
+      return e;
+    }
+    return null;
+  }
+  private offerKind(e: MadeOffer, a: EmrAction): boolean {
+    return a.kind === e.kind || (a.kind === "record_note" && !!SAVED_DRAFTS[e.kind] && a.args["label"] === SAVED_DRAFTS[e.kind]);
+  }
+  // When the offered work finished: its draft saved, or for a kind with no draft, the work itself completed; null while it has not.
+  private offerDoneAt(t: EmrTask, e: MadeOffer): number | null {
+    const saveKind = SAVED_DRAFTS[e.kind];
+    const done = t.order.map((id) => t.actions.get(id)!).filter((a) => a.state === "completed" && Date.parse(a.proposed_at) >= Date.parse(e.at) && (saveKind ? a.kind === "record_note" && a.args["label"] === saveKind : a.kind === e.kind)).map((a) => Date.parse(a.completed_at ?? a.proposed_at));
+    return done.length ? Math.min(...done) : null;
+  }
+  // Whether an offer still has work to come: unanswered, or answered with its work not yet sent or its draft not yet saved.
+  private offerPending(t: EmrTask, e: MadeOffer): boolean {
+    if (this.offerDoneAt(t, e) !== null) return false;
+    return !t.order.map((id) => t.actions.get(id)!).some((a) => this.offerOf(t, a) === e && (a.state === "sent" || a.state === "uncertain" || a.state === "acknowledged"));
+  }
+  // Closes an offer the version history no longer stands behind: its questions are answered as withdrawn, its unsent work is cancelled, and the strip says why.
+  private withdraw(l: Live, e: MadeOffer, reason: string, inForce: number | null): void {
+    const t = l.task;
+    const cancel = t.order.map((id) => t.actions.get(id)!).filter((a) => a.state === "proposed" && this.offerOf(t, a) === e).map((a) => a.action_id);
+    for (const id of cancel) this.append(l, "action.cancelled", { action_id: id, reason: "version_withdrawn" });
+    this.append(l, "version.offer_withdrawn", { offer: e.offer, version: e.version, in_force: inForce, step_id: e.step_id, kind: e.kind, reason, actions: cancel });
+    this.note(l, `Withdrawn: ${reason}. The offer from version ${e.version} is closed${cancel.length ? " and its work was not sent" : ""}.`);
+    this.settle(l, "offer_withdrawn");
   }
 
   // Under lever 1 an action proposed while its own line is decided is held from the end of that line; held work, a resume or a restart gets the whole hold again.
@@ -2242,6 +2300,10 @@ export class EmrRuntime {
     if (!a) return;
     if (a.state === "proposed") {
       if (t.state !== "running" || a.awaiting) return;
+      // Work answering a version's offer runs only while the version history still puts that version in force for this patient.
+      const fromOffer = this.offerOf(t, a);
+      const stale = fromOffer && this.o.versions?.withdrawReason ? this.o.versions.withdrawReason(fromOffer.version, t.watch ?? {}) : null;
+      if (fromOffer && stale) return this.withdraw(l, fromOffer, stale, null);
       if (!(await this.earsAgree(l, a))) return;
       if (!(await this.doseAgreed(l, a))) return;
       // A note section is sent with every section already written, so the draft always holds the whole note as it stands.
@@ -2300,7 +2362,7 @@ export class EmrRuntime {
       this.sweepObligations();
     }
     if (a.kind === "draft_handover" && a.draft) this.ask(l, a.line_id, `Handover draft for your review: "${a.draft.slice(0, 900)}" Say save the handover to record it, or tell me what to change.`);
-    if (a.kind === "draft_stay_summary" && a.draft) this.ask(l, a.line_id, `Summary draft for your review: "${a.draft.slice(0, 900)}" Say save the summary to record it on the stay, or tell me what to change.`);
+    if (a.kind === "draft_stay_summary" && a.draft) this.ask(l, a.line_id, `Summary draft for your review: "${a.draft.slice(0, 900)}" Say save the summary to record it on the stay, or tell me what to change.`, null, null, this.offerOf(t, a)?.offer ?? null);
     if (a.kind === "prepare_bill" && a.report) this.note(l, a.report);
     // A pay link read back from the bill proves only that the request is recorded.
     if (a.kind === "send_pay_link") this.note(l, PAY_LINK_VERIFIED_NOTE);

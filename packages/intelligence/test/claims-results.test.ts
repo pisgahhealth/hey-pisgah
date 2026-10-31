@@ -51,4 +51,23 @@ describe("learning claims read from the published runs", () => {
     r = cycle2Result(root, runId, { observed: [], outcomes: [] });
     expect(r).toMatchObject({ result: "no_change_warranted", cycle2_result_recorded: true, no_hypothesis_cited_as_evidence: false, cited_foreign_hypotheses: 1 });
   });
+
+  it("C-10 labels a dev-valid proposal that carries the adopted change again as re_proposed_adopted, not new_proposal", () => {
+    const root = mkdtempSync(join(tmpdir(), "cycle2-"));
+    const runId = "run-cyc00002";
+    const adopted = [{ op: "remove_soft_edge", edge_id: "e04" }, { op: "set_prep_trigger", target: { step: "st06" }, when: { after: { step: "st01" } } }];
+    const log = openStream(root, sessionStreamId(runId), { writer: true });
+    log.append("session.opened", { commitment: { revision: 13, hash: "x" }, settings: { effort: "medium" }, model: "m" }, Z);
+    log.append("proposal.linked", { proposal_id: "p-00000002" }, Z);
+    log.append("session.stopped", { stop: "dev_valid_proposal", detail: "p-00000002" }, Z);
+    log.close();
+    const p = openStream(root, STREAMS.proposals, { writer: true });
+    p.append("proposal.submitted", { proposal_id: "p-00000002", parent_proposal_id: null, ops: [{ edge_id: "e04", op: "remove_soft_edge" }, { op: "set_prep_trigger", when: { after: { step: "st01" } }, target: { step: "st06" } }], evidence: { hypothesis_ids: [], experiment_ids: [], event_ids: [] } }, Z);
+    p.close();
+    const v = openStream(root, STREAMS.validations, { writer: true });
+    v.append("validation.completed", { proposal_ref: { stream_id: STREAMS.proposals, seq: 1 }, report: { proposal_id: "p-00000002", status: "dev_validated" } }, Z);
+    v.close();
+    expect(cycle2Result(root, runId, { observed: [], outcomes: [], adoptedOps: adopted })).toMatchObject({ result: "re_proposed_adopted", result_said: "the adopted change proposed again, so it kept the change" });
+    expect(cycle2Result(root, runId, { observed: [], outcomes: [], adoptedOps: [adopted[0], { op: "set_prep_trigger", target: { step: "st06" }, when: { after: { step: "st02" } } }] })).toMatchObject({ result: "new_proposal" });
+  });
 });
