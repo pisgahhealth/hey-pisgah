@@ -17,16 +17,16 @@ async function door(specimen: string) {
     const url = new URL(req.url ?? "/", "http://door");
     const path = url.pathname.replace(/^\/d\//, "");
     const send = (s: number, j: unknown) => { res.writeHead(s, { "content-type": "application/json" }); res.end(JSON.stringify(j)); };
-    if (req.method === "GET" && path === "lab/receive") return send(200, { orderId: url.searchParams.get("orderId"), caseId: CASE, caseVersion: 4, caseState: st.caseState, specimenState: st.specimen });
-    if (req.method === "POST" && path === "lab/receive") { st.posts.push({ path, body }); st.specimen = "processed"; return send(200, { ok: true, id: SPEC, status: "processed" }); }
-    if (req.method === "POST" && path === "lab/cancel") { st.posts.push({ path, body }); st.caseState = "cancelled"; return send(200, { ok: true, id: CASE, status: "cancelled" }); }
+    if (req.method === "GET" && path === "bench/intake") return send(200, { orderId: url.searchParams.get("orderId"), caseId: CASE, caseVersion: 4, caseState: st.caseState, specimenState: st.specimen });
+    if (req.method === "POST" && path === "bench/intake") { st.posts.push({ path, body }); st.specimen = "processed"; return send(200, { ok: true, id: SPEC, status: "processed" }); }
+    if (req.method === "POST" && path === "bench/void") { st.posts.push({ path, body }); st.caseState = "cancelled"; return send(200, { ok: true, id: CASE, status: "cancelled" }); }
     send(404, { error: { code: "not_found_opaque" } });
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   return { st, base: `http://127.0.0.1:${(server.address() as { port: number }).port}/d`, close: () => new Promise<void>((r) => server.close(() => r())) };
 }
 
-const read = { path: "lab/receive", query: { orderId: "$order_id" } };
+const read = { path: "bench/intake", query: { orderId: "$order_id" } };
 const profile = (base: string) => DoorProfile.parse({
   base_url: base, timeout_ms: 2000,
   headers: { on_behalf_of: "X-For", origin: "X-Origin", evidence: "X-Evidence", spoken_at: "X-Spoken", idempotency: "X-Key", replayed: "X-Replayed" },
@@ -37,12 +37,12 @@ const profile = (base: string) => DoorProfile.parse({
   },
   work: {
     receive_specimen: {
-      method: "POST", path: "lab/receive", body: { orderId: "$order_id", expectedVersion: "$case_version" },
+      method: "POST", path: "bench/intake", body: { orderId: "$order_id", expectedVersion: "$case_version" },
       before: [{ ...read, where: { specimenState: "collected" }, field: "caseVersion", vars: ["case_version"] }],
       ack: { id_path: "id", store: "lab_specimen" }, proof: { ...read, checks: { specimenState: "processed" } }
     },
     cancel_test: {
-      method: "POST", path: "lab/cancel", body: { caseId: "$case_id", expectedVersion: "$case_version", reasonCode: "$reason" },
+      method: "POST", path: "bench/void", body: { caseId: "$case_id", expectedVersion: "$case_version", reasonCode: "$reason" },
       before: [{ ...read, where: {}, field: "caseId", vars: ["case_id"] }, { ...read, where: {}, field: "caseVersion", vars: ["case_version"] }],
       ack: { id_path: "id", store: "lab_case" }, proof: { ...read, checks: { caseState: "cancelled" } }
     }
@@ -59,7 +59,7 @@ describe("lab writes over a flat pre-read", () => {
       const port = new PisgahPort(profile(d.base), { bearers: { [LAB]: "b-lab" } });
       const c = await port.commit("receive_specimen", args, "key-r-0001", prov);
       expect(c).toMatchObject({ ok: true, record_id: SPEC });
-      expect(d.st.posts).toEqual([{ path: "lab/receive", body: { orderId: ORDER, expectedVersion: 4 } }]);
+      expect(d.st.posts).toEqual([{ path: "bench/intake", body: { orderId: ORDER, expectedVersion: 4 } }]);
       expect(await port.prove("receive_specimen", args, c as never, prov)).not.toBeNull();
     } finally { await d.close(); }
   });
@@ -80,7 +80,7 @@ describe("lab writes over a flat pre-read", () => {
       const a = { ...args, reason: "requester_cancelled" };
       const c = await port.commit("cancel_test", a, "key-c-0001", prov);
       expect(c).toMatchObject({ ok: true, record_id: CASE });
-      expect(d.st.posts).toEqual([{ path: "lab/cancel", body: { caseId: CASE, expectedVersion: 4, reasonCode: "requester_cancelled" } }]);
+      expect(d.st.posts).toEqual([{ path: "bench/void", body: { caseId: CASE, expectedVersion: 4, reasonCode: "requester_cancelled" } }]);
       expect(await port.prove("cancel_test", a, c as never, prov)).not.toBeNull();
     } finally { await d.close(); }
   });

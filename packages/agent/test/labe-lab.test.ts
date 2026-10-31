@@ -22,7 +22,7 @@ class LabFake extends ClerkFake {
   private t = 0;
   override kindsFor(owner?: string): readonly string[] { return owner === LAB ? [NUDGE_KIND, ACK_KIND, RECEIVE_KIND, CANCEL_TEST_KIND] : [...CLERK_KINDS, "order_test", DELEGATE_KIND]; }
   orderables(): Orderables { return { tests: { fbc: ["full blood count", "FBC"], urinalysis: ["urinalysis", "urine test"] }, drugs: {} }; }
-  delegationHandoffs(owner: string) { return owner === DOC ? { order_test: { team: "lab", subject_table: "diagnostic_orders" } } : {}; }
+  delegationHandoffs(owner: string) { return owner === DOC ? { order_test: { team: "lab", subject_table: "bench_orders" } } : {}; }
   delegationSide(owner: string) { return owner === DOC ? ("delegator" as const) : ("assignee" as const); }
   delegationOwners(): readonly string[] { return [DOC, LAB]; }
   delegationTeams(owner: string): Record<string, DelegationTeam> { return owner === DOC ? TEAMS : {}; }
@@ -39,7 +39,7 @@ class LabFake extends ClerkFake {
     if (kind === "order_test") {
       const test = String(args["test"]);
       this.writes.push({ kind, args, key, prov, id: STATE[test]! });
-      return { ok: true, record_id: STATE[test]!, record_version: 1, event_ids: [`voice_order:${STATE[test]}`, `diagnostic_orders:${ORDER[test]}`], replayed: false };
+      return { ok: true, record_id: STATE[test]!, record_version: 1, event_ids: [`voice_order:${STATE[test]}`, `bench_orders:${ORDER[test]}`], replayed: false };
     }
     if (kind === DELEGATE_KIND) {
       const id = uuid();
@@ -80,7 +80,7 @@ const labAsks = (b: Awaited<ReturnType<typeof handed>>) => b.rt.views(LAB).flatM
 describe("LABE 4.1: the lab hand-off names the lab order", () => {
   it("hands the sent test to the lab about its diagnostic order, not the order's voice state", async () => {
     const b = await handed(["fbc"]);
-    expect(b.port.writes.find((w) => w.kind === DELEGATE_KIND)!.args).toMatchObject({ task_kind: "lab_order", subject_table: "diagnostic_orders", subject_id: ORDER["fbc"] });
+    expect(b.port.writes.find((w) => w.kind === DELEGATE_KIND)!.args).toMatchObject({ task_kind: "lab_order", subject_table: "bench_orders", subject_id: ORDER["fbc"] });
     await b.rt.stop();
   });
 });
