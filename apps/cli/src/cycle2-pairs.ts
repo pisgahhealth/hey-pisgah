@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadV1 } from "@hey-pisgah/hospital";
-import { DiscoveryPool, cycleResponse, loadObserved, reverseOutcomes } from "@hey-pisgah/intelligence";
+import { DiscoveryPool, cycle2Result, cycleResponse, loadObserved, reverseOutcomes } from "@hey-pisgah/intelligence";
 
 type Row = Record<string, unknown>;
 const SAID: Record<string, string> = { rollback_proposed: "proposed a rollback for a person to decide", proposed_revision: "proposed a revision", no_change_warranted: "kept the version", insufficient_evidence: "said the evidence is insufficient", re_proposed_adopted: "proposed the adopted change again", declined: "ended without a result", other_proposal: "proposed another change", no_response: "reached no result" };
@@ -25,7 +25,19 @@ export function pairsReport(o: { dir: string; pairs: [string, string][]; outcome
 }
 
 // npx tsx apps/cli/src/cycle2-pairs.ts --file evaluation/results/cycle2.json --dir <pairs dir> --pairs u1:r1,u2:r2,u3:r3 --cap 1.0 --revision 16 --how "<text>"
-if (process.argv[1]?.endsWith("cycle2-pairs.ts")) {
+// npx tsx apps/cli/src/cycle2-pairs.ts --relabel <store>=<run> --file evaluation/results/cycle2.json: the recorded run's result read again against the adopted operations; every other field stays as measured.
+if (process.argv[1]?.endsWith("cycle2-pairs.ts") && process.argv.includes("--relabel")) {
+  const argv = process.argv.slice(2);
+  const flag = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
+  const file = flag("file") ?? "evaluation/results/cycle2.json";
+  const [store, runId] = flag("relabel")!.split("=");
+  const cur = JSON.parse(readFileSync(file, "utf8")) as Row;
+  if (cur["run_id"] !== runId) throw new Error(`${file} records ${String(cur["run_id"])}, not ${runId}`);
+  const improve = JSON.parse(readFileSync(flag("improve") ?? "evaluation/results/improve.json", "utf8")) as { proposal: { ops: unknown[] } };
+  const r = cycle2Result(store!, runId!, { observed: loadObserved(flag("observed") ?? "evaluation/results/observed-cases.json"), outcomes: loadObserved(flag("outcomes") ?? "packages/intelligence/fixtures/outcomes/adopted-v2.json"), adoptedOps: improve.proposal.ops });
+  writeFileSync(file, `${JSON.stringify({ ...cur, result: r["result"], result_said: r["result_said"], result_before_relabel: cur["result_before_relabel"] ?? cur["result"] }, null, 1)}\n`);
+  console.log(JSON.stringify({ result: r["result"], was: cur["result"] }));
+} else if (process.argv[1]?.endsWith("cycle2-pairs.ts")) {
   const argv = process.argv.slice(2);
   const flag = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
   const file = flag("file") ?? "evaluation/results/cycle2.json";

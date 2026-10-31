@@ -98,13 +98,16 @@ describe("no learning words before the system has earned them", () => {
     mkdirSync(join(root, "evaluation", "results"), { recursive: true });
     writeFileSync(join(root, "evaluation", "claims.json"), JSON.stringify(withWord()));
     const run = () => claimsCheck(root, { commit: "abc1234", now: () => "2026-10-30T12:00:00.000Z" });
-    const cycle2 = (outcomes: number, responded: (boolean | null)[]) => writeFileSync(join(root, "evaluation", "results", "cycle2.json"), JSON.stringify({ read: { outcomes }, counter_evidence: { runs: responded.map((r) => ({ responded_to_contradiction: r })) } }));
+    const cycle2 = (outcomes: number, responded: (boolean | null)[], pairsMet = true) => writeFileSync(join(root, "evaluation", "results", "cycle2.json"), JSON.stringify({ read: { outcomes }, counter_evidence: { runs: responded.map((r) => ({ responded_to_contradiction: r })) }, reversed_pairs: { reversed_declared_met: pairsMet } }));
     expect(run).toThrow(/C-26 wording\.pass uses a learning word/);
     cycle2(2, []);
     expect(run).toThrow(/learning word/);
     cycle2(2, [true, false]);
     expect(run).toThrow(/learning word/);
     cycle2(0, [true]);
+    expect(run).toThrow(/learning word/);
+    // The paired reversed runs of the current revision must hold too, not only the last counter-evidence run.
+    cycle2(2, [false, true], false);
     expect(run).toThrow(/learning word/);
     cycle2(2, [false, true]);
     expect(learningEarned(root)).toEqual({ c10_reads_outcomes: true, reversed_evidence_passed: true });

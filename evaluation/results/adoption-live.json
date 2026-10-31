@@ -1,0 +1,107 @@
+{
+ "measured_at": "2026-10-31T07:13:43.946Z",
+ "measured": true,
+ "source": "sandbox_live_sequence",
+ "mode": "sandbox door through the VER serve: the doctor's admission and round entries written by his agent (scripted); the nurse's two lines typed to her serve and read by the live gate; adoption and suspension posted to the version desk in the ward manager's role by the VER build lane, disclosed; the EMR serve was not restarted between them",
+ "version": 2,
+ "definition_hash": "c6574e8e7111737a0dddedf0d0f2e7703a9124ad6a490c66d7429e7bbd6fd6b3",
+ "scope": {
+  "wards": [
+   "A"
+  ],
+  "condition": null
+ },
+ "version_log": {
+  "hash_before_adoption": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "hash_after_adoption": "e2a0f7a5413db3906373402ee7dc210783ff735a2cddd33a7b0c6cc75887a30d",
+  "hash_after_suspension": "7615e3ce4913e77e57101d3fe5700edbe1260e4a77eed5ed49bf03ae2dcedfc9",
+  "records": [
+   {
+    "seq": 1,
+    "record_type": "version.created",
+    "hash": "445db6aa7efa00b878bb7adc0dbb81656520e9b475313ec6cab8a519b5411459"
+   },
+   {
+    "seq": 2,
+    "record_type": "version.adopted",
+    "hash": "e2a0f7a5413db3906373402ee7dc210783ff735a2cddd33a7b0c6cc75887a30d"
+   },
+   {
+    "seq": 3,
+    "record_type": "version.suspended",
+    "hash": "7615e3ce4913e77e57101d3fe5700edbe1260e4a77eed5ed49bf03ae2dcedfc9"
+   }
+  ]
+ },
+ "adopted_at": "2026-10-31T07:08:35.021Z",
+ "suspended_at": "2026-10-31T07:12:19.650Z",
+ "suspension_reason": "On dev case c-ad742d69 the draft waited 167 minutes past sign-off for a round entry typed in late; suspended until a revision is reviewed",
+ "adopted_by_person_role": true,
+ "suspended_by_person_role": true,
+ "played_by_lane": true,
+ "human_approval": false,
+ "approval": {
+  "approver_id": "wm_a_synthetic_ver",
+  "kind": "person",
+  "at": "2026-10-31T07:08:34.891Z",
+  "display_name": "Synthetic Ward A manager (disclosed; a person's role played by the VER build lane)",
+  "played_by_lane": true,
+  "suspended_or_reverted": true,
+  "why": "suspended by wm_a_synthetic_ver after its adoption"
+ },
+ "adopted_by_own_person": false,
+ "suspended_by_own_person": false,
+ "human_decision": false,
+ "applicable": {
+  "ward_id": "A",
+  "version_in_force": 2,
+  "offers_made": 1,
+  "offer": "The round entry is on the stay. Say draft the summary when you want it drafted from the record.",
+  "saved_verified": true,
+  "note_by_nurse_agent": true,
+  "provenance_rows": 1,
+  "provenance_on_behalf_of_nurse": true,
+  "lines": "the nurse's two lines typed to her serve (draft, then save once reviewed), read by the live gate",
+  "calls": 2,
+  "cost_usd": 0.009585
+ },
+ "pending_offer": {
+  "version_in_force": 1,
+  "withdrawn": true,
+  "withdrawn_after_s": 14,
+  "questions_left": 0,
+  "note": "Withdrawn: version 2 was suspended by Synthetic Ward A manager (disclosed; a person's role played by the VER build lane) on 31 Oct, 08:12 (On dev case c-ad742d69 the draft waited 167 minutes past sign-off for a round entry typed in late; suspended until a revision is reviewed), so version 1 is in force. The offer from version 2 is closed."
+ },
+ "next_fresh": {
+  "version_in_force": 1,
+  "offers_made": 0,
+  "questions": 0,
+  "reason_is_suspension": true,
+  "note": "Not offered: version 2 was suspended by Synthetic Ward A manager (disclosed; a person's role played by the VER build lane) on 31 Oct, 08:12 (On dev case c-ad742d69 the draft waited 167 minutes past sign-off for a round entry typed in late; suspended until a revision is reviewed), so version 1 is in force."
+ },
+ "restart": {
+  "tasks": 3,
+  "all_version_1": true,
+  "questions": 0,
+  "withdrawn_once": true
+ },
+ "used_on_fresh_stay": true,
+ "suspension_took_effect": true,
+ "restart_agrees": true,
+ "sequence_complete": true,
+ "withdrawn_after_s": 14,
+ "suspension_shown": "version 2 was suspended by Synthetic Ward A manager (disclosed; a person's role played by the VER build lane) on 31 Oct, 08:12 (On dev case c-ad742d69 the draft waited 167 minutes past sign-off for a round entry typed in late; suspended until a revision is reviewed), so version 1 is in force",
+ "strip": {
+  "offer_shown": true,
+  "saved_shown": true,
+  "withdrawal_shown": false,
+  "why": "the strip follows the task with the newest line, action or waiting question, and a withdrawal or a not-offered note is neither, so after the suspension it shows the first stay's task; the reason is in the page task's notes and the serve's view"
+ },
+ "approver": "Synthetic Ward A manager (disclosed; a person's role played by the VER build lane)",
+ "planted_failure_detected": true,
+ "only_affected_blocked": true,
+ "approval_by_person": true,
+ "monitor_source": "evaluation/results/monitor.json (the planted ward B r2 check), copied so C-09 reads the monitor and the live suspension together",
+ "cost_usd": 0.009585,
+ "calls": 2
+}
