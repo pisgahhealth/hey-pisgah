@@ -475,7 +475,7 @@ export const emrIntentKey = (taskId: string, actionId: string, args: unknown) =>
 export const SPOKEN_PAUSE = /^(?:(?:ok(?:ay)?|right|sorry|wait)[,.!]?\s+)?(?:stop|hold on|hang on|pause)\b(?:[\s,.!-]+(?:i'?ll|i will|we'?ll|let me)\s+come back to (?:this|that|it|her|him)(?:\s+later)?)?[\s.!]*$|\bi'?ll come back to (?:this|that|it)\b/i;
 // "Sign everything" asks for the read-back of the owner's voice orders awaiting countersign; the yes that follows signs that batch.
 // Said the way clinicians say it: "let me sign everything for her", "I'll sign them all now", "sign that one too".
-export const SIGN_EVERYTHING = /^(?:(?:ok(?:ay)?|right|now|and|so)\s+)?(?:(?:let me|let's|lemme|i'll|i will|i want to|i'd like to)\s+)?(?:please\s+)?(?:countersign|sign)\s+(?:everything|it all|them all|all of (?:it|them)|all (?:the )?(?:voice )?orders|the orders|that one|this one|that|the new one|that last one)(?:\s+(?:too|as well|also))?(?:\s+for (?:her|him|them|this patient|the patient))?(?:\s+(?:now|please))?$/;
+export const SIGN_EVERYTHING = /^(?:(?:ok(?:ay)?|right|now|and|so)\s+)?(?:(?:let me|let's|lemme|i'll|i will|i want to|i'd like to)\s+)?(?:please\s+)?(?:countersign|sign)\s+(?:everything|it all|them all|all of (?:it|them)|all (?:the )?(?:voice )?orders|the orders|that one|this one|that|the new one|that last one)(?:\s+(?:too|to|as well|also))?(?:\s+for (?:her|him|them|this patient|the patient))?(?:\s+(?:now|please))?$/;
 // Work that needs the owner's explicit spoken confirmation of what was read back from the record (R-3).
 export const CONFIRM_KINDS: ReadonlySet<string> = new Set(["release_home"]);
 

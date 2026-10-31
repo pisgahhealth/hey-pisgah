@@ -191,7 +191,7 @@ describe("sign everything said the way clinicians say it (acceptance rehearsal, 
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z' ]+/g, " ").replace(/\s+/g, " ").trim();
   it("takes the natural forms and leaves other talk with sign in it alone", async () => {
     const { SIGN_EVERYTHING: rule } = await import("../src/emr/runtime.js");
-    for (const yes of ["Let me sign everything for her.", "Sign that one too.", "I'll sign them all now", "Okay, sign everything", "so let's sign the orders for him"]) expect(rule.test(norm(yes)), yes).toBe(true);
+    for (const yes of ["Let me sign everything for her.", "Sign that one too.", "I'll sign them all now", "Okay, sign everything", "so let's sign the orders for him", "Sign that one to"]) expect(rule.test(norm(yes)), yes).toBe(true);
     for (const no of ["she signed the consent", "sign her up for the clinic", "let me sign off the note later", "who will sign for the blood"]) expect(rule.test(norm(no)), no).toBe(false);
   });
 });
