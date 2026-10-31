@@ -440,7 +440,9 @@ async function runLine(line: Line): Promise<void> {
     if (vars["order_test"] && HOSPITAL === "sandbox") { const o = (await hospital.query("acc_order_for_test", { visit: vars["visit"] ?? "", test: vars["order_test"] }))[0]; vars["order_id"] = String(o?.["order_id"] ?? ""); }
     // A settle names the amount owed, so the stay's bill is read first, as the accounts person reads it on screen.
     if (line.op === "settle" && !vars["outstanding"] && hospital.hasPerson("bill")) { const b = await hospital.person("bill", vars); vars["outstanding"] = String((b.json as { bill?: { outstandingNgn?: string } } | null)?.bill?.outstandingNgn ?? "0.00"); }
-    if (HOSPITAL === "sandbox" && line.op === "acc_lab_result") { const r = await labResult(vars); note = r.note; if (!r.ok) errors.push(r.note); }
+    // In Samuel's run his own attestations are his, at the screen; the harness only waits for them.
+    if (DRIVER === "human" && line.who === "doctor") { process.stdout.write(`\n  AT THE SCREEN (${line.id}): ${line.note ?? line.op}\n  Press Enter here when done.\n`); await rl!.question(""); note = "done by Samuel at the screen"; }
+    else if (HOSPITAL === "sandbox" && line.op === "acc_lab_result") { const r = await labResult(vars); note = r.note; if (!r.ok) errors.push(r.note); }
     else if (HOSPITAL === "sandbox" && line.op === "acc_lab_cancel") { const r = await labCancelOnScreen(vars); note = r.note; if (!r.ok) errors.push(r.note); }
     else if (!hospital.hasPerson(line.op!)) { blocked = true; errors.push(`person op ${line.op} is not in the profile`); }
     else { const r = await hospital.person(line.op!, vars); note = `person ${line.op}: ${r.status} ${r.note ?? ""}`.trim(); if (!r.ok) errors.push(note); }
