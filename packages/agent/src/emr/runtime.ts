@@ -62,7 +62,7 @@ export type EmrRefusal = { line_id: string; kind: string | null; asked_for: stri
 export type QuestionChoice = Choice & { kind: string; base: Record<string, unknown>; corrects_action_id: string | null };
 // A question about a voice order is settled by the owner's own matched "yes" or "confirm", never by a model.
 export type OrderRule = { kind: "countersign"; args: WorkArgs } | { kind: "confirm" | "authorise"; action_id: string };
-export type EmrQuestion = { question_id: string; text: string; line_id: string; answered_by: string | null; at: string; choice: QuestionChoice | null; rule: OrderRule | null; pref_id: string | null; offer: string | null; pending?: PendingWork | null; whom?: WhomChoice | null; answered_at?: string | null };
+export type EmrQuestion = { question_id: string; text: string; line_id: string; answered_by: string | null; at: string; choice: QuestionChoice | null; rule: OrderRule | null; pref_id: string | null; offer: string | null; pending?: PendingWork | null; whom?: WhomChoice | null; answered_at?: string | null; floor?: PendingWork | null };
 // Work asked about for a missing value: the clause so far and the words it came from, so the answer is merged with it rather than read alone.
 export type PendingWork = { kind: string; clause: Record<string, unknown>; text: string };
 // A line that named another open patient without a switch phrase, held until the owner says which patient it is for.
@@ -178,6 +178,8 @@ export type EmrRuntimeOptions = {
   versions?: VersionWiring;
   // How often held work is checked for its time or condition; the runtime's own timer, since nothing else calls it.
   obligationTickMs?: number;
+  // How long an unanswered question waits before it closes with a note; 30 minutes when absent.
+  questionExpiryMs?: number;
   // The speed levers in force; each is off unless named, so a recorded run replays as it was made.
   speed?: Partial<SpeedLevers>;
   wallNow?: () => Date;
@@ -253,7 +255,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       break;
     }
     case "intent.failed": { const l = t.lines.find((y) => y.id === x["line_id"]); if (l) l.decided = true; break; }
-    case "question.asked": t.questions.push({ question_id: String(x["question_id"]), text: String(x["text"]), line_id: String(x["line_id"]), answered_by: null, at: e.wall_at, choice: (x["choice"] as QuestionChoice | undefined) ?? null, rule: (x["rule"] as OrderRule | undefined) ?? null, pref_id: (x["pref_id"] as string | undefined) ?? null, offer: (x["offer"] as string | undefined) ?? null, pending: (x["pending"] as PendingWork | undefined) ?? null, whom: (x["whom"] as WhomChoice | undefined) ?? null, answered_at: null }); break;
+    case "question.asked": t.questions.push({ question_id: String(x["question_id"]), text: String(x["text"]), line_id: String(x["line_id"]), answered_by: null, at: e.wall_at, choice: (x["choice"] as QuestionChoice | undefined) ?? null, rule: (x["rule"] as OrderRule | undefined) ?? null, pref_id: (x["pref_id"] as string | undefined) ?? null, offer: (x["offer"] as string | undefined) ?? null, pending: (x["pending"] as PendingWork | undefined) ?? null, whom: (x["whom"] as WhomChoice | undefined) ?? null, answered_at: null, floor: (x["floor"] as PendingWork | undefined) ?? null }); break;
     case "speaker.attributed": { const l = t.lines.find((y) => y.id === x["line_id"]); if (l) l.speaker = x["speaker"] as SpeakerRecord; break; }
     case "action.authorised": if (act) { act.awaiting = x["awaiting"] === "confirm" || x["awaiting"] === "repeat" ? x["awaiting"] : null; if (x["as"] === "confirm") act.confirmed_by_line = String(x["line_id"]); else if (x["as"] !== "repeat") act.authorised_by_line = String(x["line_id"]); } break;
     case "preference.applied": t.prefs.applied.push({ ...(x as PrefUse), at: e.wall_at }); break;
@@ -660,6 +662,7 @@ export class EmrRuntime {
   // The runtime's own clock for held work, and the obligations already queued to fire.
   private obTick: NodeJS.Timeout | null = null;
   private readonly firing = new Set<string>();
+  private readonly expiring = new Set<string>();
   // The latest result state of each order a task waits on, by record id, as the last read showed it.
   private readonly results = new Map<string, Map<string, OrderResult>>();
   // The levers in force, the line whose clauses are being applied now, second readings started with the gate, timings, and side work to wait for.
@@ -1213,6 +1216,7 @@ export class EmrRuntime {
     const line = t.lines.find((x) => x.id === lineId);
     if (!line || line.decided || t.state !== "running") return false;
     if (this.scopeByWord(l, lineId, line)) return true;
+    if (this.floorByRule(l, lineId, line)) return true;
     const q = (line.question_id ? t.questions.find((y) => y.question_id === line.question_id && (y.answered_by === null || y.answered_by === lineId)) : undefined) ?? t.questions.filter((y) => y.answered_by === null || y.answered_by === lineId).at(-1);
     // A tapped or typed answer bound to its question by id ignores the window; a spoken bare answer keeps it (D40).
     if (!q?.choice || (line.question_id !== q.question_id && Date.parse(line.at) - Date.parse(q.at) > (this.o.answerWindowMs ?? 120_000))) return false;
@@ -1223,6 +1227,32 @@ export class EmrRuntime {
     if (a === "no") { this.note(l, "Left it unwritten, as you said."); this.settle(l, "answered_no"); return true; }
     this.fresh = lineId;
     try { return this.applyAnswer(l, lineId, line, a, q.choice); } finally { this.fresh = null; }
+  }
+
+  // The floor question takes only the owner's bare yes or no, bound to that question as the latest shown (D38); "okay" or anything else writes nothing.
+  private floorByRule(l: Live, lineId: string, line: EmrLine): boolean {
+    const t = l.task;
+    const open = t.questions.filter((y) => y.answered_by === null);
+    const q = line.question_id ? open.find((y) => y.question_id === line.question_id) : open.at(-1);
+    if (!q?.floor || (line.question_id !== q.question_id && Date.parse(line.at) - Date.parse(q.at) > (this.o.answerWindowMs ?? 120_000))) return false;
+    const text = line.text.toLowerCase().replace(/[^a-z' ]+/g, " ").replace(/\s+/g, " ").trim();
+    const yes = text.split(" ").length <= 5 && OWNER_YES.test(text);
+    const no = text.split(" ").length <= 4 && OWNER_NO.test(text);
+    if (!yes && !no) return false;
+    const held = q.floor;
+    this.append(l, "line.ruled", { line_id: lineId, classes: ["instruction"], as: "answer", question_id: q.question_id });
+    // Another voice's yes or no leaves the question open for the owner.
+    this.whenAttributed(l, lineId, (who) => {
+      if (this.notOwnersWords(l, lineId, who, "floor_answer") || q.answered_by !== null) return this.settle(l, "floor_unanswered");
+      this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
+      if (no) { this.note(l, `Left it unwritten, as you said: "${held.text.slice(0, 160)}".`); return this.settle(l, "answered_no"); }
+      this.append(l, "line.resumed", { line_id: lineId, question_id: q.question_id, kind: held.kind });
+      const c = { ...held.clause, class: "instruction", kind: held.kind, confidence: 1 } as AnyClause;
+      if (held.kind === OBSERVATION_KIND) this.applyClause(l, lineId, c, 0, this.kinds(t.owner), this.provFor(t, { line_id: lineId } as EmrAction));
+      else this.applyWork(l, lineId, c, held.kind, {}, { text: held.text, count: null, own: line.text });
+      this.settle(l, "floor_yes");
+    });
+    return true;
   }
 
   private applyAnswer(l: Live, lineId: string, line: EmrLine, a: Record<string, string>, c: QuestionChoice): boolean {
@@ -1464,7 +1494,9 @@ export class EmrRuntime {
         this.unsureRepeat.set(lineId, unsure);
         try { return this.applyWork(l, lineId, c, c.kind); } finally { this.unsureRepeat.delete(lineId); }
       }
-      this.ask(l, lineId, unsure);
+      // An unsure instruction the owner may do is kept on its question, so the owner's bare yes charts it and no drops it.
+      const held = c.class === "instruction" && c.kind ? { kind: c.kind, clause: Object.fromEntries(Object.entries(c).filter(([k, v]) => v !== null && v !== undefined && !["confidence", "question", "asked_for"].includes(k))), text: lineText } : null;
+      this.ask(l, lineId, unsure, null, null, null, held);
       return;
     }
     // Work for a later time or a record event is held as an obligation; the clinician is never asked to say it again.
@@ -1983,6 +2015,11 @@ export class EmrRuntime {
     for (const l of this.live.values()) {
       const t = l.task;
       if (CLOSED_TASK.has(t.state) || t.state === "paused") continue;
+      const expiry = this.o.questionExpiryMs ?? 30 * 60_000;
+      if (!this.expiring.has(t.task_id) && t.questions.some((q) => q.answered_by === null && now - Date.parse(q.at) > expiry)) {
+        this.expiring.add(t.task_id);
+        this.enqueue(l, async () => { try { this.expireQuestions(l, expiry); } finally { this.expiring.delete(t.task_id); } });
+      }
       if (t.admission_id && t.obligations.some((o) => o.kind === "schedule_review" && o.state === "held" && !o.anchor_action_id)) this.enqueue(l, async () => this.anchorReviews(l));
       if (t.delegations.some((d) => d.ward_review === "held" && d.delegation_id) && this.onBed(t)) this.enqueue(l, async () => this.requestReviews(l));
       if (t.admission_id && t.patient_id && t.obligations.some((o) => o.kind === "schedule_review" && o.state !== "cancelled" && !this.reviewTried.has(o.obligation_id) && !t.delegations.some((d) => d.line_id === o.line_id))) {
@@ -2004,6 +2041,20 @@ export class EmrRuntime {
         this.enqueue(l, async () => { try { this.fire(l, o.obligation_id, timeCame ? "timer" : "condition"); } finally { this.firing.delete(o.obligation_id); } });
       }
     }
+  }
+
+  // An unanswered question closes after its wait with a note naming it, and the work it held is cancelled, so nothing is done on it later.
+  private expireQuestions(l: Live, expiry: number): void {
+    const t = l.task;
+    const now = this.wall().getTime();
+    const stale = t.questions.filter((q) => q.answered_by === null && now - Date.parse(q.at) > expiry);
+    for (const q of stale) {
+      this.append(l, "question.answered", { question_id: q.question_id, line_id: `expired:${q.question_id}` });
+      const held = q.rule && "action_id" in q.rule ? t.actions.get(q.rule.action_id) : undefined;
+      if (held?.state === "proposed") this.append(l, "action.cancelled", { action_id: held.action_id, reason: "question_expired" });
+      this.note(l, `No answer, so nothing was done: ${q.text.slice(0, 200)}`);
+    }
+    if (stale.length) this.settle(l, "question_expired");
   }
 
   // Fires one obligation exactly once: the fired record is journaled first, then its work is proposed from the words that asked for it.
@@ -2318,7 +2369,7 @@ export class EmrRuntime {
     this.append(l, "task.note", { note_id: `n-${shortHash(l.task.task_id, l.task.notes.length + 1)}`, text, kind });
   }
   // The same question still open is not asked again; work asked about again carries its newer clause onto that question.
-  private ask(l: Live, lineId: string, text: string, choice: QuestionChoice | null = null, rule: OrderRule | null = null, offer: string | null = null): void {
+  private ask(l: Live, lineId: string, text: string, choice: QuestionChoice | null = null, rule: OrderRule | null = null, offer: string | null = null, floor: PendingWork | null = null): void {
     // A confirm shows its order's ref, so the owner's yes is bound to that read-back.
     const n = rule && "action_id" in rule ? l.task.order.indexOf(rule.action_id) + 1 : 0;
     // A rule question is shown whole, so a long countersign read-back lists every order it signs.
@@ -2330,7 +2381,7 @@ export class EmrRuntime {
       this.renewed = same.question_id;
       return;
     }
-    this.append(l, "question.asked", { question_id: `q-${shortHash(l.task.task_id, l.task.questions.length + 1)}`, line_id: lineId, text: body, ...(choice ? { choice } : {}), ...(rule ? { rule } : {}), ...(offer ? { offer } : {}), ...(pending && !rule && !choice && !offer ? { pending } : {}) });
+    this.append(l, "question.asked", { question_id: `q-${shortHash(l.task.task_id, l.task.questions.length + 1)}`, line_id: lineId, text: body, ...(choice ? { choice } : {}), ...(rule ? { rule } : {}), ...(offer ? { offer } : {}), ...(floor ? { floor } : pending && !rule && !choice && !offer ? { pending } : {}) });
   }
 
   private applyDecision(l: Live, lineId: string, d: Decide & { spo2?: number | null }, _prov: Provenance): void {
