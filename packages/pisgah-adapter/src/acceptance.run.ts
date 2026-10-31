@@ -636,7 +636,7 @@ async function payTestAtDesk(vars: Record<string, string>): Promise<{ ok: boolea
   if (!orderId) return { ok: false, note: `no ${vars["order_test"]} order on the visit` };
   if (!process.env["ACC_LAB_CANCEL_SCRIPT"]) return { ok: false, note: "no web step for the desk payment" };
   const line = webStep("ACC_PAY_ORDER", orderId, "lab bill paid");
-  const paid = (await hospital.query("acc_test_prepaid", { order: orderId })).length > 0;
+  const paid = (await hospital.query("acc_test_prepaid", { visit: vars["visit"] ?? "", test: vars["order_test"] ?? "" })).length > 0;
   return { ok: paid, note: `accounts.bola's Record payment on the ${vars["order_test"]} lab bill (run for her): ${paid ? "paid" : line.slice(0, 200)}` };
 }
 
