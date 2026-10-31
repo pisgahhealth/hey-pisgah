@@ -758,7 +758,10 @@ export class EmrRuntime {
       // "hey Pisgah, emergency" heard in a transcript opens an arrival, unless the device already did within the last ten seconds.
       // Heard audio may carry the phrase the way the local ear writes it ("Heape is the emergency"); typed lines keep the strict phrase.
       if ((EMERGENCY_LINE.test(text) || (s.source === "audio" && emergencyHeardLoosely(text) && !/^\W*(?:hey|hi|hay|okay|ok)\W*emergency/i.test(text))) && this.kinds(s.owner).includes(EMERGENCY_KIND)) {
-        const recent = [...this.live.values()].some((x) => x.task.owner === s.owner && x.task.unidentified && Date.now() - Date.parse(x.task.created_at) < 10_000);
+        const recentTask = [...this.live.values()].find((x) => x.task.owner === s.owner && x.task.unidentified && Date.now() - Date.parse(x.task.created_at) < 10_000);
+        const recent = !!recentTask;
+        // The device already opened the arrival for these words, so a line that is only the phrase is the wake itself and never reaches the gate or a note.
+        if (recentTask && text.replace(/^\W*(?:\S+\W+){0,4}?emergency\b/i, "").split(/\s+/).filter((w) => /\w/.test(w)).length < 2) return { task_id: recentTask.task.task_id, line_id: lineId };
         if (!recent) {
           const r = await this.emergency(s.owner, { text, spoken_at: s.ambient?.ended_at ?? spokenAt, source: s.source ?? "text", args: { unidentified_ref: unidentifiedRef(new Date(spokenAt)), reason: emergencyReason(text), ...(this.o.emergencyClinicId ? { clinic_id: this.o.emergencyClinicId } : {}) } });
           return { task_id: r.task_id, line_id: r.line_id };

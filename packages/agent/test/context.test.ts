@@ -269,6 +269,23 @@ describe("the patient the clinician is with", () => {
     await s.close();
   });
 
+  it("never gives the wake phrase to the gate after the device opened the arrival for it, so it cannot become note text (pass 10c B01)", async () => {
+    const { s } = await boot(["Hep is the emergency", "Another one coming in, young man, motorcycle accident."]);
+    const arrival = await post(`${s.url}/tasks/emergency`, { owner: OWNER, spokenAt: new Date().toISOString() });
+    await s.runtime.settled();
+    const lines = () => s.runtime.view(arrival.body.task_id)!.transcript.length;
+    const opened = lines();
+    await listen(s.url, { session: "s-wake2", seq: 0 });
+    await s.runtime.settled();
+    expect(lines()).toBe(opened);
+    // Negative control: the words after the phrase still reach the arrival.
+    await new Promise((r) => setTimeout(r, 1100));
+    await listen(s.url, { session: "s-wake2", seq: 1 });
+    await s.runtime.settled();
+    expect(lines()).toBe(opened + 1);
+    await s.close();
+  });
+
   it("opens a second arrival from the phrase as the local ear writes it while a patient is open, and not from a bare hey emergency", async () => {
     const { s } = await boot(["", "Hey, emergency.", "Heape is the emergency"]);
     await listen(s.url, { session: "s-wake", seq: 0, patientId: PAGE_A });
