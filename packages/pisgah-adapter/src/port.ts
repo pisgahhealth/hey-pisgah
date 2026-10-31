@@ -1,6 +1,6 @@
 import { canonical, sha256 } from "@hey-pisgah/contracts";
 import {
-  EMERGENCY_KIND, EmrId, EmrPortError, OBSERVATION_KIND, ObservationArgs, READ_ONLY_KINDS,
+  EMERGENCY_KIND, EmrId, EmrPortError, NEW_RECORD_KINDS, OBSERVATION_KIND, ObservationArgs, READ_ONLY_KINDS,
   type DelegationRead, type DelegationTeam, type EmrCommit, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type EmrWriteKind, type InboxPage, type OrderResult, type Orderables, type Provenance,
   type PaperworkReadBack, type ReadBack, type SayableNames, type SpeakerInput, type SpeakerVerdict, type WatchOffer, type WatchRead, type WorkArgs
 } from "@hey-pisgah/agent";
@@ -13,6 +13,8 @@ const IDEM = /^[A-Za-z0-9_.:-]{1,255}$/;
 const TOKEN = /^(?:v1\.\d{13}\.[A-Za-z0-9_-]{43}|v2\.\d{13}\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43})$/;
 const VOICE = new RegExp(`^transcript:[A-Za-z0-9_.:#/-]{1,180}~${TOKEN.source.slice(1, -1)}$`);
 const DIGEST = /^[0-9a-f]{64}$/;
+// A 2xx that names no record: the hospital saved the write, so the runtime holds it uncertain and reads for it, never sending it again.
+const COMMITTED_WITHOUT_RECORD = (status: number): EmrCommit => ({ ok: false, reason: "committed_without_record", status, retryable: true, counted: false, committed: true });
 
 export type DoorLog = {
   at: string; method: string; path: string; status: number | null; ms: number; replayed: boolean;
@@ -386,7 +388,7 @@ export class PisgahPort implements EmrPort {
     const writes = pick(r.json, op.writes_path);
     const list = Array.isArray(writes) ? writes.filter((w): w is { store: string; id: string } => !!w && typeof w === "object" && typeof (w as P).store === "string" && typeof (w as P).id === "string") : [];
     const primary = list.find((w) => w.store === op.primary_store);
-    if (!primary) return { ok: false, reason: "ack_without_record", status: r.status, retryable: false, counted: false };
+    if (!primary) return COMMITTED_WITHOUT_RECORD(r.status);
     return { ok: true, record_id: primary.id, record_version: 1, event_ids: list.map((w) => `${w.store}:${w.id}`), replayed: r.replayed };
   }
 
@@ -530,8 +532,9 @@ export class PisgahPort implements EmrPort {
       events = list.map((w) => `${w.store}:${w.id}`);
     }
     for (const [store, path] of Object.entries(op.ack.also ?? {})) { const v = str(pick(r.json, path)); if (v) events.push(`${store}:${v}`); }
-    id ??= str(a["admission_id"] ?? a["visit_id"]);
-    if (!id) return { ok: false, reason: "ack_without_record", status: r.status, retryable: false, counted: false };
+    // Only work whose record is its visit or stay is named by that id; a success naming no record of its own is saved but unnamed, and is read for.
+    if (!id && !op.ack.id_path && !op.ack.writes_path && !NEW_RECORD_KINDS.has(kind)) id = str(a["admission_id"] ?? a["visit_id"]);
+    if (!id) return COMMITTED_WITHOUT_RECORD(r.status);
     if (kind === EMERGENCY_KIND) this.learnArrival(id, str(pick(r.json, op.ack.also?.["visit"] ?? "visitId")), a);
     if ((kind === "request_admission" || kind === "admit_patient") && EmrId.safeParse(id).success && vars["patient_id"]) {
       this.learned.admission_by_patient.set(String(vars["patient_id"]), id);
