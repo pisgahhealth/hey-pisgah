@@ -130,7 +130,7 @@ export function gatePrompt(kinds: readonly EmrWriteKind[], names?: SayableNames)
     ...(orders ? [`Tests you may name in test: ${list(names?.tests)}.`, `Medicines you may name in drug: ${list(names?.drugs)}.`] : []),
     `Page targets you may name in to: ${list(names?.page_targets)}.`,
     `Clinics you may name in clinic: ${list(names?.clinics)}.`,
-    ...(holdsClerking(kinds) ? [...CLERKING_RULES.filter((r) => !r.startsWith("Vitals") || kinds.includes(OBSERVATION_KIND)), `Wards you may name in ward: ${list(names?.wards)}.`] : [])
+    ...(holdsClerking(kinds) ? [...CLERKING_RULES.filter((r) => !r.startsWith("Vitals") || kinds.includes(OBSERVATION_KIND)), ...(kinds.includes("record_note") ? [ROUND_RULE] : []), `Wards you may name in ward: ${list(names?.wards)}.`] : [])
   ].join("\n");
 }
 
@@ -167,6 +167,9 @@ export const CLERKING_RULES = [
   "The ward for admit_patient and assign_bed is one of the wards listed below; never choose one the clinician did not say.",
   "An instruction of your kinds that is to be done at a later time said, or once the patient is admitted or a result is back, stays an instruction: set in_minutes (one hour is 60) or after (admission, result). A plan that depends on what a value or a result shows stays conditional."
 ] as const;
+
+// A round entry on an admitted patient is documentation of the stay, not the arrival's clerking, however it is said.
+export const ROUND_RULE = "Once the patient is admitted (Where names a ward), the clinician's account of how the patient is doing now, as on a ward round or a review (how they are today, what has changed since, and the plan going on), is one instruction of record_note with note_type ward_round and text in their words, even when no note is asked for. While an arrival with no ward is first clerked, the same kind of words stay finding.";
 
 export type GateAction = { n: number; kind: string; args: Record<string, unknown>; state: "active" | "stopped" | "not recorded"; corrects: number | null };
 export type GateInput = {
