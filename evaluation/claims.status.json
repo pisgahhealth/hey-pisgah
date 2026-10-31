@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-30T20:58:17.794Z",
-  "commit": "3eb0ecf",
+  "generated_at": "2026-10-31T07:24:22.039Z",
+  "commit": "8830bd0",
   "claims": [
     {
       "claim_id": "C-01",
@@ -85,26 +85,14 @@
       "claim_id": "C-07",
       "status": "amber",
       "values": {
-        "adopted_by_person": true,
-        "human_approval": false,
-        "fresh_applicable.executed_differently": true,
-        "fresh_applicable.actions_open": 0,
-        "fresh_applicable.state": "done",
-        "withheld.version_withheld": true,
-        "withheld.actions_open": 0,
-        "withheld.state": "done",
-        "applicable_case": "c-110f6ad7",
-        "draft_earlier_by_min": 146,
-        "wait_v1_min": 166,
-        "wait_adopted_min": 57,
-        "dev_cases": 15,
-        "dev_median_wait_delta_min": 0,
-        "dev_moved": 5,
-        "dev_shorter": 4,
-        "dev_longer": 1,
-        "withheld_case": "c-2a14921a"
+        "human_decision": false,
+        "sequence_complete": true,
+        "adopted_by_person_role": true,
+        "suspended_by_person_role": true,
+        "withdrawn_after_s": 14,
+        "approver": "Synthetic Ward A manager (disclosed; a person's role played by the VER build lane)"
       },
-      "measured_at": "2026-10-30T06:10:21.797Z"
+      "measured_at": "2026-10-31T07:13:43.946Z"
     },
     {
       "claim_id": "C-08",
@@ -123,9 +111,11 @@
         "planted_failure_detected": true,
         "only_affected_blocked": true,
         "approval_by_person": true,
-        "human_decision": false
+        "human_decision": false,
+        "suspension_took_effect": true,
+        "withdrawn_after_s": 14
       },
-      "measured_at": "2026-10-28T12:18:57.708Z"
+      "measured_at": "2026-10-31T07:13:43.946Z"
     },
     {
       "claim_id": "C-10",
@@ -134,7 +124,7 @@
         "cycle2_result_recorded": true,
         "no_hypothesis_cited_as_evidence": true,
         "read.outcomes": 2,
-        "result": "new_proposal",
+        "result_said": "the adopted change proposed again, so it kept the change",
         "reversed_pairs_summary": "with the ward A outcome reversed so the adopted change hurt, 2 of 3 reversed runs ended in a declared result (2 proposed a rollback for a person to decide) and 1 did not (1 proposed the adopted change again); unreversed, 1 proposed the adopted change again, 1 ended without a result, 1 kept the version",
         "stop": "dev_valid_proposal (p-08e023d0)"
       },
@@ -412,8 +402,15 @@
         "dev_shorter": 4,
         "dev_longer": 1,
         "dev_slowest_min": 167,
+        "dev_unchanged": 10,
+        "adverse_case_id": "c-ad742d69",
+        "rev_proposal_id": "p-0ff1535c",
+        "rev_status": "dev_validated",
+        "rev_dev_shorter": 4,
+        "rev_dev_longer": 0,
+        "rev_dev_unchanged": 11,
         "withheld_case": "c-2a14921a",
-        "emr_offer_reason": "on a fresh ward A stay the adopted version offered the summary draft at the round entry (1 offer), the nurse approved it by voice and the reviewed draft was saved as a note on the stay and proved by a fresh read; on a ward B stay at the same trigger point it was withheld with the reason \"version 2 is adopted for ward A and this patient is on ward B, so version 1 is in force\"",
+        "emr_offer_reason": "on a fresh ward A stay the adopted version offered the summary draft at the round entry (1 offer), the nurse approved it in two typed lines at her serve and the reviewed draft was saved as a note on the stay and proved by a fresh read; on an existing ward B stay at the same trigger point it was withheld with the reason \"version 2 is adopted for ward A and this patient is on ward B, so version 1 is in force\"",
         "deployment_reason": "every changed step has a watched trigger point, a work kind and an owner"
       },
       "measured_at": "2026-10-30T06:10:21.797Z"

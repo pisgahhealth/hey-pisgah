@@ -279,7 +279,7 @@
  "emr_journey_blocked": null,
  "emr_offers_made": 1,
  "emr_offer_seen": true,
- "emr_offer_reason": "on a fresh ward A stay the adopted version offered the summary draft at the round entry (1 offer), the nurse approved it by voice and the reviewed draft was saved as a note on the stay and proved by a fresh read; on a ward B stay at the same trigger point it was withheld with the reason \"version 2 is adopted for ward A and this patient is on ward B, so version 1 is in force\"",
+ "emr_offer_reason": "on a fresh ward A stay the adopted version offered the summary draft at the round entry (1 offer), the nurse approved it in two typed lines at her serve and the reviewed draft was saved as a note on the stay and proved by a fresh read; on an existing ward B stay at the same trigger point it was withheld with the reason \"version 2 is adopted for ward A and this patient is on ward B, so version 1 is in force\"",
  "applicable_case": "c-110f6ad7",
  "withheld_case": "c-2a14921a",
  "draft_earlier_by_min": 146,
@@ -407,7 +407,7 @@
   "why": "adopted by a person's role played by a build lane, disclosed in the record"
  },
  "emr_loop": {
-  "mode": "sandbox door, live Spark Open gate on the nurse's two lines, the doctor's admission and round entry written by his agent through the door (scripted)",
+  "mode": "sandbox door, live Spark Open gate on the nurse's two lines typed to her serve, the doctor's admission and round entry written by his agent through the door (scripted)",
   "applicable": {
    "ward_id": "A",
    "version_in_force": 2,
@@ -417,7 +417,7 @@
     "round": null,
     "ward": "read"
    },
-   "approved_by": "the nurse's own spoken line through serve (say draft, then save once reviewed)",
+   "approved_by": "the nurse's own two lines typed to her serve (say draft, then save once reviewed)",
    "action": {
     "kind": "record_note",
     "label": "stay_summary",
@@ -438,5 +438,198 @@
   }
  },
  "emr_loop_complete": true,
- "dev_slowest_min": 167
+ "dev_slowest_min": 167,
+ "adverse_case": {
+  "case_id": "c-ad742d69",
+  "ward_id": "A",
+  "wait_delta_min": 167,
+  "wait_base_min": 54,
+  "wait_version_min": 221,
+  "round_entry_at": 516,
+  "round_entry_in_record_at": 742,
+  "signoff_in_record_at": 592,
+  "entry_lag_min": 226,
+  "entry_lag_reason": "Entered after the round from the paper notes.",
+  "draft_start_base": 592,
+  "draft_start_version": 742,
+  "family": "round entry in the record after sign-off",
+  "why": "the round entry happened at minute 516 but reached the record at minute 742 (entered after the round from the paper notes, 226 minutes late), after sign-off at minute 592; version 2 starts the draft only after the round entry is in the record, so the draft waited until minute 742, where version 1 started it at sign-off (minute 592)"
+ },
+ "adverse_case_id": "c-ad742d69",
+ "adverse_case_min": 167,
+ "adverse_why": "the round entry happened at minute 516 but reached the record at minute 742 (entered after the round from the paper notes, 226 minutes late), after sign-off at minute 592; version 2 starts the draft only after the round entry is in the record, so the draft waited until minute 742, where version 1 started it at sign-off (minute 592)",
+ "revision": {
+  "proposal_id": "p-0ff1535c",
+  "parent_proposal_id": "p-494e0f14",
+  "ops": [
+   {
+    "edge_id": "e04",
+    "op": "remove_soft_edge"
+   },
+   {
+    "op": "set_prep_trigger",
+    "target": {
+     "step": "st06"
+    },
+    "when": {
+     "any_of": [
+      {
+       "after": {
+        "step": "st01"
+       }
+      },
+      {
+       "after": {
+        "step": "st05"
+       }
+      }
+     ]
+    }
+   }
+  ],
+  "scope": {
+   "condition": null,
+   "wards": [
+    "A"
+   ]
+  },
+  "rationale": "Combined e04 removal + trigger after st01 allows discharge summary draft to start at expected discharge record before clinical signoff, parallelizing documentation. x-170aa603 showed median -88 min post_signoff wait on 3 discharge-summary cases with st06 start moving 70-129 Revision: on dev case c-ad742d69 the round entry reached the record 226 minutes late, after sign-off, so the draft waited 167 minutes longer than under version 1; the draft now starts at the round entry or at sign-off, whichever the record shows first, so a late round entry costs nothing and the four shorter waits are kept.",
+  "status": "dev_validated",
+  "definition_hash": "4d3d85e0e59f5a5790e943f66ff40a8e2fd4b779f876f39ddd82c44079413370",
+  "gate": {
+   "documents_kept": true,
+   "exception_check": true,
+   "fences_intact": true,
+   "no_regression": true,
+   "pass": true,
+   "prohibited_attempts": 0,
+   "rework_budget_min_per_case": 10,
+   "rework_max_added_min": 2,
+   "rework_within_budget": true
+  },
+  "dev_distribution": {
+   "proposal_id": "p-0ff1535c",
+   "status": "dev_validated",
+   "cases": 15,
+   "in_scope": 11,
+   "median_wait_delta_min": 0,
+   "moved": 4,
+   "shorter": 4,
+   "longer": 0,
+   "wait_deltas_min": [
+    {
+     "case_id": "c-0aae9686",
+     "in_scope": true,
+     "wait": 0,
+     "rework": 2
+    },
+    {
+     "case_id": "c-1d4adfd6",
+     "in_scope": true,
+     "wait": -107,
+     "rework": 1
+    },
+    {
+     "case_id": "c-2b477d9f",
+     "in_scope": false,
+     "wait": 0,
+     "rework": 0
+    },
+    {
+     "case_id": "c-3591fe3a",
+     "in_scope": true,
+     "wait": -20,
+     "rework": 2
+    },
+    {
+     "case_id": "c-3c54c5e0",
+     "in_scope": true,
+     "wait": 0,
+     "rework": 2
+    },
+    {
+     "case_id": "c-515bed1c",
+     "in_scope": true,
+     "wait": -5,
+     "rework": 1
+    },
+    {
+     "case_id": "c-5bbb4174",
+     "in_scope": true,
+     "wait": 0,
+     "rework": 2
+    },
+    {
+     "case_id": "c-93aff9ba",
+     "in_scope": false,
+     "wait": 0,
+     "rework": 0
+    },
+    {
+     "case_id": "c-9a806ffd",
+     "in_scope": true,
+     "wait": 0,
+     "rework": 2
+    },
+    {
+     "case_id": "c-ad742d69",
+     "in_scope": true,
+     "wait": 0,
+     "rework": 0
+    },
+    {
+     "case_id": "c-b47991ef",
+     "in_scope": false,
+     "wait": 0,
+     "rework": 0
+    },
+    {
+     "case_id": "c-d453bd4e",
+     "in_scope": false,
+     "wait": 0,
+     "rework": 0
+    },
+    {
+     "case_id": "c-efe5d0a3",
+     "in_scope": true,
+     "wait": -143,
+     "rework": 2
+    },
+    {
+     "case_id": "c-f1f15bd9",
+     "in_scope": true,
+     "wait": 0,
+     "rework": 2
+    },
+    {
+     "case_id": "c-fa61d81b",
+     "in_scope": true,
+     "wait": 0,
+     "rework": 0
+    }
+   ],
+   "rework_added_min": 16,
+   "source": "the dev gate's stored validation report for the adopted version, not re-run"
+  },
+  "adverse_case_after": {
+   "case_id": "c-ad742d69",
+   "wait_delta_min": 0,
+   "draft_start_version": 592
+  },
+  "deployable_in_emr": {
+   "deployable": true,
+   "reason": "every changed step has a watched trigger point, a work kind and an owner"
+  },
+  "adopted": false,
+  "adoption": "awaiting a person's decision at the version desk; it would be adopted as a new version and version 2 stays suspended"
+ },
+ "rev_proposal_id": "p-0ff1535c",
+ "rev_status": "dev_validated",
+ "rev_dev_cases": 15,
+ "rev_dev_shorter": 4,
+ "rev_dev_longer": 0,
+ "rev_dev_unchanged": 11,
+ "rev_dev_median_wait_delta_min": 0,
+ "dev_unchanged": 10,
+ "scope_change": "the draft starts at the round entry or at sign-off, whichever the record shows first, so a round entry that reaches the record after sign-off no longer holds the draft back"
 }

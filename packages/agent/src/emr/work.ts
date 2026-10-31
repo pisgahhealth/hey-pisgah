@@ -18,6 +18,8 @@ export const READ_ONLY_KINDS: ReadonlySet<string> = new Set(["draft_handover", "
 export const SAVED_DRAFTS: Readonly<Record<string, "handover" | "stay_summary">> = { draft_handover: "handover", draft_stay_summary: "stay_summary" };
 // Order kinds one spoken line may ask for several of at once; the line names every such item it asked for, so the hospital binds it to that batch.
 export const BATCH_KINDS: ReadonlySet<string> = new Set(["order_test", "prescribe"]);
+// Kinds whose write makes a record of its own, so the visit or stay it belongs to is never taken for that record's id.
+export const NEW_RECORD_KINDS: ReadonlySet<string> = new Set(["order_test", "prescribe", "take_verbal_order"]);
 // Kinds the owner's own matched voice asks for and a later matched confirm line releases; any other voice never writes them.
 export const OWNER_CONFIRM_KINDS: ReadonlySet<string> = new Set(["record_diagnosis"]);
 

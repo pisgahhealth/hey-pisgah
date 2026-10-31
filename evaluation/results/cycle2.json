@@ -96,7 +96,7 @@
  "validations": [
   "dev_validated"
  ],
- "result": "new_proposal",
+ "result": "re_proposed_adopted",
  "declared": null,
  "stop": "dev_valid_proposal (p-08e023d0)",
  "cycle2_result_recorded": true,
@@ -778,5 +778,7 @@
  "reversed_pairs_summary": "with the ward A outcome reversed so the adopted change hurt, 2 of 3 reversed runs ended in a declared result (2 proposed a rollback for a person to decide) and 1 did not (1 proposed the adopted change again); unreversed, 1 proposed the adopted change again, 1 ended without a result, 1 kept the version",
  "reversed_declared": 2,
  "reversed_runs": 3,
- "reversed_declared_met": true
+ "reversed_declared_met": true,
+ "result_said": "the adopted change proposed again, so it kept the change",
+ "result_before_relabel": "new_proposal"
 }

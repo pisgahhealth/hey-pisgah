@@ -29,7 +29,8 @@ export type Provenance = { owner: string; evidence: string; spoken_at: string; v
 // A read-only kind returns what it found as report; a draft is held for the owner to review before anything is written.
 export type EmrCommit =
   | { ok: true; record_id: string; record_version: number; event_ids: string[]; replayed: boolean; report?: string; draft?: string }
-  | { ok: false; reason: string; status: number | null; retryable: boolean; counted: boolean };
+  // committed: the hospital said the write was saved but named no record, so it is read for and never sent again.
+  | { ok: false; reason: string; status: number | null; retryable: boolean; counted: boolean; committed?: true };
 export type EmrProof = { record_id: string; record_version: number; event_ids: string[]; record_hash: string; verified_at: string; read: string };
 
 export class EmrPortError extends Error {

@@ -19,7 +19,9 @@ export function learningEarned(resultsRoot: string): { c10_reads_outcomes: boole
   const outcomes = fieldAt(c2, "read.outcomes");
   const runs = fieldAt(c2, "counter_evidence.runs");
   const last = Array.isArray(runs) ? (runs.at(-1) as { responded_to_contradiction?: unknown } | undefined) : undefined;
-  return { c10_reads_outcomes: typeof outcomes === "number" && outcomes >= 1, reversed_evidence_passed: last?.responded_to_contradiction === true };
+  // The last counter-evidence run and the current revision's paired reversed runs must both have answered the contradiction.
+  const pairs = fieldAt(c2, "reversed_pairs.reversed_declared_met") === true;
+  return { c10_reads_outcomes: typeof outcomes === "number" && outcomes >= 1, reversed_evidence_passed: last?.responded_to_contradiction === true && pairs };
 }
 
 // Every claim text that uses a learning word while either result is missing; the wording until then is "discovers and adapts under approval".

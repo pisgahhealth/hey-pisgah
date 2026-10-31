@@ -8,7 +8,7 @@ import { primaryClass } from "./classes.js";
 import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
-import { BATCH_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
+import { BATCH_KINDS, NEW_RECORD_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
@@ -37,11 +37,14 @@ export type EmrAction = {
   // Saved by the door but not yet found by its verification read; reconciled by the record id or the same key, never marked failed for it.
   awaiting_verification: { since: string; attempts: number; reason: string } | null;
   // Sent with no answer that says whether it was saved, and when its intent was journaled, so the record can be read for it.
-  uncertain: { since: string; attempts: number; reason: string } | null; intent_at: string | null;
+  // committed marks a write the hospital said it saved without naming the record, which is only ever read for.
+  uncertain: { since: string; attempts: number; reason: string; committed?: true } | null; intent_at: string | null;
   // Vitals heard from audio wait for the second ear to agree before the write.
   ears: boolean;
-  // A voice order waits for the owner's own matched voice, or for the spoken confirmation a controlled drug needs; the lines that gave them.
-  awaiting: "owner_voice" | "confirm" | null; authorised_by_line: string | null; confirmed_by_line: string | null;
+  // A voice order waits for the owner's own matched voice, the owner's yes to a repeated order, or the spoken confirmation a controlled drug needs; the lines that gave them.
+  awaiting: "owner_voice" | "repeat" | "confirm" | null; authorised_by_line: string | null; confirmed_by_line: string | null;
+  // The earlier order of this patient's encounter that this one repeats, held until the owner says to order it again (D35).
+  repeat_of: { action_id: string; at: string } | null;
   // The page that shows this work, bound to the action's encounter and command id.
   screen: ScreenPlan | null;
   // The paperwork read back from the record before a discharge, which the owner's confirmation covers.
@@ -57,7 +60,9 @@ export type EmrRefusal = { line_id: string; kind: string | null; asked_for: stri
 export type QuestionChoice = Choice & { kind: string; base: Record<string, unknown>; corrects_action_id: string | null };
 // A question about a voice order is settled by the owner's own matched "yes" or "confirm", never by a model.
 export type OrderRule = { kind: "countersign"; args: WorkArgs } | { kind: "confirm" | "authorise"; action_id: string };
-export type EmrQuestion = { question_id: string; text: string; line_id: string; answered_by: string | null; at: string; choice: QuestionChoice | null; rule: OrderRule | null; pref_id: string | null };
+export type EmrQuestion = { question_id: string; text: string; line_id: string; answered_by: string | null; at: string; choice: QuestionChoice | null; rule: OrderRule | null; pref_id: string | null; offer: string | null };
+// One offer an adopted version made on this task, kept so it can be withdrawn while its work is still pending.
+export type MadeOffer = { offer: string; version: number; step_id: string; kind: string; at: string; withdrawn: string | null };
 // One use of a remembered preference in this task, or one it did not use and why, each with its source for the strip.
 export type PrefUse = { pref_id: string; field: string; value: string; text: string; scope: string; source: string; line_id: string; action_id: string | null; reason: string | null; at: string };
 // One comparison of the two readings before a vitals write.
@@ -66,7 +71,7 @@ export type EarsRecord = { action_id: string; line_id: string; session_id: strin
 export type WatchChange = { fact: string; label: string; from: string | null; to: string | null; at: string };
 export type EmrPause = { line_id: string | null; reason: string; at: string; pending: string[]; facts: Record<string, string | null> };
 // The adopted version as this task reads it: the offers it may make, what it says instead, and offers the monitor blocked.
-export type EmrVersionView = { version: number; definition_hash: string; offers: string[]; lines: string[]; blocked: { offer: string; requirement_version: string; conflict: string }[]; withheld?: { offer: string; version: number; reason: string }[] };
+export type EmrVersionView = { version: number; definition_hash: string; offers: string[]; lines: string[]; blocked: { offer: string; requirement_version: string; conflict: string }[]; withheld?: { offer: string; version: number; reason: string }[]; withdrawn?: { offer: string; version: number; reason: string; actions: string[] }[]; log_hash?: string | null };
 // Work held for a time or a record event; it fires once from the runtime's own timer and survives a restart because it lives in the task stream.
 export type EmrObligation = {
   obligation_id: string; line_id: string; kind: string; clause: Record<string, unknown>; title: string;
@@ -93,6 +98,7 @@ export type EmrTask = {
   // Work this owner's agent handed on or was handed, each state as the record showed it.
   delegations: EmrDelegation[];
   prefs: { applied: PrefUse[]; withheld: PrefUse[]; candidates: string[] };
+  madeOffers: MadeOffer[];
 };
 // The strip's view of one task.
 export type EmrTaskView = {
@@ -101,9 +107,9 @@ export type EmrTaskView = {
     action_id: string; kind: string; state: EmrActionState; summary: string; reason: string | null; corrects_action_id: string | null;
     line_id: string; args: Record<string, unknown>; proposed_at: string; written_at: string | null;
     proof?: { record_id: string; record_version: number; event_ids: string[] };
-    report?: string; draft?: string; unverified?: true; awaiting?: "owner_voice" | "confirm"; authorised_by_line?: string;
+    report?: string; draft?: string; unverified?: true; awaiting?: "owner_voice" | "repeat" | "confirm"; authorised_by_line?: string;
     awaiting_verification?: { since: string; attempts: number; reason: string };
-    uncertain?: { since: string; attempts: number; reason: string };
+    uncertain?: { since: string; attempts: number; reason: string; committed?: true };
     // The page the strip opens and fills for this action; command_id and owner_id bind it through navigation.
     screen?: ScreenPlan & { command_id: string; owner_id: string };
   }[];
@@ -197,7 +203,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       run_id: String(x["run_id"]), goal: "", state: "running", reason: null, actions: new Map(), order: [], lines: [], questions: [], notes: [], refusals: [],
       calls: 0, usd: 0, fallbacks: 0, created_at: e.wall_at, updated_at: e.wall_at,
       watch: null, changes: [], offered: [], pages: [], pause: null, digests: [], ears: [], version: null, obligations: [], speed: [],
-      identities: [], unidentified: !!x["unidentified"], label: String(x["label"] ?? ""), delegations: [], prefs: { applied: [], withheld: [], candidates: [] }
+      identities: [], unidentified: !!x["unidentified"], label: String(x["label"] ?? ""), delegations: [], prefs: { applied: [], withheld: [], candidates: [] }, madeOffers: []
     };
   }
   if (!t) return null;
@@ -230,9 +236,9 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       break;
     }
     case "intent.failed": { const l = t.lines.find((y) => y.id === x["line_id"]); if (l) l.decided = true; break; }
-    case "question.asked": t.questions.push({ question_id: String(x["question_id"]), text: String(x["text"]), line_id: String(x["line_id"]), answered_by: null, at: e.wall_at, choice: (x["choice"] as QuestionChoice | undefined) ?? null, rule: (x["rule"] as OrderRule | undefined) ?? null, pref_id: (x["pref_id"] as string | undefined) ?? null }); break;
+    case "question.asked": t.questions.push({ question_id: String(x["question_id"]), text: String(x["text"]), line_id: String(x["line_id"]), answered_by: null, at: e.wall_at, choice: (x["choice"] as QuestionChoice | undefined) ?? null, rule: (x["rule"] as OrderRule | undefined) ?? null, pref_id: (x["pref_id"] as string | undefined) ?? null, offer: (x["offer"] as string | undefined) ?? null }); break;
     case "speaker.attributed": { const l = t.lines.find((y) => y.id === x["line_id"]); if (l) l.speaker = x["speaker"] as SpeakerRecord; break; }
-    case "action.authorised": if (act) { act.awaiting = x["awaiting"] === "confirm" ? "confirm" : null; if (x["as"] === "confirm") act.confirmed_by_line = String(x["line_id"]); else act.authorised_by_line = String(x["line_id"]); } break;
+    case "action.authorised": if (act) { act.awaiting = x["awaiting"] === "confirm" || x["awaiting"] === "repeat" ? x["awaiting"] : null; if (x["as"] === "confirm") act.confirmed_by_line = String(x["line_id"]); else if (x["as"] !== "repeat") act.authorised_by_line = String(x["line_id"]); } break;
     case "preference.applied": t.prefs.applied.push({ ...(x as PrefUse), at: e.wall_at }); break;
     case "preference.withheld": t.prefs.withheld.push({ ...(x as PrefUse), at: e.wall_at }); break;
     case "preference.candidate_noted": t.prefs.candidates.push(String(x["pref_id"])); break;
@@ -257,13 +263,13 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
         corrects_action_id: (x["corrects_action_id"] as string | null) ?? null, state: "proposed", intent_key: null, written: null, proof: null, reason: null,
         proposed_at: e.wall_at, written_at: null, completed_at: null, report: null, draft: null, unverified: false, awaiting_verification: null, uncertain: null, intent_at: null, ears: !!x["ears"],
         awaiting: (x["awaiting"] as EmrAction["awaiting"] | undefined) ?? null, authorised_by_line: (x["authorised_by_line"] as string | null | undefined) ?? null, confirmed_by_line: null,
-        screen: (x["screen"] as ScreenPlan | undefined) ?? null, read_back: null
+        repeat_of: (x["repeat_of"] as EmrAction["repeat_of"] | undefined) ?? null, screen: (x["screen"] as ScreenPlan | undefined) ?? null, read_back: null
       });
       t.order.push(String(x["action_id"]));
       break;
     case "action.read_back": if (act) act.read_back = x["read_back"] as PaperworkReadBack; break;
     case "action.intent": if (act) { act.state = "sent"; act.intent_key = String(x["intent_key"]); act.intent_at = e.wall_at; if (x["args"]) act.args = x["args"] as WorkArgs; } break;
-    case "action.uncertain": if (act) { act.state = "uncertain"; act.uncertain = { since: act.uncertain?.since ?? e.wall_at, attempts: Number(x["attempts"]), reason: String(x["reason"]) }; } break;
+    case "action.uncertain": if (act) { act.state = "uncertain"; act.uncertain = { since: act.uncertain?.since ?? e.wall_at, attempts: Number(x["attempts"]), reason: String(x["reason"]), ...(act.uncertain?.committed || x["committed"] ? { committed: true as const } : {}) }; } break;
     case "action.written": if (act) { act.state = "acknowledged"; act.written = x["written"] as EmrAction["written"]; act.written_at = e.wall_at; } break;
     case "action.completed": if (act) { act.state = "completed"; act.proof = x["proof"] as EmrProof; act.completed_at = e.wall_at; } break;
     case "action.cancelled": if (act) { act.state = "cancelled"; act.reason = String(x["reason"]); } break;
@@ -283,9 +289,19 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       for (const c of (x["changes"] as Omit<WatchChange, "at">[]) ?? []) t.changes.push({ ...c, at: e.wall_at });
       break;
     }
-    case "offer.made": t.offered.push(String(x["offer"])); break;
+    case "offer.made":
+      t.offered.push(String(x["offer"]));
+      if (x["version"] !== undefined) t.madeOffers.push({ offer: String(x["offer"]), version: Number(x["version"]), step_id: String(x["step_id"] ?? ""), kind: String(x["kind"] ?? String(x["offer"]).split(":").at(-1)), at: e.wall_at, withdrawn: null });
+      break;
+    case "version.offer_withdrawn": {
+      const o = t.madeOffers.find((y) => y.offer === x["offer"] && !y.withdrawn);
+      if (o) o.withdrawn = String(x["reason"]);
+      for (const q of t.questions) if (q.answered_by === null && q.offer === x["offer"]) q.answered_by = `withdrawn:${String(x["offer"])}`;
+      t.version?.withdrawn?.push({ offer: String(x["offer"]), version: Number(x["version"]), reason: String(x["reason"]), actions: (x["actions"] as string[] | undefined) ?? [] });
+      break;
+    }
     case "version.offer_withheld": t.offered.push(String(x["offer"])); t.version?.withheld?.push({ offer: String(x["offer"]), version: Number(x["version"]), reason: String(x["reason"]) }); break;
-    case "version.rules": t.version = { version: Number(x["version"]), definition_hash: String(x["definition_hash"]), offers: (x["offers"] as string[]) ?? [], lines: (x["lines"] as string[]) ?? [], blocked: [], withheld: [] }; break;
+    case "version.rules": t.version = { version: Number(x["version"]), definition_hash: String(x["definition_hash"]), offers: (x["offers"] as string[]) ?? [], lines: (x["lines"] as string[]) ?? [], blocked: [], withheld: [], withdrawn: [], log_hash: (x["log_hash"] as string | null | undefined) ?? null }; break;
     case "version.check_failed": {
       t.offered.push(String(x["offer"]));
       t.version?.blocked.push({ offer: String(x["offer"]), requirement_version: String(x["requirement_version"]), conflict: String(x["conflict"]) });
@@ -496,6 +512,24 @@ export const PAY_LINK_VERIFIED_NOTE = "Pay link request verified: the bill shows
 
 // "Yes, confirm the morphine" names what is confirmed; up to two words after the, that or this, so a new sentence after confirm is never a yes.
 export const OWNER_YES = /^(?:yes|yeah|yes please|yes sign(?: them| it| everything)?|sign(?: them| it)?|go ahead|send it|do it|(?:(?:yes|yeah|okay|ok) )?(?:i )?confirm(?:ed)?(?: (?:the|that|this|it)(?: [a-z']+){0,2})?)$/;
+// A line that asks for a further order on purpose, so it is never held as a repeat.
+export const DELIBERATE_REPEAT = /\b(?:another|again)\b/i;
+// The states of an order that was requested or sent; a declined, refused or failed order is not repeated by saying it again.
+const REQUESTED: ReadonlySet<EmrActionState> = new Set(["proposed", "sent", "uncertain", "acknowledged", "completed"]);
+// The question for a repeated order, with the local time the first was asked for.
+export function repeatAsk(summary: string, at: string): string {
+  const hm = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Africa/Lagos" }).format(new Date(at));
+  return `${summary}. Already ordered at ${hm}. Order again?`;
+}
+// Two orders are the same when they name the same test, or the same medicine for the same patient and encounter with no differing dose or route.
+export function sameOrder(kind: string, a: WorkArgs, b: WorkArgs): boolean {
+  if (a["patient_id"] !== b["patient_id"] || a["visit_id"] !== b["visit_id"]) return false;
+  if (kind === "order_test") return a["test"] === b["test"];
+  if (a["drug"] !== b["drug"]) return false;
+  if (typeof a["route"] === "string" && typeof b["route"] === "string" && a["route"] !== b["route"]) return false;
+  if (typeof a["dose"] === "string" && typeof b["dose"] === "string") return doseAgrees(a["dose"], b["dose"]) && doseAgrees(b["dose"], a["dose"]);
+  return true;
+}
 export const OWNER_NO = /^(?:no|nope|don'?t|do not|cancel(?: it| that)?|leave it)$/;
 // The owner's natural yes to a countersign batch read back on screen, within the answer window; never a controlled-drug, diagnosis or discharge confirm, and never a held order from an unmatched voice.
 export const READ_BACK_YES = /^(?:(?:ok(?:ay)?|yeah|yes)\s+)?(?:go on|go ahead|sign (?:them|it|those)(?: all)?)$/;
@@ -544,6 +578,8 @@ export class EmrRuntime {
   private readonly timers = new Set<NodeJS.Timeout>();
   private readonly recon = new Set<NodeJS.Timeout>();
   private readonly reconRound = new Map<string, number>();
+  // Lines whose order the gate was unsure of, sent on only when they repeat an order, with the question asked otherwise.
+  private readonly unsureRepeat = new Map<string, string>();
   private lineCounter = 0;
   private stopped = false;
   private poller: NodeJS.Timeout | null = null;
@@ -1251,7 +1287,13 @@ export class EmrRuntime {
       return;
     }
     if ((c.confidence ?? 0) < floor) {
-      this.ask(l, lineId, c.question ?? `Did you want me to chart this: "${c.words.slice(0, 160)}"?`);
+      const unsure = c.question ?? `Did you want me to chart this: "${c.words.slice(0, 160)}"?`;
+      // A repeated order the gate is unsure of is asked as the repeat it is, under the owner's bound yes; anything else is asked as before.
+      if (c.class === "instruction" && c.kind && this.mayRepeat(t, lineId, c)) {
+        this.unsureRepeat.set(lineId, unsure);
+        try { return this.applyWork(l, lineId, c, c.kind); } finally { this.unsureRepeat.delete(lineId); }
+      }
+      this.ask(l, lineId, unsure);
       return;
     }
     // Work for a later time or a record event is held as an obligation; the clinician is never asked to say it again.
@@ -1757,6 +1799,10 @@ export class EmrRuntime {
     const bySession = kind === REGISTER_KIND && who?.speaker === "unverified" && who.reason === "owner_not_enrolled";
     let awaiting: EmrAction["awaiting"] = needsOwner && who?.speaker !== "owner" && !bySession ? "owner_voice" : null;
     const controlled = (kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(args["drug"])]?.controlled) || OWNER_CONFIRM_KINDS.has(kind);
+    const repeat = this.repeatOf(t, lineId, kind, args);
+    const unsure = this.unsureRepeat.get(lineId);
+    if (unsure !== undefined && !repeat) { this.ask(l, lineId, unsure); return; }
+    if (!awaiting && repeat) awaiting = "repeat";
     if (!awaiting && (controlled || CONFIRM_KINDS.has(kind))) awaiting = "confirm";
     const authorisedBy = kind === "countersign" || ((ORDER_KINDS.has(kind) || kind === VERBAL_ORDER_KIND) && who?.speaker === "owner") ? lineId : null;
     const actionId = `a-${shortHash(t.task_id, lineId, t.order.length + 1)}`;
@@ -1764,13 +1810,32 @@ export class EmrRuntime {
     if (kind === "prescribe" && typeof args["dose"] === "string") this.startDoseCheck(l, actionId, lineId, args["dose"]);
     const anchor = awaiting ? null : this.anchorOf(t, lineId);
     const screen = this.screenOf(t, kind, args);
-    this.append(l, "action.proposed", { action_id: actionId, kind, args, summary, line_id: lineId, corrects_action_id: correctsId, hold_ms: this.o.holdMs ?? 0, ...this.holdUntil(anchor), ...(ears ? { ears: true } : {}), ...(awaiting ? { awaiting } : {}), ...(authorisedBy ? { authorised_by_line: authorisedBy } : {}), ...(screen ? { screen } : {}) });
+    this.append(l, "action.proposed", { action_id: actionId, kind, args, summary, line_id: lineId, corrects_action_id: correctsId, hold_ms: this.o.holdMs ?? 0, ...this.holdUntil(anchor), ...(ears ? { ears: true } : {}), ...(awaiting ? { awaiting } : {}), ...(authorisedBy ? { authorised_by_line: authorisedBy } : {}), ...(repeat ? { repeat_of: repeat } : {}), ...(screen ? { screen } : {}) });
+    if (awaiting === "repeat") this.ask(l, lineId, repeatAsk(summary, repeat!.at), null, { kind: "confirm", action_id: actionId });
     if (awaiting === "owner_voice") this.ask(l, lineId, `Held: ${summary}. ${who ? "I could not match the voice to you" : "I heard no voice to match"}, so it waits until you say yes yourself.`, null, { kind: "authorise", action_id: actionId });
     if (awaiting === "confirm" && !CONFIRM_KINDS.has(kind)) this.ask(l, lineId, confirmAsk(kind, summary), null, { kind: "confirm", action_id: actionId });
     this.settle(l, "proposed");
     if (CONFIRM_KINDS.has(kind)) void this.readBackPaperwork(l, lineId, actionId);
     this.noteHold(actionId, anchor);
     if (t.state === "running" && !awaiting) this.hold(l, actionId, anchor);
+  }
+
+  // Whether an order the gate named may repeat one this owner already asked for, by its kind, test or medicine and patient, before its arguments are built.
+  private mayRepeat(t: EmrTask, lineId: string, c: AnyClause): boolean {
+    if (!c.kind || !BATCH_KINDS.has(c.kind) || DELIBERATE_REPEAT.test(t.lines.find((x) => x.id === lineId)?.text ?? "")) return false;
+    const key = c.kind === "order_test" ? (c as { test?: unknown }).test : (c as { drug?: unknown }).drug;
+    return [...this.live.values()].some((x) => x.task.owner === t.owner && [...x.task.actions.values()].some((a) => a.kind === c.kind && a.line_id !== lineId && REQUESTED.has(a.state) && a.awaiting !== "owner_voice" && a.args["patient_id"] === t.patient_id && a.args[c.kind === "order_test" ? "test" : "drug"] === key));
+  }
+
+  // The order of this owner's for the same patient and encounter that a new order repeats: the same test, or the same medicine at the same dose and route where both say one; a line saying another or again asks for a new one.
+  private repeatOf(t: EmrTask, lineId: string, kind: string, args: WorkArgs): { action_id: string; at: string } | null {
+    if (!BATCH_KINDS.has(kind)) return null;
+    const text = t.lines.find((x) => x.id === lineId)?.text ?? "";
+    if (DELIBERATE_REPEAT.test(text)) return null;
+    const prior = [...this.live.values()].filter((x) => x.task.owner === t.owner).flatMap((x) => [...x.task.actions.values()].map((a) => ({ a, at: x.task.lines.find((y) => y.id === a.line_id)?.at ?? a.proposed_at })))
+      .filter(({ a }) => a.kind === kind && a.line_id !== lineId && REQUESTED.has(a.state) && a.awaiting !== "owner_voice" && sameOrder(kind, a.args, args))
+      .sort((p, q) => Date.parse(q.at) - Date.parse(p.at))[0];
+    return prior ? { action_id: prior.a.action_id, at: prior.at } : null;
   }
 
   // The line's matched speaker, once the hospital answered; null when the line had no voice to match.
@@ -1887,13 +1952,18 @@ export class EmrRuntime {
     const controlled = (a.kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(a.args["drug"])]?.controlled) || OWNER_CONFIRM_KINDS.has(a.kind);
     const confirmKind = CONFIRM_KINDS.has(a.kind);
     if (a.awaiting === "owner_voice") {
-      this.append(l, "action.authorised", { action_id: a.action_id, line_id: lineId, as: "authorise", awaiting: controlled || confirmKind ? "confirm" : null });
+      this.append(l, "action.authorised", { action_id: a.action_id, line_id: lineId, as: "authorise", awaiting: a.repeat_of ? "repeat" : controlled || confirmKind ? "confirm" : null });
+      if (a.repeat_of) { this.ask(l, lineId, repeatAsk(a.summary, a.repeat_of.at), null, { kind: "confirm", action_id: a.action_id }); this.settle(l, "asked"); return true; }
       if (controlled) { this.ask(l, lineId, confirmAsk(a.kind, a.summary), null, { kind: "confirm", action_id: a.action_id }); this.settle(l, "asked"); return true; }
       if (confirmKind) {
         if (a.read_back) this.ask(l, lineId, paperworkAsk(a.summary, a.read_back), null, { kind: "confirm", action_id: a.action_id });
         this.settle(l, "asked");
         return true;
       }
+    } else if (a.awaiting === "repeat") {
+      // The owner's yes to a repeated order releases this one order only; a controlled drug still needs its own confirm after it.
+      this.append(l, "action.authorised", { action_id: a.action_id, line_id: lineId, as: "repeat", awaiting: controlled ? "confirm" : null });
+      if (controlled) { this.ask(l, lineId, confirmAsk(a.kind, a.summary), null, { kind: "confirm", action_id: a.action_id }); this.settle(l, "asked"); return true; }
     } else if (confirmKind && (!a.read_back || lineId === a.line_id)) {
       // A discharge is confirmed only on its read-back, by a line after the instruction.
       this.note(l, "The paperwork has not been read back yet, so nothing was confirmed. Say confirm once it shows.");
@@ -1950,8 +2020,8 @@ export class EmrRuntime {
     return true;
   }
 
-  private ask(l: Live, lineId: string, text: string, choice: QuestionChoice | null = null, rule: OrderRule | null = null): void {
-    this.append(l, "question.asked", { question_id: `q-${shortHash(l.task.task_id, l.task.questions.length + 1)}`, line_id: lineId, text: text.slice(0, rule ? 900 : 300), ...(choice ? { choice } : {}), ...(rule ? { rule } : {}) });
+  private ask(l: Live, lineId: string, text: string, choice: QuestionChoice | null = null, rule: OrderRule | null = null, offer: string | null = null): void {
+    this.append(l, "question.asked", { question_id: `q-${shortHash(l.task.task_id, l.task.questions.length + 1)}`, line_id: lineId, text: text.slice(0, rule ? 900 : 300), ...(choice ? { choice } : {}), ...(rule ? { rule } : {}), ...(offer ? { offer } : {}) });
   }
 
   private applyDecision(l: Live, lineId: string, d: Decide, _prov: Provenance): void {
@@ -2186,13 +2256,20 @@ export class EmrRuntime {
     if (!v) return;
     const t = l.task;
     const rules = v.rulesFor(t.owner, kinds, facts);
-    if (!rules) return;
-    if (!t.version || t.version.version !== rules.version) {
-      this.append(l, "version.rules", { version: rules.version, definition_hash: rules.definition_hash, parent_version: rules.parent_version, offers: rules.offers.map((o) => o.key), lines: rules.lines, readings: rules.readings });
+    if (rules && (!t.version || t.version.version !== rules.version)) {
+      this.append(l, "version.rules", { version: rules.version, definition_hash: rules.definition_hash, parent_version: rules.parent_version, offers: rules.offers.map((o) => o.key), lines: rules.lines, readings: rules.readings, log_hash: rules.log_hash ?? null });
       for (const line of rules.lines) this.note(l, line);
     }
+    // An offer made under a version the history no longer puts in force here is withdrawn while its work is pending.
+    for (const e of t.madeOffers.filter((x) => !x.withdrawn && this.offerPending(t, x))) {
+      const why = v.withdrawReason ? v.withdrawReason(e.version, facts) : rules && rules.version !== e.version ? `version ${e.version} is no longer in force here` : null;
+      if (why) this.withdraw(l, e, why, rules?.version ?? null);
+    }
+    if (!rules) return;
     for (const o of rules.offers) {
       if (t.offered.includes(o.key) || !o.when.every((w) => facts[w.fact] === w.equals)) continue;
+      // A trigger met more than one way offers once per step.
+      if (t.madeOffers.some((e) => e.version === o.version && e.step_id === o.step_id)) continue;
       if (t.order.some((id) => t.actions.get(id)!.kind === o.kind && t.actions.get(id)!.state !== "cancelled")) continue;
       const c = v.check(o, facts);
       if (!c.ok) {
@@ -2201,16 +2278,54 @@ export class EmrRuntime {
         this.note(l, c.conflict);
         continue;
       }
-      this.append(l, "offer.made", { offer: o.key, version: o.version, step_id: o.step_id, requirement_version: c.requirement_version });
-      this.ask(l, t.lines.at(-1)?.id ?? "watch", o.ask);
+      this.append(l, "offer.made", { offer: o.key, version: o.version, step_id: o.step_id, kind: o.kind, requirement_version: c.requirement_version });
+      this.ask(l, t.lines.at(-1)?.id ?? "watch", o.ask, null, null, o.key);
       this.settle(l, "offered");
     }
-    // The newest adopted version's offer at its own trigger point, kept from this patient by its scope, is recorded once with the reason.
+    // The newest adopted version's offer at its own trigger point, kept from this patient by its scope or a person's suspension, is recorded once with the reason.
     for (const w of rules.withheld ?? []) {
       if (t.offered.includes(w.key) || !w.when.every((x) => facts[x.fact] === x.equals)) continue;
+      // An offer this task already had, since withdrawn, or another way of meeting the same step, is not told again.
+      if (t.madeOffers.some((e) => e.version === w.version && e.step_id === w.step_id) || t.offered.some((k) => k.startsWith(`withheld:v${w.version}:${w.step_id}:`))) continue;
       this.append(l, "version.offer_withheld", { offer: w.key, version: w.version, in_force: w.in_force, step_id: w.step_id, document_id: w.document_id, stage: w.stage, kind: w.kind, ward_id: rules.ward_id ?? null, reason: w.reason });
       this.note(l, `Not offered: ${w.reason}.`);
     }
+  }
+
+  // The live version offer an action answers: the offered kind, or the save of its draft, proposed after the offer.
+  private offerOf(t: EmrTask, a: EmrAction): MadeOffer | null {
+    const at = Date.parse(a.proposed_at);
+    for (const e of [...t.madeOffers].reverse()) {
+      if (e.withdrawn || at < Date.parse(e.at) || !this.offerKind(e, a)) continue;
+      // Once the offered work is done, later work of that kind is the clinician's own.
+      const done = this.offerDoneAt(t, e);
+      if (done !== null && at > done) continue;
+      return e;
+    }
+    return null;
+  }
+  private offerKind(e: MadeOffer, a: EmrAction): boolean {
+    return a.kind === e.kind || (a.kind === "record_note" && !!SAVED_DRAFTS[e.kind] && a.args["label"] === SAVED_DRAFTS[e.kind]);
+  }
+  // When the offered work finished: its draft saved, or for a kind with no draft, the work itself completed; null while it has not.
+  private offerDoneAt(t: EmrTask, e: MadeOffer): number | null {
+    const saveKind = SAVED_DRAFTS[e.kind];
+    const done = t.order.map((id) => t.actions.get(id)!).filter((a) => a.state === "completed" && Date.parse(a.proposed_at) >= Date.parse(e.at) && (saveKind ? a.kind === "record_note" && a.args["label"] === saveKind : a.kind === e.kind)).map((a) => Date.parse(a.completed_at ?? a.proposed_at));
+    return done.length ? Math.min(...done) : null;
+  }
+  // Whether an offer still has work to come: unanswered, or answered with its work not yet sent or its draft not yet saved.
+  private offerPending(t: EmrTask, e: MadeOffer): boolean {
+    if (this.offerDoneAt(t, e) !== null) return false;
+    return !t.order.map((id) => t.actions.get(id)!).some((a) => this.offerOf(t, a) === e && (a.state === "sent" || a.state === "uncertain" || a.state === "acknowledged"));
+  }
+  // Closes an offer the version history no longer stands behind: its questions are answered as withdrawn, its unsent work is cancelled, and the strip says why.
+  private withdraw(l: Live, e: MadeOffer, reason: string, inForce: number | null): void {
+    const t = l.task;
+    const cancel = t.order.map((id) => t.actions.get(id)!).filter((a) => a.state === "proposed" && this.offerOf(t, a) === e).map((a) => a.action_id);
+    for (const id of cancel) this.append(l, "action.cancelled", { action_id: id, reason: "version_withdrawn" });
+    this.append(l, "version.offer_withdrawn", { offer: e.offer, version: e.version, in_force: inForce, step_id: e.step_id, kind: e.kind, reason, actions: cancel });
+    this.note(l, `Withdrawn: ${reason}. The offer from version ${e.version} is closed${cancel.length ? " and its work was not sent" : ""}.`);
+    this.settle(l, "offer_withdrawn");
   }
 
   // Under lever 1 an action proposed while its own line is decided is held from the end of that line; held work, a resume or a restart gets the whole hold again.
@@ -2271,6 +2386,10 @@ export class EmrRuntime {
     if (!a) return;
     if (a.state === "proposed") {
       if (t.state !== "running" || a.awaiting) return;
+      // Work answering a version's offer runs only while the version history still puts that version in force for this patient.
+      const fromOffer = this.offerOf(t, a);
+      const stale = fromOffer && this.o.versions?.withdrawReason ? this.o.versions.withdrawReason(fromOffer.version, t.watch ?? {}) : null;
+      if (fromOffer && stale) return this.withdraw(l, fromOffer, stale, null);
       if (!(await this.earsAgree(l, a))) return;
       if (!(await this.doseAgreed(l, a))) return;
       // A note section is sent with every section already written, so the draft always holds the whole note as it stands.
@@ -2329,7 +2448,7 @@ export class EmrRuntime {
       this.sweepObligations();
     }
     if (a.kind === "draft_handover" && a.draft) this.ask(l, a.line_id, `Handover draft for your review: "${a.draft.slice(0, 900)}" Say save the handover to record it, or tell me what to change.`);
-    if (a.kind === "draft_stay_summary" && a.draft) this.ask(l, a.line_id, `Summary draft for your review: "${a.draft.slice(0, 900)}" Say save the summary to record it on the stay, or tell me what to change.`);
+    if (a.kind === "draft_stay_summary" && a.draft) this.ask(l, a.line_id, `Summary draft for your review: "${a.draft.slice(0, 900)}" Say save the summary to record it on the stay, or tell me what to change.`, null, null, this.offerOf(t, a)?.offer ?? null);
     if (a.kind === "prepare_bill" && a.report) this.note(l, a.report);
     // A pay link read back from the bill proves only that the request is recorded.
     if (a.kind === "send_pay_link") this.note(l, PAY_LINK_VERIFIED_NOTE);
@@ -2350,9 +2469,16 @@ export class EmrRuntime {
           this.append(l, "action.written", { action_id: a.action_id, written: { ...found, replayed: true } });
           return true;
         }
+        // The hospital said this one was saved, so it is only read for; sending it again could only replay the same answer or make a second record.
+        if (a.uncertain?.committed) return this.holdUncertain(l, a, first);
         this.append(l, "action.retry", { action_id: a.action_id, reason: a.uncertain?.reason ?? "uncertain", status: null, same_key: true });
       }
       const c = await this.o.port.commit(a.kind, a.args, a.intent_key!, prov);
+      // A success that names the visit or stay for work that makes its own record named no record at all.
+      if ((!c.ok && c.committed) || (c.ok && NEW_RECORD_KINDS.has(a.kind) && this.encounterIds(t, a).has(c.record_id))) {
+        this.append(l, "action.uncertain", { action_id: a.action_id, attempts: (a.uncertain?.attempts ?? 0) + 1, reason: "saved, but the hospital's answer named no record", status: c.ok ? null : c.status, next_in_ms: null, committed: true });
+        continue;
+      }
       if (c.ok) {
         this.append(l, "action.written", { action_id: a.action_id, written: { record_id: c.record_id, record_version: c.record_version, event_ids: c.event_ids, replayed: c.replayed } });
         if (c.report || c.draft) this.append(l, "action.reported", { action_id: a.action_id, report: c.report ?? null, draft: c.draft ?? null });
@@ -2370,6 +2496,11 @@ export class EmrRuntime {
       return false;
     }
     return this.holdUncertain(l, a, first);
+  }
+
+  // The patient, visit and stay ids this action's encounter is known by, none of which is ever a new order's own id.
+  private encounterIds(t: EmrTask, a: EmrAction): Set<string> {
+    return new Set([a.args["visit_id"], a.args["admission_id"], a.args["patient_id"], t.visit_id, t.admission_id, t.patient_id].filter((x): x is string => typeof x === "string" && x.length > 0));
   }
 
   // The record this write made, found by the port's own read of the hospital; null when nothing is found or several could be it, "unread" when the read failed.
@@ -2395,7 +2526,7 @@ export class EmrRuntime {
     const round = (this.reconRound.get(key) ?? 0) + 1;
     this.reconRound.set(key, round);
     const next = round <= waits.length ? waits[round - 1]! : null;
-    if (first) this.note(l, `${a.summary}: the hospital's answer was lost, so it may be saved. I will read the record and ask again under the same request before anything depends on it.`);
+    if (first) this.note(l, a.uncertain?.committed ? `${a.summary}: the hospital says it was saved but did not name the record. Checking the save: I will read the record before anything depends on it, and I will not send it again.` : `${a.summary}: the hospital's answer was lost, so it may be saved. I will read the record and ask again under the same request before anything depends on it.`);
     this.settle(l, "uncertain");
     if (next === null || this.stopped) return false;
     const timer = setTimeout(() => {

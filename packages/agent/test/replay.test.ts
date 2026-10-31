@@ -127,12 +127,15 @@ describe("replay defence: session and presence, never the voice", () => {
     expect(presenceOf({ marker: AT_SCREEN, captured_at: 0, audio_ms: 1000, arrived_at: PRESENCE_RULE.stale_capture_ms + 5000 }, "observed")).toEqual({ live: false, reason: "stale_capture" });
   });
 
-  it("goes red without the defence: the same replay under a new session is matched as the owner and sends a second order (negative control)", async () => {
+  it("goes red without the defence: the same replay under a new session is matched as the owner and makes a second order (negative control)", async () => {
     const r = rig({ replay: "off", presence: "observed" });
     const take = clip(0.3);
     await r.send("live-1", take, 1_000_000, { marker: AT_SCREEN });
     await r.send("replay-1", take, 1_000_010, { marker: AT_SCREEN, burst: true });
     expect(new Set(r.port.matched).size).toBe(2);
-    expect(r.orders()).toHaveLength(2);
+    // The replayed line is taken as the owner's order; only the repeated-order hold (D35) keeps it from the hospital until a yes.
+    const made = r.rt.views().flatMap((v) => v.actions).filter((a) => a.kind === "order_test");
+    expect(made.map((a) => [a.state, a.awaiting ?? null])).toEqual([["completed", null], ["proposed", "repeat"]]);
+    expect(r.orders()).toHaveLength(1);
   });
 });
