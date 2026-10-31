@@ -69,7 +69,8 @@ async function main(): Promise<void> {
     log: (l) => process.stderr.write(`${l}\n`)
   });
   process.stdout.write(`emr serve on ${s.urls.join(" ")} (mode ${s.client.mode}, ${Object.keys(bearers).length} owner${Object.keys(bearers).length > 1 ? "s" : ""}, speaker model ${embed ? `on, voiceprint at ${at}` : "off"}, ears ${earSwitch(process.env["HEY_PISGAH_EAR"])}/${asr}${adopted ? `, workflow version ${adopted.def.version} adopted` : ""})\n`);
-  const stop = () => { void s.close().then(() => process.exit(0)); };
+  // A stop that has not finished in 10 s exits anyway, as a kill would, so a restart never waits on a slow door call.
+  const stop = () => { setTimeout(() => process.exit(0), 10_000).unref(); void s.close().then(() => process.exit(0)); };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
 }

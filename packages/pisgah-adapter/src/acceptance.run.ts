@@ -130,8 +130,10 @@ async function restartServe(signal: "SIGKILL" | "SIGTERM"): Promise<{ ms: number
   for (let i = 0; i < 240 && (pidsOnPort().length || alive().length); i++) await wait(250);
   if (alive().length) { log(`restart: the old serve (pids ${alive().join(",")}) was still stopping after 60 s, so it was killed`); for (const p of alive()) { try { process.kill(p, "SIGKILL"); } catch { /* gone */ } } await wait(500); }
   restarts += 1;
+  const stoppedMs = Date.now() - at;
   startServe();
   const ok = await healthy();
+  log(`restart: the old serve stopped in ${stoppedMs} ms, the new one answered ${Date.now() - at - stoppedMs} ms later`);
   return { ms: Date.now() - at, ok, pids };
 }
 
@@ -214,7 +216,7 @@ function realignFakeMic(why: string): void {
 const fakeSlots = new Map<string, { at: number; clipMs: number; end: number }>();
 const heardInRoom = (l: Line) => l.mode === "speak" || l.mode === "play";
 function slotGap(l: Line, next: Line | undefined): number {
-  if (!heardInRoom(l)) return l.mode === "wait" ? Math.min(l.timeout_s ?? 90, 180) * 1000 : l.mode === "fault" ? 45_000 : l.mode === "person" ? (l.timeout_s ?? 30) * 1000 : 20_000;
+  if (!heardInRoom(l)) return l.mode === "wait" ? Math.min(l.timeout_s ?? 90, 180) * 1000 : l.mode === "fault" ? 60_000 : l.mode === "person" ? (l.timeout_s ?? 30) * 1000 : 20_000;
   if (l.interrupt) return 60_000;
   if (l.lose_ack || next?.confirm) return 40_000;
   return Number(process.env["ACC_FAKE_GAP_MS"] ?? 25_000);
@@ -407,8 +409,11 @@ async function check(e: Expect, line: Line, lineId: string | null, before: Set<s
   if ("act" in e) {
     const owners = e.owner ? ownersOf(e.owner) : [DOCTOR];
     if (e.from_line && !lineId) return { ok: false, detail: `${e.act}: this step's words were not heard, so nothing can come from them` };
-    const xs = owners.flatMap((o) => ofPatient(ref, o)).filter((a) => a.kind === e.act && (!e.from_line || a.line_id === lineId));
-    const inState = xs.filter((a) => a.state === e.state && during(seen.get(`${a.action_id}:${a.state}`)));
+    // from_step: the action must come from an earlier step's own line (a request a clarification finished), whenever it reached its state.
+    const stepLine = e.from_step ? steps.find((x) => x.line === e.from_step)?.line_id ?? null : null;
+    if (e.from_step && !stepLine) return { ok: false, detail: `${e.act}: step ${e.from_step}'s words were not heard` };
+    const xs = owners.flatMap((o) => ofPatient(ref, o)).filter((a) => a.kind === e.act && (!e.from_line || a.line_id === lineId) && (!stepLine || a.line_id === stepLine));
+    const inState = xs.filter((a) => a.state === e.state && (stepLine ? true : during(seen.get(`${a.action_id}:${a.state}`))));
     const n = e.n ?? 1;
     const vals = e.values ? inState.filter((a) => Object.entries(e.values!).every(([k, v]) => String(a.args[k] ?? "") === String(v))) : inState;
     return { ok: vals.length >= n, detail: `${e.act}: ${xs.map((a) => `${a.state}${a.reason ? `(${a.reason.slice(0, 60)})` : ""}`).join(", ") || "none"}${e.values ? `; values ${JSON.stringify(xs.map((a) => a.args)).slice(0, 160)}` : ""}` };
@@ -481,6 +486,8 @@ const steps: StepOutcome[] = [];
 const harnessErrors: string[] = [];
 const faults: Fault[] = [];
 const otherTouches: AccResult["touches"]["other_people"] = [];
+// A lost-acknowledgement fault is judged once per path, on the line where its write was seen or on the last line that could carry it.
+const lostAckJudged = new Set<string>();
 async function runLine(line: Line): Promise<void> {
   // Under the fake microphone each line runs in its slot of the file, so the room's timing never depends on the agent.
   const slot = DRIVER === "fake" ? fakeSlots.get(line.id) : undefined;
@@ -536,7 +543,7 @@ async function runLine(line: Line): Promise<void> {
   } else if (line.mode !== "wait") {
     if (line.mode === "type") otherTouches.push({ line: line.id, who: line.who, what: "typed stand-in line at that person's strip" });
     if (line.mode === "remote") otherTouches.push({ line: line.id, who: line.who, what: "spoken stand-in through that person's strip (no touch, listed so it is not mistaken for the doctor's)" });
-    if (line.lose_ack && PROXY_PORT) dropNext = { path: line.lose_ack.path, hit: null };
+    if (line.lose_ack && PROXY_PORT && !lostAckJudged.has(line.lose_ack.path) && dropNext?.path !== line.lose_ack.path) dropNext = { path: line.lose_ack.path, hit: null };
     if (line.muted && page && DRIVER === "human") { process.stdout.write("\n  MUTE: press the strip's mute button (the crossed microphone), then press Enter here.\n"); await rl!.question(""); }
     else if (line.muted && page) { await page.click(`${STRIP} button[aria-label="Mute the agent"]`).catch(() => harnessErrors.push(`${line.id}: no Mute button`)); await wait(800); }
     // Chrome's fake microphone reads its file afresh on a reload, so the harness cuts the file at the reload (realignFakeMic); ACC_FAKE_RELOAD=0 skips the reload.
@@ -569,7 +576,13 @@ async function runLine(line: Line): Promise<void> {
     if (blocked || outcomes.every((c) => c.ok) || Date.now() > limit()) break;
   }
   if (interruptWatch) await interruptWatch;
-  if (line.lose_ack && PROXY_PORT) {
+  // A write a clarification finishes on the next line keeps the dropped reply armed for that line, and the fault is judged there.
+  const nextLine = script.lines[script.lines.findIndex((x) => x.id === line.id) + 1];
+  const judged = !!line.lose_ack && lostAckJudged.has(line.lose_ack.path);
+  const carried = !!line.lose_ack && !!PROXY_PORT && !judged && !dropNext?.hit && nextLine?.lose_ack?.path === line.lose_ack.path;
+  if (carried) log(`${line.id}: no ${line.lose_ack!.path} write yet; the dropped reply stays armed for ${nextLine!.id}`);
+  if (line.lose_ack && PROXY_PORT && !carried && !judged) {
+    lostAckJudged.add(line.lose_ack.path);
     const hit = dropNext?.hit ?? null;
     const kinds = outcomes.filter((c) => "act" in c.expect);
     faults.push({ kind: "lost_ack", line: line.id, at: started, killed_during: hit, restarted_in_ms: null, outcome: hit ? `reply to ${hit} dropped; ${kinds.map((c) => c.detail).join("; ")}` : "no matching write was seen", ok: !!hit && kinds.every((c) => c.ok) });
@@ -787,7 +800,7 @@ async function finish(): Promise<void> {
     model: { calls, usd: Number(usd.toFixed(4)), rate_limited: rateLimited },
     harness_errors: harnessErrors, completion: { complete: false, reasons: [] }
   };
-  result.completion = completion(result, script.lines.filter((l) => l.mode === "fault" || l.interrupt).length + (PROXY_PORT ? script.lines.filter((l) => l.lose_ack).length : 0) + (page ? script.lines.filter((l) => l.offline_s || l.muted || (l.reload && (DRIVER !== "fake" || process.env["ACC_FAKE_RELOAD"] !== "0"))).length : 0));
+  result.completion = completion(result, script.lines.filter((l) => l.mode === "fault" || l.interrupt).length + (PROXY_PORT ? new Set(script.lines.filter((l) => l.lose_ack).map((l) => l.lose_ack!.path)).size : 0) + (page ? script.lines.filter((l) => l.offline_s || l.muted || (l.reload && (DRIVER !== "fake" || process.env["ACC_FAKE_RELOAD"] !== "0"))).length : 0));
   void signedIds;
   const root = KIND === "final" ? env("ACC_PUBLISH_ROOT") : OUT;
   const files = writeAccResults(root, result, { previews_with_names: Number(process.env["ACC_PREVIEWS_WITH_NAMES"] ?? "0"), privilege_gained: 0 });

@@ -1193,14 +1193,18 @@ export class EmrRuntime {
     // An earlier line's write can finish while this call is out and leave the task done or waiting; this line wakes it again rather than being dropped.
     if (l.task.state === "done" || l.task.state === "waiting") this.setState(l, "running", `heard_${lineId}`);
     if (l.task.state !== "running") return;
+    // The owner's short answer naming the medicine finishes the prescription the question held, on its own line, and is not a new order.
+    const resumed = this.resumeHeldDrug(l, lineId, line.text, settings.confidence_floor, kinds, prov);
     // Words meant for the agent answer its open question before they are acted on; a question waiting on the owner's voice closes only on the owner's line.
     if (clauses.some((c) => c.class === "instruction" || c.class === "correction")) {
       const speaker = this.speakerOf(t, lineId)?.speaker;
-      for (const q of t.questions.filter((y) => y.answered_by === null && (!y.rule || !speaker || speaker === "owner"))) this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
+      // Another voice never answers the owner's held medicine question.
+      const heldAsk = speaker && speaker !== "owner" ? this.drugAsked.get(t.task_id)?.lineId : undefined;
+      for (const q of t.questions.filter((y) => y.answered_by === null && (!y.rule || !speaker || speaker === "owner") && y.line_id !== heldAsk)) this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
     }
     this.fresh = lineId;
     try {
-      for (const c of oneUnclear(mergeInstructions(clauses, settings.confidence_floor, kinds))) this.applyClause(l, lineId, c, settings.confidence_floor, kinds, prov);
+      for (const c of oneUnclear(mergeInstructions(clauses, settings.confidence_floor, kinds))) if (!(resumed && c.kind === "prescribe")) this.applyClause(l, lineId, c, settings.confidence_floor, kinds, prov);
     } finally { this.fresh = null; }
     this.settle(l, "heard");
   }
@@ -1418,7 +1422,8 @@ export class EmrRuntime {
       case "prescribe": {
         if (!needVisit() || !t.patient_id) return;
         const drugs = this.o.port.orderables?.().drugs ?? {};
-        const key = this.orderableSaid(Object.fromEntries(Object.entries(drugs).map(([k, d]) => [k, d.words])), c.drug, line);
+        const key = (this.drugGiven?.lineId === lineId ? this.drugGiven.key : null) ?? this.orderableSaid(Object.fromEntries(Object.entries(drugs).map(([k, d]) => [k, d.words])), c.drug, line);
+        if (!key) this.drugAsked.set(t.task_id, { lineId, clause: c });
         if (!key) return this.ask(l, lineId, `Which medicine should I prescribe? I can prescribe ${Object.values(drugs).map((d) => d.words[0]).join(", ") || "none"}.`);
         const rx = prescriptionSaid(line, c);
         if (rx.quantity === null) return this.ask(l, lineId, `How many should the pharmacy give for ${drugs[key]!.words[0]}? Say the number.`);
@@ -1921,6 +1926,27 @@ export class EmrRuntime {
   private note(l: Live, text: string): void {
     this.append(l, "task.note", { note_id: `n-${shortHash(l.task.task_id, l.task.notes.length + 1)}`, text });
   }
+  // A prescription held on "which medicine", waiting per task for the owner's answer; the answer only supplies the medicine its own words name.
+  private readonly drugAsked = new Map<string, { lineId: string; clause: AnyClause }>();
+  private drugGiven: { lineId: string; key: string } | null = null;
+  private resumeHeldDrug(l: Live, lineId: string, text: string, floor: number, kinds: readonly string[], prov: Provenance): boolean {
+    const t = l.task;
+    const held = this.drugAsked.get(t.task_id);
+    if (!held || held.lineId === lineId) return false;
+    const open = t.questions.find((q) => q.line_id === held.lineId && q.answered_by === null);
+    if (!open) { this.drugAsked.delete(t.task_id); return false; }
+    const who = this.speakerOf(t, lineId)?.speaker;
+    if (who && who !== "owner") return false;
+    const drugs = this.o.port.orderables?.().drugs ?? {};
+    const key = this.orderableSaid(Object.fromEntries(Object.entries(drugs).map(([k, d]) => [k, d.words])), null, text);
+    if (!key) return false;
+    this.drugAsked.delete(t.task_id);
+    this.append(l, "question.answered", { question_id: open.question_id, line_id: lineId });
+    this.drugGiven = { lineId: held.lineId, key };
+    try { this.applyClause(l, held.lineId, { ...held.clause, drug: key } as AnyClause, floor, kinds, prov); } finally { this.drugGiven = null; }
+    return true;
+  }
+
   private ask(l: Live, lineId: string, text: string, choice: QuestionChoice | null = null, rule: OrderRule | null = null): void {
     this.append(l, "question.asked", { question_id: `q-${shortHash(l.task.task_id, l.task.questions.length + 1)}`, line_id: lineId, text: text.slice(0, rule ? 900 : 300), ...(choice ? { choice } : {}), ...(rule ? { rule } : {}) });
   }

@@ -14,7 +14,7 @@ export const Expect = z.union([
   z.strictObject({ arrival: Ref }),
   // established: the registration wrote the record with this name; without it the name need only be held, and either way a different spelling is held, never passed.
   z.strictObject({ identity: Ref, name: z.string().min(3), established: z.literal(true).optional() }),
-  z.strictObject({ act: z.string().min(1), owner: z.enum(WHO).optional(), state: z.enum(["proposed", "sent", "acknowledged", "completed", "refused", "failed", "cancelled"]), from_line: z.boolean().optional(), n: z.number().int().min(1).optional(), values: z.record(z.string(), z.union([z.string(), z.number()])).optional(), optional: z.boolean().optional() }),
+  z.strictObject({ act: z.string().min(1), owner: z.enum(WHO).optional(), state: z.enum(["proposed", "sent", "acknowledged", "completed", "refused", "failed", "cancelled"]), from_line: z.boolean().optional(), from_step: z.string().regex(/^[A-Z][A-Z0-9]{1,5}$/).optional(), n: z.number().int().min(1).optional(), values: z.record(z.string(), z.union([z.string(), z.number()])).optional(), optional: z.boolean().optional() }),
   z.strictObject({ awaits: z.string().min(1), optional: z.boolean().optional() }),
   z.strictObject({ question: z.string().min(1), optional: z.boolean().optional() }),
   z.strictObject({ no_write_from_line: z.string().min(1) }),
