@@ -14,7 +14,7 @@ import { answerChoice, compareAll, compareReadings, disagreementQuestion, normVa
 import type { VersionWiring } from "./version-offers.js";
 import { DOCUMENTATION_KINDS, ORDER_KINDS, lineVerdict, recordOf, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
 import { EMERGENCY_KIND, EMERGENCY_LINE, RULE_ONLY_KINDS, currentPatientNamed, emergencyHeardLoosely, emergencyReason, identityFrom, otherPatientsNamed, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
-import { screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
+import { openableHref, screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
 import {
   ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_ARGS, DELEGATION_RULE_KINDS, DISPENSE_KIND, ESCALATE_KIND, NUDGE_KIND, PREPARE_KIND, REGISTER_KIND, WARD_REVIEW_KIND,
   ACCEPT_LINE, CONSENT_PURPOSES, acceptedTask, consentSaid, consentScope, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
@@ -47,6 +47,8 @@ export type EmrAction = {
   repeat_of: { action_id: string; at: string } | null;
   // The page that shows this work, bound to the action's encounter and command id.
   screen: ScreenPlan | null;
+  // The strip's report that its page showed this action's verified record; saved (the proof read) and shown are separate facts.
+  shown: { page: string; record_id: string; at: string } | null;
   // The paperwork read back from the record before a discharge, which the owner's confirmation covers.
   read_back: PaperworkReadBack | null;
 };
@@ -120,6 +122,7 @@ export type EmrTaskView = {
     uncertain?: { since: string; attempts: number; reason: string; committed?: true };
     // The page the strip opens and fills for this action; command_id and owner_id bind it through navigation.
     screen?: ScreenPlan & { command_id: string; owner_id: string };
+    shown?: { page: string; record_id: string; at: string };
   }[];
   questions: { question_id: string; text: string; answers?: string[] }[];
   transcript: { id: string; line_id: string; text: string; at: string; source: "text" | "audio"; decided: boolean; class: SpeechClass | null; classes: SpeechClass[]; kept: boolean; ambient?: AmbientMeta; speaker?: SpeakerRecord }[];
@@ -218,7 +221,8 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
     };
   }
   if (!t) return null;
-  t.updated_at = e.wall_at;
+  // What a page showed is not activity on the task, so it never reorders the owner's tasks.
+  if (e.record_type !== "action.shown") t.updated_at = e.wall_at;
   const act = t.actions.get(String(x["action_id"]));
   switch (e.record_type) {
     case "utterance.heard": {
@@ -276,11 +280,12 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
         corrects_action_id: (x["corrects_action_id"] as string | null) ?? null, state: "proposed", intent_key: null, written: null, proof: null, reason: null,
         proposed_at: e.wall_at, written_at: null, completed_at: null, report: null, draft: null, unverified: false, awaiting_verification: null, uncertain: null, intent_at: null, ears: !!x["ears"],
         awaiting: (x["awaiting"] as EmrAction["awaiting"] | undefined) ?? null, authorised_by_line: (x["authorised_by_line"] as string | null | undefined) ?? null, confirmed_by_line: null,
-        repeat_of: (x["repeat_of"] as EmrAction["repeat_of"] | undefined) ?? null, screen: (x["screen"] as ScreenPlan | undefined) ?? null, read_back: null
+        repeat_of: (x["repeat_of"] as EmrAction["repeat_of"] | undefined) ?? null, screen: (x["screen"] as ScreenPlan | undefined) ?? null, shown: null, read_back: null
       });
       t.order.push(String(x["action_id"]));
       break;
     case "action.read_back": if (act) act.read_back = x["read_back"] as PaperworkReadBack; break;
+    case "action.shown": if (act && !act.shown) act.shown = { page: String(x["page"]), record_id: String(x["record_id"]), at: e.wall_at }; break;
     case "action.intent": if (act) { act.state = "sent"; act.intent_key = String(x["intent_key"]); act.intent_at = e.wall_at; if (x["args"]) act.args = x["args"] as WorkArgs; } break;
     case "action.uncertain": if (act) { act.state = "uncertain"; act.uncertain = { since: act.uncertain?.since ?? e.wall_at, attempts: Number(x["attempts"]), reason: String(x["reason"]), ...(act.uncertain?.committed || x["committed"] ? { committed: true as const } : {}) }; } break;
     case "action.written": if (act) { act.state = "acknowledged"; act.written = x["written"] as EmrAction["written"]; act.written_at = e.wall_at; } break;
@@ -369,6 +374,12 @@ export function projectEmr(records: readonly Envelope[]): EmrTask {
   return t;
 }
 
+// The screen plan as the strip reads it: the task's ids fill what the plan did not know, and the route opens only once every id it names is known.
+function screenView(p: ScreenPlan, t: EmrTask, actionId: string): ScreenPlan & { command_id: string; owner_id: string } {
+  const encounter = { patient_id: p.encounter.patient_id ?? t.patient_id, visit_id: p.encounter.visit_id ?? t.visit_id, admission_id: p.encounter.admission_id ?? (t.admission_id || null) };
+  return { ...p, section: p.section ?? "", href: openableHref(p.href, encounter), encounter, command_id: actionId, owner_id: t.owner };
+}
+
 export function viewOf(t: EmrTask): EmrTaskView {
   return {
     task_id: t.task_id, goal: t.goal, state: t.state, reason: t.reason, owner: t.owner, admission_id: t.admission_id, patient_id: t.patient_id, visit_id: t.visit_id,
@@ -380,7 +391,8 @@ export function viewOf(t: EmrTask): EmrTaskView {
       ...(a.awaiting_verification && a.state === "acknowledged" ? { awaiting_verification: { ...a.awaiting_verification } } : {}),
       ...(a.uncertain && a.state === "uncertain" ? { uncertain: { ...a.uncertain } } : {}),
       ...(a.authorised_by_line && a.authorised_by_line !== a.line_id ? { authorised_by_line: a.authorised_by_line } : {}),
-      ...(a.screen ? { screen: { ...a.screen, encounter: { patient_id: a.screen.encounter.patient_id ?? t.patient_id, visit_id: a.screen.encounter.visit_id ?? t.visit_id, admission_id: a.screen.encounter.admission_id ?? (t.admission_id || null) }, command_id: a.action_id, owner_id: t.owner } } : {})
+      ...(a.screen ? { screen: screenView(a.screen, t, a.action_id) } : {}),
+      ...(a.shown ? { shown: { ...a.shown } } : {})
     })),
     questions: t.questions.filter((q) => q.answered_by === null).map((q) => ({ question_id: q.question_id, text: q.text, ...(q.choice ? { answers: answersOf(q.choice) } : q.pref_id ? { answers: [...SCOPE_KINDS, "no"] } : q.whom ? { answers: q.whom.choices.map((c) => c.label) } : {}) })),
     transcript: t.lines.map((l) => ({ id: l.id, line_id: l.id, text: l.kept ? l.text : "", at: l.at, source: l.source, decided: l.decided, class: primaryClass(l.classes) as SpeechClass | null, classes: l.classes, kept: l.kept, ...(l.ambient ? { ambient: l.kept ? l.ambient : { ...l.ambient, raw_text: "" } } : {}), ...(l.speaker ? { speaker: l.speaker } : {}) })),
@@ -1234,6 +1246,20 @@ export class EmrRuntime {
     this.setState(l, "running", "resumed");
     for (const id of pending) this.hold(l, id);
     this.settle(l, "resumed");
+  }
+
+  // The strip says its page showed an action's verified record; only the owner's own completed action, on its own page, with the record its proof names, is kept.
+  markShown(taskId: string, by: string, actionId: string, shown: { page: string; record_id: string }): { ok: boolean; reason?: string } {
+    const l = this.live.get(taskId);
+    if (!l) return { ok: false, reason: "unknown_task" };
+    if (l.task.owner !== by) return { ok: false, reason: "not_yours" };
+    const a = l.task.actions.get(actionId);
+    if (!a) return { ok: false, reason: "unknown_action" };
+    if (a.state !== "completed" || !a.proof) return { ok: false, reason: "not_saved" };
+    if (a.proof.record_id !== shown.record_id) return { ok: false, reason: "another_record" };
+    if (!a.screen || a.screen.page !== shown.page) return { ok: false, reason: "another_page" };
+    if (!a.shown) this.append(l, "action.shown", { action_id: actionId, page: shown.page, record_id: shown.record_id });
+    return { ok: true };
   }
 
   // The strip's resume button: the same return as "where were we", with no line.

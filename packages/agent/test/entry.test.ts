@@ -126,6 +126,28 @@ describe("the unidentified arrival through serve", () => {
     await s.close();
   });
 
+  it("keeps shown apart from saved: only the owner's page showing the proved record marks it shown, once", async () => {
+    const { s } = await boot();
+    const r = await post(`${s.url}/tasks/emergency`, { owner: OWNER, spokenAt: new Date().toISOString() });
+    await s.runtime.settled();
+    const url = `${s.url}/tasks/${r.body.task_id}/actions/${r.body.action_id}/shown`;
+    const before = s.runtime.view(r.body.task_id)!;
+    expect(before.actions[0]).toMatchObject({ state: "completed", proof: { record_id: PATIENT } });
+    expect(before.actions[0]!.shown).toBeUndefined();
+    expect((await post(url, { owner: OWNER, page: "doctor_workspace", record_id: VISIT })).status).toBe(409);
+    expect((await post(url, { owner: OTHER, page: "doctor_workspace", record_id: PATIENT })).status).toBe(403);
+    expect((await post(url, { owner: OWNER, page: "triage", record_id: PATIENT })).status).toBe(409);
+    expect((await post(`${s.url}/tasks/${r.body.task_id}/actions/a-nope/shown`, { owner: OWNER, page: "doctor_workspace", record_id: PATIENT })).status).toBe(404);
+    expect(s.runtime.view(r.body.task_id)!.actions[0]!.shown).toBeUndefined();
+    expect((await post(url, { owner: OWNER, page: "doctor_workspace", record_id: PATIENT })).status).toBe(200);
+    expect((await post(url, { owner: OWNER, page: "doctor_workspace", record_id: PATIENT })).status).toBe(200);
+    const after = s.runtime.view(r.body.task_id)!;
+    expect(after.actions[0]).toMatchObject({ state: "completed", proof: { record_id: PATIENT }, shown: { page: "doctor_workspace", record_id: PATIENT } });
+    // A page report is not activity: the task keeps its place in the owner's list.
+    expect(after.updated_at).toBe(before.updated_at);
+    await s.close();
+  });
+
   it("holds the spoken identity as an obligation and writes nothing to the record", async () => {
     const { s, port, calls } = await boot();
     const r = await post(`${s.url}/tasks/emergency`, { owner: OWNER, spokenAt: new Date().toISOString() });

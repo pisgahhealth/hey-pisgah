@@ -15,6 +15,7 @@ import { printWav, type Embedder, type LivenessMarker } from "./speaker.js";
 import { Heartbeats } from "./presence.js";
 import { EmrId, EmrPortError, type EmrPort, type EmrTarget } from "./port.js";
 import { gateArrival } from "./gate.js";
+import { SCREEN_PAGES, type ScreenPage } from "./screens.js";
 import { EMERGENCY_KIND, EMERGENCY_LINE, EMERGENCY_PRESS, afterWake, identityFrom, emergencyHeardLoosely, emergencyReason, spokenPatient, unidentifiedRef } from "./entry.js";
 import { shortHash } from "../ids.js";
 import { openStream } from "@hey-pisgah/store";
@@ -108,6 +109,7 @@ const KWS_FILE = /^[A-Za-z0-9_.-]{1,120}$/;
 const KWS_TYPES: Record<string, string> = { ".js": "text/javascript", ".wasm": "application/wasm", ".onnx": "application/octet-stream", ".txt": "text/plain", ".json": "application/json" };
 const Interrupt = z.strictObject({ owner: Owner.optional(), task_id: z.string().optional() });
 const Scope = z.strictObject({ owner: Owner, scope: z.enum([...SCOPE_KINDS, "no"]) });
+const Shown = z.strictObject({ owner: Owner, page: z.enum(SCREEN_PAGES as [ScreenPage, ...ScreenPage[]]), record_id: z.string().min(1).max(80) });
 // A hospital rule given as text by a person, under the scope they name; a patient scope comes only from a correction or a spoken rule.
 const External = z.strictObject({ owner: Owner, text: z.string().min(3).max(600), scope: z.enum(["me", "ward", "everyone"]), ward: z.string().min(1).max(120).optional() });
 const StreamMeta = z.strictObject({ owner: Owner, admissionId: EmrId.optional(), patientId: EmrId.optional(), session_id: z.string().min(1).max(80).regex(/^[A-Za-z0-9_.:-]+$/), rate: z.coerce.number().int().refine((r) => r === 16_000 || r === 24_000, "rate is 16000 or 24000") });
@@ -779,6 +781,13 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       const r = rt.scopePreference(id, b.owner, parts[3]!, b.scope);
       return [r.ok ? 200 : r.reason === "unknown_preference" ? 404 : r.reason === "not_yours" ? 403 : 409, r];
     }
+    // The strip's page showed this action's verified record; saved and shown stay separate facts on the action.
+    if (parts.length === 5 && parts[2] === "actions" && parts[4] === "shown" && m === "POST") {
+      const b = parse(Shown, await json(req));
+      if (!task) throw new HttpError(404, "unknown task");
+      const r = rt.markShown(id, b.owner, parts[3]!, { page: b.page, record_id: b.record_id });
+      return [r.ok ? 200 : r.reason === "not_yours" ? 403 : r.reason === "unknown_action" ? 404 : 409, r];
+    }
     if (parts.length === 3 && parts[2] === "interrupt" && m === "POST") {
       const b = parse(Interrupt, await json(req));
       if (!task) throw new HttpError(404, "unknown task");
@@ -841,7 +850,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
 }
 
 // The routes that take a JSON body; requiring the JSON type makes a browser preflight them.
-const JSON_ROUTES = /^\/tasks\/(?:say|watch|[^/]+\/(?:say|resume|interrupt))$/;
+const JSON_ROUTES = /^\/tasks\/(?:say|watch|[^/]+\/(?:say|resume|interrupt|actions\/[^/]+\/shown))$/;
 // Only a loopback host name reaches the service, which stops a rebinding page from talking to it under its own name.
 export function loopbackHost(host: string | undefined): boolean {
   if (!host) return true;
