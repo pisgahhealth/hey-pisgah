@@ -205,9 +205,12 @@ export function afterSaid(after: string, line: string): boolean {
   return after === "admission" ? /\badmit(ted|s)?\b|\badmission\b|\bon the ward\b/.test(low) : after === "result" ? /\bresults?\b|\bcomes? back\b|\bare back\b|\bis back\b/.test(low) : false;
 }
 
+// Doses per day as said on a Nigerian ward, most specific first so "twice daily" is never read as "daily"; stat and nocte are one dose, and prn has no number here.
 const FREQUENCY_WORDS: readonly [RegExp, number][] = [
-  [/\b(once (a|per) day|once daily|daily|every 24 hours|od)\b/, 1], [/\b(twice (a|per) day|twice daily|every 12 hours|bd)\b/, 2],
-  [/\b(three times (a|per) day|three times daily|every 8 hours|tds)\b/, 3], [/\b(four times (a|per) day|four times daily|every 6 hours|qds|qid)\b/, 4]
+  [/\b(four times (a|per) day|four times daily|every (6|six) hours|(6|six)[\s-]hourly|qds|qid)\b/, 4],
+  [/\b(three times (a|per) day|three times daily|every (8|eight) hours|(8|eight)[\s-]hourly|tds|tid)\b/, 3],
+  [/\b(twice (a|per) day|twice daily|every (12|twelve) hours|(12|twelve)[\s-]hourly|bd|bid)\b/, 2],
+  [/\b(once (a|per) day|once daily|daily|every 24 hours|(24|twenty four)[\s-]hourly|od|nocte|stat)\b/, 1]
 ];
 const ROUTE_WORDS: readonly [RegExp, (typeof DRUG_ROUTES)[number]][] = [
   [/\b(iv|i v|intravenous(ly)?|into the vein)\b/, "iv"], [/\b(im|i m|intramuscular(ly)?)\b/, "im"], [/\b(oral(ly)?|by mouth|po|tablets?)\b/, "oral"],

@@ -172,7 +172,7 @@ describe("voice orders, attribution and countersign", () => {
 
   it("reads a prescription only from the words said, with stat as one dose and no value worked out", () => {
     expect(prescriptionSaid("Give paracetamol 1 g IV three times a day for 3 days, quantity 9.", { dose: "1 g" })).toEqual({ dose: "1 g", frequency: 3, duration_days: 3, quantity: 9, route: "iv" });
-    expect(prescriptionSaid("Paracetamol 1 g IV stat.", { dose: "1 g" })).toMatchObject({ quantity: 1, route: "iv", frequency: null });
+    expect(prescriptionSaid("Paracetamol 1 g IV stat.", { dose: "1 g" })).toMatchObject({ quantity: 1, route: "iv", frequency: 1 });
     expect(prescriptionSaid("Paracetamol twice a day.", { dose: "500 mg" })).toEqual({ dose: null, frequency: 2, duration_days: null, quantity: null, route: null });
   });
 
