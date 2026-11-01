@@ -15,6 +15,8 @@ import type { VersionWiring } from "./version-offers.js";
 import { DOCUMENTATION_KINDS, ORDER_KINDS, lineVerdict, recordOf, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
 import { EMERGENCY_KIND, EMERGENCY_LINE, IDENTITY_KIND, IdentityArgs, RULE_ONLY_KINDS, currentPatientNamed, emergencyHeardLoosely, emergencyReason, identityFrom, otherPatientsNamed, selfNamed, spelledName, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
 import { openableHref, screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
+import { EventsLoop } from "./events.js";
+import type { EmrEvent, ObligationAnswer, ObligationOp } from "./port.js";
 import {
   ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_ARGS, DELEGATION_RULE_KINDS, DISPENSE_KIND, ESCALATE_KIND, NUDGE_KIND, PREPARE_KIND, REGISTER_KIND, WARD_REVIEW_KIND, RECEIVE_KIND, CANCEL_TEST_KIND,
   ACCEPT_LINE, LAB_ACT_WORDS, cancelReason, labAsked, patientSaid, CONSENT_PURPOSES, acceptedTask, consentSaid, consentScope, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
@@ -89,6 +91,8 @@ export type EmrObligation = {
   held_at: string; fired_at: string | null; fired_by: string | null; action_id: string | null; anchor_action_id: string | null; reason: string;
   // Work held for a result names the orders it waits on (by action until written, then by record id) and the states that mean the result is back.
   condition?: ResultCondition | null;
+  // The hospital's copy of this obligation, whose guarded claim decides who fires it.
+  mirror_id?: string | null;
 };
 export type ResultCondition = { order_actions: string[]; orders: string[]; tests: string[]; states: string[]; unbound_noted?: boolean };
 // One verified action timed from the end of the words that asked for it; parts are the milestones on the way.
@@ -180,6 +184,8 @@ export type EmrRuntimeOptions = {
   versions?: VersionWiring;
   // How often held work is checked for its time or condition; the runtime's own timer, since nothing else calls it.
   obligationTickMs?: number;
+  // When the port offers the hospital's events route, delegations and results are read on its events and swept once a minute; false keeps the old poll.
+  events?: boolean;
   // How long an unanswered question waits before it closes with a note; 30 minutes when absent.
   questionExpiryMs?: number;
   // The speed levers in force; each is off unless named, so a recorded run replays as it was made.
@@ -198,6 +204,9 @@ export type EmrRuntimeOptions = {
   preferences?: PreferenceMemory;
 };
 
+// How long a failed hold, claim or cancel at the hospital waits before it is tried again, and how often events still sweep everything.
+const MIRROR_RETRY_MS = 15_000;
+const EVENTS_SWEEP_MS = 60_000;
 const OPEN_ACTION: ReadonlySet<EmrActionState> = new Set(["proposed", "sent", "uncertain", "acknowledged"]);
 const CLOSED_TASK: ReadonlySet<TaskState> = new Set(["cancelled", "failed"]);
 // An action that will never write: its order is not one a held result waits on.
@@ -355,6 +364,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
     case "obligation.fired": { const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]); if (o) { o.state = "fired"; o.fired_at = e.wall_at; o.fired_by = String(x["by"]); } break; }
     case "obligation.done": { const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]); if (o) { o.state = "done"; o.action_id = (x["action_id"] as string | null) ?? null; } break; }
     case "obligation.cancelled": { const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]); if (o) o.state = "cancelled"; break; }
+    case "obligation.mirrored": { const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]); if (o) o.mirror_id = String(x["mirror_id"]); break; }
     case "speed.logged": t.speed.push(x["row"] as SpeedRow); break;
     case "delegation.made": case "delegation.received": t.delegations.push(x["delegation"] as EmrDelegation); break;
     case "delegation.state": {
@@ -430,6 +440,8 @@ export function percentile(xs: readonly number[], p: number): number | null {
 export const TELL_ME_KIND = "tell_me";
 
 // The names a line may use for a task's patient: a delegation's task carries its title as label, so only the names said for its patient count.
+// The obligations of a task still held or fired and not yet done; the retention sweep keeps a task's words while any is open.
+export const openObligations = (t: Pick<EmrTask, "obligations">): EmrObligation[] => t.obligations.filter((o) => o.state === "held" || o.state === "fired");
 export const patientNames = (t: Pick<EmrTask, "entry" | "label" | "identities">): string[] => (t.entry === "delegation" ? t.identities.filter((i) => i.state !== "cancelled").map((i) => i.name) : knownNames(t));
 // The value that names what a request is about; a long line with a different one is a new request.
 const PRIMARY_FIELD: Readonly<Record<string, string>> = { prescribe: "drug", order_test: "test", page_staff: "to", schedule_follow_up: "clinic", record_allergy: "substance" };
@@ -688,6 +700,15 @@ export class EmrRuntime {
   // The second reading of a spoken dose, per prescription action, compared before the write.
   private readonly doseChecks = new Map<string, Promise<{ agree: boolean; heard: string | null; error: string | null; reading: EarReading | null }>>();
   private readonly doseEars = new Map<string, Promise<{ reading: EarReading | null; error: string | null }>>();
+  // When each obligation was last offered to the hospital or claimed there, so a failing door is not asked every tick.
+  private readonly mirrorTried = new Map<string, number>();
+  // Owners and results the hospital said changed, read on the next drain; and when everything was last swept.
+  private events: EventsLoop | null = null;
+  private readonly pushedOwners = new Set<string>();
+  private pushedResults = false;
+  private pushAll = false;
+  private sweptAt = 0;
+  private draining = false;
   // Review obligations already checked for a team to hand them to, so the sweep asks once per obligation.
   private readonly reviewTried = new Set<string>();
   // Tasks handed on elsewhere are followed only when made from shortly before this runtime started, so old leftovers are never taken up.
@@ -776,6 +797,10 @@ export class EmrRuntime {
     if (this.o.watchMs && this.o.watchMs > 0 && (this.o.port.watch || this.o.port.inbox || this.o.port.delegations || this.o.port.orderResults) && !this.poller) {
       this.poller = setInterval(() => { void this.pollOnce(); }, this.o.watchMs);
     }
+    if (this.eventsOn() && !this.events) {
+      this.events = new EventsLoop({ port: this.o.port, orders: (owner) => this.ordersWaitedOn(owner), wallNow: () => this.wall(), log: (x) => this.log(x), onEvents: (owner, evs) => this.onEvents(owner, evs) });
+      for (const owner of this.delegationOwnersNow()) this.events.watch(owner);
+    }
     this.sweepObligations();
     if (!this.obTick) { this.obTick = setInterval(() => this.sweepObligations(), this.o.obligationTickMs ?? 1000); this.obTick.unref(); }
   }
@@ -801,6 +826,7 @@ export class EmrRuntime {
 
   async stop(): Promise<void> {
     this.stopped = true;
+    this.events?.stop();
     if (this.poller) clearInterval(this.poller);
     this.poller = null;
     if (this.obTick) clearInterval(this.obTick);
@@ -1987,6 +2013,7 @@ export class EmrRuntime {
     const obligation_id = `o-${shortHash(t.task_id, lineId, kind, t.obligations.length + 1)}`;
     const condition = w.after === "result" ? this.resultCondition(t, lineId) : null;
     this.append(l, "obligation.held", { obligation_id, line_id: lineId, kind, clause, title, due_at: w.due_at, after: w.after, reason: w.reason, ...(condition ? { condition } : {}) });
+    this.mirrorObligation(l, obligation_id);
     const when = [w.due_at ? `at ${w.due_at.slice(11, 16)} UTC` : null, w.after === "admission" ? "once the patient is admitted" : w.after === "result" ? "when the result is back" : null].filter(Boolean).join(", ");
     this.note(l, `Held ${when}: ${kind === "schedule_review" ? `review, ${title}` : kind === TELL_ME_KIND ? `telling you, ${title}` : summariseWork(kind, clause)}. I will do it then without being asked again.`);
     this.anchorReviews(l);
@@ -2065,7 +2092,10 @@ export class EmrRuntime {
     const now = this.wall().getTime();
     for (const l of this.live.values()) {
       const t = l.task;
-      if (CLOSED_TASK.has(t.state) || t.state === "paused") continue;
+      // A closed task's work is cancelled at the hospital too, so its job never fires work nobody wants.
+      if (CLOSED_TASK.has(t.state)) { this.cancelMirrors(l); continue; }
+      for (const o of t.obligations) if (o.state === "held" && o.due_at && !o.mirror_id) this.mirrorObligation(l, o.obligation_id);
+      if (t.state === "paused") continue;
       const expiry = this.o.questionExpiryMs ?? 30 * 60_000;
       if (!this.expiring.has(t.task_id) && t.questions.some((q) => q.answered_by === null && now - Date.parse(q.at) > expiry)) {
         this.expiring.add(t.task_id);
@@ -2087,10 +2117,68 @@ export class EmrRuntime {
         const condition = o.after === "admission" ? !!t.admission_id : o.after === "result" ? this.resultBack(t, o) : false;
         // A held time and a condition both have to be met when both were said.
         const ready = o.due_at !== null && o.after !== null ? timeCame && condition : timeCame || condition;
-        if (!ready) continue;
+        if (!ready || (o.mirror_id && this.triedLately(o.obligation_id))) continue;
         this.firing.add(o.obligation_id);
-        this.enqueue(l, async () => { try { this.fire(l, o.obligation_id, timeCame ? "timer" : "condition"); } finally { this.firing.delete(o.obligation_id); } });
+        this.enqueue(l, async () => { try { if (await this.claim(l, o)) this.fire(l, o.obligation_id, timeCame ? "timer" : "condition"); } finally { this.firing.delete(o.obligation_id); } });
       }
+    }
+  }
+
+  private triedLately(id: string): boolean {
+    const last = this.mirrorTried.get(id);
+    return last !== undefined && Date.now() - last < MIRROR_RETRY_MS;
+  }
+  private obligationProv(t: EmrTask, o: EmrObligation): Provenance {
+    return { owner: t.owner, evidence: o.line_id.startsWith("rec-") ? `record:${o.line_id.slice(4)}` : `transcript:${o.line_id}`, spoken_at: this.wall().toISOString() };
+  }
+
+  // Gives one timed obligation to the hospital, so its job fires it if this agent is not running then; a failure is offered again from the sweep.
+  private mirrorObligation(l: Live, id: string): void {
+    const t = l.task;
+    const o = t.obligations.find((x) => x.obligation_id === id);
+    const port = this.o.port;
+    if (!o || o.mirror_id || o.state !== "held" || !o.due_at || !t.patient_id || !port.obligation || this.stopped || this.triedLately(id)) return;
+    this.mirrorTried.set(id, Date.now());
+    const op: ObligationOp = { op: "hold", key: `${t.task_id}:${id}`, kind: o.kind === "schedule_review" ? "review_due" : "held_work", due_at: o.due_at, patient_id: t.patient_id, ...(t.admission_id ? { admission_id: t.admission_id } : {}) };
+    void this.track(port.obligation(t.owner, op, this.obligationProv(t, o)).then((r) => {
+      if (this.stopped || o.mirror_id || !r.id) return;
+      this.append(l, "obligation.mirrored", { obligation_id: id, mirror_id: r.id });
+      this.mirrorTried.delete(id);
+    }).catch((e: unknown) => this.log(`obligation ${id}: ${e instanceof Error ? e.message : String(e)}`)));
+  }
+
+  // Claims a mirrored obligation at the hospital before it fires here; when the hospital's job fired it while this agent was away, nothing is done twice.
+  private async claim(l: Live, o: EmrObligation): Promise<boolean> {
+    const port = this.o.port;
+    if (!o.mirror_id || !port.obligation) return true;
+    let r: ObligationAnswer;
+    try { r = await port.obligation(l.task.owner, { op: "fire", id: o.mirror_id }, this.obligationProv(l.task, o)); } catch (e) {
+      this.mirrorTried.set(o.obligation_id, Date.now());
+      this.log(`obligation ${o.obligation_id}: ${e instanceof Error ? e.message : String(e)}`);
+      return false;
+    }
+    if (o.state !== "held") return false;
+    if (r.status === "fired" || (r.status === "already_fired" && r.fired_by === "serve")) return true;
+    if (r.status !== "already_fired") { this.append(l, "obligation.cancelled", { obligation_id: o.obligation_id }); return false; }
+    this.append(l, "obligation.fired", { obligation_id: o.obligation_id, by: "hospital" });
+    this.append(l, "obligation.done", { obligation_id: o.obligation_id, action_id: null });
+    const when = r.fired_at ? ` at ${r.fired_at.slice(11, 16)} UTC` : "";
+    this.note(l, o.kind === "schedule_review"
+      ? `Review due: ${o.title}. The hospital's bell told you${when}, while I was not running.`
+      : `Not done: ${summariseWork(o.kind, o.clause)}. It came due${when} while I was not running, and the hospital's bell told you; say it again if it is still wanted.`);
+    this.settle(l, "fired_by_hospital");
+    return false;
+  }
+
+  // Cancels at the hospital each obligation a closed task still holds there.
+  private cancelMirrors(l: Live): void {
+    const port = this.o.port;
+    for (const o of l.task.obligations) {
+      if (o.state !== "held" || !o.mirror_id || !port.obligation || this.stopped || this.triedLately(o.obligation_id)) continue;
+      this.mirrorTried.set(o.obligation_id, Date.now());
+      void this.track(port.obligation(l.task.owner, { op: "cancel", id: o.mirror_id }, this.obligationProv(l.task, o)).then((r) => {
+        if (!this.stopped && o.state === "held" && r.status !== "fired") this.append(l, "obligation.cancelled", { obligation_id: o.obligation_id });
+      }).catch((e: unknown) => this.log(`obligation ${o.obligation_id}: ${e instanceof Error ? e.message : String(e)}`)));
     }
   }
 
@@ -2669,10 +2757,47 @@ export class EmrRuntime {
           }
         }
       }
-      await this.pollResults(at);
-      await this.pollDelegations(at);
+      if (!this.events) {
+        await this.pollResults(at);
+        await this.pollDelegations(at);
+      } else {
+        for (const owner of this.delegationOwnersNow()) this.events.watch(owner);
+        // The events route carries the changes; a sweep a minute still reads everything, for a change it missed.
+        if (Date.now() - this.sweptAt >= EVENTS_SWEEP_MS) { this.sweptAt = Date.now(); this.pushedResults = true; this.pushAll = true; }
+        await this.drainPushed();
+      }
     } finally {
       this.polling = false;
+    }
+  }
+
+  private eventsOn(): boolean { return this.o.events !== false && !!this.o.port.events && !!this.o.watchMs && this.o.watchMs > 0; }
+  private delegationOwnersNow(): Set<string> { return new Set([...(this.o.port.delegationOwners?.() ?? []), ...[...this.live.values()].map((l) => l.task.owner)]); }
+  // The order records an owner's held work waits on, named to the events route so their results come back as events.
+  private ordersWaitedOn(owner: string): string[] {
+    const ids = [...this.live.values()].filter((l) => l.task.owner === owner && !CLOSED_TASK.has(l.task.state)).flatMap((l) => l.task.obligations
+      .filter((o) => o.state === "held" && o.after === "result" && o.condition)
+      .flatMap((o) => [...o.condition!.orders, ...o.condition!.order_actions.map((id) => l.task.actions.get(id)?.written?.record_id ?? "")]));
+    return [...new Set(ids.filter((id) => EmrId.safeParse(id).success))].slice(0, 50);
+  }
+  private onEvents(owner: string, evs: readonly EmrEvent[]): void {
+    for (const e of evs) { if (e.kind === "result.changed") this.pushedResults = true; else this.pushedOwners.add(owner); }
+    void this.drainPushed();
+  }
+  // Reads what the hospital said changed, one drain at a time, so an event and the sweep never read the same task together.
+  private async drainPushed(): Promise<void> {
+    if (this.draining || this.stopped) return;
+    this.draining = true;
+    try {
+      while ((this.pushAll || this.pushedResults || this.pushedOwners.size) && !this.stopped) {
+        const all = this.pushAll, results = this.pushedResults, owners = new Set(this.pushedOwners);
+        this.pushAll = false; this.pushedResults = false; this.pushedOwners.clear();
+        const at = this.wall().toISOString();
+        if (all || results) await this.pollResults(at);
+        if (all || owners.size) await this.pollDelegations(at, all ? null : owners);
+      }
+    } finally {
+      this.draining = false;
     }
   }
 
@@ -3461,12 +3586,12 @@ export class EmrRuntime {
   }
 
   // Each poll: new tasks handed to an owner are received; tasks an owner handed on are read again, closed when the record shows them done and escalated once when overdue.
-  private async pollDelegations(at: string): Promise<void> {
+  private async pollDelegations(at: string, only: ReadonlySet<string> | null = null): Promise<void> {
     const port = this.o.port;
     if (!port.delegations || !port.delegation) return;
-    const owners = new Set([...(port.delegationOwners?.() ?? []), ...[...this.live.values()].map((l) => l.task.owner)]);
-    for (const owner of owners) {
+    for (const owner of this.delegationOwnersNow()) {
       if (this.stopped) return;
+      if (only && !only.has(owner)) continue;
       const side = port.delegationSide?.(owner) ?? "none";
       const prov: Provenance = { owner, evidence: "watch:delegations", spoken_at: at };
       const mine = () => [...this.live.values()].filter((l) => l.task.owner === owner);

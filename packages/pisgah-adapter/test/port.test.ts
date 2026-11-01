@@ -181,4 +181,31 @@ describe("profile helpers", () => {
     expect(new PisgahPort(profile(base), { bearers: {} }).orderResults).toBeUndefined();
     await new Promise<void>((r) => server.close(() => r()));
   });
+  it("waits on the hospital's events outside the door's budget, and keeps each obligation at the hospital under one key per step", async () => {
+    const asked: { method: string; url: string; key: string | undefined; body: unknown }[] = [];
+    const server = createServer(async (req, res) => {
+      const chunks: Buffer[] = [];
+      for await (const c of req) chunks.push(c as Buffer);
+      asked.push({ method: req.method ?? "", url: req.url ?? "", key: req.headers["x-door-key"] as string | undefined, body: chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null });
+      res.writeHead(200, { "content-type": "application/json" });
+      if ((req.url ?? "").includes("agent/events")) return res.end(JSON.stringify({ cursor: "2026-11-01T10:00:00.123456Z", events: [{ kind: "delegation.new", id: ADM, at: "2026-11-01T10:00:00.123456Z" }, { kind: "delegation.new", id: "not-an-id", at: "x" }] }));
+      res.end(JSON.stringify({ ok: true, id: EPI, status: "already_fired", firedBy: "emr_job", firedAt: "2026-11-01T10:02:00.000Z" }));
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/door/v9`;
+    const p = DoorProfile.parse({ ...profile(base), obligations: { path: "agent/obligations" }, events: { path: "agent/events", wait_seconds: 5 } });
+    // A budget with one request in it and almost no refill: every wait still goes, since the hospital meters waits on its own.
+    const port = new PisgahPort(p, { bearers: { [OWNER]: "t" }, budget: { capacity: 1, perSecond: 0.001, readWaitMs: 10, writeReserve: 0 } });
+    const orders = Array.from({ length: 50 }, (_, i) => `88888888-9999-4aaa-8bbb-${String(i).padStart(12, "0")}`);
+    for (let i = 0; i < 5; i += 1) expect((await port.events!(OWNER, "2026-11-01T09:59:00.000000Z", orders, PROV)).events).toEqual([{ kind: "delegation.new", id: ADM, at: "2026-11-01T10:00:00.123456Z" }]);
+    expect(asked.filter((a) => a.url.startsWith("/door/v9/agent/events?"))).toHaveLength(5);
+    expect(asked[0]!.url).toContain(`orders=${orders.join("%2C")}`);
+    const held = await port.obligation!(OWNER, { op: "hold", key: "t-1a2b3c4d:o-5e6f7a8b", kind: "review_due", due_at: "2026-11-01T11:00:00.000Z", patient_id: PAT }, PROV);
+    expect(held).toEqual({ id: EPI, status: "already_fired", fired_by: "hospital", fired_at: "2026-11-01T10:02:00.000Z" });
+    const post = asked.find((a) => a.method === "POST")!;
+    expect(post).toMatchObject({ url: "/door/v9/agent/obligations", key: "obligation:hold:t-1a2b3c4d:o-5e6f7a8b", body: { op: "hold", key: "t-1a2b3c4d:o-5e6f7a8b", kind: "review_due", dueAt: "2026-11-01T11:00:00.000Z", patientId: PAT } });
+    // Without the blocks the port offers neither, so the runtime keeps polling.
+    expect(new PisgahPort(profile(base), { bearers: {} }).events).toBeUndefined();
+    await new Promise<void>((r) => server.close(() => r()));
+  });
 });

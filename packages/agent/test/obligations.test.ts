@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readStream } from "@hey-pisgah/store";
 import { afterSaid, minutesSaid } from "../src/emr/work.js";
-import { percentile } from "../src/emr/runtime.js";
-import type { OrderResult, Orderables } from "../src/emr/port.js";
+import { openObligations, percentile } from "../src/emr/runtime.js";
+import type { ObligationAnswer, ObligationOp, OrderResult, Orderables } from "../src/emr/port.js";
 import { ADMIT, ClerkFake, DOC, PAT, clerkBoot, ins } from "./clerking-helpers.js";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -126,5 +126,91 @@ describe("obligations held for a time or a condition", () => {
     expect(v.speed.by_kind["record_observation"]).toMatchObject({ n: 1 });
     expect(v.speed.errors).toEqual({ failed: 0, refused: 0, unverified: 0 });
     await a.rt.stop();
+  });
+});
+
+// The clerking hospital that keeps each timed obligation and fires it from its own job; one guarded claim decides who fires it.
+class KeptFake extends ClerkFake {
+  readonly kept = new Map<string, { key: string; kind: string; due_at: string; fired_by: string | null; cancelled: boolean }>();
+  down = false;
+  claims = 0;
+  async obligation(_owner: string, op: ObligationOp): Promise<ObligationAnswer> {
+    if (this.down) throw new Error("the hospital door could not be reached");
+    if (op.op === "hold") {
+      const found = [...this.kept.entries()].find(([, r]) => r.key === op.key);
+      if (found) return { id: found[0], status: "already_held" };
+      const id = `aaaaaaaa-0000-4000-8000-${String(this.kept.size + 1).padStart(12, "0")}`;
+      this.kept.set(id, { key: op.key, kind: op.kind, due_at: op.due_at, fired_by: null, cancelled: false });
+      return { id, status: "held" };
+    }
+    const r = this.kept.get(op.id)!;
+    if (r.fired_by) return { id: op.id, status: "already_fired", fired_by: r.fired_by, fired_at: "2026-11-01T10:02:00.000Z" };
+    if (r.cancelled) return { id: op.id, status: "already_cancelled" };
+    if (op.op === "cancel") { r.cancelled = true; return { id: op.id, status: "cancelled" }; }
+    this.claims += 1;
+    r.fired_by = "serve";
+    return { id: op.id, status: "fired" };
+  }
+  // The hospital's job: the same guarded claim, and true only when it fired.
+  job(id: string): boolean { const r = this.kept.get(id)!; if (r.fired_by || r.cancelled) return false; r.fired_by = "hospital"; return true; }
+}
+
+describe("obligations the hospital keeps", () => {
+  it("gives a timed review to the hospital, and when the hospital's job fired it while the agent was away, the agent says so and fires nothing", async () => {
+    const clock = { now: Date.now() };
+    const port = new KeptFake();
+    port.admitted = true;
+    const a = clerkBoot(() => [ins("schedule_review", { title: "review his abdomen", in_minutes: 60 })], { port, clock });
+    const said = await a.rt.say({ owner: DOC, target: { admission_id: ADMIT }, text: "Review his abdomen again in one hour." });
+    await a.rt.settled();
+    await wait(30);
+    const o = a.rt.view(said.task_id)!.obligations[0]!;
+    const [id, kept] = [...port.kept.entries()][0]!;
+    expect(kept).toMatchObject({ key: `${said.task_id}:${o.obligation_id}`, kind: "review_due", due_at: o.due_at });
+    expect(a.rt.view(said.task_id)!.obligations[0]!.mirror_id).toBe(id);
+    expect(openObligations(a.rt.task(said.task_id)!)).toHaveLength(1);
+    await a.rt.stop();
+
+    // The agent is down at the due time, so the hospital's job fires it; the agent coming back fires nothing of its own.
+    clock.now += 63 * 60_000;
+    expect(port.job(id)).toBe(true);
+    const b = clerkBoot(() => [], { root: a.root, port, clock });
+    await wait(200);
+    await b.rt.settled();
+    const v = b.rt.view(said.task_id)!;
+    expect(v.obligations[0]).toMatchObject({ state: "done", fired_by: "hospital" });
+    expect(v.notes.at(-1)?.text).toBe("Review due: review his abdomen. The hospital's bell told you at 10:02 UTC, while I was not running.");
+    expect(v.notes.some((n) => n.text.startsWith("Review due now"))).toBe(false);
+    expect(port.claims).toBe(0);
+    expect(openObligations(b.rt.task(said.task_id)!)).toHaveLength(0);
+    await b.rt.stop();
+  });
+
+  it("claims at the hospital before it fires, so the hospital's job finds it fired, and waits while the door is down", async () => {
+    const clock = { now: Date.now() };
+    const port = new KeptFake();
+    port.admitted = true;
+    const a = clerkBoot(() => [ins("schedule_review", { title: "review his chest", in_minutes: 60 })], { port, clock });
+    const said = await a.rt.say({ owner: DOC, target: { admission_id: ADMIT }, text: "Review his chest again in one hour." });
+    await a.rt.settled();
+    await wait(30);
+    const [id] = [...port.kept.keys()];
+    // At the due time the door is down: nothing fires here, since the hospital may still fire it.
+    port.down = true;
+    clock.now += 61 * 60_000;
+    await wait(100);
+    await a.rt.settled();
+    expect(fired(a.root, said.task_id)).toHaveLength(0);
+    await a.rt.stop();
+    // Back up: the claim lands, the agent fires it, and the hospital's job then has nothing to do.
+    port.down = false;
+    const b = clerkBoot(() => [], { root: a.root, port, clock });
+    await wait(200);
+    await b.rt.settled();
+    expect(fired(a.root, said.task_id)).toHaveLength(1);
+    expect(b.rt.view(said.task_id)!.notes.at(-1)?.text).toBe("Review due now: review his chest. It is on the ward board.");
+    expect(port.claims).toBe(1);
+    expect(port.job(id!)).toBe(false);
+    await b.rt.stop();
   });
 });

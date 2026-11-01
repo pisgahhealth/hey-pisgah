@@ -1,13 +1,15 @@
 import { canonical, sha256 } from "@hey-pisgah/contracts";
 import {
   EMERGENCY_KIND, EmrId, EmrPortError, NEW_RECORD_KINDS, OBSERVATION_KIND, ObservationArgs, READ_ONLY_KINDS,
-  type DelegationRead, type DelegationTeam, type EmrCommit, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type EmrWriteKind, type InboxPage, type OrderResult, type Orderables, type Provenance,
+  type DelegationRead, type DelegationTeam, type EmrCommit, type EmrEvent, type ObligationAnswer, type ObligationOp, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type EmrWriteKind, type InboxPage, type OrderResult, type Orderables, type Provenance,
   type PaperworkReadBack, type ReadBack, type SayableNames, type SpeakerInput, type SpeakerVerdict, type WatchOffer, type WatchRead, type WorkArgs
 } from "@hey-pisgah/agent";
 import { fillPath, fillTemplate, pathPattern, pick, type DoorProfile } from "./profile.js";
 
 const EVIDENCE = /^[A-Za-z0-9_.:#/-]{1,200}$/;
 const QUERY_VALUE = /^[A-Za-z0-9_.:|-]{1,80}$/;
+// A list of record ids, the one longer query value, for the events wait.
+const ID_LIST = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(,[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}){0,49}$/;
 const IDEM = /^[A-Za-z0-9_.:-]{1,255}$/;
 // A voice authority header is the matched line's evidence and the hospital's token for it.
 const TOKEN = /^(?:v1\.\d{13}\.[A-Za-z0-9_-]{43}|v2\.\d{13}\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43})$/;
@@ -93,6 +95,8 @@ export class PisgahPort implements EmrPort {
   readonly readBack?: (owner: string, visitId: string, prov: Provenance) => Promise<ReadBack>;
   readonly readPaperwork?: (owner: string, admissionId: string, prov: Provenance) => Promise<PaperworkReadBack>;
   readonly orderResults?: (owner: string, subject: EmrTarget & { visit_id?: string | null }, prov: Provenance) => Promise<OrderResult[]>;
+  readonly obligation?: (owner: string, op: ObligationOp, prov: Provenance) => Promise<ObligationAnswer>;
+  readonly events?: (owner: string, since: string | null, orders: readonly string[], prov: Provenance) => Promise<{ cursor: string; events: EmrEvent[] }>;
 
   constructor(readonly profile: DoorProfile, private readonly o: PisgahPortOptions) {
     const ops = profile.ops;
@@ -100,11 +104,13 @@ export class PisgahPort implements EmrPort {
     if (ops.read_back) this.readBack = (owner, visitId, prov) => this.readBackFor(owner, visitId, prov);
     if (ops.paperwork) this.readPaperwork = (owner, admissionId, prov) => this.paperworkFor(owner, admissionId, prov);
     if (profile.result_orders) this.orderResults = (_owner, subject, prov) => this.resultsFor(subject, prov);
+    if (profile.obligations) this.obligation = (owner, op, prov) => this.obligationAt(owner, op, prov);
+    if (profile.events) this.events = (owner, since, orders, prov) => this.eventsFor(owner, since, orders, prov);
     const reads = [
       ...(profile.result_orders ? [profile.result_orders.path] : []),
       ...(ops.patient_context ? [ops.patient_context.path] : []), ...profile.owners.flatMap((o) => (o.context ? [o.context.path] : [])), ...Object.values(profile.watches).map((w) => w.path),
       ...(profile.inbox ? [profile.inbox.path, ...(profile.inbox.detail ? [profile.inbox.detail.path] : [])] : []),
-      ...(profile.delegations ? [profile.delegations.list.path, profile.delegations.one.path] : []),
+      ...(profile.delegations ? [profile.delegations.list.path, profile.delegations.one.path] : []), ...(profile.events ? [profile.events.path] : []),
       ...Object.values(profile.work).flatMap((w) => ("reads" in w ? Object.values(w.reads).map((r) => r.path) : [...(w.proof ? [w.proof.path] : []), ...(w.before ?? []).map((b) => b.path)]))
     ];
     const writes = Object.values(profile.work).flatMap((w) => ("method" in w ? [w.path] : []));
@@ -112,7 +118,8 @@ export class PisgahPort implements EmrPort {
       ops.read_admission, ops.write_observation, ...(ops.census ? [ops.census] : []),
       ...(ops.speaker ? [{ method: "POST", path: ops.speaker.path }] : []), ...(ops.read_back ? [{ method: "GET", path: ops.read_back.path }] : []),
       ...(ops.paperwork ? [{ method: "GET", path: ops.paperwork.path }] : []),
-      ...reads.map((path) => ({ method: "GET", path })), ...writes.map((path) => ({ method: "POST", path })), ...(profile.memos ? [{ method: "POST", path: profile.memos.path }, ...(profile.memos.alerts_path ? [{ method: "POST", path: profile.memos.alerts_path }] : [])] : [])
+      ...reads.map((path) => ({ method: "GET", path })), ...writes.map((path) => ({ method: "POST", path })), ...(profile.memos ? [{ method: "POST", path: profile.memos.path }, ...(profile.memos.alerts_path ? [{ method: "POST", path: profile.memos.alerts_path }] : [])] : []),
+      ...(profile.obligations ? [{ method: "POST", path: profile.obligations.path }] : [])
     ].map((x) => ({ method: x.method, re: pathPattern(x.path) }));
     for (const a of this.allow) for (const d of [...profile.deny, ...profile.deny_exact]) if (a.re.test(d)) throw new Error("the profile allows a denied path");
   }
@@ -243,6 +250,26 @@ export class PisgahPort implements EmrPort {
     return delegationOf(await this.read(spec.one, { delegation_id: id }, prov));
   }
 
+  // Holds, fires or cancels one obligation at the hospital under the same key for the same step, so a lost answer is replayed, never doubled.
+  private async obligationAt(owner: string, op: ObligationOp, prov: Provenance): Promise<ObligationAnswer> {
+    const r = await this.request("POST", this.profile.obligations!.path, prov, { body: op.op === "hold" ? { op: "hold", key: op.key, kind: op.kind, dueAt: op.due_at, patientId: op.patient_id, ...(op.admission_id ? { admissionId: op.admission_id } : {}) } : op, idempotencyKey: `obligation:${op.op}:${op.op === "hold" ? op.key : op.id}`.slice(0, 255) });
+    if (r.kind !== "response" || r.status < 200 || r.status > 299) throw new EmrPortError(r.kind === "response" ? "write_failed" : r.reason, `the hospital did not take the obligation ${op.op}`, r.kind === "response" ? r.status : null);
+    const j = (r.json ?? {}) as Record<string, unknown>;
+    return { id: String(j["id"] ?? ""), status: j["status"] as ObligationAnswer["status"], ...(typeof j["firedBy"] === "string" ? { fired_by: j["firedBy"] === "emr_job" ? "hospital" : j["firedBy"] } : {}), ...(typeof j["firedAt"] === "string" ? { fired_at: j["firedAt"] } : {}) };
+  }
+
+  // One wait on the hospital's events route; the wait is the hospital's, so its time limit is the wait plus a margin.
+  private async eventsFor(owner: string, since: string | null, orders: readonly string[], prov: Provenance): Promise<{ cursor: string; events: EmrEvent[] }> {
+    const spec = this.profile.events!;
+    if (!this.o.bearers[owner]) throw new EmrPortError("no_bearer_for_owner", "no bearer for that owner");
+    const query: Record<string, string> = { wait: String(spec.wait_seconds), ...(since ? { since } : {}), ...(orders.length ? { orders: orders.join(",") } : {}) };
+    const r = await this.request("GET", spec.path, prov, { query, unpaced: true, timeoutMs: (spec.wait_seconds + 15) * 1000 });
+    if (r.kind !== "response" || r.status < 200 || r.status > 299) throw new EmrPortError(r.kind === "response" ? "read_failed" : r.reason, "the hospital's events wait failed", r.kind === "response" ? r.status : null);
+    const j = (r.json ?? {}) as { cursor?: unknown; events?: unknown };
+    const events = (Array.isArray(j.events) ? j.events : []).filter((e): e is EmrEvent => !!e && typeof e === "object" && ["delegation.new", "delegation.changed", "result.changed"].includes(String((e as EmrEvent).kind)) && EmrId.safeParse((e as EmrEvent).id).success);
+    return { cursor: typeof j.cursor === "string" ? j.cursor : since ?? "", events };
+  }
+
   private readonly pacers = new Map<string, DoorPacer>();
   private pacerOf(owner: string): DoorPacer { let p = this.pacers.get(owner); if (!p) { p = new DoorPacer(this.o.budget ?? PISGAH_AGENT_BUDGET); this.pacers.set(owner, p); } return p; }
   refusedCount(): number { return this.refusals.length; }
@@ -255,12 +282,12 @@ export class PisgahPort implements EmrPort {
   }
 
   // The only function that reaches the network: deny list first, then the allowlist, then the bearer for the named owner.
-  async request(method: "GET" | "POST", path: string, prov: Provenance, init: { body?: unknown; bytes?: Uint8Array; segments?: readonly number[]; idempotencyKey?: string; query?: Record<string, string> } = {}): Promise<DoorResult> {
+  async request(method: "GET" | "POST", path: string, prov: Provenance, init: { body?: unknown; bytes?: Uint8Array; segments?: readonly number[]; idempotencyKey?: string; query?: Record<string, string>; unpaced?: true; timeoutMs?: number } = {}): Promise<DoorResult> {
     const clean = path.replace(/^\/+|\/+$/g, "");
     if (this.profile.deny.some((d) => clean === d || clean.startsWith(`${d}/`)) || this.profile.deny_exact.includes(clean)) return this.refuse(method, clean, "denied_path");
     if (!this.allow.some((a) => a.method === method && a.re.test(clean))) return this.refuse(method, clean, "not_allowlisted");
     const query = Object.entries(init.query ?? {});
-    if (query.some(([k, v]) => !/^[A-Za-z][A-Za-z0-9_]{0,40}$/.test(k) || !QUERY_VALUE.test(v))) return this.refuse(method, clean, "bad_header");
+    if (query.some(([k, v]) => !/^[A-Za-z][A-Za-z0-9_]{0,40}$/.test(k) || !(QUERY_VALUE.test(v) || ID_LIST.test(v)))) return this.refuse(method, clean, "bad_header");
     const qs = query.length ? `?${new URLSearchParams(query).toString()}` : "";
     // An owner the serve holds no bearer for yet, such as a person who logged in after it started, is minted once before the call is refused.
     if (!this.o.bearers[prov.owner] && !(this.o.refresh && await this.freshBearer(prov.owner, ""))) return this.refuse(method, clean, "no_bearer_for_owner");
@@ -280,7 +307,8 @@ export class PisgahPort implements EmrPort {
       ...(init.idempotencyKey ? { [h.idempotency]: init.idempotencyKey } : {}), ...(init.bytes ? { "content-type": "application/octet-stream" } : init.body !== undefined ? { "content-type": "application/json" } : {}), accept: "application/json"
     };
     // The door's own budget is kept here, so a busy watcher never starves the writes it exists for.
-    const pacer = this.o.budget === null ? null : this.pacerOf(prov.owner);
+    // The events wait has its own budget at the hospital, so it spends none of the door's.
+    const pacer = this.o.budget === null || init.unpaced ? null : this.pacerOf(prov.owner);
     if (pacer && method === "POST") pacer.write();
     if (pacer && method === "GET" && !(await pacer.read())) { this.o.onRequest?.({ at: this.now().toISOString(), method, path: clean, status: null, ms: 0, replayed: false, headers: {}, body: null, outcome: "network_error", reason: "paced" }); return { kind: "network_error", reason: "paced" }; }
     const t0 = performance.now();
@@ -289,7 +317,7 @@ export class PisgahPort implements EmrPort {
       this.o.onRequest?.({ at, method, path: clean, status, ms: Math.round(performance.now() - t0), replayed, headers: { authorization: "Bearer <redacted>", ...redactVoice(shown, h) }, body: clean === this.profile.ops.speaker?.path ? { [init.bytes ? "audio" : "embedding"]: init.bytes ? "<audio withheld>" : "<voiceprint withheld>" } : init.bytes ? "<bytes withheld>" : init.body ?? null, outcome, ...(reason ? { reason } : {}) });
     const send = (bearer: string) => (this.o.fetch ?? fetch)(`${this.profile.base_url.replace(/\/+$/, "")}/${clean}${qs}`, {
       method, headers: { authorization: `Bearer ${bearer}`, ...shown }, ...(init.bytes ? { body: new Uint8Array(init.bytes) } : init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
-      signal: AbortSignal.timeout(this.profile.timeout_ms)
+      signal: AbortSignal.timeout(init.timeoutMs ?? this.profile.timeout_ms)
     });
     let res: Response;
     try {

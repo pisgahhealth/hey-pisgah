@@ -148,6 +148,10 @@ export const DoorProfile = z.strictObject({
   versions: VersionsSpec.optional(),
   // The delegation reads and the teams owners may hand work to.
   delegations: DelegationsSpec.optional(),
+  // Where each timed obligation is kept by the hospital, whose job fires it when no agent is running.
+  obligations: z.strictObject({ path: PathTpl }).optional(),
+  // The hospital's events wait; with it delegations and results are read on its events, without it they are polled.
+  events: z.strictObject({ path: PathTpl, wait_seconds: z.number().int().min(1).max(25).default(25) }).optional(),
   // Where a checked nightly memo is delivered, and the owner whose agent sends it, with how that sender is disclosed.
   // The memo route, and the route that takes each urgent item, or a withheld memo's open work, as a task alert of its own.
   memos: z.strictObject({ path: PathTpl, alerts_path: PathTpl.optional(), sender: z.string().min(1).max(80), sender_label: z.string().min(1).max(200) }).optional(),

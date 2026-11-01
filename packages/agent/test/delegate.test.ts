@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_ARGS, DELEGATION_RULE_KINDS, DISPENSE_KIND, ESCALATE_KIND, NUDGE_KIND, PREPARE_KIND, REGISTER_KIND, WARD_REVIEW_KIND, acceptedTask, orderAsked, consentSaid, consentScope, phoneSaid, registrationFrom, registrationInstruction, teamSaid, type DelegationRead, type DelegationTeam } from "../src/emr/delegate.js";
-import type { EmrCommit, Provenance, WorkArgs } from "../src/emr/port.js";
+import type { EmrCommit, EmrEvent, Provenance, WorkArgs } from "../src/emr/port.js";
 import type { SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
 import { ADMIT, CLERK_KINDS, ClerkFake, DOC, PAT, clerkBoot, ins } from "./clerking-helpers.js";
 
@@ -554,5 +554,59 @@ describe("delegation by rule between agents", () => {
     await a.rt.settled();
     expect(port.writes.find((w) => w.kind === REGISTER_KIND)!.args["consent_purposes"]).toEqual(["registration"]);
     await a.rt.stop();
+  });
+});
+
+// The delegation hospital with an events route: each owner's wait is answered when a change is pushed for them, and every list read is counted.
+class EventsFake extends DelegationFake {
+  readonly lists = new Map<string, number>();
+  private readonly waiters = new Map<string, (e: EmrEvent[]) => void>();
+  async events(owner: string, since: string | null): Promise<{ cursor: string; events: EmrEvent[] }> {
+    if (since === null) return { cursor: "c0", events: [] };
+    const evs = await new Promise<EmrEvent[]>((res) => { this.waiters.set(owner, res); setTimeout(() => res([]), 5_000).unref(); });
+    this.waiters.delete(owner);
+    return { cursor: `c${Date.now()}`, events: evs };
+  }
+  push(owner: string, e: EmrEvent): void { this.waiters.get(owner)?.([e]); }
+  override async delegations(owner: string, as: "assignee" | "delegator" = "assignee"): Promise<DelegationRead[]> {
+    this.lists.set(owner, (this.lists.get(owner) ?? 0) + 1);
+    return super.delegations(owner, as);
+  }
+}
+
+describe("delegations pushed by the hospital's events route", () => {
+  it("brings a new task to the surgeon's agent on the event, with no poll of the door in between", async () => {
+    const port = new EventsFake();
+    port.admitted = true;
+    // The poll timer is far off, so only the event reads the door.
+    const a = clerkBoot((said) => (/surgical/i.test(said) ? [ins("schedule_review", { title: "surgical review", in_minutes: 60 })] : []), { port, watchMs: 600_000 });
+    await a.rt.say({ owner: DOC, target: { admission_id: ADMIT }, text: "Surgical review in one hour." });
+    await a.rt.settled();
+    const made = port.writes.find((w) => w.kind === DELEGATE_KIND)!;
+    await new Promise((r) => setTimeout(r, 50));
+    expect(a.rt.views(SURG)).toHaveLength(0);
+    expect(port.lists.get(SURG) ?? 0).toBe(0);
+    port.push(SURG, { kind: "delegation.new", id: made.id, at: new Date().toISOString() });
+    for (let i = 0; i < 100 && !a.rt.views(SURG).length; i += 1) await new Promise((r) => setTimeout(r, 20));
+    await a.rt.settled();
+    expect(port.lists.get(SURG)).toBe(1);
+    expect(port.kindsWritten(SURG)).toEqual([NUDGE_KIND]);
+    expect(a.rt.views(SURG)[0]!.notes.at(-1)!.text).toMatch(/^New task for you: Surgical review/);
+    // An event for the surgeon reads only the surgeon's tasks.
+    expect(port.lists.get(DESK) ?? 0).toBe(0);
+    await a.rt.stop();
+  });
+
+  it("keeps the old poll when the switch is off", async () => {
+    const port = new EventsFake();
+    const a = clerkBoot(() => [], { port });
+    await a.rt.stop();
+    const rt = new (a.rt.constructor as typeof import("../src/emr/runtime.js").EmrRuntime)({ storeRoot: a.root, client: a.client, port, holdMs: 0, watchMs: 600_000, events: false });
+    rt.start();
+    await rt.pollOnce();
+    expect(port.lists.get(SURG)).toBe(1);
+    await rt.pollOnce();
+    expect(port.lists.get(SURG)).toBe(2);
+    await rt.stop();
   });
 });

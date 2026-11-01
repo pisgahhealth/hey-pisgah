@@ -96,7 +96,18 @@ export interface EmrPort {
   delegationHandoffs?(owner: string): Record<string, DelegationHandoff>;
   delegations?(owner: string, as: "assignee" | "delegator", prov: Provenance): Promise<DelegationRead[]>;
   delegation?(owner: string, id: string, prov: Provenance): Promise<DelegationRead | null>;
+  // The hospital's copy of a timed obligation, so its own job fires it when this agent is not running; the claim it answers is the one firing authority.
+  obligation?(owner: string, op: ObligationOp, prov: Provenance): Promise<ObligationAnswer>;
+  // Waits for a delegation or a named order's result to change for the owner, outside the door's per-second budget; ids and kinds only.
+  events?(owner: string, since: string | null, orders: readonly string[], prov: Provenance): Promise<{ cursor: string; events: EmrEvent[] }>;
 }
+
+export type ObligationOp =
+  | { op: "hold"; key: string; kind: "review_due" | "held_work"; due_at: string; patient_id: string; admission_id?: string }
+  | { op: "fire"; id: string }
+  | { op: "cancel"; id: string };
+export type ObligationAnswer = { id: string; status: "held" | "already_held" | "fired" | "cancelled" | "already_fired" | "already_cancelled"; fired_by?: string; fired_at?: string };
+export type EmrEvent = { kind: "delegation.new" | "delegation.changed" | "result.changed"; id: string; at: string };
 
 // Prescribed and dispensed stay apart; each exception is for the responsible doctor to confirm, and the digest binds the confirmation to this reading.
 export type PaperworkReadBack = { digest: string; diagnosis: string | null; dispensed: string[]; exceptions: string[]; tests: { resulted: number; total: number }; unsigned: number; pending?: string[] };
