@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ACK_KIND, CANCEL_TEST_KIND, DELEGATE_KIND, DELEGATION_RULE_KINDS, NUDGE_KIND, RECEIVE_KIND, cancelReason, labAsked, type DelegationRead, type DelegationTeam } from "../src/emr/delegate.js";
 import type { EmrCommit, EmrContext, EmrTarget, Orderables, Provenance, WorkArgs } from "../src/emr/port.js";
 import type { SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
-import { CLERK_KINDS, ClerkFake, DOC, PAT, VISIT, clerkBoot, ins } from "./clerking-helpers.js";
+import { ADMIT, CLERK_KINDS, ClerkFake, DOC, PAT, VISIT, clerkBoot, ins } from "./clerking-helpers.js";
 
 // Lane LABE, RECONCILE 4.1: the lab scientist's agent receives and cancels a test handed to the lab, by rule, on her own voice.
 const LAB = "lab-1";
@@ -283,6 +283,20 @@ describe("SA-ENG 2: two patients awaiting the same test", () => {
     await b.rt.settled();
     expect(b.port.writes.filter((w) => w.prov.owner === LAB && w.kind !== NUDGE_KIND)).toHaveLength(0);
     expect(labAsks(b).some((q) => /^The full blood count is waiting for more than one patient\. Open the patient and say it again\./.test(q))).toBe(true);
+    await b.rt.stop();
+  });
+});
+
+describe("SA-ENG 2: an admitted patient's page target names only the stay", () => {
+  it("finds the lab task handed off before the admission through the stay's patient", async () => {
+    const b = await handed(["fbc"], [PAT, OTHER_PAT]);
+    // The doctor admits the first patient after the tests went to the lab, so the lab tasks carry no stay.
+    b.port.admitted = true;
+    await b.rt.open(DOC, { admission_id: ADMIT });
+    // The strip's audio for an admitted patient names the stay alone.
+    await b.rt.say({ owner: LAB, target: { admission_id: ADMIT }, text: "Received the FBC, running it.", source: "audio", voiceprint: LAB_V });
+    await b.rt.settled();
+    expect(lab(b.port, RECEIVE_KIND).map((w) => w.args["order_id"])).toEqual([ORDER["fbc"]]);
     await b.rt.stop();
   });
 });

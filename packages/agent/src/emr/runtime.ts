@@ -3270,7 +3270,9 @@ export class EmrRuntime {
     // A question or a conditional is about the lab only when it names a test or the lab's own act, so a question to a patient passes by.
     if (!acts && asked !== "unclear" && !said.length && !LAB_ACT_WORDS.test(low)) return null;
     const testOf = (d: EmrDelegation) => Object.keys(tests).find((k) => new RegExp(`\\btest: ${k.replace(/_/g, " ")}(,|$)`, "i").test(d.instruction ?? "")) ?? null;
-    const here = all.filter((x) => target && ((target.patient_id && x.l.task.patient_id === target.patient_id) || (target.admission_id && x.l.task.admission_id === target.admission_id)));
+    // A stay alone names its patient through any task on that stay, so a test handed to the lab before the admission is still this patient's.
+    const pid = target?.patient_id ?? (target?.admission_id ? [...this.live.values()].find((x) => x.task.admission_id === target.admission_id && x.task.patient_id)?.task.patient_id : undefined);
+    const here = all.filter((x) => target && ((pid && x.l.task.patient_id === pid) || (target.admission_id && x.l.task.admission_id === target.admission_id)));
     // An explicit patient is never widened to everyone's lab tasks.
     const scoped = target && (target.patient_id || target.admission_id) ? here : all;
     if (!scoped.length) return null;
