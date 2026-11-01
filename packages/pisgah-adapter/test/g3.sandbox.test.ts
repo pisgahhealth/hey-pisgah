@@ -45,6 +45,8 @@ async function scenario(): Promise<void> {
     const pharm = mintAgentBearer(sb, sb.owners.find((o) => o.login === "pharm.uduak")!);
     const ime = sb.owners.find((o) => o.login === "dr.ime")!;
     const imeId = String(profile.owners.find((o) => o.label === "Dr Ime")!.id);
+    // The doctor is named by the words the profile gives the issuer, so no person's name is written here.
+    const issuerSaid = Object.values(profile.verbal_issuers).find((v) => v.id === doc.owner)!.words[0]!;
     const port = new PisgahPort(profile, { bearers: { [doc.owner]: doc.bearer, [nurse.owner]: nurse.bearer, [pharm.owner]: pharm.bearer } });
     const base = profile.base_url.replace(/\/+$/, "");
     const dir = join(process.env["HEY_PISGAH_G3_TMP"] ?? "/tmp", `g3-${run}`);
@@ -98,11 +100,11 @@ async function scenario(): Promise<void> {
 
     // A verbal prescription and a verbal lab order the nurse took from the doctor, each on her own matched read-back.
     const t0 = Date.now();
-    const rb1 = await readBack("Paracetamol one gram IV three times a day, read back to Doctor Edikan.");
+    const rb1 = await readBack(`Paracetamol one gram IV three times a day, read back to ${issuerSaid}.`);
     const tookRx = await verbal(rx(PARACETAMOL_IV), rb1);
     results["ms_rx"] = Date.now() - t0;
     expect(tookRx.status, tookRx.text).toBe(200);
-    const rb2 = await readBack("Urinalysis now, read back to Doctor Edikan.");
+    const rb2 = await readBack(`Urinalysis now, read back to ${issuerSaid}.`);
     const tookLab = await verbal(lab("ZZ-TEST Urinalysis"), rb2);
     expect(tookLab.status, tookLab.text).toBe(200);
     // The read-back line is spent: the same line for another order is refused.
@@ -168,7 +170,7 @@ async function scenario(): Promise<void> {
     const client = new ModelClient({ storeRoot: root, mode: "mock", mock: () => { throw new Error("G3 makes no model call"); } });
     const rt = new EmrRuntime({ storeRoot: root, client, port, holdMs: 0, proofRetryMs: 500 });
     try {
-      const text = `Verbal order from Doctor Edikan, full blood count now, read back. Run ${run}.`;
+      const text = `Verbal order from ${issuerSaid}, full blood count now, read back. Run ${run}.`;
       const t1 = Date.now();
       const r = await rt.say({ owner: nurse.owner, target: { patient_id: patient2 }, text, source: "audio", voiceprint: (await embed(speak(NURSE_VOICE, text, join(dir, "rt-1.wav"))))! });
       let done = false;

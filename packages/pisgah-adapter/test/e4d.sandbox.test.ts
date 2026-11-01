@@ -71,13 +71,15 @@ describe.skipIf(!RUN)("E4 the pharmacy and the lab act on sent voice orders on t
       const stateId = (fbc as { record_id: string }).record_id;
 
       // The doctor's agent hands each verified order on to the team that performs it: the write its hand-off makes after the order's proof.
+      // The record table each hand-off names is the profile's, never a literal of one EMR.
+      const handoffTable = (k: string) => profile.delegations!.handoffs[k]!.subject_table;
       const handoff = async (kind: string, team: string, table: string, id: string, title: string, line: string) => {
         const c = await port.commit(DELEGATE_KIND, { task_kind: kind, team, patient_id: patient, visit_id: visit, subject_table: table, subject_id: id, title, instruction: `${title}: the voice order sent on the doctor's line.`, evidence: `transcript:${line}` }, `e4d-hand-${id}`, prov(line));
         expect(c, JSON.stringify(c)).toMatchObject({ ok: true });
         return (c as { record_id: string }).record_id;
       };
-      const rxTask = await handoff("dispense", "pharmacy", "prescriptions", rxId, "Dispense the voice order", "e4d-rx");
-      const labTask = await handoff("lab_order", "lab", "clinical_order_states", stateId, "Receive the lab order", "e4d-fbc");
+      const rxTask = await handoff("dispense", "pharmacy", handoffTable("prescribe"), rxId, "Dispense the voice order", "e4d-rx");
+      const labTask = await handoff("lab_order", "lab", handoffTable("order_test"), stateId, "Receive the lab order", "e4d-fbc");
       const labAssignee = String(sandboxQuery(sb, "delegations_for", { patient }).find((r) => r["id"] === labTask)!["assignee"]);
       const lab = labs.find((x) => x.owner === labAssignee)!;
       expect(lab, "the lab task went to a minted scientist").toBeDefined();

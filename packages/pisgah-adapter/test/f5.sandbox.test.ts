@@ -22,7 +22,8 @@ describe.skipIf(!RUN)("F5 a ward's team task stays with that ward's staff", () =
     const elsewhere = nurses.find((n) => n.username === "nurse.edidiong" && n.ward !== ward)!;
     expect([posted, other, elsewhere].every(Boolean), "the seed's posted nurse, a second ward and an unposted nurse").toBe(true);
     const { patient } = await freshArrival(profile, "F5 Ward");
-    const doctor = mintPersonBearer(sb, { login: "dr.edikan" });
+    // The doctor is the sandbox owner, whose login is the profile's own mint login.
+    const doctor = mintPersonBearer(sb, { login: sb.mint.args[sb.mint.args.indexOf("--login") + 1]! });
     const call = async (bearer: string, method: "GET" | "POST", path: string, body?: unknown) => {
       const r = await fetch(`${base}/${path}`, { method, headers: { authorization: `Bearer ${bearer}`, accept: "application/json", ...(body ? { "content-type": "application/json", [profile.headers.idempotency]: `f5-${Date.now()}-${Math.random().toString(36).slice(2)}` } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
       const text = await r.text();
