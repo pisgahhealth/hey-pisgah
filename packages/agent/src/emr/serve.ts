@@ -153,6 +153,13 @@ type Pending = { task_id: string; reply: { task_id: string; line_id: string; act
 export type HeardStatus = { seq: number; at: string; status: "accepted" | "processing" | "failed" | "completed"; waiting?: "arrival" | "join"; error?: string; task_id?: string; line_id?: string; note?: string };
 const pageKey = (p: EmrTarget) => (p.admission_id || p.patient_id ? JSON.stringify(p) : "");
 
+// A typed line is cleaned and read for vitals words as the ear's words are, without the sound-alike guesses only a second ear may confirm.
+export const typedText = (text: string): string => vitalsVocabulary(cleanTranscript(text), { guesses: false }).text;
+function typedLine<T extends { text: string }>(b: T): T {
+  const text = typedText(b.text);
+  if (!text) throw new HttpError(400, "text: nothing is left once the pause words are dropped");
+  return { ...b, text };
+}
 class HttpError extends Error { constructor(readonly status: number, message: string) { super(message); } }
 
 async function raw(req: IncomingMessage, limit: number): Promise<Buffer> {
@@ -736,7 +743,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       return [200, rt.views(own(req, parse(Owner, owner)))];
     }
     if (parts.length === 2 && parts[1] === "say" && m === "POST") {
-      const b = parse(Say, await json(req));
+      const b = typedLine(parse(Say, await json(req)));
       own(req, b.owner);
       const page = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
       // A typed line with no patient open goes to the patient the agent is with, and opens an arrival on the emergency phrase.
@@ -803,7 +810,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     if (task) own(req, task.owner);
     if (parts.length === 2 && m === "GET") { if (!task) throw new HttpError(404, "unknown task"); return [200, rt.view(id)]; }
     if (parts.length === 3 && parts[2] === "say" && m === "POST") {
-      const b = parse(FollowUp, await json(req));
+      const b = typedLine(parse(FollowUp, await json(req)));
       if (!task) throw new HttpError(404, "unknown task");
       if (b.task_id !== undefined && b.task_id !== id) throw new HttpError(400, "task_id does not match the path");
       if (b.owner !== undefined && b.owner !== task.owner) throw new HttpError(403, "the task belongs to another owner");

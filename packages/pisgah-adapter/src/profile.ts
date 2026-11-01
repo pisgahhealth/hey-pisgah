@@ -63,7 +63,9 @@ const TeamSpec = z.strictObject({
 export const DelegationsSpec = z.strictObject({
   list: ReadSpec.extend({ list_path: Dotted }), one: ReadSpec, teams: z.record(z.string().regex(/^[a-z_]{1,30}$/), TeamSpec).default({}),
   // Kinds whose verified write is handed on to a team, with the table of the record the write made.
-  handoffs: z.record(z.string().min(1).max(40), z.strictObject({ team: z.string().regex(/^[a-z_]{1,30}$/), subject_table: z.string().regex(/^[a-z_]{1,40}$/) })).default({})
+  handoffs: z.record(z.string().min(1).max(40), z.strictObject({ team: z.string().regex(/^[a-z_]{1,30}$/), subject_table: z.string().regex(/^[a-z_]{1,40}$/) })).default({}),
+  // Per subject table, the read that gives the receiving owner the patient's name, and the patient id when the answer has one.
+  subjects: z.record(z.string().regex(/^[a-z_]{1,40}$/), ReadSpec.extend({ label: Dotted, patient: Dotted.optional() })).default({})
 });
 
 const WatchCond = z.strictObject({ fact: z.string().min(1).max(80), equals: z.string().min(1).max(80) });

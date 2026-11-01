@@ -96,6 +96,8 @@ export interface EmrPort {
   delegationHandoffs?(owner: string): Record<string, DelegationHandoff>;
   delegations?(owner: string, as: "assignee" | "delegator", prov: Provenance): Promise<DelegationRead[]>;
   delegation?(owner: string, id: string, prov: Provenance): Promise<DelegationRead | null>;
+  // The patient a hand-off's subject record is for, read on the receiving owner's session, so that owner's task knows the patient by name.
+  delegationSubject?(owner: string, subject: { table: string; id: string }, prov: Provenance): Promise<{ patient_id: string | null; label: string | null } | null>;
   // The hospital's copy of a timed obligation, so its own job fires it when this agent is not running; the claim it answers is the one firing authority.
   obligation?(owner: string, op: ObligationOp, prov: Provenance): Promise<ObligationAnswer>;
   // Waits for a delegation or a named order's result to change for the owner, outside the door's per-second budget; ids and kinds only.

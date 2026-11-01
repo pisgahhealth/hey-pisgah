@@ -66,6 +66,7 @@ export type DelegationRead = {
   instruction: string | null; nudged: string[];
   // The record the task is about, and what a fresh read says of a prescription: past the pharmacist's review, its voice order received, the consultation finished.
   subject_id: string | null; subject_prepared: boolean | null; order_received: boolean | null; consult_finished: boolean | null;
+  subject_table?: string | null;
   created_at?: string | null;
   // A reviewed prescription is ready at the counter, or waits for its payment.
   subject_ready?: boolean | null; awaiting_payment?: boolean | null;

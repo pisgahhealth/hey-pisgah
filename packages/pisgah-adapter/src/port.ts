@@ -110,7 +110,7 @@ export class PisgahPort implements EmrPort {
       ...(profile.result_orders ? [profile.result_orders.path] : []),
       ...(ops.patient_context ? [ops.patient_context.path] : []), ...profile.owners.flatMap((o) => (o.context ? [o.context.path] : [])), ...Object.values(profile.watches).map((w) => w.path),
       ...(profile.inbox ? [profile.inbox.path, ...(profile.inbox.detail ? [profile.inbox.detail.path] : [])] : []),
-      ...(profile.delegations ? [profile.delegations.list.path, profile.delegations.one.path] : []), ...(profile.events ? [profile.events.path] : []),
+      ...(profile.delegations ? [profile.delegations.list.path, profile.delegations.one.path, ...Object.values(profile.delegations.subjects).map((x) => x.path)] : []), ...(profile.events ? [profile.events.path] : []),
       ...Object.values(profile.work).flatMap((w) => ("reads" in w ? Object.values(w.reads).map((r) => r.path) : [...(w.proof ? [w.proof.path] : []), ...(w.before ?? []).map((b) => b.path)]))
     ];
     const writes = Object.values(profile.work).flatMap((w) => ("method" in w ? [w.path] : []));
@@ -248,6 +248,15 @@ export class PisgahPort implements EmrPort {
     const spec = this.profile.delegations;
     if (!spec || this.delegationSide(owner) === "none" || !EmrId.safeParse(id).success) return null;
     return delegationOf(await this.read(spec.one, { delegation_id: id }, prov));
+  }
+
+  // The patient a hand-off's subject record is for, read on the receiving owner's session; a table the profile does not list is never read.
+  async delegationSubject(owner: string, subject: { table: string; id: string }, prov: Provenance): Promise<{ patient_id: string | null; label: string | null } | null> {
+    const spec = this.profile.delegations?.subjects[subject.table];
+    if (!spec || this.delegationSide(owner) === "none" || !this.o.bearers[owner] || !EmrId.safeParse(subject.id).success) return null;
+    const json = await this.read(spec, { subject_id: subject.id }, prov);
+    const patient = spec.patient ? opt(pick(json, spec.patient)) : null;
+    return { patient_id: patient && EmrId.safeParse(patient).success ? patient : null, label: opt(pick(json, spec.label)) };
   }
 
   // Holds, claims, completes or cancels one obligation at the hospital; a hold and a completion replay under one key, while each claim asks afresh.
@@ -718,7 +727,7 @@ function delegationOf(x: unknown): DelegationRead | null {
     due_at: opt(pick(x, "dueAt")), overdue: pick(x, "overdue") === true, escalated_at: opt(pick(x, "escalatedAt")),
     record: { status: status === "verified" || status === "verifier_error" ? status : "unsupported_or_incomplete", record_id: opt(pick(x, "record.recordId")), reason: opt(pick(x, "record.reason")) },
     instruction: opt(pick(x, "instruction")), nudged: Array.isArray(pick(x, "nudged")) ? (pick(x, "nudged") as unknown[]).map(String) : [],
-    subject_id: opt(pick(x, "subject.id")), subject_prepared: flag(pick(x, "subjectPrepared")), order_received: flag(pick(x, "orderReceived")), consult_finished: flag(pick(x, "consultFinished")), created_at: opt(pick(x, "createdAt")),
+    subject_table: opt(pick(x, "subject.table")), subject_id: opt(pick(x, "subject.id")), subject_prepared: flag(pick(x, "subjectPrepared")), order_received: flag(pick(x, "orderReceived")), consult_finished: flag(pick(x, "consultFinished")), created_at: opt(pick(x, "createdAt")),
     subject_ready: flag(pick(x, "subjectReady")), awaiting_payment: flag(pick(x, "awaitingPayment"))
   };
 }
