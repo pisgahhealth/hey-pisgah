@@ -8,6 +8,7 @@ import { loadKeys } from "./env.js";
 import { ModelError } from "./errors.js";
 import { DEFAULT_RECORDINGS_DIR, pickHeaders, readRecording, readRunRecording, requestHash, runRecordingKey, wireJson, writeRecording } from "./recordings.js";
 import { ROUTES, parseUsage, routeFor, type EffortLevel, type ProviderId } from "./routes.js";
+import { DaySpend, type Reservation } from "./spend.js";
 
 export type ChatCompletion = OpenAI.Chat.Completions.ChatCompletion;
 export type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
@@ -53,6 +54,8 @@ export type ClientOptions = {
   record?: boolean;
   timeoutMs?: number;
   now?: () => Date;
+  // Where the day's spend alert and cap notes are said besides the spend stream; stderr when absent.
+  spendLog?: (line: string) => void;
 };
 
 const DENY_EFFORT_LINE = /Reasoning strength:/i;
@@ -90,6 +93,8 @@ export class ModelClient {
   private readonly sdk = new Map<string, OpenAI>();
   private readonly recordingsDir: string;
   private readonly occurrences = new Map<string, number>();
+  // The hospital's running day total, present when day caps are configured.
+  readonly spend: DaySpend | null;
 
   constructor(private readonly opts: ClientOptions) {
     const m = opts.mode ?? (process.env.HEY_PISGAH_MODE as Mode | undefined) ?? "mock";
@@ -98,6 +103,7 @@ export class ModelClient {
     this.keys = opts.keys ?? (m === "live" ? loadKeys() : {});
     this.budget = opts.budget ?? budgetFromEnv();
     this.recordingsDir = opts.recordingsDir ?? DEFAULT_RECORDINGS_DIR;
+    this.spend = this.budget.day ? new DaySpend(opts.storeRoot, this.budget.day, () => this.now(), opts.spendLog) : null;
   }
 
   ledgerStreamId(runId: string | null): string {
@@ -143,13 +149,22 @@ export class ModelClient {
     return state;
   }
 
-  private checkBudget(args: CallArgs): void {
+  private checkBudget(args: CallArgs): Reservation | null {
+    if (this.spend) {
+      try {
+        return this.spend.reserve("model", this.spend.caps.reserveUsd, { run_id: args.run_id, purpose: args.purpose });
+      } catch (e) {
+        if (e instanceof ModelError) this.refuse(args, "budget_exhausted", e.detail);
+        throw e;
+      }
+    }
     const run = this.runUsage(args.run_id);
     if (run.calls >= this.budget.runMaxCalls) this.refuse(args, "budget_exhausted", { scope: "run_calls", used: run.calls, cap: this.budget.runMaxCalls });
     if (run.usd >= this.budget.runUsd) this.refuse(args, "budget_exhausted", { scope: "run_usd", used: run.usd, cap: this.budget.runUsd });
     const week = weekSpendUsd(join(this.opts.storeRoot, "ledger"), this.budget.weekSince());
     const stop = this.budget.weekUsd * this.budget.weekStopFraction;
     if (week >= stop) this.refuse(args, "budget_exhausted", { scope: "week_usd", used: week, cap: stop });
+    return null;
   }
 
   private body(args: CallArgs): Record<string, unknown> {
@@ -201,7 +216,7 @@ export class ModelClient {
     }
     const taskState = this.gate(args);
     if (this.mode === "live") this.client(args.provider);
-    this.checkBudget(args);
+    const hold = this.checkBudget(args);
 
     const body = this.body(args);
     const hash = requestHash(args.provider, body);
@@ -240,6 +255,9 @@ export class ModelClient {
           if (runKey && args.run_id) writeRecording(this.recordingsDir, { hash: runKey.key, body_hash: hash, run_id: args.run_id, occurrence: runKey.occurrence, ...kept }, secrets);
         }
       }
+    } catch (e) {
+      hold?.release();
+      throw e;
     } finally {
       this.inflight.set(ledgerId, Math.max(0, (this.inflight.get(ledgerId) ?? 1) - 1));
     }
@@ -267,16 +285,21 @@ export class ModelClient {
       affinity_key: args.affinity_key
     });
     const env = this.ledger(args.run_id).append("model.call", row, { recorded_at: 0, occurred_at: 0 });
+    hold?.settle(row.cost_usd);
     return { completion, row, ref: { stream_id: env.stream_id, seq: env.seq }, hash };
   }
 
   appendRecord(runId: string | null, recordType: string, payload: unknown): StoreRef {
     const e = this.ledger(runId).append(recordType, payload, { recorded_at: 0, occurred_at: 0 });
+    // A reading's cost was spent before the client heard of it, so it is counted and alerts but cannot be refused.
+    const cost = (payload as { cost_usd?: unknown } | null)?.cost_usd;
+    if (this.spend && recordType === "reading.call" && typeof cost === "number" && cost > 0) this.spend.charge("reading", cost, { run_id: runId, purpose: String((payload as { purpose?: unknown }).purpose ?? "reading") });
     return { stream_id: e.stream_id, seq: e.seq };
   }
 
   close(): void {
     for (const s of this.ledgers.values()) s.close();
+    this.spend?.close();
     this.ledgers.clear();
   }
 }

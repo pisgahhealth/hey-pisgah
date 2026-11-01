@@ -1,8 +1,10 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { LedgerRow } from "@hey-pisgah/contracts";
+import { dayCapsFromEnv, type DayCaps } from "./spend.js";
 
-export type Budget = { runUsd: number; runMaxCalls: number; weekUsd: number; weekStopFraction: number; weekSince: () => Date };
+// With day caps set, a hospital serve is capped per day and the per-run and week stops of evaluation runs do not apply.
+export type Budget = { runUsd: number; runMaxCalls: number; weekUsd: number; weekStopFraction: number; weekSince: () => Date; day?: DayCaps | null };
 
 const num = (v: string | undefined, d: number) => (v !== undefined && v !== "" && Number.isFinite(Number(v)) ? Number(v) : d);
 
@@ -13,7 +15,8 @@ export function budgetFromEnv(env: NodeJS.ProcessEnv = process.env): Budget {
     runMaxCalls: num(env.HEY_PISGAH_MAX_CALLS, 200),
     weekUsd: num(env.HEY_PISGAH_WEEK_USD, 120),
     weekStopFraction: 0.8,
-    weekSince: () => (env.HEY_PISGAH_WEEK_SINCE ? new Date(env.HEY_PISGAH_WEEK_SINCE) : new Date(Date.now() - 7 * 24 * 3600 * 1000))
+    weekSince: () => (env.HEY_PISGAH_WEEK_SINCE ? new Date(env.HEY_PISGAH_WEEK_SINCE) : new Date(Date.now() - 7 * 24 * 3600 * 1000)),
+    day: dayCapsFromEnv(env)
   };
 }
 

@@ -7,3 +7,4 @@ export { DEFAULT_RECORDINGS_DIR, HEADER_WHITELIST, readRecording, readRunRecordi
 export { budgetFromEnv, ledgerRowsIn, weekSpendUsd, type Budget } from "./budget.js";
 export { ModelClient, createModelClient, fixedMock, type CallArgs, type CallResult, type ChatCompletion, type ChatMessage, type ChatTool, type ClientOptions, type MockResponder, type Mode } from "./client.js";
 export { callStructured, extractCandidate, formatIssues, type StructuredResult } from "./structured.js";
+export { DaySpend, dayCapsFromEnv, spendDay, type DayCaps, type Reservation, type SpendKind, type SpendScope, type SpendStatus } from "./spend.js";

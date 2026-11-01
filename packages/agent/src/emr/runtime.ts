@@ -22,6 +22,8 @@ import {
 } from "./delegate.js";
 import { VERBAL_LINE, VERBAL_ORDER_ARGS, VERBAL_ORDER_KIND, verbalMissingNote, verbalOrderSaid } from "./verbal.js";
 import { FROM_NOW_ON, PreferenceError, SCOPE_KINDS, describePref, describeScope, describeSource, readRule, scopeAnswer, type PrefField, type PreferenceMemory } from "./preferences.js";
+import { retainClosed } from "./retention.js";
+import { modelFailNote } from "./spend.js";
 
 // uncertain: sent, but the answer said nothing about whether the hospital saved it; reconciled under its own key, never failed for it.
 export type EmrActionState = "proposed" | "sent" | "uncertain" | "acknowledged" | "completed" | "refused" | "cancelled" | "failed";
@@ -1419,7 +1421,7 @@ export class EmrRuntime {
       const code = e instanceof ModelError ? e.code : "error";
       this.append(l, "intent.failed", { line_id: lineId, reason: `model_${code}` });
       // A failed decision is said, so the line never ends in silence.
-      this.note(l, "I could not decide what that line asked for, so nothing was written from it. Say it again.", "refusal");
+      this.note(l, modelFailNote(code), "refusal");
       if (l.task.state === "running") this.setState(l, "needs_input", `model_${code}`);
       return;
     }
@@ -1466,7 +1468,7 @@ export class EmrRuntime {
       const code = e instanceof ModelError ? e.code : "error";
       this.append(l, "intent.failed", { line_id: lineId, reason: `model_${code}` });
       // A failed decision is said, so the line never ends in silence.
-      this.note(l, "I could not decide what that line asked for, so nothing was written from it. Say it again.", "refusal");
+      this.note(l, modelFailNote(code), "refusal");
       if (l.task.state === "running") this.setState(l, "needs_input", `model_${code}`);
       return;
     } finally { l.calling = null; }
@@ -3611,5 +3613,6 @@ export class EmrRuntime {
     if (open) return this.setState(l, "running", null);
     if (t.questions.some((q) => q.answered_by === null)) return this.setState(l, "waiting", "question_open");
     this.setState(l, "done", reason);
+    retainClosed(l.stream, t, (m) => this.log(m));
   }
 }

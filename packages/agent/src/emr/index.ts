@@ -27,3 +27,5 @@ export { PARAKEET_DIR, PARAKEET_MODEL, STREAM_DIR, STREAM_FLUSH_MS, STREAM_MODEL
 export { STREAM_ENDPOINT_MS, STREAM_LIVE_SLACK_MS, STREAM_MAX_MS, STREAM_PREROLL_MS, StreamListener, StreamRefused } from "./stream-listen.js";
 export { META_JOIN_QUIET_MS, META_KEEP_MS, META_OVERLAP_MS, META_PAD_AFTER_MS, META_RECONNECTS, META_ROLL_AT_MS, META_STREAM_MODEL, META_TURN_PREROLL_MS, META_TURN_TAIL_MS, MetaStreamFailed, MetaStreamListener, probeRealtime, type MetaStreamOptions } from "./meta-stream.js";
 export { HEARTBEAT_RULE, Heartbeats, beatMac, beatText, type Beat, type BeatAnswer, type HeartbeatRule } from "./presence.js";
+export { finallyClosed, openObligations, retainClosed } from "./retention.js";
+export { arrivalRunId, modelFailNote, spendingTranscriber, wavMs } from "./spend.js";

@@ -18,6 +18,7 @@ import { gateArrival } from "./gate.js";
 import { SCREEN_PAGES, type ScreenPage } from "./screens.js";
 import { EMERGENCY_KIND, EMERGENCY_LINE, EMERGENCY_PRESS, afterWake, identityFrom, emergencyHeardLoosely, emergencyReason, spokenPatient, unidentifiedRef } from "./entry.js";
 import { shortHash } from "../ids.js";
+import { arrivalRunId } from "./spend.js";
 import { openStream } from "@hey-pisgah/store";
 import { PreferenceError, PreferenceMemory, SCOPE_KINDS, describePref, describeScope, describeSource } from "./preferences.js";
 
@@ -387,7 +388,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const now = Date.now();
     const recent = (before.get(owner) ?? []).filter((x) => now - x.at < ARRIVAL_RECENT_MS);
     let r: Awaited<ReturnType<typeof gateArrival>>;
-    try { r = await gateArrival(client, recent.map((x) => x.text), text, { run_id: `run-${shortHash("arrival", owner)}` }); } catch (e) {
+    try { r = await gateArrival(client, recent.map((x) => x.text), text, { run_id: arrivalRunId(owner) }); } catch (e) {
       o.log?.(`arrival not decided: ${e instanceof Error ? e.message.slice(0, 160) : String(e)}`);
       return null;
     }
