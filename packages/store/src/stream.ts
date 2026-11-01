@@ -60,6 +60,8 @@ export class Stream {
   private envelopes: Envelope[];
   private plain: Envelope[];
   private closed = false;
+  // Lines before this index were already retained by this handle, so a repeat only walks the newer ones.
+  private retainedUpTo = 0;
 
   private constructor(
     readonly root: string,
@@ -204,14 +206,20 @@ export class Stream {
   retain(keep?: ReadonlySet<string>): { fields: number } {
     if (this.closed) throw new StoreError("stream_closed", "stream is closed");
     if (!this.writer || this.fd === null || this.lock === null) throw new StoreError("not_writer", "stream was opened for reading");
+    if (!areaSealed(this.streamId)) return { fields: 0 };
     assertToken(this.paths.lock, this.lock.token);
     let fields = 0;
-    const next = this.envelopes.map((e) => {
+    const from = keep ? 0 : this.retainedUpTo;
+    const next = this.envelopes.map((e, i) => {
+      if (i < from) return e;
       const r = retainPayload(e.payload, keep);
       fields += r.fields;
       return r.fields ? { ...e, payload: r.payload } : e;
     });
-    if (fields === 0) return { fields: 0 };
+    if (fields === 0) {
+      if (!keep) this.retainedUpTo = this.envelopes.length;
+      return { fields: 0 };
+    }
     const bytes = Buffer.from(next.map((e) => `${canonical(e)}\n`).join(""), "utf8");
     const check = scanBytes(bytes, this.streamId);
     if (check.problem || check.envelopes.length !== next.length) throw new StoreError("store_corrupt", "the retained copy failed the chain check, so nothing was changed", { stream_id: this.streamId, ...(check.problem ?? {}) });
@@ -230,6 +238,7 @@ export class Stream {
     this.envelopes = check.envelopes;
     this.plain = openAll(this.streamId, check.envelopes);
     this.appendInternal("store.retained", { through_seq: next.length, fields });
+    if (!keep) this.retainedUpTo = this.envelopes.length;
     return { fields };
   }
 
