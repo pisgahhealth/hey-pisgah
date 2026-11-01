@@ -18,6 +18,7 @@ class ConvFake extends ClerkFake {
   private n = 0;
   // Loses the hospital's answer to a prescription, so the write is left uncertain.
   lose = false;
+  noVisit = false;
   commits = 0;
   kinds: string[] = [...ORDER_REFERENCE_KINDS, EMERGENCY_KIND, IDENTITY_KIND, "record_triage_vitals"];
   readBackAnswer: ReadBack | null = null;
@@ -32,7 +33,7 @@ class ConvFake extends ClerkFake {
     if (kind === "prescribe" && this.lose) return { ok: false, reason: "timeout", status: null, retryable: true, counted: false };
     if (kind !== EMERGENCY_KIND) return super.commit(kind, args, key, prov);
     if (!this.writes.some((w) => w.key === key)) this.writes.push({ kind, args, key, prov, id: ARRIVAL });
-    return { ok: true, record_id: ARRIVAL, record_version: 1, event_ids: [`patient:${ARRIVAL}`, `visit:${ARRIVAL_VISIT}`], replayed: false };
+    return { ok: true, record_id: ARRIVAL, record_version: 1, event_ids: [`patient:${ARRIVAL}`, ...(this.noVisit ? [] : [`visit:${ARRIVAL_VISIT}`])], replayed: false };
   }
   readonly speaker = async (_o: string, v: readonly number[], _p: Provenance): Promise<SpeakerVerdict> => {
     this.n += 1;
@@ -164,7 +165,7 @@ describe("CONV 1: the owner's agent writes the name said for an emergency arriva
     await sayOn(b.rt, task, "His name is Emeka Bassey.");
     await b.rt.settled();
     expect(of(b.port, IDENTITY_KIND)).toHaveLength(0);
-    expect(b.rt.view(task)!.notes.some((n) => /^Held for the front desk to register: Emeka Bassey/.test(n.text))).toBe(true);
+    expect(b.rt.view(task)!.notes.some((n) => /^Name heard, held for the front desk to register, no phone yet\./.test(n.text))).toBe(true);
     await b.rt.stop();
   });
 
@@ -227,6 +228,66 @@ describe("SA-ENG 3: the identity summary names no one", () => {
     expect(acts.length).toBeGreaterThanOrEqual(2);
     for (const a of acts) expect(a.summary, a.summary).not.toMatch(NAMES), expect(a.summary, a.summary).not.toMatch(/\d/);
     expect(of(b.port, IDENTITY_KIND).map((w) => w.args["name"])).toEqual(["Blessing Adeyemi", "Blessing Adebayo"]);
+    await b.rt.stop();
+  });
+});
+
+describe("SA-ENG 3b: identity notes and questions name no one (coordinator ruling)", () => {
+  const NAMES = /Blessing|Adeyemi|Adebayo|Emeka|Bassey|Ada\b|Ade\b|Adu\b/i;
+  // Every note and question the strip shows after the arrival opened.
+  const shownSince = (b: ReturnType<typeof boot>, task: string, from: number) => { const v = b.rt.view(task)!; return [...v.notes.map((n) => n.text), ...v.questions.map((q) => q.text)].slice(from); };
+  const before = (b: ReturnType<typeof boot>, task: string) => { const v = b.rt.view(task)!; return v.notes.length + v.questions.length; };
+  it("writes, repeats and corrects a name with no name or digits in any note", async () => {
+    const b = boot(() => ASIDE);
+    const task = await arrival(b);
+    const from = before(b, task);
+    for (const line of ["Her name is Blessing Adeyemi, her phone is 08031234567.", "Her name is Blessing Adeyemi, her phone is 08031234567.", "Sorry, her name is Blessing Adebayo."]) { await sayOn(b.rt, task, line); await b.rt.settled(); }
+    const shown = shownSince(b, task, from);
+    expect(shown.some((x) => /^Already recorded/.test(x))).toBe(true);
+    for (const x of shown) expect(x, x).not.toMatch(NAMES), expect(x, x).not.toMatch(/\d/);
+    expect(b.rt.view(task)!.identities.at(-1)).toMatchObject({ name: "Blessing Adebayo" });
+    await b.rt.stop();
+  });
+
+  it("holds a name for the front desk with no name or phone in the note", async () => {
+    const b = boot(() => ASIDE);
+    b.port.kinds = b.port.kinds.filter((k) => k !== IDENTITY_KIND);
+    const task = await arrival(b);
+    const from = before(b, task);
+    await sayOn(b.rt, task, "His name is Emeka Bassey, his phone is 08031234567.");
+    await b.rt.settled();
+    const shown = shownSince(b, task, from);
+    expect(shown.some((x) => /^Name heard, held for the front desk/.test(x))).toBe(true);
+    for (const x of shown) expect(x, x).not.toMatch(NAMES), expect(x, x).not.toMatch(/\d/);
+    expect(b.rt.view(task)!.identities.at(-1)).toMatchObject({ name: "Emeka Bassey", phone: "08031234567" });
+    await b.rt.stop();
+  });
+
+  it("waits for the arrival's save with no name in the note", async () => {
+    const b = boot(() => ASIDE);
+    // The door's answer names the patient but not yet the visit, so the name waits.
+    b.port.noVisit = true;
+    const task = await arrival(b);
+    const from = before(b, task);
+    await sayOn(b.rt, task, "Her name is Blessing Adeyemi.");
+    await b.rt.settled();
+    const shown = shownSince(b, task, from);
+    expect(shown.some((x) => /^Name heard\. I will record it once the arrival is saved\./.test(x))).toBe(true);
+    for (const x of shown) expect(x, x).not.toMatch(NAMES);
+    await b.rt.stop();
+  });
+
+  it("asks about an unclear spelling without naming either part", async () => {
+    const b = boot(() => ASIDE);
+    const task = await arrival(b);
+    await sayOn(b.rt, task, "Her name is Ada Ade.");
+    await b.rt.settled();
+    const from = before(b, task);
+    await sayOn(b.rt, task, "It is spelt A-D-U.");
+    await b.rt.settled();
+    const shown = shownSince(b, task, from);
+    expect(shown.length).toBeGreaterThan(0);
+    for (const x of shown) expect(x, x).not.toMatch(NAMES);
     await b.rt.stop();
   });
 });
@@ -394,7 +455,7 @@ describe("CONV review fixes (codex review of ce4de52)", () => {
     await sayOn(b.rt, task, "It is spelt A-D-U.");
     await b.rt.settled();
     expect(of(b.port, IDENTITY_KIND).map((w) => w.args["name"])).toEqual(["Ada Ade"]);
-    expect(b.rt.view(task)!.questions.at(-1)!.text).toBe("Which part of Ada Ade is Adu? Say the full name.");
+    expect(b.rt.view(task)!.questions.at(-1)!.text).toBe("That spelling is as close to two parts of the name, so I did not change it. Say the full name.");
     await b.rt.stop();
   });
 

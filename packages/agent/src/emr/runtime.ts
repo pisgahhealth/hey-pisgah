@@ -976,7 +976,8 @@ export class EmrRuntime {
     const sp = held ? spelledName(text, held.name) : null;
     if (sp && "ask" in sp) {
       this.append(live, "line.ruled", { line_id: lineId, classes: ["instruction"], as: "identity" });
-      this.ask(live, lineId, `Which part of ${held!.name} is ${sp.word}? Say the full name.`);
+      // The strip never shows the name; the clinician knows what was spelled, so the question asks for the full name.
+      this.ask(live, lineId, "That spelling is as close to two parts of the name, so I did not change it. Say the full name.");
       this.afterLine(live, lineId, true);
       this.settle(live, "identity_asked");
       return { task_id: live.task.task_id, line_id: lineId };
@@ -3050,7 +3051,8 @@ export class EmrRuntime {
     const line = t.lines.find((x) => x.id === lineId);
     if (line && !line.kept) this.append(l, "line.kept", { line_id: lineId, text: line.text, raw_text: line.ambient?.raw_text ?? null });
     if (prev) {
-      if (prev.name === name && (!phone || prev.phone === phone)) return this.note(l, `Already recorded: ${name}.`);
+      // Identity notes never carry the name or phone; those stay in the identity hold behind the strip's tap.
+      if (prev.name === name && (!phone || prev.phone === phone)) return this.note(l, "Already recorded: the name you said is on the arrival.");
       this.append(l, "identity.amended", { obligation_id: prev.obligation_id, name, phone: phone ?? prev.phone, line_id: lineId });
       return this.writeIdentity(l, lineId);
     }
@@ -3060,7 +3062,7 @@ export class EmrRuntime {
     };
     this.append(l, "identity.held", { identity: ob });
     if (writes) return this.writeIdentity(l, lineId);
-    this.note(l, `Held for the front desk to register: ${name}${phone ? `, phone ${phone}` : ", no phone yet"}.`);
+    this.note(l, `Name heard, held for the front desk to register${phone ? ", with a phone" : ", no phone yet"}.`);
     this.delegateRegistration(l, lineId, ob.obligation_id, name, phone);
   }
 
@@ -3069,7 +3071,7 @@ export class EmrRuntime {
     const t = l.task;
     const ob = t.identities.filter((i) => i.state === "open" && i.completes_by === "owner_agent").at(-1);
     if (!ob) return;
-    if (!t.visit_id || !t.patient_id) return this.note(l, `Name heard: ${ob.name}. I will record it once the arrival is saved.`, "hold");
+    if (!t.visit_id || !t.patient_id) return this.note(l, "Name heard. I will record it once the arrival is saved.", "hold");
     const parsed = IdentityArgs.safeParse({ visit_id: t.visit_id, patient_id: t.patient_id, name: ob.name, ...(ob.phone ? { phone: ob.phone } : {}) });
     if (!parsed.success) return this.note(l, "I could not use that name, so nothing was recorded. Say the name again.", "refusal");
     const prior = [...t.order].reverse().map((id) => t.actions.get(id)!).find((a) => a.kind === IDENTITY_KIND && !["cancelled", "refused", "failed"].includes(a.state));
