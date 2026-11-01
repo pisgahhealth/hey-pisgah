@@ -5,44 +5,73 @@ import { loadKeys, secondSparkRoute } from "@hey-pisgah/model";
 import { loadProfile, staffHintsOf } from "./profile.js";
 import { PisgahPort } from "./port.js";
 import { adoptedForEmr } from "./versions.js";
-import { SandboxBlock, mintAgentBearer, mintAgentBearerAsync, sandboxQuery } from "./sandbox.js";
+import { SandboxBlock, doorMintFrom, mintAgentBearer, mintAgentBearerAsync, mintAgentBearerFromDoor, renewBearers, sandboxQuery } from "./sandbox.js";
 
-// Starts the EMR-facing serve over the agent door on HEY_PISGAH_EMR_PORT (default 4100); the bearer comes from the environment or a sandbox mint.
+// Starts the EMR-facing serve over the agent door on HEY_PISGAH_EMR_PORT (default 4100); bearers come from the hospital's mint, the environment or a sandbox mint.
 async function main(): Promise<void> {
   const profile = loadProfile();
   const sandbox = profile.sandbox ? SandboxBlock.parse(profile.sandbox) : null;
+  // With HEY_PISGAH_MINT_URL and HEY_PISGAH_SERVE_KEY the hospital's own mint gives each owner's bearer while their login is live; otherwise the sandbox script does.
+  const door = doorMintFrom(process.env);
   let owner = process.env["HEY_PISGAH_AGENT_OWNER"] ?? sandbox?.owner ?? "";
   let bearer = process.env["HEY_PISGAH_AGENT_BEARER"] ?? "";
-  if (!bearer) {
-    if (!sandbox) throw new Error("set HEY_PISGAH_AGENT_BEARER, or add a sandbox block to the profile");
-    const m = mintAgentBearer(sandbox);
-    bearer = m.bearer;
-    owner = m.owner;
+  const bearers: Record<string, string> = {};
+  const loginOf = new Map<string, SandboxBlock["owners"][number] | null>();
+  const doorOwners = door ? [...new Set([owner, ...profile.owners.map((x) => x.id)].filter(Boolean))] : [];
+  if (door) {
+    if (doorOwners.length === 0) throw new Error("set HEY_PISGAH_AGENT_OWNER, or list owners in the profile");
+    if (bearer && owner) bearers[owner] = bearer;
+    for (const o of doorOwners) {
+      if (bearers[o]) continue;
+      const m = await mintAgentBearerFromDoor(door, o).catch((e: unknown) => { process.stderr.write(`agent mint failed for an owner: ${e instanceof Error ? e.message : String(e)}\n`); return null; });
+      if (m) bearers[o] = m.bearer;
+      else process.stderr.write("an owner has no live login yet; their agent is minted within a minute of it\n");
+    }
+  } else {
+    if (!bearer) {
+      if (!sandbox) throw new Error("set HEY_PISGAH_AGENT_BEARER, or HEY_PISGAH_MINT_URL and HEY_PISGAH_SERVE_KEY, or add a sandbox block to the profile");
+      const m = mintAgentBearer(sandbox);
+      bearer = m.bearer;
+      owner = m.owner;
+    }
+    if (!owner) throw new Error("set HEY_PISGAH_AGENT_OWNER");
+    // One agent bearer per owner: the sandbox block's other logins are minted the same way, each for its own owner.
+    bearers[owner] = bearer;
+    loginOf.set(owner, null);
+    for (const who of sandbox?.owners ?? []) {
+      const m = mintAgentBearer(sandbox!, who);
+      bearers[m.owner] = m.bearer;
+      loginOf.set(m.owner, who);
+    }
   }
-  if (!owner) throw new Error("set HEY_PISGAH_AGENT_OWNER");
-  // One agent bearer per owner: the sandbox block's other logins are minted the same way, each for its own owner.
-  const bearers: Record<string, string> = { [owner]: bearer };
-  const loginOf = new Map<string, SandboxBlock["owners"][number] | null>([[owner, null]]);
-  for (const who of sandbox?.owners ?? []) {
-    const m = mintAgentBearer(sandbox!, who);
-    bearers[m.owner] = m.bearer;
-    loginOf.set(m.owner, who);
-  }
-  // A bearer the door no longer takes is minted again for the same login, at most once a minute per owner, and kept only when it names the same owner.
-  const failedAt = new Map<string, number>();
-  const refresh = sandbox ? async (o: string): Promise<string | null> => {
-    if (!loginOf.has(o) || Date.now() - (failedAt.get(o) ?? 0) < 60_000) return null;
-    try {
+  const mintFor = door
+    ? async (o: string) => (await mintAgentBearerFromDoor(door, o))?.bearer ?? null
+    : sandbox ? async (o: string) => {
       const m = await mintAgentBearerAsync(sandbox, loginOf.get(o) ?? null);
       if (m.owner !== o) throw new Error("the mint named another owner");
-      process.stderr.write("agent bearer re-minted after a 401\n");
       return m.bearer;
+    } : null;
+  const held = door ? doorOwners : [...loginOf.keys()];
+  // A bearer the door no longer takes is minted again for the same owner, at most once a minute per owner.
+  const failedAt = new Map<string, number>();
+  const refresh = mintFor ? async (o: string): Promise<string | null> => {
+    if (!held.includes(o) || Date.now() - (failedAt.get(o) ?? 0) < 60_000) return null;
+    try {
+      const b = await mintFor(o);
+      if (!b) throw new Error("no live login");
+      process.stderr.write("agent bearer re-minted after a 401\n");
+      return b;
     } catch {
       failedAt.set(o, Date.now());
       process.stderr.write("agent bearer re-mint failed; the door's 401 stands\n");
       return null;
     }
   } : undefined;
+  // Every minute, a bearer that is missing or within 15 minutes of expiry is minted again, so a live login never meets an expired agent.
+  const renewal = mintFor ? setInterval(() => {
+    void renewBearers(bearers, held, mintFor).then((r) => { if (r.length) process.stderr.write(`agent bearers renewed for ${r.length} owner${r.length > 1 ? "s" : ""}\n`); });
+  }, 60_000) : null;
+  renewal?.unref();
   const store = process.env["HEY_PISGAH_EMR_STORE"] ?? join(process.cwd(), ".hey-pisgah", "emr-store");
   const port = new PisgahPort(profile, {
     bearers, ...(refresh ? { refresh } : {}),
@@ -93,7 +122,7 @@ async function main(): Promise<void> {
   process.stdout.write(`emr serve on ${s.urls.join(" ")} (mode ${s.client.mode}, ${Object.keys(bearers).length} owner${Object.keys(bearers).length > 1 ? "s" : ""}, speaker model ${embed ? `on, voiceprint at ${at}` : "off"}, ears ${earSwitch(process.env["HEY_PISGAH_EAR"])}/${asr}${second ? `, fallback ${second.provider}` : ""}${adopted ? `, workflow version ${adopted.def.version} adopted` : ""})\n`);
   // A stop that has not finished in 10 s exits anyway with code 1 and says so, so a restart never waits on a slow door call.
   const forced = (why: string) => { process.stderr.write(`serve stop ${why}; exiting with code 1\n`); process.exit(1); };
-  const stop = () => { setTimeout(() => forced("did not finish in 10 s"), 10_000).unref(); void s.close().then(() => process.exit(0), () => forced("failed")); };
+  const stop = () => { if (renewal) clearInterval(renewal); setTimeout(() => forced("did not finish in 10 s"), 10_000).unref(); void s.close().then(() => process.exit(0), () => forced("failed")); };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
 }
