@@ -30,7 +30,7 @@ Pisgah Health's hospital EMR existed before the event, including agent identitie
 
 ## What is measured
 
-Each claim has a question, a result file and a fixed sentence per outcome in `evaluation/claims.json`. `npm run claims:check` reads the result files and writes `evaluation/claims.status.json`. On 31 October 2026 the status was 13 green, 5 amber and 10 not yet measured. A few of the green sentences, word for word:
+Each claim has a question, a result file and a fixed sentence per outcome in `evaluation/claims.json`. `npm run claims:check` reads the result files and writes `evaluation/claims.status.json`. On 1 November 2026 the status was 13 green, 5 amber and 10 not yet measured. A few of the green sentences, word for word:
 
 | Claim | Sentence |
 | --- | --- |

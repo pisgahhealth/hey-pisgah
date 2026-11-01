@@ -22,21 +22,21 @@ Earlier product documents set the direction and are not code: a product brief (2
 
 ## Built during the event, in this repository
 
-Every file in this repository was written during the event. Dates are commit dates. The first commit is the first one that added the part's code; the latest is the newest on 31 Oct 2026.
+Every file in this repository was written during the event. Dates are commit dates. The first commit is the first one that added the part's code; the latest is the newest on 1 Nov 2026.
 
 | Part | What was built | Folders | First commit | Latest commit |
 | --- | --- | --- | --- | --- |
-| Contracts | Shared types, the hash-chained record format, the workflow schema | `packages/contracts/` | f29bb4c, 28 Oct | 21bbd95, 30 Oct |
-| Agent runtime | Tasks with wakes and proofs, the decision gate, conversation state, hand-offs between agents | `packages/agent/src/` | ec95421, 28 Oct | 916a5b2, 31 Oct |
-| EMR connection | The agent's port over the EMR's agent API, the serve the clinician's strip talks to, the local ears | `packages/agent/src/emr/`, `packages/pisgah-adapter/` | c98e2a5, 28 Oct | ac91a0a, 31 Oct |
-| Voice input | Meta Voice Transcribe over REST, then Meta's realtime ear | `packages/voice/` | ebece40, 28 Oct | cb41a13, 30 Oct |
-| Wake phrase and speaker | A local wake-phrase spotter, a local speaker model that says who probably spoke | `packages/agent/src/emr/` | 4c8426f, 29 Oct | 65b3383, 30 Oct |
-| Local ears | A local streaming ear and a local second ear, behind switches | `packages/agent/src/emr/` | e17d98d, 30 Oct | 1ab68ee, 30 Oct |
-| Model layer and ledger | Clients for Muse Spark Open, a record of every model call, spending limits, replay for tests | `packages/model/`, `packages/store/` | 1417c1c, 28 Oct | ce47fdf, 28 Oct |
+| Contracts | Shared types, the hash-chained record format, the workflow schema | `packages/contracts/` | f29bb4c, 28 Oct | 29fa08a, 1 Nov |
+| Agent runtime | Tasks with wakes and proofs, the decision gate, conversation state, hand-offs between agents | `packages/agent/src/` | ec95421, 28 Oct | 2ea1f93, 1 Nov |
+| EMR connection | The agent's port over the EMR's agent API, the serve the clinician's strip talks to, the local ears | `packages/agent/src/emr/`, `packages/pisgah-adapter/` | c98e2a5, 28 Oct | f19a4b6, 1 Nov |
+| Voice input | Meta Voice Transcribe over REST, then Meta's realtime ear | `packages/voice/` | ebece40, 28 Oct | 8d6768b, 31 Oct |
+| Wake phrase and speaker | A local wake-phrase spotter, a local speaker model that says who probably spoke | `packages/agent/src/emr/` | 4c8426f, 29 Oct | 1a4b886, 1 Nov |
+| Local ears | A local streaming ear and a local second ear, behind switches | `packages/agent/src/emr/` | e17d98d, 30 Oct | 1a4b886, 1 Nov |
+| Model layer and ledger | Clients for Muse Spark Open, a record of every model call, spending limits, replay for tests | `packages/model/`, `packages/store/` | 1417c1c, 28 Oct | 583b7e4, 1 Nov |
 | Synthetic hospital and simulator | A made-up hospital described as data and a simulator that runs its discharges | `packages/hospital/`, `packages/simulator/`, `packages/cases/` | 9f1d9d3, 28 Oct | a84ecc1, 30 Oct |
 | Investigation tools | Evidence gathering, explanations, matched experiments, proposals | `packages/intelligence/` | 2079589, 28 Oct | 8acec42, 31 Oct |
 | Workflow versions | Numbered versions, adoption by a person, a monitor, suspension | `packages/workflow/` | 09163f8, 28 Oct | df7f042, 28 Oct |
-| Evaluator and claims | Scoring against simple baselines, the acceptance harness, the claims registry and its status file | `packages/evaluator/`, `evaluation/`, `apps/cli/` | d32b5be, 28 Oct | ac91a0a, 31 Oct |
+| Evaluator and claims | Scoring against simple baselines, the acceptance harness, the claims registry and its status file | `packages/evaluator/`, `evaluation/`, `apps/cli/` | d32b5be, 28 Oct | 1626f96, 1 Nov |
 | Demo app | A view that shows and replays the agent's work and each claim's status | `apps/demo/` | d798a3c, 28 Oct | 21bbd95, 30 Oct |
 
 ## Built during the event, in the EMR
