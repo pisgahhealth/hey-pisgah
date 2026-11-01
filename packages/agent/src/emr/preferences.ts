@@ -1,6 +1,7 @@
 import { openStream, type Stream } from "@hey-pisgah/store";
 import { shortHash } from "../ids.js";
-import { CADENCE_WORDS, cadenceSaid } from "./work.js";
+import { CADENCE_WORDS, cadenceSaid, wordSaid } from "./work.js";
+import type { EmrTask } from "./runtime.js";
 
 // The clinician's remembered preferences, one stream for every owner, outside any one task so a fresh encounter reads them.
 export const PREFERENCES_STREAM = "learning/preferences";
@@ -11,7 +12,8 @@ export type PrefField = keyof typeof PREF_FIELDS;
 export const SCOPE_KINDS = ["patient", "me", "ward", "everyone"] as const;
 export type ScopeKind = (typeof SCOPE_KINDS)[number];
 export type PrefScope = { kind: "patient"; patient_id: string } | { kind: "me" } | { kind: "ward"; ward: string } | { kind: "everyone" };
-export type PrefSource = { kind: "correction" | "from_now_on" | "external"; owner: string; task_id: string | null; line_id: string | null; quote: string; at: string };
+// A derived source cites the owner's own notes it was counted from, as task and action ids, never their text.
+export type PrefSource = { kind: "correction" | "from_now_on" | "external" | "derived"; owner: string; task_id: string | null; line_id: string | null; quote: string; at: string; cites?: string[] };
 export type Preference = {
   pref_id: string; owner: string; field: PrefField; item_kind: string | null; value: string;
   state: "candidate" | "active" | "declined"; scope: PrefScope | null; source: PrefSource;
@@ -62,6 +64,7 @@ export function describeSource(s: PrefSource, viewer: string | null = null): str
   const said = s.quote ? ` "${s.quote.slice(0, 80)}"` : "";
   const mine = viewer === null || viewer === s.owner;
   if (s.kind === "external") return `a hospital rule added as text${said}`;
+  if (s.kind === "derived") return `${mine ? "your own" : "a colleague's"} records (${s.quote})`;
   return s.kind === "correction" ? `${mine ? "your" : "a colleague's"} correction${said}` : `${mine ? "you" : "a colleague"} said${said}`;
 }
 
@@ -113,6 +116,38 @@ export function choosePreference(prefs: readonly Preference[], at: PrefAt): Pref
   return { applied: applied ?? null, withheld };
 }
 
+// One value the owner said aloud on a past entry, with the task and action it is on.
+export type PastEntry = { ref: string; field: PrefField; item_kind: string | null; value: string; at: string };
+export type DerivedReading = RuleReading & { k: number; n: number; cites: string[]; quote: string };
+
+// The owner's completed notes and care-plan items whose type or cadence the line itself said; a value a preference or the fallback filled is not the owner's.
+export function pastEntries(tasks: readonly EmrTask[], owner: string): PastEntry[] {
+  return tasks.filter((t) => t.owner === owner).flatMap((t) => t.order.map((id) => t.actions.get(id)!).flatMap((a): PastEntry[] => {
+    const field: PrefField | null = a.kind === "record_note" ? "note_type" : a.kind === "add_care_plan_item" ? "care_plan_cadence" : null;
+    const line = t.lines.find((x) => x.id === a.line_id);
+    if (!field || a.state !== "completed" || !line?.kept || t.prefs.applied.some((u) => u.action_id === a.action_id)) return [];
+    const value = String(a.args[field === "note_type" ? "note_type" : "cadence"] ?? "");
+    if (!value || !(field === "note_type" ? wordSaid(value, line.text) : cadenceSaid(value, line.text))) return [];
+    return [{ ref: `${t.task_id}#${a.action_id}`, field, item_kind: field === "care_plan_cadence" ? String(a.args["item_kind"]) : null, value, at: a.completed_at ?? a.proposed_at }];
+  }));
+}
+
+// A default is the value on at least share of the owner's last window said entries of one kind, from at least min of them; each cites the entries it counted.
+export function deriveDefaults(entries: readonly PastEntry[], o: { window?: number; min?: number; share?: number } = {}): DerivedReading[] {
+  const groups = new Map<string, PastEntry[]>();
+  for (const e of entries) groups.set(`${e.field}|${e.item_kind ?? ""}`, [...(groups.get(`${e.field}|${e.item_kind ?? ""}`) ?? []), e]);
+  return [...groups.values()].flatMap((g): DerivedReading[] => {
+    const last = [...g].sort((x, y) => (x.at < y.at ? 1 : -1)).slice(0, o.window ?? 10);
+    const counts = new Map<string, number>();
+    for (const e of last) counts.set(e.value, (counts.get(e.value) ?? 0) + 1);
+    const [value, k] = [...counts].sort((x, y) => y[1] - x[1])[0]!;
+    if (last.length < (o.min ?? 5) || k / last.length < (o.share ?? 0.7)) return [];
+    const { field, item_kind } = last[0]!;
+    const what = field === "note_type" ? `${value.replace(/_/g, " ")} on ${k} of your last ${last.length} notes whose type you said` : `${CADENCE_SAY[value] ?? value} on ${k} of your last ${last.length} ${item_kind} items whose cadence you said`;
+    return [{ field, item_kind, value, k, n: last.length, cites: last.filter((e) => e.value === value).map((e) => e.ref), quote: what }];
+  });
+}
+
 const Z = { recorded_at: 0, occurred_at: 0 };
 
 // The memory itself: candidates, scope decisions and external rules on one append-only stream, folded in memory.
@@ -154,6 +189,12 @@ export class PreferenceMemory {
     };
     this.append("preference.candidate", { preference: p });
     return structuredClone(p);
+  }
+
+  // Derived defaults become candidates for their owner, one per field and value; one already kept, declined or offered is not offered again.
+  derived(owner: string, readings: readonly DerivedReading[]): Preference[] {
+    const held = (r: DerivedReading) => [...this.prefs.values()].some((p) => p.owner === owner && p.field === r.field && p.item_kind === r.item_kind && p.value === r.value);
+    return readings.filter((r) => !held(r)).map((r) => this.candidate({ owner, reading: { field: r.field, item_kind: r.item_kind, value: r.value }, source: { kind: "derived", task_id: null, line_id: null, quote: r.quote, cites: r.cites }, patient_id: null, ward: null }));
   }
 
   // The owner's scope decision, by one word or on the strip; "no" declines it, and nobody else may decide for them.

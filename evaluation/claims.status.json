@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-01T05:16:30.259Z",
-  "commit": "75c362e",
+  "generated_at": "2026-11-01T05:32:35.196Z",
+  "commit": "e4279fc",
   "claims": [
     {
       "claim_id": "C-01",
@@ -438,6 +438,27 @@
         "negative_cases.altered_due_date": "unsupported_or_incomplete"
       },
       "measured_at": "2026-10-30T16:50:00.912Z"
+    },
+    {
+      "claim_id": "C-29",
+      "status": "green",
+      "values": {
+        "gain_net": 36,
+        "wrong_fills_added": -9,
+        "shuffled_gain_net": -31,
+        "empty_equals_before": true,
+        "unscoped_applied": 0,
+        "said_overridden": 0,
+        "live_calls": 0,
+        "n": 30,
+        "after_matched": 30,
+        "unsaid_slots": 50,
+        "before_matched": 3,
+        "after_wrong": 3,
+        "before_wrong": 12,
+        "shuffled_wrong": 45
+      },
+      "measured_at": "2026-11-01T05:32:34.127Z"
     }
   ]
 }

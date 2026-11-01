@@ -1784,6 +1784,15 @@ export class EmrRuntime {
       this.append(l, "preference.applied", { ...pref.use, action_id: t.order.at(-1)! });
       this.note(l, `${pref.use.text}: used ${pref.use.source}, scope ${pref.use.scope}.`);
     }
+    if (t.order.length > before && (kind === "record_note" || kind === "add_care_plan_item")) this.offerDerived(l, lineId, kind === "record_note" ? "note_type" : "care_plan_cadence", kind === "add_care_plan_item" ? String(parsed.data["item_kind" as keyof typeof parsed.data]) : null);
+  }
+
+  // A default derived from the owner's own records is offered once per task, after its work went through and with no question open, so one word can scope it.
+  private offerDerived(l: Live, lineId: string, field: PrefField, itemKind: string | null): void {
+    const t = l.task;
+    if (!this.o.preferences || t.questions.some((q) => q.answered_by === null)) return;
+    const p = this.o.preferences.all().find((x) => x.owner === t.owner && x.state === "candidate" && x.source.kind === "derived" && x.field === field && (field !== "care_plan_cadence" || x.item_kind === itemKind) && !t.questions.some((q) => q.pref_id === x.pref_id));
+    if (p) this.askScope(l, lineId, p.pref_id, `From your own records: ${p.source.quote}. Keep ${describePref(p)} for your later entries? Say patient, me, ward or everyone; no keeps nothing.`);
   }
 
   // The one open question a line answers: the one it names, else the latest shown; a confirm, a pending request or a whom question is closed only by its own answer.
