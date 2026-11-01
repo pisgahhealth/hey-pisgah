@@ -17,7 +17,7 @@ import { EMERGENCY_KIND, EMERGENCY_LINE, IDENTITY_KIND, IdentityArgs, RULE_ONLY_
 import { openableHref, screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
 import {
   ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_ARGS, DELEGATION_RULE_KINDS, DISPENSE_KIND, ESCALATE_KIND, NUDGE_KIND, PREPARE_KIND, REGISTER_KIND, WARD_REVIEW_KIND, RECEIVE_KIND, CANCEL_TEST_KIND,
-  ACCEPT_LINE, cancelReason, labAsked, patientSaid, CONSENT_PURPOSES, acceptedTask, consentSaid, consentScope, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
+  ACCEPT_LINE, LAB_ACT_WORDS, cancelReason, labAsked, patientSaid, CONSENT_PURPOSES, acceptedTask, consentSaid, consentScope, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
   type ConsentPurpose, type DelegationRead, type EmrDelegation
 } from "./delegate.js";
 import { VERBAL_LINE, VERBAL_ORDER_ARGS, VERBAL_ORDER_KIND, verbalMissingNote, verbalOrderSaid } from "./verbal.js";
@@ -3262,10 +3262,13 @@ export class EmrRuntime {
     const asked = labAsked(text);
     const kind = asked === "cancel" ? CANCEL_TEST_KIND : RECEIVE_KIND;
     const all = open.filter((x) => x.d.task_kind === "lab_order" && x.d.subject_id && x.d.delegation_id);
-    if (!asked || !all.length || !this.kinds(owner).includes(asked === "unclear" ? RECEIVE_KIND : kind)) return null;
+    const acts = asked === "receive" || asked === "cancel";
+    if (!asked || !all.length || !(acts ? this.kinds(owner).includes(kind) : this.kinds(owner).some((k) => k === RECEIVE_KIND || k === CANCEL_TEST_KIND))) return null;
     const tests = this.o.port.orderables?.().tests ?? {};
     const low = ` ${text.toLowerCase().replace(/[^a-z0-9]+/g, " ")} `;
     const said = Object.entries(tests).filter(([, ws]) => ws.some((w) => low.includes(` ${w.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `))).map(([k]) => k);
+    // A question or a conditional is about the lab only when it names a test or the lab's own act, so a question to a patient passes by.
+    if (!acts && asked !== "unclear" && !said.length && !LAB_ACT_WORDS.test(low)) return null;
     const testOf = (d: EmrDelegation) => Object.keys(tests).find((k) => new RegExp(`\\btest: ${k.replace(/_/g, " ")}(,|$)`, "i").test(d.instruction ?? "")) ?? null;
     const here = all.filter((x) => target && ((target.patient_id && x.l.task.patient_id === target.patient_id) || (target.admission_id && x.l.task.admission_id === target.admission_id)));
     // An explicit patient is never widened to everyone's lab tasks.
@@ -3280,8 +3283,12 @@ export class EmrRuntime {
     const home = (hits[0] ?? scoped.at(-1)!).l;
     const lineId = this.ruledLine(home, owner, text, spokenAt, source, "lab", vp, unverifiedReason);
     const name = (k: string | null) => (k ? tests[k]?.[0] ?? k : "a test");
-    if (asked === "unclear") {
-      this.ask(home, lineId, `I did not act: that line says ${said.length === 1 ? `the ${name(said[0]!)}` : "a test"} was not received or not cancelled. Say "received the ${said.length === 1 ? name(said[0]!) : "test"}" or "cancel the ${said.length === 1 ? name(said[0]!) : "test"}" with the reason if you want me to.`);
+    const which = said.length === 1 ? name(said[0]!) : "test";
+    // A question or a conditional is asked about with what to say to act, and nothing is sent.
+    if (!acts) {
+      this.ask(home, lineId, asked === "question" ? `I did not act: that was a question, not an instruction. Say "received the ${which}" or "cancel the ${which}" with the reason if you want me to.`
+        : asked === "conditional" ? `I did not act: that line says if or when. Say "received the ${which}" once it is, or "cancel the ${which}" with the reason.`
+        : `I did not act: that line says ${said.length === 1 ? `the ${which}` : "a test"} was not received or not cancelled. Say "received the ${which}" or "cancel the ${which}" with the reason if you want me to.`);
       this.settle(home, "lab_line");
       return { task_id: home.task.task_id, line_id: lineId };
     }

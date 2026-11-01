@@ -4,6 +4,7 @@ import { EMERGENCY_KIND, IDENTITY_KIND, spelledName, identityFrom } from "../src
 import type { EmrCommit, EmrContext, EmrTarget, Orderables, Provenance, ReadBack, WorkArgs } from "../src/emr/port.js";
 import type { SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
 import { openStream } from "@hey-pisgah/store";
+import { summariseWork } from "../src/emr/work.js";
 import { ADMIT, ClerkFake, DOC, PAT, VISIT, clerkBoot, ins, type W } from "./clerking-helpers.js";
 
 // Lane CONV: the conversation fixes after the ACC2 review, each red before its fix.
@@ -208,6 +209,24 @@ describe("CONV 1: the owner's agent writes the name said for an emergency arriva
     await sayOn(b.rt, task, "Pulse 84 again, sats 97.");
     await b.rt.settled();
     expect(of(b.port, "record_triage_vitals")).toHaveLength(1);
+    await b.rt.stop();
+  });
+});
+
+describe("SA-ENG 3: the identity summary names no one", () => {
+  const NAMES = /Blessing|Adeyemi|Adebayo/i;
+  it("keeps the name and the phone out of every record_identity summary, in the args only", async () => {
+    expect(summariseWork(IDENTITY_KIND, { visit_id: ARRIVAL_VISIT, patient_id: ARRIVAL, name: "Blessing Adeyemi", phone: "08031234567" })).toBe("Name recorded for the arrival; the desk completes the registration");
+    const b = boot(() => ASIDE);
+    const task = await arrival(b);
+    await sayOn(b.rt, task, "Her name is Blessing Adeyemi, her phone is 08031234567.");
+    await b.rt.settled();
+    await sayOn(b.rt, task, "Sorry, her name is Blessing Adebayo.");
+    await b.rt.settled();
+    const acts = b.rt.view(task)!.actions.filter((a) => a.kind === IDENTITY_KIND);
+    expect(acts.length).toBeGreaterThanOrEqual(2);
+    for (const a of acts) expect(a.summary, a.summary).not.toMatch(NAMES), expect(a.summary, a.summary).not.toMatch(/\d/);
+    expect(of(b.port, IDENTITY_KIND).map((w) => w.args["name"])).toEqual(["Blessing Adeyemi", "Blessing Adebayo"]);
     await b.rt.stop();
   });
 });
