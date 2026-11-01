@@ -56,7 +56,7 @@ class LabFake extends ClerkFake {
       this.rows.set(id, {
         id, kind: String(args["task_kind"]), title: String(args["title"]), patient_id: String(args["patient_id"]), admission_id: null, visit_id: args["visit_id"] ? String(args["visit_id"]) : VISIT, state: "assigned", assignee: null, rule: "on_duty",
         acknowledged_at: null, completed_at: null, completion_record_id: null, due_at: null, overdue: false, escalated_at: null, record: { status: "unsupported_or_incomplete", record_id: null, reason: null },
-        instruction: String(args["instruction"]), nudged: [], subject_id: String(args["subject_id"]), subject_prepared: null, order_received: null, consult_finished: null, assignee_owner: LAB
+        instruction: String(args["instruction"]), nudged: [], subject_table: String(args["subject_table"]), subject_id: String(args["subject_id"]), subject_prepared: null, order_received: null, consult_finished: null, assignee_owner: LAB
       });
       this.writes.push({ kind, args, key, prov, id });
       return { ok: true, record_id: id, record_version: 1, event_ids: [`delegation:${id}`], replayed: false };
@@ -298,5 +298,78 @@ describe("SA-ENG 2: an admitted patient's page target names only the stay", () =
     await b.rt.settled();
     expect(lab(b.port, RECEIVE_KIND).map((w) => w.args["order_id"])).toEqual([ORDER["fbc"]]);
     await b.rt.stop();
+  });
+});
+
+// Lane F2 (c): the lab agent reads the hand-off's lab order through the door, so its task knows the patient by name.
+class NamedLab extends LabFake {
+  readonly subjectReads: { owner: string; table: string; id: string }[] = [];
+  // The patient each lab order is for, as the lab order read would show it.
+  answer: (id: string) => { patient_id: string | null; label: string | null } = (id) => (Object.values(ORDER2).includes(id) ? { patient_id: OTHER_PAT, label: "Emeka Obi" } : { patient_id: PAT, label: "Blessing Adeyemi" });
+  async delegationSubject(owner: string, subject: { table: string; id: string }) {
+    this.subjectReads.push({ owner, ...subject });
+    return owner === LAB && subject.table === "bench_orders" ? this.answer(subject.id) : null;
+  }
+}
+async function named(tests: string[], patients: string[] = [PAT], o: { answer?: NamedLab["answer"] } = {}) {
+  const port = new NamedLab();
+  if (o.answer) port.answer = o.answer;
+  const b = clerkBoot(gate, { port });
+  for (const p of patients) for (const t of tests) await b.rt.say({ owner: DOC, target: { patient_id: p }, text: `Send a ${t === "fbc" ? "full blood count" : "urinalysis"}.`, source: "audio", voiceprint: DOC_V });
+  await b.rt.settled();
+  await b.rt.pollOnce();
+  await b.rt.settled();
+  return { ...b, port };
+}
+
+describe("F2 (c): the lab task learns the patient's name from the lab order", () => {
+  it("receives the FBC for Blessing on her lab order, and the name reaches no title, bell or note", async () => {
+    const b = await named(["fbc"]);
+    expect(b.port.subjectReads).toEqual([{ owner: LAB, table: "bench_orders", id: ORDER["fbc"] }]);
+    const s = await labSay(b, "Received the FBC for Blessing, running it.");
+    await b.rt.settled();
+    expect(lab(b.port, RECEIVE_KIND).map((w) => w.args)).toEqual([expect.objectContaining({ order_id: ORDER["fbc"], evidence: `transcript:${s.line_id}` })]);
+    const said = JSON.stringify([b.port.writes.filter((w) => w.kind !== RECEIVE_KIND).map((w) => w.args), [...b.port.rows.values()].map((r) => r.title), labNotes(b), b.rt.views(LAB).flatMap((v) => v.actions.map((a) => a.summary)), b.rt.views(DOC).flatMap((v) => v.notes.map((x) => x.text))]);
+    expect(said).not.toMatch(/Blessing|Adeyemi/);
+    await b.rt.stop();
+  });
+
+  it("names each patient's own order when two patients wait for an FBC", async () => {
+    const b = await named(["fbc"], [PAT, OTHER_PAT]);
+    await labSay(b, "Received the FBC for Emeka, running it.", LAB_V, { patient: OTHER_PAT });
+    await b.rt.settled();
+    await labSay(b, "Received the FBC for Emeka, running it.");
+    await b.rt.settled();
+    expect(lab(b.port, RECEIVE_KIND).map((w) => w.args["order_id"])).toEqual([ORDER2["fbc"]]);
+    expect(labAsks(b).some((q) => /^I could not match "emeka" to a lab task waiting here/.test(q))).toBe(true);
+    await b.rt.stop();
+  });
+
+  it("takes no name from a lab order read that shows another patient, so the named line is held", async () => {
+    const b = await named(["fbc"], [PAT], { answer: () => ({ patient_id: OTHER_PAT, label: "Blessing Adeyemi" }) });
+    await labSay(b, "Received the FBC for Blessing, running it.");
+    await b.rt.settled();
+    expect(lab(b.port, RECEIVE_KIND)).toHaveLength(0);
+    expect(labAsks(b).some((q) => /^I could not match "blessing" to a lab task waiting here/.test(q))).toBe(true);
+    await b.rt.stop();
+  });
+
+  it("takes the name from a lab order read that names no patient, as the hospital checked the order is this patient's", async () => {
+    const b = await named(["fbc"], [PAT], { answer: () => ({ patient_id: null, label: "Blessing Adeyemi" }) });
+    await labSay(b, "Received the FBC for Blessing, running it.");
+    await b.rt.settled();
+    expect(lab(b.port, RECEIVE_KIND).map((w) => w.args["order_id"])).toEqual([ORDER["fbc"]]);
+    await b.rt.stop();
+  });
+
+  it("keeps the name across a restart", async () => {
+    const b = await named(["fbc"]);
+    await b.rt.stop();
+    b.client.close();
+    const again = clerkBoot(gate, { port: b.port, root: b.root });
+    await labSay({ ...b, ...again, port: b.port }, "Received the FBC for Blessing, running it.");
+    await again.rt.settled();
+    expect(lab(b.port, RECEIVE_KIND).map((w) => w.args["order_id"])).toEqual([ORDER["fbc"]]);
+    await again.rt.stop();
   });
 });

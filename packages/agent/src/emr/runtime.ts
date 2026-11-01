@@ -112,6 +112,8 @@ export type EmrTask = {
   obligations: EmrObligation[]; speed: SpeedRow[];
   // Spoken identities held for the front desk, and whether the patient is still unnamed.
   identities: EmrIdentityHold[]; unidentified: boolean; label: string;
+  // The patient's name a handed-on task learned from its subject record; it stays on this task and never reaches a title or a bell.
+  patient_label?: string | null;
   // How the task was opened; a task opened for a delegation is labelled with the task's title, not the patient's name.
   entry?: string | null;
   // Work this owner's agent handed on or was handed, each state as the record showed it.
@@ -347,7 +349,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       break;
     }
     case "page.received": t.pages.push(x["page"] as InboxPage); break;
-    case "task.subject": t.patient_id = (x["patient_id"] as string | null) ?? t.patient_id; t.visit_id = (x["visit_id"] as string | null) ?? t.visit_id; t.unidentified = x["unidentified"] === undefined ? t.unidentified : !!x["unidentified"]; break;
+    case "task.subject": t.patient_id = (x["patient_id"] as string | null) ?? t.patient_id; t.visit_id = (x["visit_id"] as string | null) ?? t.visit_id; t.unidentified = x["unidentified"] === undefined ? t.unidentified : !!x["unidentified"]; if (typeof x["patient_label"] === "string") t.patient_label = x["patient_label"]; break;
     case "identity.held": t.identities.push(x["identity"] as EmrIdentityHold); break;
     case "identity.amended": { const o = t.identities.find((y) => y.obligation_id === x["obligation_id"]); if (o) { o.amended = [...(o.amended ?? []), { from: o.name, line_id: String(x["line_id"]) }]; o.name = String(x["name"]); o.phone = (x["phone"] as string | null | undefined) ?? o.phone; o.recorded_at = null; } break; }
     case "obligation.held":
@@ -446,7 +448,7 @@ export const TELL_ME_KIND = "tell_me";
 
 // The names a line may use for a task's patient: a delegation's task carries its title as label, so only the names said for its patient count.
 // The obligations of a task still held or fired and not yet done; the retention sweep keeps a task's words while any is open.
-export const patientNames = (t: Pick<EmrTask, "entry" | "label" | "identities">): string[] => (t.entry === "delegation" ? t.identities.filter((i) => i.state !== "cancelled").map((i) => i.name) : knownNames(t));
+export const patientNames = (t: Pick<EmrTask, "entry" | "label" | "identities" | "patient_label">): string[] => (t.entry === "delegation" ? [...(t.patient_label ? [t.patient_label] : []), ...t.identities.filter((i) => i.state !== "cancelled").map((i) => i.name)] : knownNames(t));
 // The opening of the question asked when the said values do not make a valid request.
 const COULD_NOT_USE = "I could not use that";
 // The value that names what a request is about; a long line with a different one is a new request.
@@ -3624,9 +3626,12 @@ export class EmrRuntime {
   }
 
   // A task handed to this owner opens the owner's task for that patient with no read, and the agent tells its human on the bell at once.
-  private receive(owner: string, d: DelegationRead, at: string): void {
+  private receive(owner: string, d: DelegationRead, at: string, about: { patient_id: string | null; label: string | null } | null = null): void {
     const ctx: EmrContext = { admission_id: d.admission_id ?? "", patient_id: d.patient_id, visit_id: d.visit_id, label: d.title, facts: {}, keywords: [] };
     const l = this.taskFor(owner, ctx) ?? this.openTask(owner, ctx, { entry: "delegation" });
+    // The hospital checked the subject is this patient's when the task was made, so a read naming another patient is the only one refused.
+    const label = about?.label?.trim().slice(0, 120);
+    if (label && (about!.patient_id === null || about!.patient_id === d.patient_id) && l.task.patient_id === d.patient_id && l.task.patient_label !== label) this.append(l, "task.subject", { patient_label: label, by: `delegation:${d.id}` });
     const reg = d.kind === "registration" ? { ...registrationFrom(d.instruction), consent_line: null } : null;
     const lineId = `rec-${d.id}`;
     this.append(l, "delegation.received", { delegation: { ...this.newDelegation(d.id, lineId, d.kind, d.title, null, d.due_at, "none", { registration: reg, subject_id: d.subject_id, instruction: d.instruction }), delegation_id: d.id, side: "assignee", action_id: null, assigned_at: at, acknowledged_at: d.acknowledged_at, escalated_at: d.escalated_at } });
@@ -3654,7 +3659,10 @@ export class EmrRuntime {
         for (const d of rows.filter((r) => !known.has(r.id) && r.state !== "completed" && r.state !== "cancelled")) {
           let whole: DelegationRead | null = null;
           try { whole = await port.delegation(owner, d.id, prov); } catch { whole = null; }
-          if (!this.stopped) this.receive(owner, whole ?? d, at);
+          const r = whole ?? d;
+          let about: { patient_id: string | null; label: string | null } | null = null;
+          if (r.subject_table && r.subject_id && port.delegationSubject) { try { about = await port.delegationSubject(owner, { table: r.subject_table, id: r.subject_id }, prov); } catch { about = null; } }
+          if (!this.stopped) this.receive(owner, r, at, about);
         }
         for (const l of mine().filter((x) => !CLOSED_TASK.has(x.task.state))) {
           for (const d of l.task.delegations.filter((x) => x.side === "assignee" && x.task_kind === "dispense" && x.asked && !x.record_id)) await this.advanceOrder(l, d.key);
