@@ -85,17 +85,23 @@ export function identityFrom(line: string): SpokenIdentity | null {
 // True when the patient named themselves ("my name is"), which counts unless the voice is the owner's own (D40).
 export const selfNamed = (line: string): boolean => /\bmy\s+name\s+(?:is|na|now|no)\b/i.test(line);
 
-// A name spelled letter by letter ("A-D-E-Y-E-M-I"), read as the word, put in place of the one held part it is closest to; when no part or several parts are as close, it is asked.
+// The part of a name a spelling line names: "surname", "last name" or "family name" is the last part, "first name" or "given name" the first.
+const LAST_PART = /\b(?:sur\s?name|last\s+name|family\s+name)\b/i, FIRST_PART = /\b(?:first|given)\s+name\b/i;
+// A name spelled letter by letter ("A-D-E-Y-E-M-I"), read as the word, put in place of the part the line names, else the one part sharing its first letter, else the one closest; two or no candidates are asked.
 export function spelledName(line: string, held: string): { name: string } | { ask: string[]; word: string } | null {
   const runs = [...line.matchAll(/(?<![A-Za-z])(?:[A-Za-z](?:[\s,.-]+|$)){3,}/g)].map((m) => m[0].replace(/[^A-Za-z]/g, "")).filter((w) => w.length >= 3);
-  if (!runs.length || !(/\bspel(?:l(?:ed|ing|s)?|t)\b/i.test(line) || runs[0]!.length >= 4)) return null;
+  const last = LAST_PART.test(line), first = FIRST_PART.test(line);
+  if (!runs.length || !(/\bspel(?:l(?:ed|ing|s)?|t)\b/i.test(line) || last || first || runs[0]!.length >= 4)) return null;
   const word = runs[0]![0]!.toUpperCase() + runs[0]!.slice(1).toLowerCase();
   const parts = held.split(/\s+/).filter(Boolean);
   if (!parts.length) return null;
-  const near = parts.map((p, i) => ({ i, d: editDistance(p.toLowerCase(), word.toLowerCase()) })).filter((x) => parts[x.i]![0]!.toLowerCase() === word[0]!.toLowerCase() && x.d <= Math.max(2, Math.floor(word.length / 3)));
+  const named = last !== first && parts.length > 1 ? (last ? parts.length - 1 : 0) : null;
+  const same = parts.map((p, i) => ({ i, d: editDistance(p.toLowerCase(), word.toLowerCase()) })).filter((x) => parts[x.i]![0]!.toLowerCase() === word[0]!.toLowerCase());
+  const near = same.length === 1 ? same : same.filter((x) => x.d <= Math.max(2, Math.floor(word.length / 3)));
   const best = Math.min(...near.map((x) => x.d));
-  const top = near.filter((x) => x.d === best);
-  if (top.length !== 1) return { ask: top.length ? top.map((x) => parts[x.i]!) : parts, word };
+  const top = named !== null ? [{ i: named }] : near.filter((x) => x.d === best);
+  // The ask lists the parts the spelling could be for, and is empty when it fits none.
+  if (top.length !== 1) return { ask: (top.length ? top : same).map((x) => parts[x.i]!), word };
   if (parts[top[0]!.i] === word) return null;
   parts[top[0]!.i] = word;
   return { name: parts.join(" ") };

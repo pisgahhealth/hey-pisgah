@@ -1013,7 +1013,7 @@ export class EmrRuntime {
     if (sp && "ask" in sp) {
       this.append(live, "line.ruled", { line_id: lineId, classes: ["instruction"], as: "identity" });
       // The strip never shows the name; the clinician knows what was spelled, so the question asks for the full name.
-      this.ask(live, lineId, "That spelling is as close to two parts of the name, so I did not change it. Say the full name.");
+      this.ask(live, lineId, sp.ask.length ? "That spelling is as close to two parts of the name, so I did not change it. Say the full name." : "I could not tell which part of the name that spelling is for, so I did not change it. Say the full name, or say which part.");
       this.afterLine(live, lineId, true);
       this.settle(live, "identity_asked");
       return { task_id: live.task.task_id, line_id: lineId };
