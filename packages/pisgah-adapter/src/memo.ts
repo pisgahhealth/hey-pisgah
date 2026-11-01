@@ -5,7 +5,7 @@ export type MemoDeliveryLike = { recipient_id: string; kind: "memo" | "task" | "
 export type DoorDeliveryAnswer = { ok: boolean; ref: string | null; reason: string | null; refused?: boolean };
 export type DoorDeliveryLog = { recipient_id: string; kind: MemoDeliveryLike["kind"]; status: number | null; outcome: "delivered" | "refused" | "failed" | "not_sent"; reason: string | null; ms: number };
 
-// Posts each checked memo to the door under the profile's sender, recording a refusal as the door's answer and never retrying it.
+// Posts each checked memo to the door under its recipient's own agent, recording a refusal as the door's answer and never retrying it.
 export function doorMemoTransport(port: PisgahPort, o: { run_id: string; now?: () => Date }): { deliver(d: MemoDeliveryLike): Promise<DoorDeliveryAnswer>; log: DoorDeliveryLog[] } {
   const spec = port.profile.memos;
   if (!spec) throw new Error("the door profile names no memo route");
@@ -19,10 +19,12 @@ export function doorMemoTransport(port: PisgahPort, o: { run_id: string; now?: (
       // A task alert needs the profile's alert route; without one it is not sent and its items reach the bell inside the memo.
       if (d.kind !== "memo" && !spec.alerts_path) { note(null, "not_sent", "the profile names no alert route; the items travel inside the memo"); return { ok: false, ref: null, reason: "no door route for a task alert", refused: false }; }
       const memoId = String((d.body as { memo_id?: unknown } | null)?.memo_id ?? "memo").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
-      const prov = { owner: spec.sender, evidence: `nightly:${o.run_id}/${memoId}`.slice(0, 200), spoken_at: now().toISOString() };
+      // The hospital takes a memo only from the agent of the person it is for, so it travels under that person and never under the profile's sender.
+      const prov = { owner: d.recipient_id, evidence: `nightly:${o.run_id}/${memoId}`.slice(0, 200), spoken_at: now().toISOString() };
       const r = d.kind === "memo"
         ? await port.request("POST", spec.path, prov, { idempotencyKey: `memo-${memoId}-${d.payload_hash.slice(0, 16)}`, body: { recipientId: d.recipient_id, kind: "memo", preview: d.preview, payloadHash: d.payload_hash, memo: d.body } })
         : await port.request("POST", spec.alerts_path!, prov, { idempotencyKey: `${d.kind}-${memoId}-${d.payload_hash.slice(0, 16)}`, body: { recipientId: d.recipient_id, kind: d.kind, preview: d.preview, payloadHash: d.payload_hash, alert: d.body } });
+      if (r.kind === "refused" && r.reason === "no_bearer_for_owner") { note(null, "not_sent", "no bearer for the recipient's own agent"); return { ok: false, ref: null, reason: "no bearer for the recipient's own agent", refused: false }; }
       if (r.kind === "refused") { note(null, "failed", `port_${r.reason}`); return { ok: false, ref: null, reason: `port_${r.reason}`, refused: false }; }
       if (r.kind === "network_error") { note(null, "failed", r.reason); return { ok: false, ref: null, reason: r.reason, refused: false }; }
       const j = (r.json ?? {}) as { id?: unknown; status?: unknown; error?: { code?: unknown; message?: unknown } };

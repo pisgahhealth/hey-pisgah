@@ -45,6 +45,7 @@ export function deliveryOutcome(r: nightly.PublishResult, expect: Expect[string]
   return { memo: r.status, reason: memo?.reason ?? null, expected: expect?.expect ?? null, correct: expect && got ? got === expect.expect : null };
 }
 
+// --bearer-file is a JSON object from each recipient's id to that person's own agent bearer.
 // npx tsx apps/cli/src/nightly.ts --observed f --emr-store dir [--emr-store dir] --roster f --day 2026-10-30 --run-id run-x --store dir --out-private f --out f [--door-profile f --bearer-file f --expect f]
 if (process.argv[1]?.endsWith("nightly.ts")) {
   const roster = JSON.parse(readFileSync(need("roster"), "utf8")) as { recipients: (nightly.Recipient & { authorise_own?: boolean })[]; departments: Record<string, string> };
@@ -67,7 +68,7 @@ if (process.argv[1]?.endsWith("nightly.ts")) {
   const inv = await nightly.investigateDay(facts, { client, provider: "modal", model: "meta-models/Muse-Spark-Open-816B-A42B", effort: "medium", run_id: runId });
   const hits = nightly.scanNightPrompts(inv.prompts);
   // The memo generator holds only the publisher; the transport is reached through the checks and nowhere else.
-  // With a door profile the memo goes to the hospital under the profile's sender; without one the deliveries are held.
+  // With a door profile each memo goes to the hospital under its recipient's own agent; without one the deliveries are held.
   const doorProfile = flag("door-profile");
   const held = nightly.heldTransport();
   let doorLog: DoorDeliveryLog[] = [];
@@ -77,7 +78,9 @@ if (process.argv[1]?.endsWith("nightly.ts")) {
     const profile = loadProfile(doorProfile);
     if (!profile.memos) throw new Error("the door profile names no memo route");
     sender = profile.memos.sender_label;
-    const port = new PisgahPort(profile, { bearers: { [profile.memos.sender]: readFileSync(need("bearer-file"), "utf8").trim() } });
+    const bearers = JSON.parse(readFileSync(need("bearer-file"), "utf8")) as unknown;
+    if (!bearers || typeof bearers !== "object" || Array.isArray(bearers) || !Object.values(bearers).every((b) => typeof b === "string" && b.length > 0)) throw new Error("the bearer file must map each recipient id to their own agent bearer");
+    const port = new PisgahPort(profile, { bearers: bearers as Record<string, string> });
     const door = doorMemoTransport(port, { run_id: runId });
     doorLog = door.log;
     transport = door;
