@@ -634,7 +634,7 @@ async function runLine(line: Line): Promise<void> {
         process.stdout.write(`\n  AT THE SCREEN (${line.id}): ${line.note ?? line.op}\n  Type done here when you have signed.\n`);
         await typedDone();
         // In the hands rehearsal the sign is the doctor's own door call, as the screen's Sign does.
-        if (HANDS && hospital.hasPerson(line.op!)) { const r = await hospital.person(line.op!, vars); return { ok: r.ok, note: `signed for the rehearsal through dr.edikan's own session: ${r.status}` }; }
+        if (HANDS && hospital.hasPerson(line.op!)) { const r = await hospital.person(line.op!, vars); return { ok: r.ok, note: `signed for the rehearsal through the doctor's own session: ${r.status}` }; }
         return { ok: true, note: "done by Samuel at the screen" };
       }
       if (HOSPITAL === "sandbox" && line.op === "acc_lab_result") return labResult(vars);

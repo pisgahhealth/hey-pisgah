@@ -172,7 +172,7 @@ describe("CONV 1: the owner's agent writes the name said for an emergency arriva
   it("takes the patient's own 'my name is', and never the owner's own voice saying it", async () => {
     const b = boot(() => ASIDE);
     const task = await arrival(b);
-    await sayOn(b.rt, task, "My name is Edikan Bassey, I am the doctor on call.", OWNER);
+    await sayOn(b.rt, task, "My name is Uduak Etim, I am the doctor on call.", OWNER);
     await b.rt.settled();
     expect(of(b.port, IDENTITY_KIND)).toHaveLength(0);
     expect(b.rt.view(task)!.notes.some((n) => /your own voice/.test(n.text))).toBe(true);
