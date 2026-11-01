@@ -1,8 +1,8 @@
 import type { Stream } from "@hey-pisgah/store";
 import type { EmrObligation, EmrTask } from "./runtime.js";
 
-// Stand-in for lane B5's export of the same name: the obligations of a task still held or fired.
-export function openObligations(t: EmrTask): EmrObligation[] {
+// The obligations of a task still held or fired; lane B5's mirror and lane B3's retention read the same rule.
+export function openObligations(t: Pick<EmrTask, "obligations">): EmrObligation[] {
   return t.obligations.filter((o) => o.state === "held" || o.state === "fired");
 }
 

@@ -24,7 +24,8 @@ import {
 } from "./delegate.js";
 import { VERBAL_LINE, VERBAL_ORDER_ARGS, VERBAL_ORDER_KIND, verbalMissingNote, verbalOrderSaid } from "./verbal.js";
 import { FROM_NOW_ON, PreferenceError, SCOPE_KINDS, describePref, describeScope, describeSource, readRule, scopeAnswer, type PrefField, type PreferenceMemory } from "./preferences.js";
-import { retainClosed } from "./retention.js";
+import { openObligations, retainClosed } from "./retention.js";
+export { openObligations };
 import { modelFailNote } from "./spend.js";
 
 // uncertain: sent, but the answer said nothing about whether the hospital saved it; reconciled under its own key, never failed for it.
@@ -441,7 +442,6 @@ export const TELL_ME_KIND = "tell_me";
 
 // The names a line may use for a task's patient: a delegation's task carries its title as label, so only the names said for its patient count.
 // The obligations of a task still held or fired and not yet done; the retention sweep keeps a task's words while any is open.
-export const openObligations = (t: Pick<EmrTask, "obligations">): EmrObligation[] => t.obligations.filter((o) => o.state === "held" || o.state === "fired");
 export const patientNames = (t: Pick<EmrTask, "entry" | "label" | "identities">): string[] => (t.entry === "delegation" ? t.identities.filter((i) => i.state !== "cancelled").map((i) => i.name) : knownNames(t));
 // The value that names what a request is about; a long line with a different one is a new request.
 const PRIMARY_FIELD: Readonly<Record<string, string>> = { prescribe: "drug", order_test: "test", page_staff: "to", schedule_follow_up: "clinic", record_allergy: "substance" };
