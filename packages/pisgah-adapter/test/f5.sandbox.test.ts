@@ -3,9 +3,11 @@ import { loadProfile } from "../src/profile.js";
 import { mintPersonBearer, sandboxQuery, SandboxBlock } from "../src/sandbox.js";
 import { freshArrival } from "./sandbox-helpers.js";
 
-// Runs only with SANDBOX=1 and F5=1 against the loopback sandbox in the private door profile; ward and nurse ids come from read-only SQL.
+// Runs only with SANDBOX=1, F5=1, F5_POSTED_NURSE and F5_UNPOSTED_NURSE against the loopback sandbox in the private door profile; ward and nurse ids come from read-only SQL.
 const RUN = process.env["SANDBOX"] === "1" && process.env["F5"] === "1";
 type Row = Record<string, unknown>;
+// The seed's nurse logins are private runtime values, so they come from the environment.
+const seedLogin = (k: string): string => { const v = process.env[k]; if (!v) throw new Error(`set ${k} to the sandbox seed login`); return v; };
 
 describe.skipIf(!RUN)("F5 a ward's team task stays with that ward's staff", () => {
   it("lets only a nurse posted to the ward (or on duty there) take it, and keeps tasks to two wards apart", async () => {
@@ -16,10 +18,10 @@ describe.skipIf(!RUN)("F5 a ward's team task stays with that ward's staff", () =
     const nurses = sandboxQuery(sb, "f5_nurses", { facility }) as { id: string; username: string; ward: string | null }[];
     const wards = sandboxQuery(sb, "f5_wards", { facility }) as { id: string; name: string }[];
     // The ward with a posted nurse, a second ward, and a nurse of the same hospital posted to neither.
-    const posted = nurses.find((n) => n.username === "nurse.patience" && n.ward)!;
+    const posted = nurses.find((n) => n.username === seedLogin("F5_POSTED_NURSE") && n.ward)!;
     const ward = posted.ward!;
     const other = wards.find((w) => w.id !== ward && !nurses.some((n) => n.ward === w.id))!;
-    const elsewhere = nurses.find((n) => n.username === "nurse.edidiong" && n.ward !== ward)!;
+    const elsewhere = nurses.find((n) => n.username === seedLogin("F5_UNPOSTED_NURSE") && n.ward !== ward)!;
     expect([posted, other, elsewhere].every(Boolean), "the seed's posted nurse, a second ward and an unposted nurse").toBe(true);
     const { patient } = await freshArrival(profile, "F5 Ward");
     // The doctor is the sandbox owner, whose login is the profile's own mint login.
