@@ -11,7 +11,7 @@ import { localDirs, parakeetEar, sherpaStreamAsr, type StreamAsr, type StreamDec
 import { matchWindows, printLine, sherpaEmbedder } from "../src/emr/speaker.js";
 import { percentile } from "../src/emr/runtime.js";
 import { StreamListener } from "../src/emr/stream-listen.js";
-import { earWorkers } from "../src/emr/workers/pool.js";
+import { ModelPool, earWorkers } from "../src/emr/workers/pool.js";
 
 const RATE = 16_000;
 const encodeWavOf = (x: Float32Array) => encodeWav(x, RATE);
@@ -144,6 +144,33 @@ describe.skipIf(process.env["LOCAL_EARS"] !== "1")("the real local models in wor
     expect(v1.every((v) => v?.length === 192)).toBe(true);
     expect(await Promise.all(wavs.map((w) => eN(w).then((p) => p?.vector)))).toEqual(v1);
   }, 180_000);
+
+  it("fails the decoders of a worker that stops, and starts a new worker that hears the same words", async () => {
+    const d = localDirs(MODELS).streamDir;
+    const files = { encoder: join(d, "encoder.onnx"), decoder: join(d, "decoder.onnx"), joiner: join(d, "joiner.onnx"), tokens: join(d, "tokens.txt") };
+    const config = { featConfig: { sampleRate: 16_000, featureDim: 80 }, modelConfig: { transducer: { encoder: files.encoder, decoder: files.decoder, joiner: files.joiner }, tokens: files.tokens, numThreads: 2, provider: "cpu", debug: 0 }, enableEndpoint: false };
+    const pool = new ModelPool("online", { from: import.meta.url, config, flushSamples: 16_000 }, 1);
+    const x = decodeWav(say("Chart his pulse 116.", "Samantha", RATE)).samples;
+    const hearOnce = async () => { const { slot, s } = pool.stream(); pool.send(slot, { op: "open", s }); pool.send(slot, { op: "accept", s, x }); const t = await pool.ask<string>(slot, { op: "finish", s }); pool.release(slot); return t; };
+    const before = await hearOnce();
+    const { slot, s } = pool.stream();
+    pool.send(slot, { op: "open", s });
+    await pool.ask<string>(slot, { op: "text", s });
+    // A worker that stops between two messages, as one ended by its memory limit would.
+    await slot.w.terminate();
+    await expect(pool.ask(slot, { op: "finish", s })).rejects.toThrow(/stopped/);
+    expect(await hearOnce()).toBe(before);
+    expect(before.toLowerCase()).toContain("sixteen");
+    // Closing while a decode is under way lets it finish with its words instead of stopping the worker inside the model.
+    const { slot: busy, s: s2 } = pool.stream();
+    pool.send(busy, { op: "open", s: s2 });
+    pool.send(busy, { op: "accept", s: s2, x });
+    const last = pool.ask<string>(busy, { op: "finish", s: s2 });
+    pool.close();
+    expect(await last).toBe(before);
+    await new Promise<void>((r) => busy.w.once("exit", () => r()));
+    expect(pool.size()).toBe(0);
+  }, 60_000);
 
   it("is null, as before, when a model folder or the speaker model is missing", () => {
     expect(sherpaStreamAsr({ modelDir: join(dir, "none"), workers: 2 })).toBeNull();

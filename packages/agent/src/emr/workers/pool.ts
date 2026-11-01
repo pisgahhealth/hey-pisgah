@@ -96,5 +96,6 @@ export class ModelPool {
 
   size(): number { return this.slots.length; }
 
-  close(): void { for (const s of [...this.slots]) void s.w.terminate(); this.slots.length = 0; }
+  // Each worker ends once it has answered what it was already asked, never stopped from outside in the middle of a native call.
+  close(): void { for (const s of this.slots.splice(0)) { s.w.postMessage({ op: "exit" }); s.w.unref(); } }
 }

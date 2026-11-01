@@ -40,6 +40,8 @@ if (model) parentPort.on("message", (m) => {
     return;
   }
   if (m.op === "close") { streams.delete(m.s); return; }
+  // Stopping a worker from outside while it is in a native call aborts the process, so a pool that closes asks each worker to end after its queued work.
+  if (m.op === "exit") { streams.clear(); parentPort.close(); return; }
   if (m.op === "text") return answer(m.id, () => model.getResult(live(m.s).st).text.trim());
   if (m.op === "finish") return answer(m.id, () => {
     const x = live(m.s);
