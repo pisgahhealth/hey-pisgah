@@ -104,9 +104,10 @@ export interface EmrPort {
 
 export type ObligationOp =
   | { op: "hold"; key: string; kind: "review_due" | "held_work"; due_at: string; patient_id: string; admission_id?: string }
-  | { op: "fire"; id: string }
+  | { op: "claim"; id: string }
+  | { op: "complete"; id: string; claim: string }
   | { op: "cancel"; id: string };
-export type ObligationAnswer = { id: string; status: "held" | "already_held" | "fired" | "cancelled" | "already_fired" | "already_cancelled"; fired_by?: string; fired_at?: string };
+export type ObligationAnswer = { id: string; status: "held" | "already_held" | "claimed" | "not_due" | "busy" | "fired" | "cancelled" | "already_fired" | "already_cancelled"; claim?: string; fired_by?: string; fired_at?: string };
 export type EmrEvent = { kind: "delegation.new" | "delegation.changed" | "result.changed"; id: string; at: string };
 
 // Prescribed and dispensed stay apart; each exception is for the responsible doctor to confirm, and the digest binds the confirmation to this reading.

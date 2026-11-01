@@ -131,8 +131,10 @@ describe("obligations held for a time or a condition", () => {
 
 // The clerking hospital that keeps each timed obligation and fires it from its own job; one guarded claim decides who fires it.
 class KeptFake extends ClerkFake {
-  readonly kept = new Map<string, { key: string; kind: string; due_at: string; fired_by: string | null; cancelled: boolean }>();
+  readonly kept = new Map<string, { key: string; kind: string; due_at: string; fired_by: string | null; cancelled: boolean; claim: string | null }>();
   down = false;
+  // The hospital saves the next hold but its answer never arrives.
+  loseHoldReply = false;
   claims = 0;
   async obligation(_owner: string, op: ObligationOp): Promise<ObligationAnswer> {
     if (this.down) throw new Error("the hospital door could not be reached");
@@ -140,19 +142,22 @@ class KeptFake extends ClerkFake {
       const found = [...this.kept.entries()].find(([, r]) => r.key === op.key);
       if (found) return { id: found[0], status: "already_held" };
       const id = `aaaaaaaa-0000-4000-8000-${String(this.kept.size + 1).padStart(12, "0")}`;
-      this.kept.set(id, { key: op.key, kind: op.kind, due_at: op.due_at, fired_by: null, cancelled: false });
+      this.kept.set(id, { key: op.key, kind: op.kind, due_at: op.due_at, fired_by: null, cancelled: false, claim: null });
+      if (this.loseHoldReply) { this.loseHoldReply = false; throw new Error("the answer was lost"); }
       return { id, status: "held" };
     }
     const r = this.kept.get(op.id)!;
     if (r.fired_by) return { id: op.id, status: "already_fired", fired_by: r.fired_by, fired_at: "2026-11-01T10:02:00.000Z" };
     if (r.cancelled) return { id: op.id, status: "already_cancelled" };
     if (op.op === "cancel") { r.cancelled = true; return { id: op.id, status: "cancelled" }; }
+    if (op.op === "complete") { if (r.claim !== op.claim) return { id: op.id, status: "busy" }; r.fired_by = "serve"; return { id: op.id, status: "fired" }; }
+    if (r.claim) return { id: op.id, status: "busy" };
     this.claims += 1;
-    r.fired_by = "serve";
-    return { id: op.id, status: "fired" };
+    r.claim = `cccccccc-0000-4000-8000-${String(this.claims).padStart(12, "0")}`;
+    return { id: op.id, status: "claimed", claim: r.claim };
   }
   // The hospital's job: the same guarded claim, and true only when it fired.
-  job(id: string): boolean { const r = this.kept.get(id)!; if (r.fired_by || r.cancelled) return false; r.fired_by = "hospital"; return true; }
+  job(id: string): boolean { const r = this.kept.get(id)!; if (r.fired_by || r.cancelled || r.claim) return false; r.fired_by = "hospital"; return true; }
 }
 
 describe("obligations the hospital keeps", () => {
@@ -211,6 +216,41 @@ describe("obligations the hospital keeps", () => {
     expect(b.rt.view(said.task_id)!.notes.at(-1)?.text).toBe("Review due now: review his chest. It is on the ward board.");
     expect(port.claims).toBe(1);
     expect(port.job(id!)).toBe(false);
+    // The firing done here is recorded at the hospital under the claim.
+    expect(port.kept.get(id!)!.fired_by).toBe("serve");
+    await b.rt.stop();
+  });
+
+  it("recovers the hospital's id for a hold whose answer was lost before anything fires, so the hospital's firing is never repeated here", async () => {
+    const clock = { now: Date.now() };
+    const port = new KeptFake();
+    port.admitted = true;
+    port.loseHoldReply = true;
+    const a = clerkBoot(() => [ins("schedule_review", { title: "review his wound", in_minutes: 60 })], { port, clock });
+    const said = await a.rt.say({ owner: DOC, target: { admission_id: ADMIT }, text: "Review his wound again in one hour." });
+    await a.rt.settled();
+    await wait(30);
+    expect(a.rt.view(said.task_id)!.obligations[0]!.mirror_id ?? null).toBeNull();
+    await a.rt.stop();
+    // The hospital kept it and its job fired it while the agent was down.
+    const [id] = [...port.kept.keys()];
+    expect(port.job(id!)).toBe(true);
+    clock.now += 63 * 60_000;
+    // Back at the due time with the door still down: with no durable id there is nothing to claim, so nothing fires here.
+    port.down = true;
+    const down = clerkBoot(() => [], { root: a.root, port, clock });
+    await wait(200);
+    await down.rt.settled();
+    expect(fired(a.root, said.task_id)).toHaveLength(0);
+    await down.rt.stop();
+    port.down = false;
+    const b = clerkBoot(() => [], { root: a.root, port, clock });
+    await wait(200);
+    await b.rt.settled();
+    const v = b.rt.view(said.task_id)!;
+    expect(v.obligations[0]).toMatchObject({ state: "done", fired_by: "hospital", mirror_id: id });
+    expect(v.notes.some((n) => n.text.startsWith("Review due now"))).toBe(false);
+    expect(port.kept.size).toBe(1);
     await b.rt.stop();
   });
 });
