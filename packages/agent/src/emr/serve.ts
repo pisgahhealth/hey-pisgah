@@ -19,7 +19,7 @@ import { gateArrival } from "./gate.js";
 import { SCREEN_PAGES, type ScreenPage } from "./screens.js";
 import { EMERGENCY_KIND, EMERGENCY_LINE, EMERGENCY_PRESS, afterWake, identityFrom, emergencyHeardLoosely, emergencyReason, spokenPatient, unidentifiedRef } from "./entry.js";
 import { shortHash } from "../ids.js";
-import { arrivalRunId } from "./spend.js";
+import { arrivalRunId, spendingTranscriber } from "./spend.js";
 import { openStream } from "@hey-pisgah/store";
 import { PreferenceError, PreferenceMemory, SCOPE_KINDS, describePref, describeScope, describeSource } from "./preferences.js";
 
@@ -268,7 +268,8 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   const rt = new EmrRuntime({ ...(o.runtime ?? {}), onOwnerVoice, storeRoot: o.storeRoot, client, port: o.port, ...(secondEar ? { secondEar } : {}), ...(several ? { secondOpinion: true } : {}), ...(o.releaseWhole ? { releaseWhole: true } : {}), ...(o.log ? { log: o.log } : {}), onSubject, onArrivalFailed, ...(o.emergencyClinicId ? { emergencyClinicId: o.emergencyClinicId } : {}), ...(prefs ? { preferences: prefs } : {}) });
   runtime = rt;
   rt.start();
-  const transcribe = streamAsr ? streamAsr.transcribe : several ? parallelReadings(metaAsr, o.vtReadings!) : metaAsr;
+  // Only Meta's billed transcription is held against the day cap; the local streaming ear costs nothing.
+  const transcribe = streamAsr ? streamAsr.transcribe : spendingTranscriber(several ? parallelReadings(metaAsr, o.vtReadings!) : metaAsr, client.spend);
   const origin = o.allowOrigin ?? "http://localhost:3311";
   const strip: StripAuth = o.strip ?? { mode: "open" };
   // The owner each request's strip token names; every route that names an owner or a task checks it here.
