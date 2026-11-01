@@ -700,6 +700,31 @@
         "not_measured": "Not measured yet"
       },
       "evidence_links": []
+    },
+    {
+      "claim_id": "C-29",
+      "question": "Defaults: did note-type and cadence defaults derived from a clinician's own said entries fill unsaid values as that clinician would, only after their one-word scope, with no gain from another clinician's records?",
+      "demo_surface": {
+        "step": "results",
+        "component": "results tile; live in the EMR strip: the derived candidate with its counted source, the scope question, then each later use with its source"
+      },
+      "evaluation_view": {
+        "tab": "Decision points",
+        "table": "derived defaults before and after, with the shuffled-owner and empty controls"
+      },
+      "acceptance": {
+        "command": "HEY_PISGAH_DEFAULTS_RESULT=evaluation/results/defaults.json npx vitest run packages/agent/test/derived-defaults.test.ts (offline, scripted gate, no model call)",
+        "result_path": "evaluation/results/defaults.json",
+        "predicate": "gain_net >= 1 && wrong_fills_added <= 0 && shuffled_gain_net <= 0 && empty_equals_before == true && unscoped_applied == 0 && said_overridden == 0 && live_calls == 0 ; amber: unscoped_applied == 0 && said_overridden == 0 && live_calls == 0",
+        "measured_on": "dev"
+      },
+      "wording": {
+        "pass": "Measured on {n} held-out synthetic encounters generated for one synthetic clinician, lines typed by the test, no model call: once scoped by one word, defaults derived from that clinician's own said entries wrote {after_matched} of {unsaid_slots} unsaid values as planted (before: {before_matched}) and {after_wrong} wrong (before: {before_wrong}); the same derivation from another synthetic clinician's records wrote {shuffled_wrong} wrong, and an empty history changed nothing",
+        "partial": "On {n} held-out synthetic encounters, derived defaults filled nothing before a scope was chosen and never overrode a said value, but they did not fill more unsaid values right than before, or another clinician's records did as well",
+        "fail": "A derived default filled a value before its owner chose a scope, or overrode a value the clinician said",
+        "not_measured": "Not measured yet"
+      },
+      "evidence_links": []
     }
   ],
   "revisions": [
@@ -1211,6 +1236,14 @@
         "command": "version adopt through serve, two live demo tasks, the version offer read on a live stay and the fresh EMR journey, then npx tsx apps/cli/src/improve.ts report --profile <EMR profile> --stay-offer f --stay-offer-v1 f [--journey-version f | --journey-blocked reason]; then the fresh-stay loop (packages/pisgah-adapter/test/f5loop.sandbox.test.ts) and npx tsx apps/cli/src/improve.ts loop --file evaluation/results/improve.json --store <version store> --applicable-run f --withheld-run f"
       },
       "reason": "improve.json now keeps the ward manager role (adopted_by_person_role) apart from a person's own adoption (adopted_by_person), which is false when a build lane played the role. Amber reads the role, as its wording already says the adoption was the disclosed synthetic ward manager's; green still needs adopted_by_person and human_approval. Nothing was loosened."
+    },
+    {
+      "date": "2026-11-01",
+      "by": "F5-LEARN",
+      "claims": [
+        "C-29"
+      ],
+      "reason": "New claim for derived defaults; it reads only its own offline result on generated synthetic encounters, so its wording says generated, not dictated."
     }
   ]
 }

@@ -111,7 +111,7 @@ describe("no learning words before the system has earned them", () => {
     expect(run).toThrow(/learning word/);
     cycle2(2, [false, true]);
     expect(learningEarned(root)).toEqual({ c10_reads_outcomes: true, reversed_evidence_passed: true });
-    expect(run().claims).toHaveLength(28);
+    expect(run().claims).toHaveLength(29);
   });
 
   it("keeps the README's description of the system free of the word too", () => {

@@ -1,0 +1,155 @@
+{
+ "measured_at": "2026-11-01T05:32:34.127Z",
+ "measured": true,
+ "source": "synthetic_offline",
+ "set": "synthetic",
+ "live_calls": 0,
+ "method": "the engine's own runtime with a scripted gate and a fake ward; habits planted by a seeded generator; scope words typed by the harness",
+ "clinicians": 2,
+ "training_encounters_per_clinician": 12,
+ "heldout_encounters": 30,
+ "n": 30,
+ "habit_share_planted": 0.85,
+ "said_share": 0.5,
+ "arms": {
+  "before": {
+   "unsaid_slots": 50,
+   "matched": 3,
+   "mismatched": 12,
+   "asked": 35,
+   "said_slots": 40,
+   "said_overridden": 0,
+   "derived": [],
+   "candidates": 0,
+   "candidates_scoped": 0,
+   "cites": 0,
+   "preference_uses": 0
+  },
+  "derived_no_scope": {
+   "unsaid_slots": 50,
+   "matched": 3,
+   "mismatched": 12,
+   "asked": 35,
+   "said_slots": 40,
+   "said_overridden": 0,
+   "derived": [
+    {
+     "field": "care_plan_cadence",
+     "item_kind": "nursing",
+     "value": "q4h",
+     "cites": 5
+    },
+    {
+     "field": "note_type",
+     "item_kind": null,
+     "value": "ward_round",
+     "cites": 5
+    }
+   ],
+   "candidates": 2,
+   "candidates_scoped": 0,
+   "cites": 10,
+   "preference_uses": 0
+  },
+  "after": {
+   "unsaid_slots": 50,
+   "matched": 30,
+   "mismatched": 3,
+   "asked": 17,
+   "said_slots": 40,
+   "said_overridden": 0,
+   "derived": [
+    {
+     "field": "care_plan_cadence",
+     "item_kind": "nursing",
+     "value": "q4h",
+     "cites": 5
+    },
+    {
+     "field": "note_type",
+     "item_kind": null,
+     "value": "ward_round",
+     "cites": 5
+    }
+   ],
+   "candidates": 2,
+   "candidates_scoped": 2,
+   "cites": 10,
+   "preference_uses": 33
+  },
+  "shuffled_owner": {
+   "unsaid_slots": 50,
+   "matched": 5,
+   "mismatched": 45,
+   "asked": 0,
+   "said_slots": 40,
+   "said_overridden": 0,
+   "derived": [
+    {
+     "field": "note_type",
+     "item_kind": null,
+     "value": "progress",
+     "cites": 6
+    },
+    {
+     "field": "care_plan_cadence",
+     "item_kind": "observation",
+     "value": "q4h",
+     "cites": 9
+    },
+    {
+     "field": "care_plan_cadence",
+     "item_kind": "nursing",
+     "value": "q2h",
+     "cites": 6
+    }
+   ],
+   "candidates": 3,
+   "candidates_scoped": 3,
+   "cites": 21,
+   "preference_uses": 50
+  },
+  "empty": {
+   "unsaid_slots": 50,
+   "matched": 3,
+   "mismatched": 12,
+   "asked": 35,
+   "said_slots": 40,
+   "said_overridden": 0,
+   "derived": [],
+   "candidates": 0,
+   "candidates_scoped": 0,
+   "cites": 0,
+   "preference_uses": 0
+  }
+ },
+ "paired_vs_before": {
+  "after": {
+   "better": 30,
+   "worse": 3
+  },
+  "shuffled_owner": {
+   "better": 2,
+   "worse": 33
+  },
+  "empty": {
+   "better": 0,
+   "worse": 0
+  }
+ },
+ "gain_net": 36,
+ "shuffled_gain_net": -31,
+ "gain_matched": 27,
+ "shuffled_gain_matched": 2,
+ "wrong_fills_added": -9,
+ "empty_equals_before": true,
+ "unscoped_applied": 0,
+ "said_overridden": 0,
+ "unsaid_slots": 50,
+ "before_matched": 3,
+ "after_matched": 30,
+ "before_wrong": 12,
+ "after_wrong": 3,
+ "shuffled_wrong": 45,
+ "primary_metric": "net fills: values written as the clinician would minus values written wrong; chosen after the first run, where right fills alone hid the shuffled control's wrong fills"
+}

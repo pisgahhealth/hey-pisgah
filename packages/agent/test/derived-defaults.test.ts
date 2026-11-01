@@ -203,7 +203,9 @@ describe("derived defaults: offline before and after on held-out synthetic encou
       gain_net: net(r.after) - net(r.before), shuffled_gain_net: net(r.shuffled_owner) - net(r.before),
       gain_matched: r.after.matched - r.before.matched, shuffled_gain_matched: r.shuffled_owner.matched - r.before.matched, wrong_fills_added: r.after.mismatched - r.before.mismatched,
       empty_equals_before: JSON.stringify(r.empty) === JSON.stringify(r.before),
-      unscoped_applied: r.derived_no_scope.preference_uses, said_overridden: Object.values(r).reduce((n, x) => n + x.said_overridden, 0)
+      unscoped_applied: r.derived_no_scope.preference_uses, said_overridden: Object.values(r).reduce((n, x) => n + x.said_overridden, 0),
+      unsaid_slots: r.before.unsaid_slots, before_matched: r.before.matched, after_matched: r.after.matched, before_wrong: r.before.mismatched, after_wrong: r.after.mismatched, shuffled_wrong: r.shuffled_owner.mismatched,
+      primary_metric: "net fills: values written as the clinician would minus values written wrong; chosen after the first run, where right fills alone hid the shuffled control's wrong fills"
     };
     const out = process.env["HEY_PISGAH_DEFAULTS_RESULT"];
     if (out) { mkdirSync(dirname(out), { recursive: true }); writeFileSync(out, `${JSON.stringify(result, null, 1)}\n`); }
