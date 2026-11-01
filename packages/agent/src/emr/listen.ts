@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { open as openSealed, seal } from "@hey-pisgah/store";
 import { VITALS_KEYWORDS, VoiceError, buildKeywords, cleanTranscript, concat, continuesNumber, danglingEnd, wholeInRange, decodeWav, encodeWav, leadingSilenceMs, parseWav, trailingSilenceMs, vitalsVocabulary, type FinalTranscript, type Rewrite } from "@hey-pisgah/voice";
 import type { EmrRuntime } from "./runtime.js";
 import { primaryClass } from "./classes.js";
@@ -105,7 +106,8 @@ export class ListenSessions {
     const rows: PendingJoin[] = [...[...this.waitingFor.entries()].flatMap(([key, x]) => (x.s.waiting ? [{ key, owner: x.s.owner, target: x.s.ctx.admission_id ? { admission_id: x.s.ctx.admission_id } : { patient_id: x.s.ctx.patient_id ?? "" }, session_id: x.sessionId, text: x.s.waiting.text, raw: x.s.waiting.raw, strong: x.s.waiting.strong, at: x.s.waiting.arrived, released: x.s.waiting.released ?? null }] : [])), ...[...this.restored.values()].map((r) => r.p)];
     if (!rows.length && !existsSync(f)) return;
     mkdirSync(dirname(f), { recursive: true });
-    writeFileSync(`${f}.next`, JSON.stringify(rows));
+    // The waiting words are sealed under the store key like the rest of what was heard.
+    writeFileSync(`${f}.next`, seal(JSON.stringify(rows), "join-pending"));
     renameSync(`${f}.next`, f);
   }
   private markWaiting(s: Session, sessionId: string): void {
@@ -146,7 +148,7 @@ export class ListenSessions {
     const f = this.o.joinFile;
     if (!f || !existsSync(f)) return;
     let rows: PendingJoin[] = [];
-    try { rows = JSON.parse(readFileSync(f, "utf8")) as PendingJoin[]; } catch { rows = []; }
+    try { rows = JSON.parse(openSealed(readFileSync(f, "utf8"), "join-pending")) as PendingJoin[]; } catch { rows = []; }
     for (const p of rows) {
       const timer = setTimeout(() => {
         if (this.restored.get(p.key)?.timer !== timer) return;
