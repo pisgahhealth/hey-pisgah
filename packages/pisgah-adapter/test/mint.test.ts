@@ -63,6 +63,19 @@ describe("renewal before expiry", () => {
     expect(bearers[OTHER]).toBe(jwt(now + 6 * 3600_000));
   });
 
+  it("renews a 30 minute bearer at 15 minutes left, and a 10 minute bearer at half its life rather than every minute", async () => {
+    const life = (iat: number, exp: number) => `e30.${Buffer.from(JSON.stringify({ iat: Math.floor(iat / 1000), exp: Math.floor(exp / 1000) })).toString("base64url")}.sig`;
+    const asked: string[] = [];
+    const mint = async (o: string) => { asked.push(o); return `fresh-${o}`; };
+    const thirty = { [OWNER]: life(now - 14 * 60_000, now + 16 * 60_000) };
+    expect(await renewBearers(thirty, [OWNER], mint, { now })).toEqual([]);
+    expect(await renewBearers(thirty, [OWNER], mint, { now: now + 60_000 })).toEqual([OWNER]);
+    const ten = { [OTHER]: life(now - 4 * 60_000, now + 6 * 60_000) };
+    expect(await renewBearers(ten, [OTHER], mint, { now })).toEqual([]);
+    expect(await renewBearers(ten, [OTHER], mint, { now: now + 60_000 })).toEqual([OTHER]);
+    expect(asked).toEqual([OWNER, OTHER]);
+  });
+
   it("keeps the old bearer when the owner has logged out or the mint fails, so nothing is revived", async () => {
     const old = jwt(now + 60_000);
     const bearers: Record<string, string> = { [OWNER]: old };

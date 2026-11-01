@@ -124,21 +124,31 @@ export async function mintAgentBearerFromDoor(door: { url: string; key: string }
   return { bearer: j.bearer, owner, agent: j.agent, expiresAt: Date.parse(j.expires_at) };
 }
 
-// A bearer's expiry from its own exp claim in milliseconds, or null when it carries none.
-export function bearerExpiry(bearer: string): number | null {
-  try {
-    const exp = (JSON.parse(Buffer.from(bearer.split(".")[1] ?? "", "base64url").toString("utf8")) as { exp?: unknown }).exp;
-    return typeof exp === "number" ? exp * 1000 : null;
-  } catch { return null; }
+// A bearer's claims, or an empty object when it is not a readable token.
+function claimsOf(bearer: string): { exp?: unknown; iat?: unknown } {
+  try { return JSON.parse(Buffer.from(bearer.split(".")[1] ?? "", "base64url").toString("utf8")) as { exp?: unknown; iat?: unknown }; } catch { return {}; }
 }
 
-// Mints again each owner's bearer that is missing or expires within aheadMs, keeping the old one when a mint fails or finds no live login, and returns the owners renewed.
+// A bearer's expiry from its own exp claim in milliseconds, or null when it carries none.
+export function bearerExpiry(bearer: string): number | null {
+  const { exp } = claimsOf(bearer);
+  return typeof exp === "number" ? exp * 1000 : null;
+}
+
+// A bearer's whole life in milliseconds from its iat and exp claims, or null when it carries either not.
+function bearerLife(bearer: string): number | null {
+  const { exp, iat } = claimsOf(bearer);
+  return typeof exp === "number" && typeof iat === "number" && exp > iat ? (exp - iat) * 1000 : null;
+}
+
+// Mints again each owner's bearer that is missing or expires within aheadMs (or half its own life when that is shorter), keeping the old one when a mint fails or finds no live login, and returns the owners renewed.
 export async function renewBearers(bearers: Record<string, string>, owners: readonly string[], mint: (owner: string) => Promise<string | null>, o: { now?: number; aheadMs?: number } = {}): Promise<string[]> {
   const now = o.now ?? Date.now(), ahead = o.aheadMs ?? 15 * 60_000, renewed: string[] = [];
   for (const owner of owners) {
     const current = bearers[owner];
     const exp = current ? bearerExpiry(current) : null;
-    if (current && (exp === null || exp - now > ahead)) continue;
+    const life = current ? bearerLife(current) : null;
+    if (current && (exp === null || exp - now > Math.min(ahead, life === null ? ahead : life / 2))) continue;
     const fresh = await mint(owner).catch(() => null);
     if (fresh) { bearers[owner] = fresh; renewed.push(owner); }
   }
