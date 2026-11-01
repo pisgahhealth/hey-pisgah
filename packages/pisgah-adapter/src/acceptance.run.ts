@@ -11,7 +11,7 @@ import { personCaller } from "./journey.sandbox.js";
 import type { DoorLog } from "./port.js";
 import { SandboxBlock, mintPersonCookie, sandboxQuery } from "./sandbox.js";
 import { FAKE_OWNERS } from "./acceptance.fake.js";
-import { bindLine, completion, didBy, fakeRealign, fingerprint, fingerprintMoved, frozenRefusal, identityOutcome, loadScript, speedTable, stepLines, stepStatus, writeAccResults, type Fingerprint, type AccResult, type CheckOutcome, type DelegationRow, type Expect, type Fault, type Line, type SpeakerRow, type SpeedErr, type SpeedRowIn, type StepOutcome, type Who } from "./acceptance.js";
+import { bindLine, completion, didBy, fakeRealign, fingerprint, fingerprintMoved, frozenRefusal, identityOutcome, labStepNeeded, labSteps, loadScript, speedTable, stepLines, stepStatus, writeAccResults, type Fingerprint, type AccResult, type CheckOutcome, type DelegationRow, type Expect, type Fault, type Line, type SpeakerRow, type SpeedErr, type SpeedRowIn, type StepOutcome, type Who } from "./acceptance.js";
 
 // Runs the acceptance script against a serve on the loopback sandbox: says or plays each line, waits for the record after it, injects the faults, and writes the result files.
 const env = (k: string, d?: string): string => { const v = process.env[k] ?? d; if (v === undefined) throw new Error(`set ${k}`); return v; };
@@ -637,7 +637,7 @@ async function runLine(line: Line): Promise<void> {
         if (HANDS && hospital.hasPerson(line.op!)) { const r = await hospital.person(line.op!, vars); return { ok: r.ok, note: `signed for the rehearsal through dr.edikan's own session: ${r.status}` }; }
         return { ok: true, note: "done by Samuel at the screen" };
       }
-      if (HOSPITAL === "sandbox" && line.op === "acc_lab_result") return labResult(vars);
+      if (HOSPITAL === "sandbox" && (line.op === "acc_lab_result" || line.op === "acc_lab_collect")) return labResult(vars, line.op);
       if (HOSPITAL === "sandbox" && line.op === "acc_lab_cancel") return labCancelOnScreen(vars);
       if (HOSPITAL === "sandbox" && line.op === "acc_pay_test") return payTestAtDesk(vars);
       if (!hospital.hasPerson(line.op!)) return { ok: false, note: `person op ${line.op} is not in the profile`, blocked: true };
@@ -731,15 +731,15 @@ async function runLine(line: Line): Promise<void> {
   if (STOP_ON_FAIL && status === "failed") throw new Error(`stopped at ${line.id}`);
 }
 
-// The lab scientist's result at her screen: the order and its case and specimen versions are read, then accession, collection and the result, each as her own door call.
-async function labResult(vars: Record<string, string>): Promise<{ ok: boolean; note: string }> {
+// The lab scientist's steps at her screen: the order and its case and specimen versions are read, then accession, collection and (unless collect-only) the result, each as her own door call.
+async function labResult(vars: Record<string, string>, step: string): Promise<{ ok: boolean; note: string }> {
   const read = async () => (await hospital.query("acc_order_for_test", { visit: vars["visit"] ?? "", test: vars["test"] ?? "" }))[0] as Record<string, unknown> | undefined;
   const steps: string[] = [];
   const as = (o: Record<string, unknown>) => ({ order_id: String(o["order_id"]), case_version: Number(o["case_version"]), specimen_id: String(o["specimen_id"] ?? ""), specimen_version: Number(o["specimen_version"] ?? 0), raw_text: vars["raw_text"] ?? "ZZ-TEST result" }) as unknown as Record<string, string>;
   let o = await read();
   if (!o) return { ok: false, note: `no ${vars["test"]} order on the visit` };
-  for (const [op, need] of [["acc_lab_accession", () => !o!["specimen_id"]], ["acc_lab_record", () => !["collected", "received", "in_process", "processed"].includes(String(o!["specimen_state"] ?? ""))], ["accept", () => String(o!["specimen_state"] ?? "") !== "processed"], ["acc_lab_result_post", () => true]] as const) {
-    if (!need()) continue;
+  for (const op of labSteps(step)) {
+    if (!labStepNeeded(op, o)) continue;
     // Receipt and processing have no door; lab.grace presses Accept on her worklist, which records both.
     if (op === "accept") {
       const a = await labAcceptOnScreen(String(o["order_id"]), vars["test"] ?? "the test", vars["visit"] ?? "");
@@ -753,6 +753,7 @@ async function labResult(vars: Record<string, string>): Promise<{ ok: boolean; n
     if (!r.ok) return { ok: false, note: steps.join("; ") };
     o = (await read()) ?? o;
   }
+  if (step === "acc_lab_collect") return { ok: true, note: `${steps.join("; ") || "already collected"}; stopped before Accept for her spoken receive` };
   return { ok: true, note: steps.join("; ") };
 }
 

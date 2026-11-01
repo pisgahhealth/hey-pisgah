@@ -280,3 +280,17 @@ export function fakeRealign(fakeT0: number, reloadAt: number, listeningAt: numbe
   const cutMs = Math.max(0, reloadAt - fakeT0);
   return { cutMs, fakeT0: listeningAt - cutMs };
 }
+
+// The lab person steps in order: accession, collection, the lab's Accept (receipt and processing) and the result.
+export const LAB_STEPS = ["acc_lab_accession", "acc_lab_record", "accept", "acc_lab_result_post"] as const;
+export type LabStep = (typeof LAB_STEPS)[number];
+// A collect-only step stops before Accept, so a spoken receive can follow it and the result step after that.
+export const labSteps = (op: string): readonly LabStep[] => (op === "acc_lab_collect" ? LAB_STEPS.slice(0, 2) : LAB_STEPS);
+// Whether an order still needs a lab step, by its specimen's state as the record reads it.
+export function labStepNeeded(step: LabStep, o: { specimen_id?: unknown; specimen_state?: unknown }): boolean {
+  const state = String(o.specimen_state ?? "");
+  if (step === "acc_lab_accession") return !o.specimen_id;
+  if (step === "acc_lab_record") return !["collected", "received", "in_process", "processed"].includes(state);
+  if (step === "accept") return state !== "processed";
+  return true;
+}

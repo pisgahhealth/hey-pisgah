@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { claimStatus, parseClaimPredicate } from "@hey-pisgah/evaluator";
-import { Script, bindLine, claimFields, completion, didBy, fakeRealign, fingerprint, fingerprintMoved, frozenRefusal, identityOutcome, percentile, speedTable, stepLines, stepStatus, writeAccResults, type AccResult, type HeardRow, type StepOutcome } from "../src/acceptance.js";
+import { Script, bindLine, claimFields, completion, didBy, fakeRealign, fingerprint, fingerprintMoved, frozenRefusal, identityOutcome, labStepNeeded, labSteps, percentile, speedTable, stepLines, stepStatus, writeAccResults, type AccResult, type HeardRow, type StepOutcome } from "../src/acceptance.js";
 
 const claims = (JSON.parse(readFileSync(join(__dirname, "../../../evaluation/claims.json"), "utf8")) as { claims: { claim_id: string; acceptance: { predicate: string } }[] }).claims;
 const status = (id: string, data: unknown) => claimStatus(parseClaimPredicate(claims.find((c) => c.claim_id === id)!.acceptance.predicate), data).status;
@@ -170,5 +170,21 @@ describe("acceptance harness", () => {
     // A line due at 1400 s into the original file now plays 12 s later on the wall clock.
     expect(r.fakeT0 + 1_400_000).toBe(1_000_000 + 1_412_000);
     expect(fakeRealign(5000, 1000, 2000).cutMs).toBe(0);
+  });
+});
+
+describe("lab person steps", () => {
+  it("a collect-only step stops before Accept, so a spoken receive can follow", () => {
+    expect(labSteps("acc_lab_collect")).toEqual(["acc_lab_accession", "acc_lab_record"]);
+    expect(labSteps("acc_lab_result")).toEqual(["acc_lab_accession", "acc_lab_record", "accept", "acc_lab_result_post"]);
+  });
+  it("needs each step only while the specimen lacks it", () => {
+    expect(labStepNeeded("acc_lab_accession", {})).toBe(true);
+    expect(labStepNeeded("acc_lab_record", { specimen_id: "s", specimen_state: "accessioned" })).toBe(true);
+    expect(labStepNeeded("acc_lab_record", { specimen_id: "s", specimen_state: "collected" })).toBe(false);
+    expect(labStepNeeded("accept", { specimen_id: "s", specimen_state: "collected" })).toBe(true);
+    // After a spoken receive the result step presses no Accept.
+    expect(labStepNeeded("accept", { specimen_id: "s", specimen_state: "processed" })).toBe(false);
+    expect(labStepNeeded("acc_lab_result_post", { specimen_id: "s", specimen_state: "processed" })).toBe(true);
   });
 });
