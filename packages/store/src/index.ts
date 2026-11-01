@@ -6,3 +6,4 @@ export { acquireLock, pidAlive, processStartTime, readLock, type LockInfo } from
 export { syncDir, syncFd } from "./durable.js";
 export { STORE_RECORD_TYPES, Stream, openStream, projectionHash, readStream, scanBytes, type AppendOptions, type Clocks, type OpenOptions, type Scan } from "./stream.js";
 export { copyForRun, listStreams, type CopyOptions, type RunCopy } from "./copy.js";
+export { RETAIN_KEEPS, SEALED_AREAS, SEALED_KEYS, areaSealed, configureSealing, open, seal, sealing, sealingFromEnv, wordsDigest, type Sealing } from "./seal.js";

@@ -25,8 +25,21 @@ export type UnsealedEnvelope = Omit<Envelope, "hash">;
 export const StoreRef = z.strictObject({ stream_id: StreamId, seq: z.number().int().min(1) });
 export type StoreRef = z.infer<typeof StoreRef>;
 
+// A sealed field hashes by the sha256 of its ciphertext, so retention can drop the ciphertext and keep the chain.
+function chainView(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(chainView);
+  if (!v || typeof v !== "object") return v;
+  const o = v as Record<string, unknown>;
+  if (o["$sealed"] === 1 && typeof o["ct"] === "string") {
+    const { ct, ...rest } = o;
+    return { ...rest, ct_sha256: sha256(ct as string) };
+  }
+  return Object.fromEntries(Object.entries(o).map(([k, x]) => [k, chainView(x)]));
+}
+
 export function envelopeHash(e: UnsealedEnvelope): string {
-  return sha256(canonical(e));
+  const text = canonical(e);
+  return sha256(text.includes('"$sealed":1') ? canonical(chainView(e)) : text);
 }
 
 export function sealEnvelope(e: UnsealedEnvelope): Envelope {

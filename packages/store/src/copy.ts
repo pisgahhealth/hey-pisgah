@@ -5,7 +5,7 @@ import { RunId, canonical } from "@hey-pisgah/contracts";
 import { syncDir, syncFd } from "./durable.js";
 import { StoreError } from "./errors.js";
 import { assertAllowedPath } from "./paths.js";
-import { readStream } from "./stream.js";
+import { Stream } from "./stream.js";
 
 export type CopyOptions = { runsRoot?: string; allowedRoots?: readonly string[] };
 export type RunCopy = { dir: string; streams: { stream_id: string; last_seq: number; head_hash: string }[] };
@@ -22,7 +22,7 @@ export function copyForRun(root: string, runId: string, streamIds: readonly stri
   const tmp = join(runsRoot, `.${runId}.${randomBytes(6).toString("hex")}.tmp`);
   const streams: RunCopy["streams"] = [];
   for (const id of streamIds) {
-    const envs = readStream(root, id);
+    const envs = Stream.open(root, id, { keepSealed: true }).sealedRecords();
     const file = join(tmp, `${id}.jsonl`);
     assertAllowedPath([tmp], file);
     mkdirSync(dirname(file), { recursive: true });

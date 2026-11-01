@@ -1,16 +1,17 @@
-import { closeSync, existsSync, ftruncateSync, mkdirSync, openSync, readFileSync, renameSync, writeSync } from "node:fs";
+import { closeSync, existsSync, ftruncateSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync, writeSync } from "node:fs";
 import { dirname } from "node:path";
 import { CONTRACTS_SCHEMA_VERSION, Envelope, canonical, determinismView, hashJson, sealEnvelope, verifyChain, type StoreRef } from "@hey-pisgah/contracts";
 import { syncDir, syncFd } from "./durable.js";
 import { StoreError } from "./errors.js";
 import { acquireLock, assertToken, releaseLock, type LockInfo } from "./lock.js";
 import { streamPaths } from "./paths.js";
+import { areaSealed, hasSealMarker, openPayload, retainPayload, sealPayload, sealing } from "./seal.js";
 
 export type Clocks = { recorded_at: number; occurred_at: number };
 export type AppendOptions = { schema_version?: number };
 
 // Records the store itself writes; projections leave them out so recovery and takeover do not change domain state.
-export const STORE_RECORD_TYPES: readonly string[] = ["store.recovered", "writer.takeover"];
+export const STORE_RECORD_TYPES: readonly string[] = ["store.recovered", "writer.takeover", "store.retained"];
 
 export type ScanProblem = { at_seq: number; reason: "unparseable" | "wrong_stream" | "seq_gap" | "prev_hash_mismatch" | "hash_mismatch" };
 export type Scan = { envelopes: Envelope[]; goodBytes: number; tailBytes: number; problem: ScanProblem | null };
@@ -42,10 +43,22 @@ function readBytes(file: string): Buffer {
   return existsSync(file) ? readFileSync(file) : Buffer.alloc(0);
 }
 
-export type OpenOptions = { writer?: boolean; now?: () => string };
+// keepSealed reads the lines as they are on disk, sealed fields and all, for copies that never need the words.
+export type OpenOptions = { writer?: boolean; now?: () => string; keepSealed?: boolean };
+
+// Opens the sealed fields of a stream's lines; streams outside the sealed areas are returned as they are.
+function openAll(streamId: string, envs: Envelope[]): Envelope[] {
+  if (!areaSealed(streamId)) return [...envs];
+  const k = sealing().key;
+  return envs.map((e) => {
+    const p = openPayload(k, e.payload, streamId, e.seq);
+    return p === e.payload ? e : { ...e, payload: p };
+  });
+}
 
 export class Stream {
   private envelopes: Envelope[];
+  private plain: Envelope[];
   private closed = false;
 
   private constructor(
@@ -53,12 +66,14 @@ export class Stream {
     readonly streamId: string,
     readonly writer: boolean,
     private readonly paths: ReturnType<typeof streamPaths>,
-    private readonly fd: number | null,
+    private fd: number | null,
     private readonly lock: LockInfo | null,
     private readonly now: () => string,
-    initial: Envelope[]
+    initial: Envelope[],
+    private readonly keepSealed = false
   ) {
     this.envelopes = initial;
+    this.plain = keepSealed ? [...initial] : openAll(streamId, initial);
   }
 
   static open(root: string, streamId: string, opts: OpenOptions = {}): Stream {
@@ -67,7 +82,7 @@ export class Stream {
     if (!opts.writer) {
       const scan = scanBytes(readBytes(paths.file), streamId);
       if (scan.problem) throw new StoreError("store_corrupt", "chain check failed; only the lock holder quarantines", { ...scan.problem, stream_id: streamId });
-      return new Stream(root, streamId, false, paths, null, null, now, scan.envelopes);
+      return new Stream(root, streamId, false, paths, null, null, now, scan.envelopes, opts.keepSealed ?? false);
     }
     mkdirSync(dirname(paths.file), { recursive: true });
     const { info, takenOver } = acquireLock(paths.lock);
@@ -107,6 +122,11 @@ export class Stream {
   }
 
   records(): readonly Envelope[] {
+    return this.plain;
+  }
+
+  // The lines as they are on disk, with sealed fields still sealed.
+  sealedRecords(): readonly Envelope[] {
     return this.envelopes;
   }
 
@@ -121,11 +141,12 @@ export class Stream {
 
   // A reader re-reads the file to see the writer's newer lines.
   refresh(): readonly Envelope[] {
-    if (this.writer) return this.envelopes;
+    if (this.writer) return this.plain;
     const scan = scanBytes(readBytes(this.paths.file), this.streamId);
     if (scan.problem) throw new StoreError("store_corrupt", "chain check failed; only the lock holder quarantines", { ...scan.problem, stream_id: this.streamId });
     this.envelopes = scan.envelopes;
-    return this.envelopes;
+    this.plain = this.keepSealed ? [...scan.envelopes] : openAll(this.streamId, scan.envelopes);
+    return this.plain;
   }
 
   append(recordType: string, payload: unknown, clocks: Clocks, opts: AppendOptions = {}): Envelope {
@@ -143,6 +164,13 @@ export class Stream {
     if (!this.writer || this.fd === null || this.lock === null) throw new StoreError("not_writer", "stream was opened for reading");
     assertToken(this.paths.lock, this.lock.token);
     const head = this.head();
+    let disk = payload;
+    if (areaSealed(this.streamId)) {
+      if (hasSealMarker(payload)) throw new StoreError("store_unsealable", "a payload may not carry a sealed field of its own");
+      const s = sealing();
+      if (s.key) disk = sealPayload(s.key, payload, this.streamId, head.seq + 1);
+      else if (s.required) throw new StoreError("store_key_missing", "sealing is required and no store key is configured", { stream_id: this.streamId });
+    }
     const sealed = Envelope.parse(
       sealEnvelope({
         seq: head.seq + 1,
@@ -152,7 +180,7 @@ export class Stream {
         wall_at: this.now(),
         record_type: recordType,
         schema_version: schemaVersion,
-        payload,
+        payload: disk,
         prev_hash: head.hash
       })
     );
@@ -167,7 +195,42 @@ export class Stream {
       throw e;
     }
     this.envelopes.push(sealed);
-    return sealed;
+    const plain = disk === payload ? sealed : { ...sealed, payload };
+    this.plain.push(plain);
+    return plain;
+  }
+
+  // Drops the sealed words of every line on disk except the kept keys; ids, digests and the chain stay, and only the lock holder rewrites, by temp file and rename.
+  retain(keep?: ReadonlySet<string>): { fields: number } {
+    if (this.closed) throw new StoreError("stream_closed", "stream is closed");
+    if (!this.writer || this.fd === null || this.lock === null) throw new StoreError("not_writer", "stream was opened for reading");
+    assertToken(this.paths.lock, this.lock.token);
+    let fields = 0;
+    const next = this.envelopes.map((e) => {
+      const r = retainPayload(e.payload, keep);
+      fields += r.fields;
+      return r.fields ? { ...e, payload: r.payload } : e;
+    });
+    if (fields === 0) return { fields: 0 };
+    const bytes = Buffer.from(next.map((e) => `${canonical(e)}\n`).join(""), "utf8");
+    const check = scanBytes(bytes, this.streamId);
+    if (check.problem || check.envelopes.length !== next.length) throw new StoreError("store_corrupt", "the retained copy failed the chain check, so nothing was changed", { stream_id: this.streamId, ...(check.problem ?? {}) });
+    const tmp = `${this.paths.file}.retain`;
+    writeFileSync(tmp, bytes);
+    const tfd = openSync(tmp, "r");
+    try {
+      syncFd(tfd);
+    } finally {
+      closeSync(tfd);
+    }
+    renameSync(tmp, this.paths.file);
+    syncDir(dirname(this.paths.file));
+    closeSync(this.fd);
+    this.fd = openSync(this.paths.file, "a");
+    this.envelopes = check.envelopes;
+    this.plain = openAll(this.streamId, check.envelopes);
+    this.appendInternal("store.retained", { through_seq: next.length, fields });
+    return { fields };
   }
 
   close(): void {
