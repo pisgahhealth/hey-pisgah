@@ -89,8 +89,10 @@ export type EmrObligation = {
   held_at: string; fired_at: string | null; fired_by: string | null; action_id: string | null; anchor_action_id: string | null; reason: string;
   // Work held for a result names the orders it waits on (by action until written, then by record id) and the states that mean the result is back.
   condition?: ResultCondition | null;
-  // The hospital's copy of this obligation, whose guarded claim decides who fires it.
+  // The hospital's copy of this obligation, whose guarded claim decides who fires it, the claim this agent holds, and whether its firing was recorded there.
   mirror_id?: string | null;
+  claim?: string | null;
+  completed?: boolean;
 };
 export type ResultCondition = { order_actions: string[]; orders: string[]; tests: string[]; states: string[]; unbound_noted?: boolean };
 // One verified action timed from the end of the words that asked for it; parts are the milestones on the way.
@@ -363,6 +365,8 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
     case "obligation.done": { const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]); if (o) { o.state = "done"; o.action_id = (x["action_id"] as string | null) ?? null; } break; }
     case "obligation.cancelled": { const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]); if (o) o.state = "cancelled"; break; }
     case "obligation.mirrored": { const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]); if (o) o.mirror_id = String(x["mirror_id"]); break; }
+    case "obligation.claimed": { const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]); if (o) o.claim = String(x["claim"]); break; }
+    case "obligation.completed": { const o = t.obligations.find((y) => y.obligation_id === x["obligation_id"]); if (o) o.completed = true; break; }
     case "speed.logged": t.speed.push(x["row"] as SpeedRow); break;
     case "delegation.made": case "delegation.received": t.delegations.push(x["delegation"] as EmrDelegation); break;
     case "delegation.state": {
@@ -2091,7 +2095,10 @@ export class EmrRuntime {
       const t = l.task;
       // A closed task's work is cancelled at the hospital too, so its job never fires work nobody wants.
       if (CLOSED_TASK.has(t.state)) { this.cancelMirrors(l); continue; }
-      for (const o of t.obligations) if (o.state === "held" && o.due_at && !o.mirror_id) this.mirrorObligation(l, o.obligation_id);
+      for (const o of t.obligations) {
+        if (o.state === "held" && o.due_at && !o.mirror_id) this.mirrorObligation(l, o.obligation_id);
+        if (o.state === "done" && o.claim && !o.completed) this.completeMirror(l, o);
+      }
       if (t.state === "paused") continue;
       const expiry = this.o.questionExpiryMs ?? 30 * 60_000;
       if (!this.expiring.has(t.task_id) && t.questions.some((q) => q.answered_by === null && now - Date.parse(q.at) > expiry)) {
@@ -2116,7 +2123,9 @@ export class EmrRuntime {
         const ready = o.due_at !== null && o.after !== null ? timeCame && condition : timeCame || condition;
         if (!ready || (o.mirror_id && this.triedLately(o.obligation_id))) continue;
         this.firing.add(o.obligation_id);
-        this.enqueue(l, async () => { try { if (await this.claim(l, o)) this.fire(l, o.obligation_id, timeCame ? "timer" : "condition"); } finally { this.firing.delete(o.obligation_id); } });
+        this.enqueue(l, async () => {
+          try { if (await this.claim(l, o)) { this.fire(l, o.obligation_id, timeCame ? "timer" : "condition"); this.completeMirror(l, o); } } finally { this.firing.delete(o.obligation_id); }
+        });
       }
     }
   }
@@ -2136,26 +2145,55 @@ export class EmrRuntime {
     const port = this.o.port;
     if (!o || o.mirror_id || o.state !== "held" || !o.due_at || !t.patient_id || !port.obligation || this.stopped || this.triedLately(id)) return;
     this.mirrorTried.set(id, Date.now());
-    const op: ObligationOp = { op: "hold", key: `${t.task_id}:${id}`, kind: o.kind === "schedule_review" ? "review_due" : "held_work", due_at: o.due_at, patient_id: t.patient_id, ...(t.admission_id ? { admission_id: t.admission_id } : {}) };
-    void this.track(port.obligation(t.owner, op, this.obligationProv(t, o)).then((r) => {
-      if (this.stopped || o.mirror_id || !r.id) return;
-      this.append(l, "obligation.mirrored", { obligation_id: id, mirror_id: r.id });
-      this.mirrorTried.delete(id);
-    }).catch((e: unknown) => this.log(`obligation ${id}: ${e instanceof Error ? e.message : String(e)}`)));
+    void this.track(this.holdAt(l, o).catch((e: unknown) => this.log(`obligation ${id}: ${e instanceof Error ? e.message : String(e)}`)));
+  }
+  // Holds the obligation at the hospital under its one key; asked again after a lost answer, the hospital answers the row it already made.
+  private async holdAt(l: Live, o: EmrObligation): Promise<void> {
+    const t = l.task;
+    const op: ObligationOp = { op: "hold", key: `${t.task_id}:${o.obligation_id}`, kind: o.kind === "schedule_review" ? "review_due" : "held_work", due_at: o.due_at!, patient_id: t.patient_id!, ...(t.admission_id ? { admission_id: t.admission_id } : {}) };
+    const r = await this.o.port.obligation!(t.owner, op, this.obligationProv(t, o));
+    if (this.stopped || o.mirror_id || !r.id) return;
+    this.append(l, "obligation.mirrored", { obligation_id: o.obligation_id, mirror_id: r.id });
+    this.mirrorTried.delete(o.obligation_id);
+  }
+  private mirrorable(t: EmrTask, o: EmrObligation): boolean { return !!this.o.port.obligation && !!o.due_at && !!t.patient_id; }
+
+  // Records at the hospital the firing done here under this agent's claim, so its job does not take the obligation when the claim lapses.
+  private completeMirror(l: Live, o: EmrObligation): void {
+    const port = this.o.port;
+    if (!o.mirror_id || !o.claim || o.completed || !port.obligation || this.stopped || this.triedLately(o.obligation_id)) return;
+    this.mirrorTried.set(o.obligation_id, Date.now());
+    void this.track(port.obligation(l.task.owner, { op: "complete", id: o.mirror_id, claim: o.claim }, this.obligationProv(l.task, o)).then((r) => {
+      if (this.stopped || o.completed) return;
+      // A claim that lapsed and was taken is recorded as closed too, so it is not asked again.
+      if (r.status !== "busy" && r.status !== "not_due") { this.append(l, "obligation.completed", { obligation_id: o.obligation_id, status: r.status }); this.mirrorTried.delete(o.obligation_id); }
+    }).catch((e: unknown) => this.log(`obligation ${o.obligation_id}: ${e instanceof Error ? e.message : String(e)}`)));
   }
 
   // Claims a mirrored obligation at the hospital before it fires here; when the hospital's job fired it while this agent was away, nothing is done twice.
   private async claim(l: Live, o: EmrObligation): Promise<boolean> {
     const port = this.o.port;
-    if (!o.mirror_id || !port.obligation) return true;
+    if (!port.obligation || !this.mirrorable(l.task, o)) return true;
     let r: ObligationAnswer;
-    try { r = await port.obligation(l.task.owner, { op: "fire", id: o.mirror_id }, this.obligationProv(l.task, o)); } catch (e) {
+    try {
+      // A hold whose answer was lost may still be saved there, so its durable id is recovered by its key before anything fires.
+      if (!o.mirror_id) await this.holdAt(l, o);
+      if (!o.mirror_id) throw new Error("the hospital named no obligation for that key");
+      r = await port.obligation(l.task.owner, { op: "claim", id: o.mirror_id }, this.obligationProv(l.task, o));
+    } catch (e) {
       this.mirrorTried.set(o.obligation_id, Date.now());
       this.log(`obligation ${o.obligation_id}: ${e instanceof Error ? e.message : String(e)}`);
       return false;
     }
     if (o.state !== "held") return false;
-    if (r.status === "fired" || (r.status === "already_fired" && r.fired_by === "serve")) return true;
+    if (r.status === "claimed" && r.claim) { this.append(l, "obligation.claimed", { obligation_id: o.obligation_id, claim: r.claim }); return true; }
+    // Leased to someone else now, or not yet due there: asked again later, never fired here meanwhile.
+    if (r.status === "busy" || r.status === "not_due") { this.mirrorTried.set(o.obligation_id, Date.now()); return false; }
+    if (r.status === "already_fired" && r.fired_by === "serve") {
+      this.append(l, "obligation.fired", { obligation_id: o.obligation_id, by: "serve_before" });
+      this.append(l, "obligation.done", { obligation_id: o.obligation_id, action_id: null });
+      return false;
+    }
     if (r.status !== "already_fired") { this.append(l, "obligation.cancelled", { obligation_id: o.obligation_id }); return false; }
     this.append(l, "obligation.fired", { obligation_id: o.obligation_id, by: "hospital" });
     this.append(l, "obligation.done", { obligation_id: o.obligation_id, action_id: null });

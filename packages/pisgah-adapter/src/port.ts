@@ -250,12 +250,12 @@ export class PisgahPort implements EmrPort {
     return delegationOf(await this.read(spec.one, { delegation_id: id }, prov));
   }
 
-  // Holds, fires or cancels one obligation at the hospital under the same key for the same step, so a lost answer is replayed, never doubled.
+  // Holds, claims, completes or cancels one obligation at the hospital; a hold and a completion replay under one key, while each claim asks afresh.
   private async obligationAt(owner: string, op: ObligationOp, prov: Provenance): Promise<ObligationAnswer> {
-    const r = await this.request("POST", this.profile.obligations!.path, prov, { body: op.op === "hold" ? { op: "hold", key: op.key, kind: op.kind, dueAt: op.due_at, patientId: op.patient_id, ...(op.admission_id ? { admissionId: op.admission_id } : {}) } : op, idempotencyKey: `obligation:${op.op}:${op.op === "hold" ? op.key : op.id}`.slice(0, 255) });
+    const r = await this.request("POST", this.profile.obligations!.path, prov, { body: op.op === "hold" ? { op: "hold", key: op.key, kind: op.kind, dueAt: op.due_at, patientId: op.patient_id, ...(op.admission_id ? { admissionId: op.admission_id } : {}) } : op, idempotencyKey: (op.op === "hold" ? `obligation:hold:${op.key}` : op.op === "complete" ? `obligation:complete:${op.id}:${op.claim}` : `obligation:${op.op}:${op.id}:${Date.now()}`).slice(0, 255) });
     if (r.kind !== "response" || r.status < 200 || r.status > 299) throw new EmrPortError(r.kind === "response" ? "write_failed" : r.reason, `the hospital did not take the obligation ${op.op}`, r.kind === "response" ? r.status : null);
     const j = (r.json ?? {}) as Record<string, unknown>;
-    return { id: String(j["id"] ?? ""), status: j["status"] as ObligationAnswer["status"], ...(typeof j["firedBy"] === "string" ? { fired_by: j["firedBy"] === "emr_job" ? "hospital" : j["firedBy"] } : {}), ...(typeof j["firedAt"] === "string" ? { fired_at: j["firedAt"] } : {}) };
+    return { id: String(j["id"] ?? ""), status: j["status"] as ObligationAnswer["status"], ...(typeof j["claim"] === "string" ? { claim: j["claim"] } : {}), ...(typeof j["firedBy"] === "string" ? { fired_by: j["firedBy"] === "emr_job" ? "hospital" : j["firedBy"] } : {}), ...(typeof j["firedAt"] === "string" ? { fired_at: j["firedAt"] } : {}) };
   }
 
   // One wait on the hospital's events route; the wait is the hospital's, so its time limit is the wait plus a margin.
