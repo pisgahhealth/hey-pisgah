@@ -447,6 +447,8 @@ export const TELL_ME_KIND = "tell_me";
 // The names a line may use for a task's patient: a delegation's task carries its title as label, so only the names said for its patient count.
 // The obligations of a task still held or fired and not yet done; the retention sweep keeps a task's words while any is open.
 export const patientNames = (t: Pick<EmrTask, "entry" | "label" | "identities">): string[] => (t.entry === "delegation" ? t.identities.filter((i) => i.state !== "cancelled").map((i) => i.name) : knownNames(t));
+// The opening of the question asked when the said values do not make a valid request.
+const COULD_NOT_USE = "I could not use that";
 // The value that names what a request is about; a long line with a different one is a new request.
 const PRIMARY_FIELD: Readonly<Record<string, string>> = { prescribe: "drug", order_test: "test", page_staff: "to", schedule_follow_up: "clinic", record_allergy: "substance" };
 // A bare count said as the answer to "how many" ("nine", "3 doses"), or null.
@@ -1342,13 +1344,13 @@ export class EmrRuntime {
     const own = Object.fromEntries(Object.entries(a).filter(([, v]) => line.text.includes(String(v).split("/")[0]!)));
     if (c.kind === OBSERVATION_KIND) {
       const parsed = ObservationArgs.safeParse({ ...raw, admission_id: t.admission_id });
-      if (!parsed.success) { this.ask(l, lineId, `I could not use that (${parsed.error.issues[0]?.message ?? "invalid"}). Please say it again.`); this.settle(l, "asked"); return true; }
+      if (!parsed.success) { this.ask(l, lineId, `${COULD_NOT_USE} (${parsed.error.issues[0]?.message ?? "invalid"}). Please say it again.`); this.settle(l, "asked"); return true; }
       this.proposeObservation(l, lineId, parsed.data, c.corrects_action_id, own);
       return true;
     }
     const schema = WORK_ARGS[c.kind as Exclude<WorkKind, typeof OBSERVATION_KIND>];
     const parsed = schema?.safeParse(raw);
-    if (!parsed?.success) { this.ask(l, lineId, "I could not use that. Please say it again."); this.settle(l, "asked"); return true; }
+    if (!parsed?.success) { this.ask(l, lineId, `${COULD_NOT_USE}. Please say it again.`); this.settle(l, "asked"); return true; }
     this.propose(l, lineId, c.kind, parsed.data, null, own);
     return true;
   }
@@ -1777,7 +1779,7 @@ export class EmrRuntime {
     }
     const schema = WORK_ARGS[kind as Exclude<WorkKind, typeof OBSERVATION_KIND>];
     const parsed = schema.safeParse(raw);
-    if (!parsed.success) { this.ask(l, lineId, `I could not use that (${parsed.error.issues[0]?.message ?? "invalid"}). Please say it again.`); return; }
+    if (!parsed.success) { this.ask(l, lineId, `${COULD_NOT_USE} (${parsed.error.issues[0]?.message ?? "invalid"}). Please say it again.`); return; }
     const before = t.order.length;
     this.propose(l, lineId, kind, parsed.data, null, own);
     if (pref.use && t.order.length > before) {
@@ -2554,6 +2556,16 @@ export class EmrRuntime {
     this.settle(l, "read_back");
   }
 
+  // A proved write answers an earlier line's "could not use that" ask of the same kind, so no stale question is left asking.
+  private answerStale(l: Live, a: EmrAction): void {
+    const t = l.task;
+    const at = t.lines.findIndex((x) => x.id === a.line_id);
+    for (const q of t.questions.filter((y) => y.answered_by === null && y.pending?.kind === a.kind && y.text.startsWith(COULD_NOT_USE))) {
+      const asked = t.lines.findIndex((x) => x.id === q.line_id);
+      if (asked >= 0 && asked < at) this.append(l, "question.answered", { question_id: q.question_id, line_id: a.line_id });
+    }
+  }
+
   private note(l: Live, text: string, kind: NoteKind = noteKind(text)): void {
     this.append(l, "task.note", { note_id: `n-${shortHash(l.task.task_id, l.task.notes.length + 1)}`, text, kind });
   }
@@ -3025,6 +3037,7 @@ export class EmrRuntime {
     }
     if (!proof) return this.awaitVerification(l, a, readError);
     this.append(l, "action.completed", { action_id: actionId, proof });
+    this.answerStale(l, a);
     this.append(l, "speed.logged", { row: this.speedRow(t, a, verifyMs) });
     // An unnamed arrival the agent opened becomes the task's patient and arrival first, so later words and any hand-off reach it.
     this.linkArrival(l, a);
