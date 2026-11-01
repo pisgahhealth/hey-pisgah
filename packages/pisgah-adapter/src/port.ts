@@ -36,7 +36,7 @@ export type PisgahPortOptions = {
   now?: () => Date;
   // The door's request budget for one agent session: a burst and a steady rate per second; reads wait behind a reserve kept for writes.
   budget?: DoorBudget | null;
-  // Mints the owner a fresh agent bearer after a 401; null when it cannot, so the 401 stands.
+  // Mints the owner a fresh agent bearer after a 401 or when none is held; null when it cannot, so the refusal stands.
   refresh?: (owner: string) => Promise<string | null>;
   sleep?: (ms: number) => Promise<void>;
 };
@@ -262,7 +262,8 @@ export class PisgahPort implements EmrPort {
     const query = Object.entries(init.query ?? {});
     if (query.some(([k, v]) => !/^[A-Za-z][A-Za-z0-9_]{0,40}$/.test(k) || !QUERY_VALUE.test(v))) return this.refuse(method, clean, "bad_header");
     const qs = query.length ? `?${new URLSearchParams(query).toString()}` : "";
-    if (!this.o.bearers[prov.owner]) return this.refuse(method, clean, "no_bearer_for_owner");
+    // An owner the serve holds no bearer for yet, such as a person who logged in after it started, is minted once before the call is refused.
+    if (!this.o.bearers[prov.owner] && !(this.o.refresh && await this.freshBearer(prov.owner, ""))) return this.refuse(method, clean, "no_bearer_for_owner");
     if (!EVIDENCE.test(prov.evidence) || Number.isNaN(Date.parse(prov.spoken_at)) || (init.idempotencyKey !== undefined && !IDEM.test(init.idempotencyKey))) return this.refuse(method, clean, "bad_header");
     if ([prov.voice?.authorisation, prov.voice?.confirmation].some((v) => v !== undefined && !VOICE.test(v))) return this.refuse(method, clean, "bad_header");
     if (prov.read_back_digest !== undefined && !DIGEST.test(prov.read_back_digest)) return this.refuse(method, clean, "bad_header");

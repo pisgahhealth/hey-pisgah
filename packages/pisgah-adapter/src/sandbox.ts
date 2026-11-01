@@ -101,3 +101,46 @@ export function mintPersonCookie(s: SandboxBlock, who: { login: string; clinic?:
   if (!m || m[1]!.length < 30) throw new Error("the mint script printed no cookie");
   return m[1]!;
 }
+
+// What the hospital's agent mint answers: the bearer, its owner and agent, and when it expires.
+const DoorMint = z.object({ bearer: z.string().min(20), owner: z.string(), agent: z.string().nullable(), expires_at: z.string() });
+
+// The hospital's agent mint and the serve's hospital key, from HEY_PISGAH_MINT_URL and HEY_PISGAH_SERVE_KEY; null unless both are set, and plain http only to loopback.
+export function doorMintFrom(env: Record<string, string | undefined>): { url: string; key: string } | null {
+  const url = env["HEY_PISGAH_MINT_URL"], key = env["HEY_PISGAH_SERVE_KEY"];
+  if (!url || !key) return null;
+  const u = new URL(url);
+  if (u.protocol !== "https:" && !(u.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname))) throw new Error("HEY_PISGAH_MINT_URL must be https, or http on loopback");
+  return { url, key };
+}
+
+// Mints an owner's agent bearer at the hospital's own mint with the serve's key; null when the owner has no live login there, so a person never logged in gets no agent.
+export async function mintAgentBearerFromDoor(door: { url: string; key: string }, owner: string, f: typeof fetch = fetch): Promise<{ bearer: string; owner: string; agent: string | null; expiresAt: number } | null> {
+  const res = await f(door.url, { method: "POST", headers: { authorization: `Bearer ${door.key}`, "content-type": "application/json" }, body: JSON.stringify({ owner }), signal: AbortSignal.timeout(15_000) });
+  if (res.status === 409 || res.status === 404) return null;
+  if (!res.ok) throw new Error(`the hospital's mint answered ${res.status}`);
+  const j = DoorMint.parse(await res.json());
+  if (j.owner !== owner) throw new Error("the mint named another owner");
+  return { bearer: j.bearer, owner, agent: j.agent, expiresAt: Date.parse(j.expires_at) };
+}
+
+// A bearer's expiry from its own exp claim in milliseconds, or null when it carries none.
+export function bearerExpiry(bearer: string): number | null {
+  try {
+    const exp = (JSON.parse(Buffer.from(bearer.split(".")[1] ?? "", "base64url").toString("utf8")) as { exp?: unknown }).exp;
+    return typeof exp === "number" ? exp * 1000 : null;
+  } catch { return null; }
+}
+
+// Mints again each owner's bearer that is missing or expires within aheadMs, keeping the old one when a mint fails or finds no live login, and returns the owners renewed.
+export async function renewBearers(bearers: Record<string, string>, owners: readonly string[], mint: (owner: string) => Promise<string | null>, o: { now?: number; aheadMs?: number } = {}): Promise<string[]> {
+  const now = o.now ?? Date.now(), ahead = o.aheadMs ?? 15 * 60_000, renewed: string[] = [];
+  for (const owner of owners) {
+    const current = bearers[owner];
+    const exp = current ? bearerExpiry(current) : null;
+    if (current && (exp === null || exp - now > ahead)) continue;
+    const fresh = await mint(owner).catch(() => null);
+    if (fresh) { bearers[owner] = fresh; renewed.push(owner); }
+  }
+  return renewed;
+}
