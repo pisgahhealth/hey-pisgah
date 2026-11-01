@@ -48,12 +48,13 @@ if (model) parentPort.on("message", (m) => {
     run(x.st);
     return model.getResult(x.st).text.trim();
   });
-  if (m.op === "decode") return answer(m.id, () => {
+  // Parakeet decodes on the native pool as it did in the main thread, several clips at once from one copy of the model.
+  if (m.op === "decode") {
     const st = model.createStream();
     st.acceptWaveform({ sampleRate: 16_000, samples: m.x });
-    model.decode(st);
-    return model.getResult(st).text;
-  });
+    model.decodeAsync(st).then(() => parentPort.postMessage({ id: m.id, value: model.getResult(st).text }), (e) => parentPort.postMessage({ id: m.id, error: e instanceof Error ? e.message.slice(0, 300) : String(e) }));
+    return;
+  }
   if (m.op === "embed") return answer(m.id, () => {
     const t0 = performance.now();
     const st = model.createStream();

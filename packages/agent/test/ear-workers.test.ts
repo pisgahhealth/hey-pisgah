@@ -1,17 +1,20 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { availableParallelism, loadavg, tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { monitorEventLoopDelay } from "node:perf_hooks";
 import { describe, expect, it } from "vitest";
-import { decodeWav, type FinalTranscript } from "@hey-pisgah/voice";
+import { decodeWav, encodeWav, type FinalTranscript } from "@hey-pisgah/voice";
 import type { ListenSessions, StreamSegment } from "../src/emr/listen.js";
 import { localDirs, parakeetEar, sherpaStreamAsr, type StreamAsr, type StreamDecoder } from "../src/emr/local-ears.js";
-import { sherpaEmbedder } from "../src/emr/speaker.js";
+import { matchWindows, printLine, sherpaEmbedder } from "../src/emr/speaker.js";
+import { percentile } from "../src/emr/runtime.js";
 import { StreamListener } from "../src/emr/stream-listen.js";
 import { earWorkers } from "../src/emr/workers/pool.js";
 
 const RATE = 16_000;
+const encodeWavOf = (x: Float32Array) => encodeWav(x, RATE);
 const PART = (RATE * 80) / 1000;
 const digest = (x: Float32Array) => createHash("sha256").update(new Uint8Array(x.buffer, x.byteOffset, x.byteLength)).digest("hex").slice(0, 16);
 
@@ -148,4 +151,88 @@ describe.skipIf(process.env["LOCAL_EARS"] !== "1")("the real local models in wor
     expect(sherpaEmbedder({ modelPath: join(dir, "none.onnx"), workers: 2 })).toBeNull();
     expect(sherpaStreamAsr({ modelDir: localDirs(MODELS).streamDir, sherpaDir: join(dir, "no-library"), workers: 2 })).toBeNull();
   });
+});
+
+// Runs only with EAR_LOAD=1 and the models as above: simulated owners speak synthetic lines at once, each in real time, through one serve's local ears.
+describe.skipIf(process.env["EAR_LOAD"] !== "1")("many owners on one serve's local ears", () => {
+  it("keeps the main loop responsive with the ears in workers, against the same load in one thread", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "hp-b4l-"));
+    const voices = ["Samantha", "Daniel", "Karen", "Moira"];
+    const texts = ["Chart his pulse 116.", "Temperature 38.3.", "Blood pressure 104 over 62.", "Respiratory rate 22.", "Start paracetamol one gram by mouth."];
+    const clips = voices.flatMap((v, i) => texts.map((t, j) => {
+      const f = join(dir, `c${i}-${j}.wav`);
+      execFileSync("say", ["-v", v, "-o", f, "--file-format=WAVE", `--data-format=LEI16@${RATE}`, t], { stdio: "ignore" });
+      return decodeWav(new Uint8Array(readFileSync(f))).samples;
+    }));
+    const owners = (process.env["EAR_LOAD_OWNERS"] ?? "10,30").split(",").map(Number);
+    const seconds = Number(process.env["EAR_LOAD_SECONDS"] ?? "20");
+    const configs = (process.env["EAR_LOAD_WORKERS"] ?? "0,3").split(",").map(Number);
+    process.stdout.write(`load before ${loadavg().map((x) => x.toFixed(1)).join(" ")}\n`);
+    const dirs = localDirs(MODELS);
+    const rows: unknown[] = [];
+    for (const workers of configs) {
+      const asr = sherpaStreamAsr({ modelDir: dirs.streamDir, workers })!;
+      const embed = sherpaEmbedder({ modelPath: SPEAKER, workers: workers ? 2 : 0 })!;
+      const ear = parakeetEar({ modelDir: dirs.parakeetDir, workers: workers ? 1 : 0 })!;
+      for (const n of owners) {
+        // Each owner says a line, pauses 1.2 to 2.4 s, and says the next, from its own start.
+        const audio = Array.from({ length: n }, (_, i) => {
+          const xs: Float32Array[] = [quiet(80 * (i % 13))];
+          let len = xs[0]!.length, k = i;
+          while (len < seconds * RATE) { const c = clips[(k * 7 + i) % clips.length]!; xs.push(c, quiet(1200 + 100 * (k % 13))); len += c.length + ((1200 + 100 * (k % 13)) * RATE) / 1000; k++; }
+          return join2(xs);
+        });
+        const words: number[] = [], embedMs: number[] = [], earMs: number[] = [], late: number[] = [];
+        let segs = 0;
+        const side: Promise<unknown>[] = [];
+        const listen = {
+          admit: () => ({ refused: null, presence: { live: null } }),
+          // The work the listen rules start per line: the voiceprint on the main path and Parakeet as the second reading.
+          segment: async (s: StreamSegment) => {
+            segs++; words.push(s.trailing_ms);
+            const t0 = performance.now();
+            const wav = encodeWavOf(s.samples);
+            side.push(printLine(embed, matchWindows([s.samples], RATE), RATE).then(() => embedMs.push(performance.now() - t0)));
+            side.push(ear(wav, { run_id: "r", task_id: "t", line_id: "l" }).then(() => earMs.push(performance.now() - t0)));
+            return [];
+          },
+          nextWords: () => undefined, flush: async () => undefined, unreportedOf: () => ({ utterances: [], errors: [] })
+        } as unknown as ListenSessions;
+        const sl = new StreamListener(listen, asr);
+        audio.forEach((_, i) => sl.open({ owner: `o${i}`, target: { admission_id: `a${i}` }, session_id: `s${i}`, rate: RATE }));
+        const h = monitorEventLoopDelay({ resolution: 10 });
+        h.enable();
+        const t0 = Date.now();
+        const sent = audio.map(() => 0);
+        // One 80 ms part per owner when its time comes, as the strips post them; a part sent late counts how far the loop fell behind.
+        await new Promise<void>((done) => {
+          const tick = setInterval(() => {
+            const now = Date.now();
+            let left = false;
+            for (const [i, x] of audio.entries()) {
+              while (sent[i]! < x.length && t0 + ((sent[i]! / RATE) * 1000) + 80 <= now) {
+                late.push(now - (t0 + (sent[i]! / RATE) * 1000 + 80));
+                sl.feed(`s${i}`, x.subarray(sent[i]!, sent[i]! + PART), t0 + (sent[i]! / RATE) * 1000);
+                sent[i]! += PART;
+              }
+              if (sent[i]! < x.length) left = true;
+            }
+            if (!left) { clearInterval(tick); done(); }
+          }, 10);
+        });
+        const errors: string[] = [];
+        for (const i of audio.keys()) errors.push(...(await sl.end(`s${i}`)).errors);
+        await Promise.all(side);
+        h.disable();
+        const ms = (v: number) => Math.round(v / 1e5) / 10;
+        const st = (xs: number[]) => ({ p50: Math.round(percentile(xs, 50) ?? 0), p90: Math.round(percentile(xs, 90) ?? 0), max: Math.round(Math.max(0, ...xs)) });
+        const row = { workers, owners: n, audio_s: seconds, wall_s: Math.round((Date.now() - t0) / 100) / 10, stretches: segs, errors: errors.length, loop_delay_ms: { p50: ms(h.percentile(50)), p99: ms(h.percentile(99)), max: ms(h.max) }, part_late_ms: st(late), words_after_speech_ms: st(words), voiceprint_ms: st(embedMs), parakeet_ms: st(earMs), load: loadavg()[0] };
+        rows.push(row);
+        process.stdout.write(`${JSON.stringify(row)}\n`);
+        expect(errors).toEqual([]);
+      }
+    }
+    const file = process.env["EAR_LOAD_OUT"];
+    if (file) { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, `${JSON.stringify({ at: new Date().toISOString(), cpus: availableParallelism(), rows }, null, 1)}\n`); }
+  }, 30 * 60_000);
 });
