@@ -35,7 +35,7 @@ async function main(): Promise<void> {
   const store = join(out, `replay-store-${Date.now().toString(36)}`);
   let serve: Awaited<ReturnType<typeof startEmrServe>> | null = null;
   const client = new ModelClient({ storeRoot: store, mode: "replay", recordingsDir: join(rec, "model"), taskStateOf: (id) => serve?.runtime.stateOf(id) ?? null });
-  serve = await startEmrServe({
+  serve = await startEmrServe({ strip: { mode: "open" },
     storeRoot: store, port: new MemoryEmrPort(readKeptContext(join(rec, "context.json")), admission), client, listenPort: 0,
     transcribe: replayTranscriber(join(rec, "transcripts.json")), ears: "spark", runtime: { holdMs: 0, proofRetryMs: 1 }
   });

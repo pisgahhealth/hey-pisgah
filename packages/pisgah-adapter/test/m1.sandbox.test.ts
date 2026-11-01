@@ -37,7 +37,7 @@ describe.skipIf(!RUN)("M1 on the sandbox EMR", () => {
     let rt: EmrRuntime | null = null;
     const client = new ModelClient({ storeRoot: root, mode: "live", recordingsDir: join(root, "recordings"), taskStateOf: (id) => rt?.stateOf(id) ?? null });
     const serveLog: string[] = [];
-    const s = await startEmrServe({ storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 4000, proofRetryMs: 1500 }, log: (l) => serveLog.push(l) });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 4000, proofRetryMs: 1500 }, log: (l) => serveLog.push(l) });
     rt = s.runtime;
     const post = async (path: string, body: unknown) => {
       const r = await fetch(`${s.url}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });

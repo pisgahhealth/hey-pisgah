@@ -52,7 +52,7 @@ async function bootStream(lines: string[], o: { local: string; meta: string; num
   const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater((said) => (said.includes("37.6") ? obs(said, { temp_c: "37.6" }) : said.includes("116") ? obs(said, { pulse: 116 }) : said.includes("rate 22") ? obs(said, { resp_rate: 22 }) : [{ class: "aside" }]), seen), taskStateOf: (id) => rt?.stateOf(id) ?? null });
   const metaHeard: number[] = [];
   const local: SecondEar = async () => reading(o.local);
-  const s = await startEmrServe({
+  const s = await startEmrServe({ strip: { mode: "open" },
     storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 }, preferences: false,
     ears: local, asr: "stream", streamAsr: scriptedStream(lines),
     // Voice Transcribe here is only ever the Meta reading of a number line, never the first ear.
@@ -78,8 +78,8 @@ describe("the switches", () => {
 
   it("stop the service when a switched-on ear cannot load, rather than running without it", async () => {
     const base = { storeRoot: emrRoot(), port: new FakeEmr(), listenPort: 0, preferences: false as const };
-    await expect(startEmrServe({ ...base, ears: "parakeet", local: { parakeetDir: "/nonexistent" } })).rejects.toThrow(/Parakeet second ear was switched on/);
-    await expect(startEmrServe({ ...base, storeRoot: emrRoot(), asr: "stream", local: { streamDir: "/nonexistent" } })).rejects.toThrow(/streaming ear was switched on/);
+    await expect(startEmrServe({ strip: { mode: "open" }, ...base, ears: "parakeet", local: { parakeetDir: "/nonexistent" } })).rejects.toThrow(/Parakeet second ear was switched on/);
+    await expect(startEmrServe({ strip: { mode: "open" }, ...base, storeRoot: emrRoot(), asr: "stream", local: { streamDir: "/nonexistent" } })).rejects.toThrow(/streaming ear was switched on/);
   });
 });
 

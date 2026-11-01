@@ -104,7 +104,7 @@ describe("the agent service's heartbeat routes and health", () => {
     const boot = async (presence?: "heartbeat") => {
       const root = emrRoot();
       const client = new ModelClient({ storeRoot: root, mode: "mock", mock: () => { throw new Error("no model call"); } });
-      return startEmrServe({ storeRoot: root, port: new FakeEmr(), client, listenPort: 0, preferences: false, ears: "off", runtime: { holdMs: 0 }, ...(presence ? { listen: { presence } } : {}) });
+      return startEmrServe({ strip: { mode: "open" }, storeRoot: root, port: new FakeEmr(), client, listenPort: 0, preferences: false, ears: "off", runtime: { holdMs: 0 }, ...(presence ? { listen: { presence } } : {}) });
     };
     const STRIP = "http://localhost:3311";
     const post = (url: string, body: unknown) => fetch(url, { method: "POST", headers: { "content-type": "application/json", origin: STRIP }, body: JSON.stringify(body) });
@@ -136,7 +136,7 @@ describe("the push-to-talk route runs the same live check", () => {
     const boot = async (presence?: "heartbeat") => {
       const root = emrRoot();
       const client = new ModelClient({ storeRoot: root, mode: "mock", mock: () => ({ content: [{ type: "text", text: "{}" }] } as never) });
-      return startEmrServe({ storeRoot: root, port: new FakeEmr(), client, listenPort: 0, preferences: false, ears: "off", runtime: { holdMs: 0 }, listen: { replay: "refuse", ...(presence ? { presence } : {}) },
+      return startEmrServe({ strip: { mode: "open" }, storeRoot: root, port: new FakeEmr(), client, listenPort: 0, preferences: false, ears: "off", runtime: { holdMs: 0 }, listen: { replay: "refuse", ...(presence ? { presence } : {}) },
         transcribe: async (_w, _k, sid) => ({ final: true, text: "", audio_ms: 1000, session_id: sid, cost_usd: 0 }) });
     };
     const send = (url: string, wav: Uint8Array) => { const f = new FormData(); f.append("audio", new Blob([new Uint8Array(wav)], { type: "audio/wav" }), "say.wav"); f.append("owner", OWNER); f.append("admissionId", ADM); return fetch(`${url}/tasks/say-audio`, { method: "POST", body: f, headers: { origin: "http://localhost:3311" } }); };

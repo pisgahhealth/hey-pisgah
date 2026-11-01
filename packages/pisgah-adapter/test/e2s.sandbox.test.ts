@@ -33,7 +33,7 @@ describe.skipIf(!RUN)("E2.s vitals path speed on the sandbox EMR", () => {
     const root = mkdtempSync(join(tmpdir(), "hp-e2s-"));
     let rt: EmrRuntime | null = null;
     const client = new ModelClient({ storeRoot: root, mode: "live", recordingsDir: join(root, "recordings"), taskStateOf: (id) => rt?.stateOf(id) ?? null });
-    const s = await startEmrServe({ storeRoot: root, port, client, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4112), ears: "spark", runtime: { holdMs: 4000, proofRetryMs: 1500, speed: levers } });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4112), ears: "spark", runtime: { holdMs: 4000, proofRetryMs: 1500, speed: levers } });
     rt = s.runtime;
     const out: Record<string, unknown> = { levers: leverList(levers), spacing_ms: spacing, hold_ms: 4000, started_at: new Date().toISOString() };
     try {

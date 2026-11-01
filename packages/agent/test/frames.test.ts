@@ -54,7 +54,7 @@ async function boot(o: { asr: "stream" | "rest"; lines?: string[]; transcribe?: 
   let rt: EmrRuntime | null = null;
   const seen: string[] = [];
   const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater(vitalsGate, seen), taskStateOf: (id) => rt?.stateOf(id) ?? null });
-  const s = await startEmrServe({
+  const s = await startEmrServe({ strip: { mode: "open" },
     storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 }, preferences: false, ears: "off",
     ...(o.asr === "stream" ? { asr: "stream" as const, streamAsr: scriptedStream(o.lines ?? []) } : {}),
     transcribe: o.transcribe ?? (async () => { throw new Error("the chunk ear is not used on the frames route"); }),

@@ -80,7 +80,7 @@ describe.skipIf(!RUN)("E2 owner-aware consult holder on the sandbox EMR", () => 
     const root = mkdtempSync(join(tmpdir(), "hp-e2-"));
     let rt: EmrRuntime | null = null;
     const client = new ModelClient({ storeRoot: root, mode: "live", recordingsDir: join(root, "recordings"), taskStateOf: (id) => rt?.stateOf(id) ?? null });
-    const s = await startEmrServe({ storeRoot: root, port, client, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4107), runtime: { holdMs: 4000, proofRetryMs: 1500 }, log: (x) => process.stderr.write(`serve: ${x}\n`) });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4107), runtime: { holdMs: 4000, proofRetryMs: 1500 }, log: (x) => process.stderr.write(`serve: ${x}\n`) });
     rt = s.runtime;
     const say = async (text: string) => {
       process.stderr.write(`say: ${text}\n`);
@@ -147,7 +147,7 @@ describe.skipIf(!RUN)("E2 owner-aware consult holder on the sandbox EMR", () => 
     const boot = async () => {
       let rt: EmrRuntime | null = null;
       const client = new ModelClient({ storeRoot: root, mode: "live", recordingsDir: join(root, "recordings"), taskStateOf: (id) => rt?.stateOf(id) ?? null });
-      const s = await startEmrServe({ storeRoot: root, port, client, listenPort, ears: "spark", runtime: { holdMs: 4000, proofRetryMs: 1500, obligationTickMs: 1000 } });
+      const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort, ears: "spark", runtime: { holdMs: 4000, proofRetryMs: 1500, obligationTickMs: 1000 } });
       rt = s.runtime;
       return { s, close: async () => { await s.close(); client.close(); } };
     };

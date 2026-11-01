@@ -218,7 +218,7 @@ describe("preference memory in the EMR runtime", () => {
     const port = new WardsFake();
     let rt: EmrRuntime | null = null;
     const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater((s) => script(s) as unknown as C[]), taskStateOf: (id) => rt?.stateOf(id) ?? null });
-    const s = await startEmrServe({ storeRoot: root, port, client, listenPort: 0, ears: "off", runtime: { holdMs: 1500, proofRetryMs: 1 } });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort: 0, ears: "off", runtime: { holdMs: 1500, proofRetryMs: 1 } });
     rt = s.runtime;
     const post = (path: string, body: unknown) => fetch(`${s.url}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     try {

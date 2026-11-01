@@ -232,7 +232,7 @@ describe.skipIf(!RUN)("E3 voice orders, countersign and attribution on the sandb
     let rt: EmrRuntime | null = null;
     const client = new ModelClient({ storeRoot: root, mode: "live", recordingsDir: join(root, "recordings"), taskStateOf: (id) => rt?.stateOf(id) ?? null });
     const levers = leversFrom(KEPT_LEVERS);
-    const s = await startEmrServe({ storeRoot: root, port, client, embed, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4108), ears: "spark", runtime: { holdMs: 4000, proofRetryMs: 1500, speed: levers, keepHeard: true } });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, embed, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4108), ears: "spark", runtime: { holdMs: 4000, proofRetryMs: 1500, speed: levers, keepHeard: true } });
     rt = s.runtime;
     // The boards as their own people see them, read every 300 ms; the first time an id shows is when the order reached that board.
     const labBearer = mintPersonBearer(sb, { login: "lab.grace" }), rxBearer = mintPersonBearer(sb, { login: "pharm.uduak" });

@@ -33,7 +33,7 @@ describe.skipIf(!RUN)("F3a from an empty emergency encounter to discharge by voi
     mkdirSync(dir, { recursive: true });
     let rt: EmrRuntime | null = null;
     const client = new ModelClient({ storeRoot: root, mode: "live", recordingsDir: join(root, "recordings"), taskStateOf: (id) => rt?.stateOf(id) ?? null });
-    const s = await startEmrServe({ storeRoot: root, port, client, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4119), emergencyClinicId: clinic!, ears: "off", runtime: { holdMs: 1500, proofRetryMs: 1500, keepHeard: true }, log: (x) => process.stderr.write(`serve: ${x}\n`) });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4119), emergencyClinicId: clinic!, ears: "off", runtime: { holdMs: 1500, proofRetryMs: 1500, keepHeard: true }, log: (x) => process.stderr.write(`serve: ${x}\n`) });
     rt = s.runtime;
     // The diagnosis write's route, body keys, proof read and the code a control sends all come from the private profile.
     const op = profile.work["record_diagnosis"]!;

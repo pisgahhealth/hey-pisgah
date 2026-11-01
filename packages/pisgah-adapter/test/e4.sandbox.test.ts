@@ -32,7 +32,7 @@ describe.skipIf(!RUN)("E4 delegation between three agents on the sandbox EMR", (
     const root = mkdtempSync(join(tmpdir(), "hp-e4-"));
     let rt: EmrRuntime | null = null;
     const client = new ModelClient({ storeRoot: root, mode: "live", recordingsDir: join(root, "recordings"), taskStateOf: (id) => rt?.stateOf(id) ?? null });
-    const s = await startEmrServe({ storeRoot: root, port, client, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4109), emergencyClinicId: clinic!, ears: "off", runtime: { holdMs: 1500, proofRetryMs: 1500, watchMs: 5000, obligationTickMs: 1000 }, log: (x) => process.stderr.write(`serve: ${x}\n`) });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4109), emergencyClinicId: clinic!, ears: "off", runtime: { holdMs: 1500, proofRetryMs: 1500, watchMs: 5000, obligationTickMs: 1000 }, log: (x) => process.stderr.write(`serve: ${x}\n`) });
     rt = s.runtime;
     const post = async (path: string, body: unknown) => {
       const r = await fetch(`${s.url}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });

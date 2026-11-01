@@ -106,6 +106,9 @@ describe("the strip token (SEC H3): the serve takes calls only from its own stri
     expect(loopbackHost("agent.example.org.evil.test", ["agent.example.org"])).toBe(false);
     expect(loopbackHost("agent.example.org", [])).toBe(false);
     const root = emrRoot();
+    // A start that names no strip mode is refused, so no caller gets the open serve by leaving an option out.
+    await expect(startEmrServe({ storeRoot: root, port: new FakeEmr(), client: mockClient(root, () => ({ decision: "aside", summary: "x" }), () => null), listenPort: 0 } as unknown as Parameters<typeof startEmrServe>[0])).rejects.toThrow(/strip/);
+    await expect(startEmrServe({ storeRoot: root, port: new FakeEmr(), client: mockClient(root, () => ({ decision: "aside", summary: "x" }), () => null), listenPort: 0, strip: { mode: "token", key: "", hospital: HOSPITAL } })).rejects.toThrow(/32 bytes/);
     const s = await startEmrServe({ storeRoot: root, port: new FakeEmr(), client: mockClient(root, () => ({ decision: "aside", summary: "x" }), () => null), listenPort: 0, strip: { mode: "open" } });
     try {
       const health = (await (await fetch(`${s.url}/health`)).json()) as { strip: string };
