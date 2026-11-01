@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import { loadKeys, ModelClient, type Mode } from "@hey-pisgah/model";
+import { loadKeys, ModelClient, ModelError, type Mode } from "@hey-pisgah/model";
 import { VITALS_KEYWORDS, VoiceError, buildKeywords, cleanTranscript, transcribeWav, vitalsVocabulary, type FinalTranscript, type SocketFactory } from "@hey-pisgah/voice";
 import { sparkEar, type SecondEar } from "./ears.js";
 import { allEars, parakeetEar, sherpaStreamAsr, transcriberEar, type ReadingLedger, type StreamAsr } from "./local-ears.js";
@@ -19,7 +19,7 @@ import { gateArrival } from "./gate.js";
 import { SCREEN_PAGES, type ScreenPage } from "./screens.js";
 import { EMERGENCY_KIND, EMERGENCY_LINE, EMERGENCY_PRESS, afterWake, identityFrom, emergencyHeardLoosely, emergencyReason, spokenPatient, unidentifiedRef } from "./entry.js";
 import { shortHash } from "../ids.js";
-import { arrivalRunId, spendingTranscriber } from "./spend.js";
+import { SPEND_CAP_NOTE, arrivalRunId, spendingTranscriber } from "./spend.js";
 import { openStream } from "@hey-pisgah/store";
 import { PreferenceError, PreferenceMemory, SCOPE_KINDS, describePref, describeScope, describeSource } from "./preferences.js";
 
@@ -201,7 +201,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     base = p;
   } else base = o.ears === "off" ? undefined : typeof o.ears === "function" ? o.ears : o.ears === "spark" ? sparkEar(client) : o.runtime?.secondEar;
   // With a local first ear, Voice Transcribe reads every line that writes a number as well, so Meta still reads each number before it is written.
-  const secondEar = base && streamAsr ? allEars([base, transcriberEar(metaAsr, { ledger })]) : base;
+  const secondEar = base && streamAsr ? allEars([base, transcriberEar(spendingTranscriber(metaAsr, client.spend, { ledgered: true }), { ledger })]) : base;
   const streaming = !!streamAsr || o.asr === "meta-stream";
   // The strip reads frames from here: present only when a streaming ear is on, so an older strip or a chunk-only serve keeps posting chunks.
   const footprint = { first_ear: streamAsr ? streamAsr.model : o.asr === "meta-stream" ? META_STREAM_MODEL : "meta:muse-voice-transcribe-1.0", second_ear: typeof o.ears === "string" ? o.ears : base ? "given" : "off", meta_reading_on_numbers: !!(base && streamAsr), frames: streaming ? { route: "/tasks/listen/stream", parts: true, frame_ms: FRAME_MS, rate: 16_000, idle_ms: o.framesIdleMs ?? FRAME_IDLE_MS } : null };
@@ -269,7 +269,9 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   runtime = rt;
   rt.start();
   // Only Meta's billed transcription is held against the day cap; the local streaming ear costs nothing.
-  const transcribe = streamAsr ? streamAsr.transcribe : spendingTranscriber(several ? parallelReadings(metaAsr, o.vtReadings!) : metaAsr, client.spend);
+  // Each Meta call holds its own reservation, so parallel readings reserve once per reading.
+  const billedAsr = spendingTranscriber(metaAsr, client.spend);
+  const transcribe = streamAsr ? streamAsr.transcribe : several ? parallelReadings(billedAsr, o.vtReadings!) : billedAsr;
   const origin = o.allowOrigin ?? "http://localhost:3311";
   const strip: StripAuth = o.strip ?? { mode: "open" };
   // The owner each request's strip token names; every route that names an owner or a task checks it here.
@@ -387,6 +389,10 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     if (moved) onSubject(owner, moved.target, "spoken", spokenAt);
     // Words that receive a new patient open the same pending arrival as the phrase, so the lines after them are bound to it.
     const newcomer = !moved && text ? await arrivalHeard(owner, text, spokenAt, "audio") : null;
+    if (newcomer && "capped" in newcomer) {
+      setStatus(owner, sessionId, seq, { status: "failed", error: SPEND_CAP_NOTE });
+      return { session_id: sessionId, seq, accepted: true, utterances: [], partial: null, errors: [SPEND_CAP_NOTE] };
+    }
     if (newcomer) {
       setStatus(owner, sessionId, seq, { status: "completed", task_id: newcomer.task_id, line_id: newcomer.line_id });
       return { session_id: sessionId, seq, accepted: true, utterances: [{ id: newcomer.line_id, line_id: newcomer.line_id, task_id: newcomer.task_id, text, class: "instruction", classes: ["instruction"] }], partial: null, entry: "arrival" };
@@ -404,6 +410,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     let r: Awaited<ReturnType<typeof gateArrival>>;
     try { r = await gateArrival(client, recent.map((x) => x.text), text, { run_id: arrivalRunId(owner) }); } catch (e) {
       o.log?.(`arrival not decided: ${e instanceof Error ? e.message.slice(0, 160) : String(e)}`);
+      if (e instanceof ModelError && e.code === "budget_exhausted") return { capped: true as const };
       return null;
     }
     o.log?.(`listen with no patient: arrival ${r.arrival ? "heard" : "not heard"} (${r.ms} ms, $${r.cost_usd.toFixed(4)})`);
@@ -741,6 +748,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       const handed = target ? null : rt.delegationLine(b.owner, b.text, at, "text");
       if (handed) return [202, handed];
       const arrived = target ? null : await arrivalHeard(b.owner, b.text, at, "text");
+      if (arrived && "capped" in arrived) throw new HttpError(429, SPEND_CAP_NOTE);
       if (arrived) return [202, { ...arrived, entry: "arrival" }];
       if (!target) throw new HttpError(400, "No patient is open yet; describe the patient arriving, say hey Pisgah, emergency, or open a patient");
       return [202, await rt.say({ owner: b.owner, target, text: b.text, ...(b.spokenAt ? { spoken_at: b.spokenAt } : {}), ...(b.via ? { via: b.via } : {}), ...(b.question_id ? { question_id: b.question_id } : {}) })];

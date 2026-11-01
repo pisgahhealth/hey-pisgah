@@ -3749,6 +3749,6 @@ export class EmrRuntime {
     if (open) return this.setState(l, "running", null);
     if (t.questions.some((q) => q.answered_by === null)) return this.setState(l, "waiting", "question_open");
     this.setState(l, "done", reason);
-    retainClosed(l.stream, t, (m) => this.log(m));
+    retainClosed(l.stream, t, (m) => this.log(m), l.inflight > 0 || l.calling !== null || l.pre.size > 0);
   }
 }

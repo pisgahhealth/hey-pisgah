@@ -5,13 +5,13 @@ import { syncDir, syncFd } from "./durable.js";
 import { StoreError } from "./errors.js";
 import { acquireLock, assertToken, releaseLock, type LockInfo } from "./lock.js";
 import { streamPaths } from "./paths.js";
-import { areaSealed, hasSealMarker, openPayload, retainPayload, sealPayload, sealing } from "./seal.js";
+import { areaSealed, hasPlainWords, hasSealMarker, openPayload, retainPayload, sealPayload, sealing } from "./seal.js";
 
 export type Clocks = { recorded_at: number; occurred_at: number };
 export type AppendOptions = { schema_version?: number };
 
 // Records the store itself writes; projections leave them out so recovery and takeover do not change domain state.
-export const STORE_RECORD_TYPES: readonly string[] = ["store.recovered", "writer.takeover", "store.retained"];
+export const STORE_RECORD_TYPES: readonly string[] = ["store.recovered", "writer.takeover", "store.retained", "store.sealed"];
 
 export type ScanProblem = { at_seq: number; reason: "unparseable" | "wrong_stream" | "seq_gap" | "prev_hash_mismatch" | "hash_mismatch" };
 export type Scan = { envelopes: Envelope[]; goodBytes: number; tailBytes: number; problem: ScanProblem | null };
@@ -44,7 +44,8 @@ function readBytes(file: string): Buffer {
 }
 
 // keepSealed reads the lines as they are on disk, sealed fields and all, for copies that never need the words.
-export type OpenOptions = { writer?: boolean; now?: () => string; keepSealed?: boolean };
+// allowPlain lets the sealing migration open a keyed writer over a journal that still holds plaintext words.
+export type OpenOptions = { writer?: boolean; now?: () => string; keepSealed?: boolean; allowPlain?: boolean };
 
 // Opens the sealed fields of a stream's lines; streams outside the sealed areas are returned as they are.
 function openAll(streamId: string, envs: Envelope[]): Envelope[] {
@@ -103,6 +104,9 @@ export class Stream {
         syncDir(dirname(paths.file));
         releaseLock(paths.lock, info.token);
         throw new StoreError("store_quarantined", "an earlier line failed the chain check", { ...scan.problem, stream_id: streamId, quarantine: target });
+      }
+      if (!opts.allowPlain && areaSealed(streamId) && sealing().key && scan.envelopes.some((e) => hasPlainWords(e.payload))) {
+        throw new StoreError("store_unsealed", "this journal holds plaintext words from before the store key was set; stop the serve and run the sealing migration first", { stream_id: streamId });
       }
       if (scan.tailBytes > 0) {
         ftruncateSync(fd, scan.goodBytes);
@@ -220,9 +224,40 @@ export class Stream {
       if (!keep) this.retainedUpTo = this.envelopes.length;
       return { fields: 0 };
     }
+    this.rewrite(next);
+    this.appendInternal("store.retained", { through_seq: next.length, fields });
+    if (!keep) this.retainedUpTo = this.envelopes.length;
+    return { fields };
+  }
+
+  // Seals the plaintext words of a journal written before the key by rebuilding its chain from line 1; the old chain was verified on open and its head is recorded.
+  sealPlain(): { lines: number } {
+    if (this.closed) throw new StoreError("stream_closed", "stream is closed");
+    if (!this.writer || this.fd === null || this.lock === null) throw new StoreError("not_writer", "stream was opened for reading");
+    const k = sealing().key;
+    if (!k) throw new StoreError("store_key_missing", "no store key is configured to seal with");
+    if (!areaSealed(this.streamId)) return { lines: 0 };
+    assertToken(this.paths.lock, this.lock.token);
+    const lines = this.envelopes.filter((e) => hasPlainWords(e.payload)).length;
+    if (lines === 0) return { lines: 0 };
+    const old = this.head();
+    let prev = "";
+    const next = this.envelopes.map((e) => {
+      const { hash: _h, ...rest } = e;
+      const sealed = Envelope.parse(sealEnvelope({ ...rest, payload: sealPayload(k, e.payload, this.streamId, e.seq), prev_hash: prev }));
+      prev = sealed.hash;
+      return sealed;
+    });
+    this.rewrite(next);
+    this.appendInternal("store.sealed", { lines, previous_head: old });
+    return { lines };
+  }
+
+  // Replaces the file by temp file, fsync and rename once the new lines pass the chain check, then reopens the append handle.
+  private rewrite(next: Envelope[]): void {
     const bytes = Buffer.from(next.map((e) => `${canonical(e)}\n`).join(""), "utf8");
     const check = scanBytes(bytes, this.streamId);
-    if (check.problem || check.envelopes.length !== next.length) throw new StoreError("store_corrupt", "the retained copy failed the chain check, so nothing was changed", { stream_id: this.streamId, ...(check.problem ?? {}) });
+    if (check.problem || check.envelopes.length !== next.length) throw new StoreError("store_corrupt", "the rewritten copy failed the chain check, so nothing was changed", { stream_id: this.streamId, ...(check.problem ?? {}) });
     const tmp = `${this.paths.file}.retain`;
     writeFileSync(tmp, bytes);
     const tfd = openSync(tmp, "r");
@@ -233,13 +268,10 @@ export class Stream {
     }
     renameSync(tmp, this.paths.file);
     syncDir(dirname(this.paths.file));
-    closeSync(this.fd);
+    closeSync(this.fd!);
     this.fd = openSync(this.paths.file, "a");
     this.envelopes = check.envelopes;
     this.plain = openAll(this.streamId, check.envelopes);
-    this.appendInternal("store.retained", { through_seq: next.length, fields });
-    if (!keep) this.retainedUpTo = this.envelopes.length;
-    return { fields };
   }
 
   close(): void {

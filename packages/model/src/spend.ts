@@ -2,7 +2,8 @@ import { openStream, type Stream } from "@hey-pisgah/store";
 import { ModelError } from "./errors.js";
 
 // A hospital's caps for one day, from the serve's configuration; null fields are not capped.
-export type DayCaps = { hospital: string; usd: number | null; calls: number | null; alertFraction: number; tz: string; reserveUsd: number };
+// reserveUsd is the least a model call holds; maxOutputTokens bounds the output a call with no limit of its own is reserved for.
+export type DayCaps = { hospital: string; usd: number | null; calls: number | null; alertFraction: number; tz: string; reserveUsd: number; maxOutputTokens?: number };
 export type SpendKind = "model" | "speech" | "reading";
 export type SpendScope = "day_usd" | "day_calls";
 export type SpendStatus = { hospital: string; day: string; usd: number; calls: number; speech_ms: number; reserved_usd: number; reserved_calls: number; cap_usd: number | null; cap_calls: number | null; alerted: SpendScope[]; capped: SpendScope[] };
@@ -21,7 +22,8 @@ export function dayCapsFromEnv(env: NodeJS.ProcessEnv = process.env): DayCaps | 
     usd, calls,
     alertFraction: num(env["HEY_PISGAH_SPEND_ALERT"]) ?? 0.8,
     tz: env["HEY_PISGAH_TZ"] ?? "Africa/Lagos",
-    reserveUsd: num(env["HEY_PISGAH_CALL_RESERVE_USD"]) ?? 0.01
+    reserveUsd: num(env["HEY_PISGAH_CALL_RESERVE_USD"]) ?? 0.001,
+    maxOutputTokens: num(env["HEY_PISGAH_RESERVE_OUTPUT_TOKENS"]) ?? 4096
   };
 }
 

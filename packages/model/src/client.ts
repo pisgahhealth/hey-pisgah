@@ -149,10 +149,18 @@ export class ModelClient {
     return state;
   }
 
-  private checkBudget(args: CallArgs): Reservation | null {
+  // A conservative cost for one call before it is sent: every request character as a third of a token, and the output at its limit.
+  reserveFor(args: CallArgs, body: Record<string, unknown>): number {
+    const floor = this.spend?.caps.reserveUsd ?? 0;
+    const prompt = Math.ceil(JSON.stringify(body).length / 3);
+    const out = args.max_completion_tokens ?? this.spend?.caps.maxOutputTokens ?? 4096;
+    return Math.max(floor, estimateCostUsd({ prompt_tokens: prompt, completion_tokens: out, cached_tokens: 0 }));
+  }
+
+  private checkBudget(args: CallArgs, body: Record<string, unknown>): Reservation | null {
     if (this.spend) {
       try {
-        return this.spend.reserve("model", this.spend.caps.reserveUsd, { run_id: args.run_id, purpose: args.purpose });
+        return this.spend.reserve("model", this.reserveFor(args, body), { run_id: args.run_id, purpose: args.purpose });
       } catch (e) {
         if (e instanceof ModelError) this.refuse(args, "budget_exhausted", e.detail);
         throw e;
@@ -216,9 +224,9 @@ export class ModelClient {
     }
     const taskState = this.gate(args);
     if (this.mode === "live") this.client(args.provider);
-    const hold = this.checkBudget(args);
-
     const body = this.body(args);
+    const hold = this.checkBudget(args, body);
+
     const hash = requestHash(args.provider, body);
     const runKey = args.run_id ? this.nextRunKey(args.provider, hash, args.run_id) : null;
     const ledgerId = this.ledgerStreamId(args.run_id);

@@ -7,7 +7,10 @@ import { StoreError } from "./errors.js";
 // Areas whose heard words, names and phones are sealed at rest.
 export const SEALED_AREAS: readonly string[] = ["emr", "learning"];
 // Payload keys whose string values are sealed in those areas, at any depth.
-export const SEALED_KEYS: ReadonlySet<string> = new Set(["text", "raw_text", "words", "quote", "name", "full_name", "phone", "label", "summary", "title", "read"]);
+export const SEALED_KEYS: ReadonlySet<string> = new Set([
+  "text", "raw_text", "words", "quote", "said", "transcript", "raw_transcript", "question", "asked_for", "report", "draft", "summary", "title", "read", "label", "instruction", "message", "notes", "description", "history", "complaint",
+  "name", "full_name", "display_name", "surname", "other_names", "first_name", "last_name", "middle_name", "given_name", "unidentified_ref", "phone", "phone_number", "mobile", "email", "address", "next_of_kin", "kin_name", "kin_phone", "relative"
+]);
 // Sealed keys whose words retention keeps, so a retained task still shows its patient label.
 export const RETAIN_KEEPS: ReadonlySet<string> = new Set(["label"]);
 
@@ -105,6 +108,13 @@ function walk(v: unknown, path: string, visit: (key: string, value: unknown, pat
 }
 
 const aadOf = (streamId: string, seq: number, path: string) => `${streamId}|${seq}|${path}`;
+
+// True when a payload holds a non-empty sensitive string that is not sealed, as a journal written before the key does.
+export function hasPlainWords(payload: unknown): boolean {
+  let found = false;
+  walk(payload, "$", (key, value) => { if (!found && SEALED_KEYS.has(key) && typeof value === "string" && value !== "") found = true; return value; });
+  return found;
+}
 
 export function hasSealMarker(payload: unknown): boolean {
   let found = false;

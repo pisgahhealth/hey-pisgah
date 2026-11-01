@@ -9,9 +9,11 @@ export function arrivalRunId(owner: string, now: Date = new Date(), tz = process
 }
 
 // What the clinician is told when a decision's model call failed; the spend cap says so, since saying it again would not help.
+export const SPEND_CAP_NOTE = "The hospital's model spending limit for today is reached, so I stopped deciding new lines and nothing was written from this one. Do it on the record yourself, or ask for the limit to be raised.";
+
 export function modelFailNote(code: string): string {
   return code === "budget_exhausted"
-    ? "The hospital's model spending limit for today is reached, so I stopped deciding new lines and nothing was written from this one. Do it on the record yourself, or ask for the limit to be raised."
+    ? SPEND_CAP_NOTE
     : "I could not decide what that line asked for, so nothing was written from it. Say it again.";
 }
 
@@ -24,14 +26,15 @@ export function wavMs(wav: Uint8Array): number {
   return bytesPerMs > 0 ? Math.round(Math.max(0, wav.byteLength - 44) / bytesPerMs) : 0;
 }
 
-// A transcriber that holds its clip's cost against the day cap before the call and charges the seconds it was billed after.
-export function spendingTranscriber(t: Transcriber, spend: DaySpend | null): Transcriber {
+// A transcriber that holds its clip's cost against the day cap before the call and charges the seconds it was billed after; ledgered leaves the charge to the reading row its caller writes.
+export function spendingTranscriber(t: Transcriber, spend: DaySpend | null, o: { ledgered?: boolean } = {}): Transcriber {
   if (!spend) return t;
   return async (wav, keywords, sessionId) => {
     const hold = spend.reserve("speech", (wavMs(wav) / 3_600_000) * USD_PER_AUDIO_HOUR, { purpose: "transcribe" });
     try {
       const r = await t(wav, keywords, sessionId);
-      hold.settle(r.cost_usd, { speech_ms: r.audio_ms });
+      if (o.ledgered) hold.release();
+      else hold.settle(r.cost_usd, { speech_ms: r.audio_ms });
       return r;
     } catch (e) {
       hold.release();

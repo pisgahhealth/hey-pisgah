@@ -57,12 +57,12 @@ describe("sealed words at rest", () => {
     expect(readStream(root, S).map((e) => e.seq)).toEqual([1, 2, 3, 4, 5]);
   });
 
-  it("an old plaintext journal still replays and keeps its chain once new sealed lines follow", () => {
+  it("an old plaintext journal still replays with a key, and keeps its chain when the migration's writer appends sealed lines", () => {
     configureSealing({ key: null });
     writeTask();
     expect(disk()).toContain(PHRASE);
     configureSealing({ key: KEY });
-    const s = openStream(root, S, { writer: true });
+    const s = openStream(root, S, { writer: true, allowPlain: true });
     s.append("utterance.heard", { line_id: "l-2", text: "a sealed line after plain ones" }, Z);
     s.close();
     const envs = readStream(root, S);
@@ -158,5 +158,35 @@ describe("seal and open for files", () => {
     configureSealing({ key: null });
     expect(seal("[]", "join-pending")).toBe("[]");
     expect(code(() => open(sealed, "join-pending"))).toBe("store_key_missing");
+  });
+});
+
+describe("review fixes", () => {
+  it("seals registration details inside args.instruction and split names, and retention drops them", () => {
+    const s = openStream(root, S, { writer: true });
+    s.append("action.proposed", { action_id: "a-2", args: { instruction: `Register Adaeze Okon, phone ${PHONE}`, surname: "Okon", other_names: "Adaeze Ngozi" } }, Z);
+    expect(disk()).not.toMatch(/Okon|Adaeze|Ngozi|0803/);
+    expect((readStream(root, S)[0]!.payload as { args: { other_names: string } }).args.other_names).toBe("Adaeze Ngozi");
+    expect(s.retain()).toEqual({ fields: 3 });
+    s.close();
+    expect((readStream(root, S)[0]!.payload as { args: { instruction: string } }).args.instruction).toBe("");
+  });
+
+  it("refuses a keyed start over a plaintext journal until the chain-verified migration seals it", () => {
+    configureSealing({ key: null });
+    writeTask();
+    configureSealing({ key: KEY });
+    expect(code(() => openStream(root, S, { writer: true }))).toBe("store_unsealed");
+    expect(readStream(root, S).length).toBe(4);
+    const m = openStream(root, S, { writer: true, allowPlain: true });
+    expect(m.sealPlain()).toEqual({ lines: 3 });
+    m.close();
+    const text = disk();
+    for (const w of [PHRASE, "Adaeze", PHONE]) expect(text).not.toContain(w);
+    expect(text).toContain("store.sealed");
+    expect(verifyChain(openStream(root, S, { keepSealed: true }).sealedRecords())).toEqual({ ok: true });
+    expect((readStream(root, S)[1]!.payload as { text: string }).text).toBe(PHRASE);
+    const w = openStream(root, S, { writer: true });
+    w.close();
   });
 });

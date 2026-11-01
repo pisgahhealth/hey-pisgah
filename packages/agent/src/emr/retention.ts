@@ -8,9 +8,10 @@ export function openObligations(t: Pick<EmrTask, "obligations">): EmrObligation[
 
 const SETTLED = new Set(["completed", "refused", "cancelled", "failed"]);
 
-// Final closure: done, every action settled and every completed one proved, and nothing still open that could need the words.
+// Final closure: done, every line decided, every action settled and every completed one proved, and nothing still open that could need the words.
 export function finallyClosed(t: EmrTask): boolean {
   if (t.state !== "done") return false;
+  if (t.lines.some((l) => !l.decided)) return false;
   if (openObligations(t).length > 0) return false;
   if (t.questions.some((q) => q.answered_by === null)) return false;
   if (t.identities.some((i) => i.state === "open")) return false;
@@ -18,9 +19,9 @@ export function finallyClosed(t: EmrTask): boolean {
   return [...t.actions.values()].every((a) => SETTLED.has(a.state) && !a.unverified && (a.state !== "completed" || a.proof !== null));
 }
 
-// Drops the words of a finally closed task from its journal, keeping line ids, digests, record ids and the patient label; a failure is logged and the words stay sealed.
-export function retainClosed(stream: Stream, t: EmrTask, log?: (line: string) => void): number {
-  if (!finallyClosed(t)) return 0;
+// Drops the words of a finally closed task from its journal, keeping line ids, digests, record ids and the patient label; busy means a decision is still in flight, and a failure is logged with the words left sealed.
+export function retainClosed(stream: Stream, t: EmrTask, log?: (line: string) => void, busy = false): number {
+  if (busy || !finallyClosed(t)) return 0;
   try {
     return stream.retain().fields;
   } catch (e) {
