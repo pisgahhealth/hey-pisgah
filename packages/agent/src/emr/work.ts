@@ -265,3 +265,12 @@ export function doseAgrees(dose: string, second: string): boolean {
   if (!first) return true;
   return dosesIn(second).some((d) => d.n === first.n && (first.unit === null || d.unit === first.unit));
 }
+
+// The clinical reason an admission line states ("admit her for dehydration"), never the instruction words themselves; unstated stays honest.
+export const NO_ADMISSION_REASON = "Not yet stated";
+export function admissionReason(line: string): string {
+  const m = /\b(?:for|because(?: of)?|with|due to|as she has|as he has|since she has|since he has)\s+(.+)$/i.exec(line.replace(/\s+/g, " ").trim());
+  const tail = m?.[1]?.replace(/\b(?:and|then)\s+(?:let'?s|get|put)\b.*$/i, "").replace(/[\s.,;]+$/, "").trim() ?? "";
+  const words = tail.split(" ").filter(Boolean).filter((w) => !/^(?:the|a|an|her|him|now|please|ward|bed|admission|a&e|emergency)$/i.test(w));
+  return words.length >= 1 && !/^(?:a and e|the ward|observation|now)$/i.test(tail) ? tail.slice(0, 300) : NO_ADMISSION_REASON;
+}

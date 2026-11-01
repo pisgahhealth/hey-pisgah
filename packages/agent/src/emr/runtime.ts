@@ -8,7 +8,7 @@ import { primaryClass } from "./classes.js";
 import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
-import { BATCH_KINDS, NEW_RECORD_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
+import { BATCH_KINDS, admissionReason, NEW_RECORD_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
@@ -1059,12 +1059,16 @@ export class EmrRuntime {
 
   private holdForWhom(l: Live, lineId: string, s: SayInput, text: string, spokenAt: string): boolean {
     const t = l.task;
+    // A name said for an arrival not yet named is this patient's own name, never a line about someone else.
+    if (t.unidentified && !patientNames(t).length && identityFrom(text)) return false;
     const others = [...this.live.values()].map((x) => x.task).filter((x) => x !== t && x.owner === s.owner && !CLOSED_TASK.has(x.state) && (x.admission_id || x.patient_id) && (!t.patient_id || x.patient_id !== t.patient_id))
       .map((x) => ({ labels: patientNames(x), task_id: x.task_id, label: x.label }));
     const mine = patientNames(t);
     const hit = others.length ? otherPatientsNamed(text, others, mine) : [];
     if (!hit.length || currentPatientNamed(text, mine)) return false;
-    const choices = [{ label: t.label || "this patient", task_id: t.task_id }, ...hit.map((h) => ({ label: h.label, task_id: h.task_id }))];
+    // Two unnamed arrivals read alike, so each choice carries the name it holds or its arrival time.
+    const shown = (x: EmrTask) => patientNames(x)[0] ?? (x.unidentified ? unidentifiedRef(new Date(x.created_at)) : x.label) ?? "this patient";
+    const choices = [{ label: shown(t), task_id: t.task_id }, ...hit.map((h) => ({ label: shown(this.live.get(h.task_id)!.task), task_id: h.task_id }))];
     const questionId = `q-${shortHash(t.task_id, t.questions.length + 1)}`;
     this.append(l, "line.handled", { line_id: lineId, as: "held_for_whom" });
     this.append(l, "question.asked", { question_id: questionId, line_id: lineId, text: `For ${choices.map((c) => c.label).join(" or for ")}? I have not written it anywhere yet.`.slice(0, 300), whom: { choices } });
@@ -1744,7 +1748,7 @@ export class EmrRuntime {
         const ward = this.wardSaid(c.ward, line);
         if (!ward) return this.ask(l, lineId, `Which ward should I admit to? I know ${Object.values(this.o.port.names?.().wards ?? {}).map((w) => w[0]).join(", ") || "none"}.`);
         if (!c.admission_type || !wordSaid(c.admission_type, line)) return this.ask(l, lineId, "Is this an emergency or a planned admission?");
-        raw = { visit_id: t.visit_id, ...ids, ward, admission_type: c.admission_type, reason: said(c.text) ?? words };
+        raw = { visit_id: t.visit_id, ...ids, ward, admission_type: c.admission_type, reason: admissionReason(line) };
         break;
       }
       case "assign_bed": {
