@@ -52,7 +52,7 @@ describe("EMR serve", () => {
     expect((await fetch(`${s.url}/tasks/say`, { method: "POST", headers: { "content-type": "text/plain", origin: STRIP }, body: JSON.stringify({ owner: OWNER, admissionId: ADM, text: "Chart pulse 99" }) })).status).toBe(415);
     const list = await j(await fetch(`${s.url}/tasks?owner=${OWNER}`, { headers: { origin: STRIP } }));
     expect(list.headers.get("access-control-allow-origin")).toBe(STRIP);
-    expect(list.headers.get("access-control-allow-headers")).toBe("Content-Type");
+    expect(list.headers.get("access-control-allow-headers")).toBe("Content-Type, Authorization");
     expect(list.body).toHaveLength(1);
     const t = list.body[0];
     expect(Object.keys(t)).toEqual(expect.arrayContaining(["task_id", "goal", "state", "actions", "questions", "transcript"]));
@@ -101,7 +101,7 @@ describe("EMR serve", () => {
     const r = await j(await fetch(`${s.url}/tasks/say-audio`, { method: "POST", body: form, headers: { origin: STRIP } }));
     expect(r.status).toBe(202);
     expect(r.headers.get("access-control-allow-origin")).toBe(STRIP);
-    expect(r.headers.get("access-control-allow-headers")).toBe("Content-Type");
+    expect(r.headers.get("access-control-allow-headers")).toBe("Content-Type, Authorization");
     const pre = await fetch(`${s.url}/tasks/say-audio`, { method: "OPTIONS", headers: { origin: STRIP, "access-control-request-method": "POST" } });
     expect([pre.status, pre.headers.get("access-control-allow-origin")]).toEqual([204, STRIP]);
     expect(r.body).toMatchObject({ transcript: "Chart pulse 84", audio_ms: 1000 });

@@ -58,6 +58,17 @@ HEY_PISGAH_DOOR_PROFILE=<profile> HEY_PISGAH_MODE=live npx tsx packages/pisgah-a
 
 The sandbox integration test runs only with `SANDBOX=1` and the same profile.
 
+Every call except `/health` and the wake spotter's files needs `Authorization: Bearer <strip token>`, a token the hospital's EMR signs for the signed-in owner. Without a key the serve will not start unless the development switch is on.
+
+| Variable | What |
+| --- | --- |
+| `HEY_PISGAH_STRIP_KEY` | base64url key of at least 32 bytes, the same one the EMR signs with |
+| `HEY_PISGAH_STRIP_HOSPITAL` | the hospital id the tokens must name |
+| `HEY_PISGAH_STRIP_OPEN=1` | development only: no key, any local caller may act as any owner, `/health` says so |
+| `HEY_PISGAH_STRIP_ORIGIN` | the EMR origin allowed to call, `http://localhost:3311` by default |
+| `HEY_PISGAH_SERVE_HOSTS` | addresses to bind, comma separated, loopback by default; off loopback needs the key |
+| `HEY_PISGAH_SERVE_HOSTNAMES` | host names answered beside loopback, comma separated |
+
 With `HEY_PISGAH_RECORDINGS=<dir>`, serve keeps model replies, transcripts and the patient context there, so `talk.run.ts --replay` can play the same run again without the network.
 
 ## The journey

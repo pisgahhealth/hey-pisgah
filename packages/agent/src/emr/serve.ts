@@ -13,6 +13,7 @@ import { ListenError, ListenSessions, parallelReadings, type ListenOptions, type
 import { decodeWav, parseWav } from "@hey-pisgah/voice";
 import { printWav, type Embedder, type LivenessMarker } from "./speaker.js";
 import { Heartbeats } from "./presence.js";
+import { bearerOf, verifyStripToken, type StripAuth } from "./strip-token.js";
 import { EmrId, EmrPortError, type EmrPort, type EmrTarget } from "./port.js";
 import { gateArrival } from "./gate.js";
 import { SCREEN_PAGES, type ScreenPage } from "./screens.js";
@@ -58,8 +59,12 @@ export type EmrServeOptions = {
   // How long a frames stream waits for its next part before it is ended; FRAME_IDLE_MS unless a test shortens it.
   framesIdleMs?: number;
   listenPort?: number; hosts?: readonly string[];
+  // Host names this serve answers to beside loopback, when the hospital reaches it by name.
+  hostNames?: readonly string[];
   // The one browser origin allowed to call serve, the EMR page that hosts the strip.
   allowOrigin?: string;
+  // The strip token check; open, today's local behaviour, unless the launcher gives a key.
+  strip?: StripAuth;
   transcribe?: Transcriber;
   // Continuous listening settings for POST /tasks/listen.
   listen?: Omit<ListenOptions, "transcribe">;
@@ -264,6 +269,14 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   rt.start();
   const transcribe = streamAsr ? streamAsr.transcribe : several ? parallelReadings(metaAsr, o.vtReadings!) : metaAsr;
   const origin = o.allowOrigin ?? "http://localhost:3311";
+  const strip: StripAuth = o.strip ?? { mode: "open" };
+  // The owner each request's strip token names; every route that names an owner or a task checks it here.
+  const callers = new WeakMap<IncomingMessage, string>();
+  const own = (req: IncomingMessage, owner: string): string => {
+    const caller = callers.get(req);
+    if (caller !== undefined && caller !== owner) throw new HttpError(401, "this strip token is for another owner");
+    return owner;
+  };
   // Each patient's listening session reports its utterances' statuses under the strip's own session id, and is present only while that strip session beats.
   const seqBase = new Map<string, number>();
   // A line waiting for its number keeps its words beside the tracked patient (serve/tracking), so a restart finishes it; the file holds no line once it is joined or delivered.
@@ -429,6 +442,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       ...(field(form, "presence") ? { presence: jsonField(field(form, "presence")!) } : {}),
       ...(field(form, "admissionId") ? { admissionId: field(form, "admissionId") } : {}), ...(field(form, "patientId") ? { patientId: field(form, "patientId") } : {})
     });
+    own(req, b.owner);
     const page = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
     // The words belong to the moment they were captured, which the strip stamps; a missing or implausible stamp falls back to arrival.
     const at = b.captured_at !== undefined && b.captured_at <= arrived && b.captured_at >= arrived - 10 * 60_000 ? b.captured_at : arrived;
@@ -516,6 +530,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   };
   const listenFrames = async (req: IncomingMessage, q: URLSearchParams): Promise<[number, unknown]> => {
     const b = parse(FramesMeta, { owner: q.get("owner") ?? undefined, session_id: q.get("session_id") ?? undefined, rate: q.get("rate") ?? undefined, stream: q.get("stream") ?? undefined, part: q.get("part") ?? undefined, ...(q.get("last") ? { last: q.get("last") } : {}), ...(q.get("t") ? { t: q.get("t") } : {}), ...(q.get("admissionId") ? { admissionId: q.get("admissionId") } : {}), ...(q.get("patientId") ? { patientId: q.get("patientId") } : {}) });
+    own(req, b.owner);
     const body = await raw(req, FRAME_PART_LIMIT);
     if (body.length % 2) throw new HttpError(400, "audio: a part carries whole 16-bit samples");
     const key = `${b.session_id}.f${b.stream}`;
@@ -595,6 +610,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const q = new URL(req.url ?? "/", "http://serve").searchParams;
     if (q.has("part")) return listenFrames(req, q);
     const b = parse(StreamMeta, { owner: q.get("owner") ?? undefined, session_id: q.get("session_id") ?? undefined, rate: q.get("rate") ?? undefined, ...(q.get("admissionId") ? { admissionId: q.get("admissionId") } : {}), ...(q.get("patientId") ? { patientId: q.get("patientId") } : {}) });
+    own(req, b.owner);
     const page = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
     // The stream keeps the patient it opened with; moving to another patient opens another stream.
     const opened = Date.now();
@@ -638,6 +654,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const b = parse(AudioMeta, {
       owner: field(form, "owner"), ...(field(form, "admissionId") ? { admissionId: field(form, "admissionId") } : {}), ...(field(form, "patientId") ? { patientId: field(form, "patientId") } : {})
     });
+    own(req, b.owner);
     const arrived = Date.now();
     const target = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
     const ctx = await rt.port.resolve(target, { owner: b.owner, evidence: "transcript:audio-context", spoken_at: new Date(arrived).toISOString() });
@@ -670,24 +687,27 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const url = new URL(req.url ?? "/", "http://serve");
     const parts = url.pathname.split("/").filter(Boolean);
     const m = req.method ?? "GET";
-    if (m === "GET" && url.pathname === "/health") return [200, { ok: true, mode: client.mode, tasks: rt.taskIds().length, refused: rt.port.refusedCount(), kws: !!o.kwsDir, speaker_model: !!o.embed, ears: footprint, presence: o.listen?.presence ?? "observed" }];
+    if (m === "GET" && url.pathname === "/health") return [200, { ok: true, mode: client.mode, tasks: rt.taskIds().length, refused: rt.port.refusedCount(), kws: !!o.kwsDir, speaker_model: !!o.embed, ears: footprint, presence: o.listen?.presence ?? "observed", strip: strip.mode === "token" ? "token" : "open: development only, any local caller may act as any owner" }];
     if (m === "POST" && url.pathname === "/wake") {
       const b = parse(Wake, await json(req));
+      own(req, b.owner);
       mkdirSync(dirname(wakeLog), { recursive: true });
       appendFileSync(wakeLog, `${JSON.stringify({ at: new Date().toISOString(), ...b })}\n`);
       return [200, { logged: true }];
     }
-    if (m === "GET" && url.pathname === "/wake") return [200, wakeSummary(wakeLog, url.searchParams.get("owner"))];
+    // With a token the summary is the caller's own, never every owner's.
+    if (m === "GET" && url.pathname === "/wake") { const caller = callers.get(req); return [200, wakeSummary(wakeLog, caller !== undefined ? own(req, url.searchParams.get("owner") ?? caller) : url.searchParams.get("owner"))]; }
     if (m === "POST" && url.pathname === "/voice/embed") return embedPassage(req);
     if (parts[0] === "preferences") {
       if (!prefs) throw new HttpError(404, "preference memory is off");
       // What one clinician may see: their own preferences and shared ward or hospital rules, each with its source and scope.
       if (parts.length === 1 && m === "GET") {
-        const owner = parse(Owner, url.searchParams.get("owner") ?? "");
+        const owner = own(req, parse(Owner, url.searchParams.get("owner") ?? ""));
         return [200, prefs.visibleTo(owner).map((p) => ({ pref_id: p.pref_id, state: p.state, text: describePref(p), scope: describeScope(p.scope), source: describeSource(p.source, owner), field: p.field, item_kind: p.item_kind, value: p.value, decided: p.decided }))];
       }
       if (parts.length === 2 && parts[1] === "external" && m === "POST") {
         const b = parse(External, await json(req));
+        own(req, b.owner);
         try {
           const p = prefs.external({ by: b.owner, text: b.text, scope: b.scope, ward: b.ward ?? null });
           return [201, { pref_id: p.pref_id, text: describePref(p), scope: describeScope(p.scope), source: describeSource(p.source, b.owner) }];
@@ -699,10 +719,11 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     if (parts.length === 1 && m === "GET") {
       const owner = url.searchParams.get("owner");
       if (!owner) throw new HttpError(400, "owner is required");
-      return [200, rt.views(parse(Owner, owner))];
+      return [200, rt.views(own(req, parse(Owner, owner)))];
     }
     if (parts.length === 2 && parts[1] === "say" && m === "POST") {
       const b = parse(Say, await json(req));
+      own(req, b.owner);
       const page = { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) };
       // A typed line with no patient open goes to the patient the agent is with, and opens an arrival on the emergency phrase.
       const target = hasTarget(b) ? page : current(b.owner);
@@ -725,22 +746,24 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     // Opening a patient's page starts the owner's task with no words, so the agent watches that record for them.
     if (parts.length === 2 && parts[1] === "watch" && m === "POST") {
       const b = parse(Open, await json(req));
+      own(req, b.owner);
       return [200, await rt.open(b.owner, { ...(b.admissionId ? { admission_id: b.admissionId } : {}), ...(b.patientId ? { patient_id: b.patientId } : {}) })];
     }
     if (parts.length === 2 && parts[1] === "say-audio" && m === "POST") return sayAudio(req);
     // "hey Pisgah, emergency" spotted on the device: an unnamed arrival with no patient open, its line the evidence.
     if (parts.length === 2 && parts[1] === "emergency" && m === "POST") {
       const b = parse(Emergency, await json(req));
+      own(req, b.owner);
       if (b.press) return [202, await openArrival(b.owner, { text: EMERGENCY_PRESS, spoken_at: b.spokenAt, source: "text", wake: { ...(b.wake ?? {}), press: true }, press: true })];
       return [202, await openArrival(b.owner, { text: b.text, spoken_at: b.spokenAt, source: "audio", ...(b.wake ? { wake: b.wake } : {}) })];
     }
     if (parts.length === 2 && parts[1] === "tracking" && m === "GET") {
-      const owner = parse(Owner, url.searchParams.get("owner") ?? "");
+      const owner = own(req, parse(Owner, url.searchParams.get("owner") ?? ""));
       return [200, { owner, target: current(owner), ...(pending.has(owner) ? { pending: pending.get(owner)!.task_id } : {}) }];
     }
     // Each utterance's status in one listening session: accepted, processing, failed or completed, with the error when it failed.
     if (parts.length === 2 && parts[1] === "listen" && m === "GET") {
-      const owner = parse(Owner, url.searchParams.get("owner") ?? "");
+      const owner = own(req, parse(Owner, url.searchParams.get("owner") ?? ""));
       const session = parse(SessionId, url.searchParams.get("session_id") ?? "");
       return [200, { session_id: session, utterances: [...(statuses.get(`${owner}\u0000${session}`)?.values() ?? [])].sort((x, y) => x.seq - y.seq) }];
     }
@@ -748,17 +771,21 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     // D30 presence: a strip session takes a key, then beats with it while its tab is visible and its microphone is live.
     if (parts.length === 3 && parts[1] === "presence" && parts[2] === "open" && m === "POST") {
       const b = parse(PresenceOpen, await json(req));
+      own(req, b.owner);
       const opened = heartbeats.open(b.owner, b.session_id);
       return opened ? [200, { session_id: b.session_id, ...opened }] : [409, { session_id: b.session_id, error: "still_beating" }];
     }
     if (parts.length === 3 && parts[1] === "presence" && parts[2] === "beat" && m === "POST") {
       const b = parse(PresenceBeat, await json(req));
+      own(req, b.owner);
       const r = heartbeats.beat(b);
       return r.ok ? [200, { session_id: b.session_id, present: r.present, ...(r.reason ? { reason: r.reason } : {}) }] : [409, { session_id: b.session_id, error: r.reason, reopen: r.reason === "unknown_session" }];
     }
     if (parts.length === 3 && parts[1] === "listen" && parts[2] === "stream" && m === "POST") return listenStream(req);
     const id = parts[1] ?? "";
     const task = rt.task(id);
+    // A task is read or answered only on its owner's token.
+    if (task) own(req, task.owner);
     if (parts.length === 2 && m === "GET") { if (!task) throw new HttpError(404, "unknown task"); return [200, rt.view(id)]; }
     if (parts.length === 3 && parts[2] === "say" && m === "POST") {
       const b = parse(FollowUp, await json(req));
@@ -799,11 +826,11 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
 
   const handler = (req: IncomingMessage, res: ServerResponse) => {
     // One fixed origin on every answer, so a browser on any other page is refused by its own CORS check.
-    const cors: Record<string, string> = { "access-control-allow-origin": origin, "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "Content-Type", "access-control-max-age": "600" };
+    const cors: Record<string, string> = { "access-control-allow-origin": origin, "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "Content-Type, Authorization", "access-control-max-age": "600" };
     // CORS only hides answers, so a request from another page, or a host name that is not this loopback service, is refused before it runs.
     const from = req.headers.origin;
     if (from !== undefined && from !== origin) { send(res, 403, { error: "this origin may not call the agent service" }, cors); return; }
-    if (!loopbackHost(req.headers.host)) { send(res, 421, { error: "this host name does not serve the agent" }, cors); return; }
+    if (!loopbackHost(req.headers.host, o.hostNames)) { send(res, 421, { error: "this host name does not serve the agent" }, cors); return; }
     if (req.method === "POST" && JSON_ROUTES.test(new URL(req.url ?? "/", "http://serve").pathname) && !(req.headers["content-type"] ?? "").startsWith("application/json")) { send(res, 415, { error: "send application/json" }, cors); return; }
     if (req.method === "OPTIONS") { res.writeHead(204, cors); res.end(); return; }
     const kws = /^\/kws\/([^/?]+)/.exec(req.url ?? "");
@@ -814,6 +841,12 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       res.writeHead(200, { ...cors, "content-type": KWS_TYPES[name.slice(name.lastIndexOf("."))] ?? "application/octet-stream", "cache-control": "max-age=86400" });
       res.end(readFileSync(file));
       return;
+    }
+    // Health and the spotter's files carry no owner's words; every other call needs the strip token in token mode.
+    if (strip.mode === "token" && new URL(req.url ?? "/", "http://serve").pathname !== "/health") {
+      const v = verifyStripToken(strip.key, strip.hospital, bearerOf(req.headers.authorization), Date.now());
+      if (!v.ok) { send(res, 401, { error: "a current strip token is required", reason: v.reason }, cors); return; }
+      callers.set(req, v.owner);
     }
     route(req).then(([status, payload]) => send(res, status, payload, cors)).catch((e: unknown) => {
       const status = e instanceof HttpError ? e.status : e instanceof EmrPortError ? (e.status && e.status < 500 ? 422 : 502) : 500;
@@ -852,8 +885,9 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
 // The routes that take a JSON body; requiring the JSON type makes a browser preflight them.
 const JSON_ROUTES = /^\/tasks\/(?:say|watch|[^/]+\/(?:say|resume|interrupt|actions\/[^/]+\/shown))$/;
 // Only a loopback host name reaches the service, which stops a rebinding page from talking to it under its own name.
-export function loopbackHost(host: string | undefined): boolean {
+export function loopbackHost(host: string | undefined, names: readonly string[] = []): boolean {
   if (!host) return true;
+  if (names.some((n) => host.toLowerCase() === n.toLowerCase() || host.toLowerCase().startsWith(`${n.toLowerCase()}:`))) return true;
   return /^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?$/i.test(host);
 }
 
