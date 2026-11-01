@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { decodeWav, encodeWav } from "@hey-pisgah/voice";
+import { ModelPool, earWorkers } from "./workers/pool.js";
 
 // The local speaker model R1 chose: TitaNet-small through sherpa-onnx, 192 numbers per segment, no audio kept.
 export const SPEAKER_MODEL = "nemo_en_titanet_small" as const;
@@ -139,30 +140,40 @@ export function withDoorAudio(inner: Embedder): Embedder {
 // A whole recording's voiceprint, in windows when it runs past the cap.
 export const printWav = (embed: Embedder, wav: Uint8Array): Promise<Voiceprint | null> => { const { samples, sampleRate } = decodeWav(wav); return printLine(embed, matchWindows([samples], sampleRate), sampleRate); };
 
-// Loads sherpa-onnx-node in this process from the given folder or the normal module path; null when it is not installed or the model is missing.
-export function sherpaEmbedder(o: { modelPath: string; sherpaDir?: string | undefined; threads?: number }): Embedder | null {
+// Loads sherpa-onnx-node from the given folder or the normal module path, in worker threads unless workers is 0; null when it is not installed or the model is missing.
+export function sherpaEmbedder(o: { modelPath: string; sherpaDir?: string | undefined; threads?: number; workers?: number }): Embedder | null {
   if (!existsSync(o.modelPath)) return null;
-  let mod: SherpaModule;
-  try {
-    const req = createRequire(o.sherpaDir ? join(o.sherpaDir, "package.json") : import.meta.url);
-    mod = req("sherpa-onnx-node") as SherpaModule;
-  } catch {
-    return null;
+  const from = o.sherpaDir ? join(o.sherpaDir, "package.json") : import.meta.url;
+  const config = { model: o.modelPath, numThreads: o.threads ?? 1, provider: "cpu", debug: 0 };
+  const size = earWorkers("speaker", o.workers);
+  let compute: (x: Float32Array) => Promise<{ e: Float32Array; ms: number } | null>;
+  if (size > 0) {
+    let pool: ModelPool;
+    try { pool = new ModelPool("speaker", { from, config }, size); } catch { return null; }
+    if (pool.dim !== VOICEPRINT_DIM) { pool.close(); return null; }
+    compute = (x) => pool.job({ op: "embed", x }, [x.buffer as ArrayBuffer]);
+  } else {
+    let mod: SherpaModule;
+    try { mod = createRequire(from)("sherpa-onnx-node") as SherpaModule; } catch { return null; }
+    const ex = new mod.SpeakerEmbeddingExtractor(config);
+    if (ex.dim !== VOICEPRINT_DIM) return null;
+    compute = async (x) => {
+      const t0 = performance.now();
+      const st = ex.createStream();
+      st.acceptWaveform({ sampleRate: 16_000, samples: x });
+      st.inputFinished();
+      if (!ex.isReady(st)) return null;
+      return { e: ex.compute(st), ms: performance.now() - t0 };
+    };
   }
-  const ex = new mod.SpeakerEmbeddingExtractor({ model: o.modelPath, numThreads: o.threads ?? 1, provider: "cpu", debug: 0 });
-  if (ex.dim !== VOICEPRINT_DIM) return null;
   return async (wav) => {
     const { samples, sampleRate } = decodeWav(wav);
     // Under half a second of audio carries too little voice to match.
     if (samples.length < sampleRate / 2) return null;
-    const t0 = performance.now();
-    const st = ex.createStream();
-    st.acceptWaveform({ sampleRate: 16_000, samples: to16k(samples, sampleRate) });
-    st.inputFinished();
-    if (!ex.isReady(st)) return null;
-    const e = ex.compute(st);
-    const norm = Math.hypot(...e) || 1;
-    return { vector: Array.from(e, (v) => Math.round((v / norm) * 1e5) / 1e5), ms: Math.round((performance.now() - t0) * 10) / 10, model: SPEAKER_MODEL };
+    const r = await compute(to16k(samples, sampleRate));
+    if (!r) return null;
+    const norm = Math.hypot(...r.e) || 1;
+    return { vector: Array.from(r.e, (v) => Math.round((v / norm) * 1e5) / 1e5), ms: Math.round(r.ms * 10) / 10, model: SPEAKER_MODEL };
   };
 }
 

@@ -5,6 +5,7 @@ import { ASR_MODEL, decodeWav, type FinalTranscript } from "@hey-pisgah/voice";
 import type { EarReading, SecondEar } from "./ears.js";
 import type { Transcriber } from "./listen.js";
 import { to16k } from "./speaker.js";
+import { ModelPool, earWorkers } from "./workers/pool.js";
 
 // The offline second ear: NeMo Parakeet TDT 0.6B v2, int8, through sherpa-onnx in this process (CC-BY-4.0).
 export const PARAKEET_MODEL = "nemo-parakeet-tdt-0.6b-v2-int8" as const;
@@ -57,23 +58,39 @@ function transducerFiles(dir: string): { encoder: string; decoder: string; joine
 const wave16k = (wav: Uint8Array): Float32Array => { const { samples, sampleRate } = decodeWav(wav); return to16k(samples, sampleRate); };
 
 // Parakeet as the second reading of a clip; null when the library or the model files are missing.
-export function parakeetEar(o: { modelDir: string; sherpaDir?: string | undefined; threads?: number; ledger?: ReadingLedger }): SecondEar | null {
+// Where a worker loads sherpa-onnx-node from: the same place this thread would.
+const sherpaFrom = (sherpaDir?: string) => (sherpaDir ? join(sherpaDir, "package.json") : import.meta.url);
+// A model that cannot load in a worker is missing, as it is in this thread.
+const poolOf = (kind: "online" | "offline", sherpaDir: string | undefined, config: unknown, size: number, flushSamples?: number): ModelPool | null => {
+  try { return new ModelPool(kind, { from: sherpaFrom(sherpaDir), config, ...(flushSamples ? { flushSamples } : {}) }, size); } catch { return null; }
+};
+
+// Parakeet as the second reading of a clip, in worker threads unless workers is 0; null when the library or the model files are missing.
+export function parakeetEar(o: { modelDir: string; sherpaDir?: string | undefined; threads?: number; ledger?: ReadingLedger; workers?: number }): SecondEar | null {
   const files = transducerFiles(o.modelDir);
-  const sherpa = files ? loadSherpa(o.sherpaDir) : null;
-  if (!files || !sherpa) return null;
-  const rec = new sherpa.OfflineRecognizer({
+  if (!files) return null;
+  const config = {
     featConfig: { sampleRate: 16_000, featureDim: 80 },
     modelConfig: { transducer: { encoder: files.encoder, decoder: files.decoder, joiner: files.joiner }, tokens: files.tokens, numThreads: o.threads ?? 2, provider: "cpu", debug: 0, modelType: "nemo_transducer" }
-  });
+  };
+  const size = earWorkers("offline", o.workers);
+  let decode: (x: Float32Array) => Promise<string>;
+  if (size > 0) {
+    const pool = poolOf("offline", o.sherpaDir, config, size);
+    if (!pool) return null;
+    decode = (x) => pool.job<string>({ op: "decode", x }, [x.buffer as ArrayBuffer]);
+  } else {
+    const sherpa = loadSherpa(o.sherpaDir);
+    if (!sherpa) return null;
+    const rec = new sherpa.OfflineRecognizer(config);
+    decode = async (x) => { const st = rec.createStream(); st.acceptWaveform({ sampleRate: 16_000, samples: x }); await rec.decodeAsync(st); return rec.getResult(st).text; };
+  }
   const model = `local:${PARAKEET_MODEL}`;
   return async (wav, meta) => {
     const t0 = performance.now();
     let text = "";
     try {
-      const st = rec.createStream();
-      st.acceptWaveform({ sampleRate: 16_000, samples: wave16k(wav) });
-      await rec.decodeAsync(st);
-      text = rec.getResult(st).text.trim();
+      text = (await decode(wave16k(wav))).trim();
     } catch (e) {
       o.ledger?.(meta.run_id, { provider: "local", model, purpose: "verify_number", latency_ms: Math.round(performance.now() - t0), cost_usd: 0, task_id: meta.task_id, line_id: meta.line_id, error: "decode_failed" });
       throw e;
@@ -114,35 +131,58 @@ export function allEars(ears: readonly SecondEar[]): SecondEar {
 const TENS_TO = /\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)[\s-]+(?:to|too)\b(?=\s*(?:$|[.,;:!?]|over\b|point\b|and\b))/gi;
 export const streamRepair = (raw: string): string => raw.replace(TENS_TO, "$1 two");
 
-// One utterance being decoded as it is spoken; finish() flushes the model and spends the decoder.
-export type StreamDecoder = { accept(samples16k: Float32Array): void; text(): string; finish(): string };
+// One utterance being decoded as it is spoken; finish() flushes the model and spends the decoder, close() drops one that is not finished.
+// A decoder in a worker answers text() and finish() later, in the order they were asked.
+export type StreamDecoder = { accept(samples16k: Float32Array): void; text(): string | Promise<string>; finish(): string | Promise<string>; close?(): void };
 export type StreamAsr = { model: string; open(): StreamDecoder; transcribe: Transcriber };
 
-// The streaming recogniser; null when the library or the model files are missing.
-export function sherpaStreamAsr(o: { modelDir: string; sherpaDir?: string | undefined; threads?: number }): StreamAsr | null {
+// The streaming recogniser, in worker threads unless workers is 0; null when the library or the model files are missing.
+export function sherpaStreamAsr(o: { modelDir: string; sherpaDir?: string | undefined; threads?: number; workers?: number }): StreamAsr | null {
   const files = transducerFiles(o.modelDir);
-  const sherpa = files ? loadSherpa(o.sherpaDir) : null;
-  if (!files || !sherpa) return null;
-  const rec = new sherpa.OnlineRecognizer({
+  if (!files) return null;
+  const config = {
     featConfig: { sampleRate: 16_000, featureDim: 80 },
     modelConfig: { transducer: { encoder: files.encoder, decoder: files.decoder, joiner: files.joiner }, tokens: files.tokens, numThreads: o.threads ?? 2, provider: "cpu", debug: 0 },
     enableEndpoint: false
-  });
-  const open = (): StreamDecoder => {
-    const st = rec.createStream();
-    const run = () => { while (rec.isReady(st)) rec.decode(st); };
-    return {
-      accept: (x) => { st.acceptWaveform({ sampleRate: 16_000, samples: x }); run(); },
-      text: () => rec.getResult(st).text.trim(),
-      finish: () => { st.acceptWaveform({ sampleRate: 16_000, samples: new Float32Array((16_000 * STREAM_FLUSH_MS) / 1000) }); run(); return rec.getResult(st).text.trim(); }
-    };
   };
+  const flush = (16_000 * STREAM_FLUSH_MS) / 1000;
+  const size = earWorkers("online", o.workers);
+  let open: () => StreamDecoder;
+  if (size > 0) {
+    const pool = poolOf("online", o.sherpaDir, config, size, flush);
+    if (!pool) return null;
+    open = () => {
+      const { slot, s } = pool.stream();
+      let done = false;
+      const end = () => { if (!done) { done = true; pool.release(slot); } };
+      pool.send(slot, { op: "open", s });
+      return {
+        accept: (x) => pool.send(slot, { op: "accept", s, x }),
+        text: () => pool.ask<string>(slot, { op: "text", s }),
+        finish: () => { end(); return pool.ask<string>(slot, { op: "finish", s }); },
+        close: () => { if (!done) { end(); pool.send(slot, { op: "close", s }); } }
+      };
+    };
+  } else {
+    const sherpa = loadSherpa(o.sherpaDir);
+    if (!sherpa) return null;
+    const rec = new sherpa.OnlineRecognizer(config);
+    open = () => {
+      const st = rec.createStream();
+      const run = () => { while (rec.isReady(st)) rec.decode(st); };
+      return {
+        accept: (x) => { st.acceptWaveform({ sampleRate: 16_000, samples: x }); run(); },
+        text: () => rec.getResult(st).text.trim(),
+        finish: () => { st.acceptWaveform({ sampleRate: 16_000, samples: new Float32Array(flush) }); run(); return rec.getResult(st).text.trim(); }
+      };
+    };
+  }
   // A whole chunk from the strip, decoded at once: the chunk path's words without a network call.
   const transcribe: Transcriber = async (wav, _keywords, sessionId): Promise<FinalTranscript> => {
     const x = wave16k(wav);
     const d = open();
     d.accept(x);
-    return { final: true, text: streamRepair(d.finish()), audio_ms: Math.round((x.length / 16_000) * 1000), session_id: sessionId, cost_usd: 0 };
+    return { final: true, text: streamRepair(await d.finish()), audio_ms: Math.round((x.length / 16_000) * 1000), session_id: sessionId, cost_usd: 0 };
   };
   return { model: `local:${STREAM_MODEL}`, open, transcribe };
 }

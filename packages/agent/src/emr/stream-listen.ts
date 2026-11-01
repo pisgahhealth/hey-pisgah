@@ -19,6 +19,8 @@ type Live = {
   // capAt is when the end of the last frame heard was captured; startAt when the stretch being said began.
   capAt: number; startAt: number;
   pre: Float32Array[]; buf: Float32Array[]; speech: boolean; quiet_ms: number; speech_ms: number; partial: string; work: Promise<unknown>; errors: string[]; opened: number; fed: number;
+  // The decoder's answers taken in the order the frames were heard, so a decoder in a worker hands the listen rules the same words in the same order.
+  heard: Promise<void>;
 };
 
 const rms = (x: Float32Array) => { let s = 0; for (const v of x) s += v * v; return Math.sqrt(s / Math.max(1, x.length)); };
@@ -36,7 +38,7 @@ export class StreamListener {
     const sid = c.listen_sid ?? c.session_id;
     this.live.set(c.session_id, {
       owner: c.owner, target: c.target, sid, sids: new Set([sid]), stretch: null, rate: c.rate, frame: Math.round((c.rate * FRAME_MS) / 1000), dec: this.asr.open(), carry: new Float32Array(0), capAt: this.o.now?.() ?? Date.now(), startAt: 0,
-      pre: [], buf: [], speech: false, quiet_ms: 0, speech_ms: 0, partial: "", work: Promise.resolve(), errors: [], opened: this.o.now?.() ?? Date.now(), fed: 0
+      pre: [], buf: [], speech: false, quiet_ms: 0, speech_ms: 0, partial: "", work: Promise.resolve(), errors: [], opened: this.o.now?.() ?? Date.now(), fed: 0, heard: Promise.resolve()
     });
   }
 
@@ -66,6 +68,8 @@ export class StreamListener {
     const keptUntil = o.dropOpen && l.speech ? l.startAt : l.capAt;
     if (l.speech && !o.dropOpen) this.cut(sessionId, l);
     this.live.delete(sessionId);
+    l.dec.close?.();
+    await l.heard;
     await l.work;
     for (const sid of l.sids) await this.listen.flush(sid);
     const utterances: ListenUtterance[] = [], errors = [...l.errors];
@@ -83,7 +87,12 @@ export class StreamListener {
   }
 
   // Waits for every stretch handed on so far.
-  async drain(sessionId: string): Promise<void> { await this.live.get(sessionId)?.work; }
+  async drain(sessionId: string): Promise<void> { const l = this.live.get(sessionId); if (!l) return; await l.heard; await l.work; }
+
+  // One step after the decoder's answers so far; a failed answer is kept as an error and the next step still runs.
+  private then(l: Live, step: () => Promise<void> | void): void {
+    l.heard = l.heard.then(step).catch((e: unknown) => { l.errors.push(e instanceof Error ? e.message.slice(0, 200) : "decode failed"); });
+  }
 
   private frame(sessionId: string, l: Live, x: Float32Array): void {
     const quiet = rms(x) < SILENCE_RMS;
@@ -109,23 +118,28 @@ export class StreamListener {
     // While a line that ended on a number waits, the next words are looked at as they are said, after every stretch before them.
     const said = l.dec.text();
     const sid = l.stretch?.sid ?? l.sid;
-    if (said !== l.partial) { l.partial = said; l.work = l.work.then(() => this.listen.nextWords(sid, said)); }
+    this.then(l, async () => { const w = await said; if (w !== l.partial) { l.partial = w; l.work = l.work.then(() => this.listen.nextWords(sid, w)); } });
     if (l.quiet_ms >= (this.o.endpointMs ?? STREAM_ENDPOINT_MS) || l.speech_ms >= STREAM_MAX_MS) this.cut(sessionId, l);
   }
 
   // Ends one stretch: the model gives its words, a fresh decoder takes the next audio, and the stretch joins the listen chain.
   private cut(sessionId: string, l: Live): void {
-    const raw = streamRepair(l.dec.finish());
+    const words = l.dec.finish();
     const samples = concat(l.buf);
-    const now = this.o.now?.() ?? Date.now();
-    // Counted from when the end of the speech was captured, so a late upload is never measured as faster than it was.
-    const trailing = Math.max(l.quiet_ms, now - (l.capAt - l.quiet_ms));
+    const quiet = l.quiet_ms, endAt = l.capAt - l.quiet_ms;
     const { target, sid } = l.stretch ?? { target: l.target, sid: l.sid };
     l.dec = this.asr.open();
-    l.speech = false; l.buf = []; l.quiet_ms = 0; l.speech_ms = 0; l.partial = ""; l.stretch = null;
-    if (!raw) return;
-    l.work = l.work.then(() => this.listen.segment({ owner: l.owner, target, session_id: sid, samples, rate: l.rate, raw, trailing_ms: trailing, arrived: now, heard_at: now }))
-      .then((us) => { if (us.length) this.o.onHeard?.(sid, us); })
-      .catch((e: unknown) => { l.errors.push(e instanceof Error ? e.message.slice(0, 200) : "segment failed"); });
+    l.speech = false; l.buf = []; l.quiet_ms = 0; l.speech_ms = 0; l.stretch = null;
+    this.then(l, async () => {
+      const raw = streamRepair(await words);
+      l.partial = "";
+      // Counted from when the end of the speech was captured to when its words were ready, so a late upload is never measured as faster than it was.
+      const now = this.o.now?.() ?? Date.now();
+      const trailing = Math.max(quiet, now - endAt);
+      if (!raw) return;
+      l.work = l.work.then(() => this.listen.segment({ owner: l.owner, target, session_id: sid, samples, rate: l.rate, raw, trailing_ms: trailing, arrived: now, heard_at: now }))
+        .then((us) => { if (us.length) this.o.onHeard?.(sid, us); })
+        .catch((e: unknown) => { l.errors.push(e instanceof Error ? e.message.slice(0, 200) : "segment failed"); });
+    });
   }
 }
