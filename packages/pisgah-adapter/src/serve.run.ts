@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { languageBiasFrom, nodeSocket, recordingSocket, replaySocket } from "@hey-pisgah/voice";
 import { DEFAULT_INTENT_ROUTE, GATE_SETTINGS, KEPT_LEVERS, asrSwitch, earSwitch, keepingContext, leversFrom, localDirs, recordingTranscriber, sherpaEmbedder, startEmrServe, voiceTranscriber, voiceprintAt, withDoorAudio } from "@hey-pisgah/agent";
 import { loadKeys, secondSparkRoute } from "@hey-pisgah/model";
+import { serveConfigFromEnv } from "@hey-pisgah/agent";
 import { loadProfile, staffHintsOf } from "./profile.js";
 import { PisgahPort } from "./port.js";
 import { adoptedForEmr } from "./versions.js";
@@ -71,7 +72,9 @@ async function main(): Promise<void> {
   const replayFile = process.env["HEY_PISGAH_REALTIME_REPLAY"];
   const realtimeSocket = replayFile ? replaySocket(replayFile) : rec && asr === "meta-stream" ? recordingSocket(nodeSocket, join(rec, "realtime.jsonl")) : undefined;
   const s = await startEmrServe({
-    storeRoot: store, port: rec ? keepingContext(port, join(rec, "context.json")) : port, recordingsDir: rec ? join(rec, "model") : join(store, "..", "emr-recordings"), hosts: ["127.0.0.1", "::1"],
+    storeRoot: store, port: rec ? keepingContext(port, join(rec, "context.json")) : port, recordingsDir: rec ? join(rec, "model") : join(store, "..", "emr-recordings"),
+    // The strip key and hospital, the EMR origin and the bound addresses come from HEY_PISGAH_STRIP_* and HEY_PISGAH_SERVE_*; without a key only HEY_PISGAH_STRIP_OPEN=1 starts it.
+    ...serveConfigFromEnv(process.env),
     ...(rec ? { transcribe: recordingTranscriber(voiceTranscriber, join(rec, "transcripts.json")) } : {}),
     // Without a recordings folder no model request is kept, since gate requests carry heard words; the second ear is on unless turned off.
     recordModel: !!rec || process.env["HEY_PISGAH_RECORD_MODEL"] === "1", ears: process.env["HEY_PISGAH_SECOND_EAR"] === "off" ? "off" : earSwitch(process.env["HEY_PISGAH_EAR"]),
