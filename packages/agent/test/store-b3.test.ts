@@ -203,7 +203,7 @@ describe("review fixes", () => {
     const root = emrRoot();
     const port = Object.assign(new FakeEmr(), { kindsFor: () => [EMERGENCY_KIND] });
     const client = new ModelClient({ storeRoot: root, mode: "mock", budget: budget(caps({ calls: 0 })), spendLog: () => undefined, mock: decider(() => ({ decision: "aside", summary: "x" })) });
-    const s = await startEmrServe({ storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 }, ears: "off" });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 }, ears: "off" });
     const r = await fetch(`${s.url}/tasks/say`, { method: "POST", headers: { "content-type": "application/json", origin: "http://localhost:3311" }, body: JSON.stringify({ owner: OWNER, text: "A man has just come in with chest pain." }) });
     expect(r.status).toBe(429);
     expect(((await r.json()) as { error: string }).error).toBe(SPEND_CAP_NOTE);

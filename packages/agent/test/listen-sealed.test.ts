@@ -82,7 +82,7 @@ describe("the words a line waits on, sealed on disk", () => {
     configureSealing({ key: "ab".repeat(32) });
     const lines: string[] = [];
     const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater(gate, []) });
-    const s = await startEmrServe({ storeRoot: root, port: new FakeEmr(), client, listenPort: 0, preferences: false, log: (l) => lines.push(l) });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port: new FakeEmr(), client, listenPort: 0, preferences: false, log: (l) => lines.push(l) });
     try {
       expect(asideOf(file)).toHaveLength(1);
       expect(readFileSync(join(root, "serve", asideOf(file)[0]!), "utf8")).toBe("hps1.0000.damaged");
