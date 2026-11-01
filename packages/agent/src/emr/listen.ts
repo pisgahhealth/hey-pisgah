@@ -94,6 +94,8 @@ export class ListenSessions {
   private readonly waitingFor = new Map<string, { s: Session; sessionId: string }>();
   // Lines that were waiting when the serve last stopped, by owner and patient, each with its own deadline.
   private readonly restored = new Map<string, { p: PendingJoin; timer: NodeJS.Timeout }>();
+  // A join file this serve could not read, kept aside under its own name with the reason.
+  private joinTrouble: { kept: string; error: string } | null = null;
   constructor(private readonly rt: EmrRuntime, private readonly o: ListenOptions) {
     this.guard = new ReplayGuard(o.presence ?? "observed", o.presenceRule, o.replay === "refuse", o.heartbeat);
     this.restore();
@@ -147,8 +149,17 @@ export class ListenSessions {
   private restore(): void {
     const f = this.o.joinFile;
     if (!f || !existsSync(f)) return;
-    let rows: PendingJoin[] = [];
-    try { rows = JSON.parse(openSealed(readFileSync(f, "utf8"), "join-pending")) as PendingJoin[]; } catch { rows = []; }
+    let rows: PendingJoin[];
+    try {
+      rows = JSON.parse(openSealed(readFileSync(f, "utf8"), "join-pending")) as PendingJoin[];
+      if (!Array.isArray(rows)) throw new Error("the file is not a list of waiting lines");
+    } catch (e) {
+      // An unreadable file still holds words not yet written, so it is kept aside byte for byte and reported, never read as empty and overwritten.
+      const kept = `${f}.unreadable-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+      renameSync(f, kept);
+      this.joinTrouble = { kept, error: e instanceof Error ? e.message.slice(0, 200) : String(e) };
+      return;
+    }
     for (const p of rows) {
       const timer = setTimeout(() => {
         if (this.restored.get(p.key)?.timer !== timer) return;
@@ -170,6 +181,9 @@ export class ListenSessions {
     for (const v of c.samples) if (Math.abs(v) > 0.01) { speech = true; break; }
     return this.guard.check({ owner: c.owner, session_id: c.session_id, seq: c.seq, wav: bytes, audio_ms: Math.round((c.samples.length / c.rate) * 1000), speech, arrived_at: c.arrived_at ?? this.now(), captured_at: c.captured_at, marker: c.presence });
   }
+
+  // The join file kept aside at start because it could not be read, or null.
+  joinProblem(): { kept: string; error: string } | null { return this.joinTrouble ? { ...this.joinTrouble } : null; }
 
   // How many chunks the replay defence refused, by reason.
   replayRefusals(): Record<string, number> { return { ...this.guard.refusals }; }

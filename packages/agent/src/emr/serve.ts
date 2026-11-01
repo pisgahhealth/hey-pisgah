@@ -285,6 +285,8 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   const seqBase = new Map<string, number>();
   // A line waiting for its number keeps its words beside the tracked patient (serve/tracking), so a restart finishes it; the file holds no line once it is joined or delivered.
   const listening = new ListenSessions(rt, { joinFile: join(o.storeRoot, "serve", "join-pending.json"), ...(o.listen ?? {}), heartbeat: (owner, sid) => heartbeats.present(owner, clientOf.get(sid) ?? sid), transcribe, ...(o.releaseWhole ? { releaseWhole: true } : {}), ...(o.staffHints?.length ? { staff: o.staffHints } : {}), ...(o.embed ? { embed: o.embed } : {}), onStatus: (owner, sid, seq, st) => setStatus(owner, clientOf.get(sid) ?? sid, seq + (seqBase.get(sid) ?? 0), st) });
+  const joinProblem = listening.joinProblem();
+  if (joinProblem) o.log?.(`join-pending unreadable, kept aside as ${joinProblem.kept}: ${joinProblem.error}`);
   // Lines a frames stream finished, kept for the answer to its next part.
   const frameHeard = new Map<string, ListenUtterance[]>();
   const onHeard = (sid: string, us: ListenUtterance[]) => { const h = frameHeard.get(sid); if (h) h.push(...us); };
@@ -696,7 +698,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const url = new URL(req.url ?? "/", "http://serve");
     const parts = url.pathname.split("/").filter(Boolean);
     const m = req.method ?? "GET";
-    if (m === "GET" && url.pathname === "/health") return [200, { ok: true, mode: client.mode, tasks: rt.taskIds().length, refused: rt.port.refusedCount(), kws: !!o.kwsDir, speaker_model: !!o.embed, ears: footprint, presence: o.listen?.presence ?? "observed", strip: strip.mode === "token" ? "token" : "open: development only, any local caller may act as any owner" }];
+    if (m === "GET" && url.pathname === "/health") return [200, { ok: true, mode: client.mode, tasks: rt.taskIds().length, refused: rt.port.refusedCount(), kws: !!o.kwsDir, speaker_model: !!o.embed, ears: footprint, presence: o.listen?.presence ?? "observed", strip: strip.mode === "token" ? "token" : "open: development only, any local caller may act as any owner", ...(joinProblem ? { join_pending: joinProblem } : {}) }];
     if (m === "POST" && url.pathname === "/wake") {
       const b = parse(Wake, await json(req));
       own(req, b.owner);
