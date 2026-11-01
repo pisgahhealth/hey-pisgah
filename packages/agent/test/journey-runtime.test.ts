@@ -167,7 +167,7 @@ describe("journey kinds in the runtime", () => {
     let rt: EmrRuntime | null = null;
     const seen: string[] = [];
     const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater(() => [ins("record_note", { note_type: "progress", text: "pain settling" })], seen), taskStateOf: (id) => rt?.stateOf(id) ?? null });
-    const s = await startEmrServe({ storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 2000 } });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 2000 } });
     rt = s.runtime;
     const post = async (path: string, body: unknown) => { const r = await fetch(`${s.url}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }); return { status: r.status, body: (await r.json()) as Record<string, unknown> }; };
     const tasks = async (owner: string) => (await (await fetch(`${s.url}/tasks?owner=${owner}`)).json()) as { task_id: string; state: string }[];

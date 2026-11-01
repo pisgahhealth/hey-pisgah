@@ -48,7 +48,7 @@ async function runOnce(gateFor: (id: string) => Record<string, unknown>[]) {
     storeRoot: dir, mode: "mock", taskStateOf: (id) => s?.runtime.stateOf(id) ?? null,
     mock: gater((said) => gateFor(byText.get(said) ?? "").map((c) => ({ words: said, ...c })) as never)
   });
-  s = await startEmrServe({ storeRoot: dir, port: new MemoryEmrPort({ label: "Test Patient", facts: { ward: "Ward A", bed: "A1" }, keywords: [] }, ADM), client, listenPort: 0, transcribe: replayTranscriber(join(dir, "transcripts.json")), runtime: { holdMs: 0, proofRetryMs: 1 } });
+  s = await startEmrServe({ strip: { mode: "open" }, storeRoot: dir, port: new MemoryEmrPort({ label: "Test Patient", facts: { ward: "Ward A", bed: "A1" }, keywords: [] }, ADM), client, listenPort: 0, transcribe: replayTranscriber(join(dir, "transcripts.json")), runtime: { holdMs: 0, proofRetryMs: 1 } });
   const run = await feedTalk({ serveUrl: s.url, owner: OWNER, admissionId: ADM, sessionId: "press-1", chunks, pace: "fast", mode: "mock", talkId: talk.talk_id, gateHash: currentGateHash(), settleMs: 10_000 });
   await s.close();
   client.close();
@@ -93,7 +93,7 @@ describe("the labelled talk through the listen endpoint", () => {
     const store = mkdtempSync(join(tmpdir(), "hp-replay-"));
     let s: Awaited<ReturnType<typeof startEmrServe>> | null = null;
     const client = new ModelClient({ storeRoot: store, mode: "replay", recordingsDir: join(dir, "rec", "model"), taskStateOf: (id) => s?.runtime.stateOf(id) ?? null });
-    s = await startEmrServe({ storeRoot: store, port: new MemoryEmrPort(readKeptContext(join(dir, "rec", "context.json")), ADM), client, listenPort: 0, transcribe: replayTranscriber(join(dir, "rec", "transcripts.json")), ears: live.ears ? "spark" : "off", runtime: { holdMs: 0, proofRetryMs: 1 } });
+    s = await startEmrServe({ strip: { mode: "open" }, storeRoot: store, port: new MemoryEmrPort(readKeptContext(join(dir, "rec", "context.json")), ADM), client, listenPort: 0, transcribe: replayTranscriber(join(dir, "rec", "transcripts.json")), ears: live.ears ? "spark" : "off", runtime: { holdMs: 0, proofRetryMs: 1 } });
     const replay = await feedTalk({ serveUrl: s.url, owner: OWNER, admissionId: ADM, sessionId: "replay-1", chunks, pace: "fast", mode: "replay", talkId: talk.talk_id, gateHash: currentGateHash(), settleMs: 30_000 });
     await s.close();
     client.close();

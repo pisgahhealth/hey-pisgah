@@ -49,7 +49,7 @@ async function boot(heard: string[], arrives: (said: string, recent: string[]) =
   const port = new ArrivalEmr();
   const seen: string[] = [];
   const client = new ModelClient({ storeRoot: root, mode: "mock", mock: mock(arrives, seen) });
-  const s = await startEmrServe({ storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 }, ears: "off", emergencyClinicId: "dddddddd-1111-4222-8333-444444444444", log: (l) => { if (process.env["DBG"]) console.log(l); },
+  const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 }, ears: "off", emergencyClinicId: "dddddddd-1111-4222-8333-444444444444", log: (l) => { if (process.env["DBG"]) console.log(l); },
     transcribe: async (_w, _k, id) => ({ final: true, text: heard.shift() ?? "", audio_ms: 1000, session_id: id, cost_usd: 0 }) });
   const say = async (seq: number) => {
     const f = new FormData();

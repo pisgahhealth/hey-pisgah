@@ -290,7 +290,7 @@ describe("POST /tasks/listen", () => {
     const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater(() => [{ class: "instruction", kind: "record_observation", pulse: 92, confidence: 0.9 }]), taskStateOf: (id) => rt?.stateOf(id) ?? null });
     let release: () => void = () => undefined;
     const gateOpen = new Promise<void>((r) => { release = r; });
-    const s = await startEmrServe({
+    const s = await startEmrServe({ strip: { mode: "open" },
       storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 },
       transcribe: async (_w, _k, id) => { await gateOpen; return { final: true, text: "Chart pulse 92.", audio_ms: 1000, session_id: id, cost_usd: 0 }; }
     });

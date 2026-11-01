@@ -27,7 +27,7 @@ describe.skipIf(!RUN)("E1 on the sandbox EMR: the unidentified arrival by voice"
     const root = mkdtempSync(join(tmpdir(), "hp-e1-"));
     let rt: EmrRuntime | null = null;
     const client = new ModelClient({ storeRoot: root, mode: "live", recordingsDir: join(root, "recordings"), taskStateOf: (id) => rt?.stateOf(id) ?? null });
-    const s = await startEmrServe({ storeRoot: root, port, client, listenPort: 0, emergencyClinicId: clinic!, ears: "off", runtime: { holdMs: 0, proofRetryMs: 1500 } });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort: 0, emergencyClinicId: clinic!, ears: "off", runtime: { holdMs: 0, proofRetryMs: 1500 } });
     rt = s.runtime;
     const post = async (path: string, body: unknown) => {
       const r = await fetch(`${s.url}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });

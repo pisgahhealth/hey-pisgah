@@ -83,7 +83,7 @@ describe.skipIf(!RUN)("E4 the pharmacy and the lab act on sent voice orders on t
       expect(lab, "the lab task went to a minted scientist").toBeDefined();
       result["tasks"] = { rxTask, labTask, lab_rule: sandboxQuery(sb, "delegations_for", { patient }).find((r) => r["id"] === labTask)!["rule"] };
 
-      s = await startEmrServe({ storeRoot: root, port, client, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4109), ears: "off", runtime: { holdMs: 1500, proofRetryMs: 1500, watchMs: 8000, obligationTickMs: 1000 }, log: (x) => process.stderr.write(`serve: ${x}\n`) });
+      s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4109), ears: "off", runtime: { holdMs: 1500, proofRetryMs: 1500, watchMs: 8000, obligationTickMs: 1000 }, log: (x) => process.stderr.write(`serve: ${x}\n`) });
       rt = s.runtime;
       const serve = s;
       const sayAs = async (owner: string, text: string) => {

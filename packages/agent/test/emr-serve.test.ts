@@ -16,7 +16,7 @@ async function boot(holdMs = 0) {
   let rt: EmrRuntime | null = null;
   const heard: { keywords: readonly string[]; bytes: number }[] = [];
   const client = mockClient(root, (said) => (/^stop/i.test(said) ? { decision: "aside", summary: "x" } : { decision: "record", pulse: pulse(said), summary: "Record" }), () => rt?.stateOf ?? null);
-  const s = await startEmrServe({
+  const s = await startEmrServe({ strip: { mode: "open" },
     storeRoot: root, port, client, listenPort: 0, runtime: { holdMs, proofRetryMs: 1 },
     transcribe: async (wav, keywords, sessionId) => {
       heard.push({ keywords, bytes: wav.length });

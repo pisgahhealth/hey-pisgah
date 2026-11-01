@@ -92,7 +92,7 @@ describe("speech status through serve", () => {
     const root = emrRoot();
     const port = new FakeEmr();
     const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater(() => [{ class: "aside" }]) });
-    const s = await startEmrServe({ storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 }, ears: "off", transcribe: async () => { throw new VoiceError("upstream", "Voice Transcribe answered 502", 502); } });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 }, ears: "off", transcribe: async () => { throw new VoiceError("upstream", "Voice Transcribe answered 502", 502); } });
     const f = new FormData();
     f.append("audio", new Blob([silentish()], { type: "audio/wav" }), "c.wav");
     f.append("owner", OWNER); f.append("session_id", "s-9"); f.append("seq", "0");
@@ -112,7 +112,7 @@ describe("speech status through serve", () => {
     const port = new FakeEmr();
     const heard = ["She's been vomiting since morning, can't keep anything down, even water", "Ah no, this one is not an emergency, she can wait small"];
     const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater(() => [{ class: "aside" }]) });
-    const s = await startEmrServe({ storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 }, ears: "off", transcribe: async (_w, _k, id) => ({ final: true, text: heard.shift() ?? "", audio_ms: 6000, session_id: id, cost_usd: 0 }) });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 }, ears: "off", transcribe: async (_w, _k, id) => ({ final: true, text: heard.shift() ?? "", audio_ms: 6000, session_id: id, cost_usd: 0 }) });
     const form = (seq: number, o: { wav?: Uint8Array; end?: boolean; hint?: string }) => {
       const f = new FormData();
       if (o.wav) f.append("audio", new Blob([new Uint8Array(o.wav)], { type: "audio/wav" }), "c.wav");

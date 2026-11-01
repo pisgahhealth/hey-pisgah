@@ -91,7 +91,7 @@ export async function replayJourney(gate: MockResponder, script: JourneyScript =
   if (opts.agentMayDraft !== undefined) hospital.agentMayDraft = opts.agentMayDraft;
   let rt: EmrRuntime | null = null;
   const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gate, taskStateOf: (id) => rt?.stateOf(id) ?? null });
-  const s = await startEmrServe({ storeRoot: root, port: hospital, client, listenPort: 0, runtime: { holdMs: 400, proofRetryMs: 5, watchMs: 100 } });
+  const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port: hospital, client, listenPort: 0, runtime: { holdMs: 400, proofRetryMs: 5, watchMs: 100 } });
   rt = s.runtime;
   try {
     const trace = await runJourney({

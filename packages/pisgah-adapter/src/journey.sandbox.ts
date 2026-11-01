@@ -70,7 +70,7 @@ export async function runSandboxJourney(o: { mode: "live" | "mock"; port: number
     ? new ModelClient({ storeRoot: o.storeRoot, mode: "live", ...(o.recordingsDir ? { recordingsDir: o.recordingsDir } : {}), taskStateOf: (id) => rt?.stateOf(id) ?? null })
     : new ModelClient({ storeRoot: o.storeRoot, mode: "mock", mock: keyedGate(scriptKey(script)), taskStateOf: (id) => rt?.stateOf(id) ?? null });
   const serveLog: string[] = [];
-  const s = await startEmrServe({ storeRoot: o.storeRoot, port, client, listenPort: o.port, runtime: { holdMs: o.holdMs ?? 4000, proofRetryMs: 1500, watchMs: o.watchMs ?? 3000, ...(adopted ? { versions: adopted.wiring } : {}) }, log: (l) => serveLog.push(l) });
+  const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: o.storeRoot, port, client, listenPort: o.port, runtime: { holdMs: o.holdMs ?? 4000, proofRetryMs: 1500, watchMs: o.watchMs ?? 3000, ...(adopted ? { versions: adopted.wiring } : {}) }, log: (l) => serveLog.push(l) });
   rt = s.runtime;
   const personBearers = new Map<string, string>();
   const startedAt = new Date(Date.now() - 2000).toISOString();

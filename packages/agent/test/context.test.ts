@@ -64,7 +64,7 @@ async function boot(heard: string[] = [], again?: { root: string; port: ContextE
   const root = again?.root ?? emrRoot();
   const port = again?.port ?? new ContextEmr();
   const client = mockClient(root, () => ({ decision: "aside", summary: "x" }), () => null);
-  const s = await startEmrServe({
+  const s = await startEmrServe({ strip: { mode: "open" },
     storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1, ...(extra.reconcileMs ? { reconcileMs: extra.reconcileMs } : {}) }, ears: "off", ...(extra.pendingMaxMs ? { pendingMaxMs: extra.pendingMaxMs } : {}),
     transcribe: async (_w, _k, sessionId) => ({ final: true, text: heard.shift() ?? "", audio_ms: 1000, session_id: sessionId, cost_usd: 0 })
   });

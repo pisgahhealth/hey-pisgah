@@ -42,7 +42,7 @@ describe.skipIf(!RUN)("F4 on the sandbox EMR: an arrival whose answers are lost"
     const boot = async (profile: DoorProfile, root: string, posts: Post[], state: { lose: number }) => {
       const port = new PisgahPort(profile, { bearers: { [minted.owner]: minted.bearer }, fetch: losing(posts, profile.headers.replayed, state) });
       const client = new ModelClient({ storeRoot: root, mode: "mock", mock: () => { throw new Error("no model call is expected"); }, taskStateOf: () => null });
-      const s = await startEmrServe({ storeRoot: root, port, client, listenPort: SERVE_PORT, emergencyClinicId: clinic, ears: "off", runtime: { holdMs: 0, proofRetryMs: 1500, reconcileMs: [1500, 1500] } });
+      const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort: SERVE_PORT, emergencyClinicId: clinic, ears: "off", runtime: { holdMs: 0, proofRetryMs: 1500, reconcileMs: [1500, 1500] } });
       return { s, close: async () => { await s.close(); client.close(); } };
     };
     const until = async (get: () => EmrTaskView | null, ok: (v: EmrTaskView) => boolean, ms: number) => {

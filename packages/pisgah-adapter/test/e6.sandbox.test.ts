@@ -26,7 +26,7 @@ describe.skipIf(!RUN)("E6 preference memory on the sandbox EMR", () => {
     let rt: EmrRuntime | null = null;
     const client = new ModelClient({ storeRoot: root, mode: "live", recordingsDir: join(root, "recordings"), taskStateOf: (id) => rt?.stateOf(id) ?? null });
     // A long hold, so the spoken correction reaches the care-plan item before it is written.
-    const s = await startEmrServe({ storeRoot: root, port, client, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4111), ears: "off", runtime: { holdMs: 25_000, proofRetryMs: 1500 }, log: (x) => process.stderr.write(`serve: ${x}\n`) });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4111), ears: "off", runtime: { holdMs: 25_000, proofRetryMs: 1500 }, log: (x) => process.stderr.write(`serve: ${x}\n`) });
     rt = s.runtime;
     const post = async (path: string, body: Record<string, unknown>) => fetch(`${s.url}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const say = async (target: Record<string, string>, text: string, settle = true) => {

@@ -105,7 +105,7 @@ async function serve(root: string, port: PisgahPort, withSpeaker: boolean) {
   const embed = withSpeaker ? sherpaEmbedder({ modelPath: process.env["HEY_PISGAH_SPEAKER_MODEL"] ?? "", sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] }) : null;
   if (withSpeaker) expect(embed).not.toBeNull();
   const levers = leversFrom(process.env["HEY_PISGAH_SPEED"] ?? KEPT_LEVERS);
-  const s = await startEmrServe({
+  const s = await startEmrServe({ strip: { mode: "open" },
     storeRoot: root, port, client, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4121), ears: EAR, asr: ASR,
     local: { ...localDirs(process.env["HEY_PISGAH_ASR_DIR"] ?? join(process.cwd(), ".hey-pisgah", "asr")), sherpaDir: process.env["HEY_PISGAH_SHERPA_DIR"] },
     ...(embed ? { embed } : {}), ...(RELEASE ? { releaseWhole: true } : {}), runtime: { holdMs: 4000, proofRetryMs: 1500, speed: levers, keepHeard: true }

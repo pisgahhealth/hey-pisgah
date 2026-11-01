@@ -46,7 +46,7 @@ describe.skipIf(!RUN)("F5 one learning loop on a fresh EMR stay", () => {
     const versions = adoptedForEmr(root, process.env["F5_VERSIONS"]!, () => loadProfile().versions!);
     let rt: EmrRuntime | null = null;
     const client = new ModelClient({ storeRoot: root, mode: "live", recordingsDir: join(out, "recordings"), taskStateOf: (id) => rt?.stateOf(id) ?? null });
-    const s = await startEmrServe({ storeRoot: root, port, client, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4151), ears: "off", runtime: { holdMs: 1500, proofRetryMs: 1500, watchMs: 4000, versions: versions.wiring }, log: (x) => process.stderr.write(`serve: ${x}\n`) });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort: Number(process.env["HEY_PISGAH_EMR_PORT"] ?? 4151), ears: "off", runtime: { holdMs: 1500, proofRetryMs: 1500, watchMs: 4000, versions: versions.wiring }, log: (x) => process.stderr.write(`serve: ${x}\n`) });
     rt = s.runtime;
     const result: Row = { version: versions.def.version, definition_hash: versions.def.definition_hash };
     const types = (taskId: string) => readStream(root, `emr/${taskId}`);

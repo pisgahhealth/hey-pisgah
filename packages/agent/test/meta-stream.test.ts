@@ -80,7 +80,7 @@ async function boot(scripts: Parameters<typeof fakeMeta>[0], o: { gate?: (said: 
   const gate = o.gate ?? ((said: string) => (said.includes("37.6") ? obs(said, { temp_c: "37.6" }) : said.includes("116") ? obs(said, { pulse: 116 }) : [{ class: "aside" as const }]));
   const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater(gate, seen), taskStateOf: (id) => rt?.stateOf(id) ?? null });
   const ear: SecondEar = async () => reading(o.heard ?? "temperature 37.6 pulse 116");
-  const s = await startEmrServe({
+  const s = await startEmrServe({ strip: { mode: "open" },
     storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: o.holdMs ?? 0, proofRetryMs: 1, ...(o.levers ? { speed: leversFrom(KEPT_LEVERS) } : {}) }, preferences: false, ears: ear, asr: "meta-stream", ...(o.release ? { releaseWhole: true } : {}),
     realtimeSocket: o.socket ? o.socket(meta.factory) : meta.factory, realtimeKey: () => "k-test",
     transcribe: async () => { throw new Error("the chunk ear is not used on the frames route"); },
@@ -108,7 +108,7 @@ describe("the Meta realtime switch", () => {
 
   it("stops the service when the realtime ear cannot connect, with no fallback to another ear", async () => {
     const { factory } = fakeMeta([{ refuse: 1008 }]);
-    await expect(startEmrServe({ storeRoot: emrRoot(), port: new FakeEmr(), listenPort: 0, preferences: false, asr: "meta-stream", realtimeSocket: factory, realtimeKey: () => "k-test" }))
+    await expect(startEmrServe({ strip: { mode: "open" }, storeRoot: emrRoot(), port: new FakeEmr(), listenPort: 0, preferences: false, asr: "meta-stream", realtimeSocket: factory, realtimeKey: () => "k-test" }))
       .rejects.toThrow(/Meta realtime ear was switched on but could not connect/);
   });
 });
@@ -219,7 +219,7 @@ describe("the Meta realtime first ear", () => {
 
   it("sends the language hint only when switched on", async () => {
     const meta = fakeMeta([[], []]);
-    const s = await startEmrServe({ storeRoot: emrRoot(), port: new FakeEmr(), listenPort: 0, preferences: false, asr: "meta-stream", realtimeSocket: meta.factory, realtimeKey: () => "k-test", languageBias: ["English"] });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: emrRoot(), port: new FakeEmr(), listenPort: 0, preferences: false, asr: "meta-stream", realtimeSocket: meta.factory, realtimeKey: () => "k-test", languageBias: ["English"] });
     expect(meta.conns[0]!.handshake!["languageBias"]).toEqual(["English"]);
     await s.close();
   });
@@ -500,7 +500,7 @@ describe.skipIf(process.env["META_LIVE"] !== "1")("the real realtime endpoint", 
     let rt: EmrRuntime | null = null;
     const seen: string[] = [];
     const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater((said) => (said.includes("116") ? obs(said, { pulse: 116 }) : [{ class: "aside" }]), seen), taskStateOf: (id) => rt?.stateOf(id) ?? null });
-    const s = await startEmrServe({ storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 }, preferences: false, ears: async () => reading("pulse 116"), asr: "meta-stream" });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: 0, proofRetryMs: 1 }, preferences: false, ears: async () => reading("pulse 116"), asr: "meta-stream" });
     rt = s.runtime;
     const frame = (RATE * 20) / 1000;
     const all = new Float32Array(x.length + RATE * 2);

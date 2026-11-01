@@ -13,7 +13,7 @@ import { ListenError, ListenSessions, parallelReadings, type ListenOptions, type
 import { decodeWav, parseWav } from "@hey-pisgah/voice";
 import { printWav, type Embedder, type LivenessMarker } from "./speaker.js";
 import { Heartbeats } from "./presence.js";
-import { bearerOf, verifyStripToken, type StripAuth } from "./strip-token.js";
+import { bearerOf, stripKey, verifyStripToken, type StripAuth } from "./strip-token.js";
 import { EmrId, EmrPortError, type EmrPort, type EmrTarget } from "./port.js";
 import { gateArrival } from "./gate.js";
 import { SCREEN_PAGES, type ScreenPage } from "./screens.js";
@@ -64,8 +64,8 @@ export type EmrServeOptions = {
   hostNames?: readonly string[];
   // The one browser origin allowed to call serve, the EMR page that hosts the strip.
   allowOrigin?: string;
-  // The strip token check; open, today's local behaviour, unless the launcher gives a key.
-  strip?: StripAuth;
+  // The strip token check, always named: a key and hospital, or the explicit development mode where any local caller may act as any owner.
+  strip: StripAuth;
   transcribe?: Transcriber;
   // Continuous listening settings for POST /tasks/listen.
   listen?: Omit<ListenOptions, "transcribe">;
@@ -180,6 +180,10 @@ const field = (f: FormData, k: string): string | undefined => { const v = f.get(
 
 // The EMR-facing serve on port 4100: the strip reads tasks and posts words, audio and Stop; serve alone talks to the hospital door.
 export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
+  // No caller gets the open serve by leaving the option out; a bad key stops the start before anything listens.
+  const strip: StripAuth | undefined = o.strip;
+  if (strip?.mode !== "open" && strip?.mode !== "token") throw new Error("startEmrServe needs strip: a key and hospital, or { mode: \"open\" } for development");
+  if (strip.mode === "token") { stripKey(strip.key); if (!strip.hospital) throw new Error("strip token mode needs the hospital its tokens are for"); }
   let runtime: EmrRuntime | null = null;
   const client = o.client ?? new ModelClient({ storeRoot: o.storeRoot, ...(o.mode ? { mode: o.mode } : {}), ...(o.recordingsDir ? { recordingsDir: o.recordingsDir } : {}), ...(o.recordModel === false ? { record: false } : {}), taskStateOf: (id) => runtime?.stateOf(id) ?? null });
   // Readings that are not Spark calls go on the run's ledger as their own rows, each naming its model and purpose.
@@ -273,7 +277,6 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   const billedAsr = spendingTranscriber(metaAsr, client.spend);
   const transcribe = streamAsr ? streamAsr.transcribe : several ? parallelReadings(billedAsr, o.vtReadings!) : billedAsr;
   const origin = o.allowOrigin ?? "http://localhost:3311";
-  const strip: StripAuth = o.strip ?? { mode: "open" };
   // The owner each request's strip token names; every route that names an owner or a task checks it here.
   const callers = new WeakMap<IncomingMessage, string>();
   const own = (req: IncomingMessage, owner: string): string => {

@@ -53,7 +53,7 @@ describe.skipIf(!RUN)("REC on the sandbox EMR", () => {
     for (const v of [A, B, C]) expect(await port.commit("open_consult", { visit_id: v.visit, patient_id: v.patient }, `rec-${stamp}-open-${v.visit}`, { owner: mine.owner, evidence: `transcript:rec-${stamp}-open`, spoken_at: new Date().toISOString() })).toMatchObject({ ok: true });
     const root = mkdtempSync(join(tmpdir(), "hp-rec-sb-"));
     const client = new ModelClient({ storeRoot: root, mode: "live", recordingsDir: join(root, "recordings"), taskStateOf: (id) => s.runtime.stateOf(id) });
-    const s = await startEmrServe({ storeRoot: root, port, client, embed: embed!, listenPort: SERVE_PORT, ears: "off", runtime: { holdMs: 500, proofRetryMs: 1500, reconcileMs: [2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000] } });
+    const s = await startEmrServe({ strip: { mode: "open" }, storeRoot: root, port, client, embed: embed!, listenPort: SERVE_PORT, ears: "off", runtime: { holdMs: 500, proofRetryMs: 1500, reconcileMs: [2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000] } });
     const lookup = profile.work["order_test"] && "method" in profile.work["order_test"] ? profile.work["order_test"].lookup : undefined;
     expect(lookup).toBeDefined();
     let n = 0;
