@@ -489,3 +489,42 @@ describe("CONV review fixes (codex review of ce4de52)", () => {
     await b.rt.stop();
   });
 });
+
+describe("F6: a spelled surname always lands", () => {
+  const A02S = "Let me spell her surname for you, A, D, E, Y, E, M, I, Adeyemi.";
+  it("replaces the part the line names, whatever the distance", () => {
+    expect(spelledName(A02S, "Blessing Adimi")).toEqual({ name: "Blessing Adeyemi" });
+    expect(spelledName("Her surname is spelt O, K, O, R, O.", "Blessing Adimi")).toEqual({ name: "Blessing Okoro" });
+    expect(spelledName("His last name, A-D-U.", "Ada Ade")).toEqual({ name: "Ada Adu" });
+    expect(spelledName("Spell her first name, A, D, U.", "Ada Ade")).toEqual({ name: "Adu Ade" });
+    expect(spelledName("Her first name is B, L, E, S, S, I, N, G.", "Plessing Adimi")).toEqual({ name: "Blessing Adimi" });
+    expect(spelledName(A02S, "Blessing Adeyemi")).toBeNull();
+  });
+
+  it("with no part named, replaces the one part that shares the first letter, past two letters", () => {
+    expect(spelledName("A, D, E, Y, E, M, I", "Blessing Adimi")).toEqual({ name: "Blessing Adeyemi" });
+    expect(spelledName("Bassey, spelt B-A-S-S-E-Y", "Blessing Bassei")).toEqual({ name: "Blessing Bassey" });
+  });
+
+  it("still asks when two parts are candidates, or none is", () => {
+    expect(spelledName("spelt A-D-U", "Ada Ade")).toEqual({ ask: ["Ada", "Ade"], word: "Adu" });
+    expect(spelledName("spelt A, D, E, Y, E, M, I", "Ada Abu")).toEqual({ ask: ["Ada", "Abu"], word: "Adeyemi" });
+    expect(spelledName("spelt O, K, O, R, O", "Blessing Adimi")).toEqual({ ask: ["Blessing", "Adimi"], word: "Okoro" });
+    expect(spelledName("Her first name and her surname, spelt A, D, U.", "Ada Ade")).toEqual({ ask: ["Ada", "Ade"], word: "Adu" });
+  });
+
+  it("amends Adimi to Adeyemi on the record from A02S, and no note names her", async () => {
+    const b = boot(() => ASIDE);
+    const task = await arrival(b);
+    await sayOn(b.rt, task, "She's talking small now. Her name na Blessing, Blessing Adimi.");
+    await b.rt.settled();
+    const v0 = b.rt.view(task)!, from = v0.notes.length + v0.questions.length;
+    const c = await sayOn(b.rt, task, A02S);
+    await b.rt.settled();
+    expect(of(b.port, IDENTITY_KIND).map((w) => w.args["name"])).toEqual(["Blessing Adimi", "Blessing Adeyemi"]);
+    const v = b.rt.view(task)!;
+    expect(v.identities).toEqual([expect.objectContaining({ name: "Blessing Adeyemi", amended: [{ from: "Blessing Adimi", line_id: c.line_id }] })]);
+    for (const x of [...v.notes.map((n) => n.text), ...v.questions.map((q) => q.text)].slice(from)) expect(x, x).not.toMatch(/Blessing|Adeyemi|Adimi/);
+    await b.rt.stop();
+  });
+});
