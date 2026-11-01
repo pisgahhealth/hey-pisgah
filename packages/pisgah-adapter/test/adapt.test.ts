@@ -66,6 +66,19 @@ describe("a 401 inside the serve re-mints the owner's bearer once and retries un
     expect(bearers[OWNER]).toBe("fresh-bearer");
   });
 
+  it("an owner with no bearer yet is minted once before the call, and refused when no mint is configured or it gives none", async () => {
+    const { f, calls } = fakeFetch([() => json(200, { name: "Test Patient", visitId: VISIT, ward: "Ward A" })]);
+    const bearers: Record<string, string> = {};
+    const port = new PisgahPort(profile(), { bearers, fetch: f, budget: null, refresh: async () => "first-bearer" });
+    await port.resolve({ admission_id: ADM }, PROV);
+    expect(calls.map((x) => x.auth)).toEqual(["Bearer first-bearer"]);
+    expect(bearers[OWNER]).toBe("first-bearer");
+    const none = fakeFetch([() => json(200, {})]);
+    await expect(new PisgahPort(profile(), { bearers: {}, fetch: none.f, budget: null }).resolve({ admission_id: ADM }, PROV)).rejects.toThrow();
+    await expect(new PisgahPort(profile(), { bearers: {}, fetch: none.f, budget: null, refresh: async () => null }).resolve({ admission_id: ADM }, PROV)).rejects.toThrow();
+    expect(none.calls).toEqual([]);
+  });
+
   it("two requests refused together share one refresh, and a refresh that gives no bearer is tried once", async () => {
     const auths: string[] = [];
     const g = (async (_url: string | URL, init?: RequestInit) => {

@@ -55,11 +55,13 @@ async function main(): Promise<void> {
   // A bearer the door no longer takes is minted again for the same owner, at most once a minute per owner.
   const failedAt = new Map<string, number>();
   const refresh = mintFor ? async (o: string): Promise<string | null> => {
-    if (!held.includes(o) || Date.now() - (failedAt.get(o) ?? 0) < 60_000) return null;
+    // The hospital's mint decides who has a live login there, so in door mode any owner may be tried and is then kept renewed.
+    if ((!door && !held.includes(o)) || Date.now() - (failedAt.get(o) ?? 0) < 60_000) return null;
     try {
       const b = await mintFor(o);
       if (!b) throw new Error("no live login");
-      process.stderr.write("agent bearer re-minted after a 401\n");
+      if (!held.includes(o)) held.push(o);
+      process.stderr.write("agent bearer minted for the door\n");
       return b;
     } catch {
       failedAt.set(o, Date.now());
