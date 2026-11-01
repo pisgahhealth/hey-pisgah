@@ -149,7 +149,8 @@ describe("the patient the clinician is with", () => {
     const again = await post(`${s.url}/tasks/emergency`, { owner: OWNER, spokenAt: new Date().toISOString() });
     expect(again.body.task_id).toBe(arrival.body.task_id);
     open();
-    await until(() => s.runtime.view(arrival.body.task_id)!.identities.length === 1 && lineIn(s, arrival.body.task_id, "He's about forty, em, they found him by the roadside, no ID on him."));
+    // The typed line is cleaned as the ear's words are: the pause word goes with its comma and the number reads as digits.
+    await until(() => s.runtime.view(arrival.body.task_id)!.identities.length === 1 && lineIn(s, arrival.body.task_id, "He's about 40 they found him by the roadside, no ID on him."));
     await s.runtime.settled();
     expect(port.writes).toHaveLength(1);
     expect(s.runtime.view(arrival.body.task_id)!.identities[0]).toMatchObject({ name: "Grace Okafor", encounter: { patient_id: ARRIVAL } });

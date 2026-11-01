@@ -1,4 +1,4 @@
-import type { EmrRuntime } from "@hey-pisgah/agent";
+import { typedText, type EmrRuntime } from "@hey-pisgah/agent";
 import type { LedgerRow } from "@hey-pisgah/contracts";
 import { isTalk, type JView, type JourneyScript, type JourneyTrace, type TalkStep } from "@hey-pisgah/evaluator";
 import type { ChatCompletion, MockResponder } from "@hey-pisgah/model";
@@ -120,11 +120,13 @@ export function ledgerOf(rt: EmrRuntime, root: string): JourneyTrace["ledger"] {
 
 // A mock gate that answers each line with clauses keyed by its words: the script's own key for a dry run, or clauses recorded from a live run for a replay.
 export function keyedGate(byText: Record<string, Record<string, unknown>[]>): MockResponder {
+  // A script line reaches the gate as a typed line, cleaned as the ear's words are, so the keys and their clause words are cleaned the same way.
+  const typed = new Map(Object.entries(byText).map(([k, v]) => [typedText(k), v]));
   return ({ body, hash }) => {
     const msgs = body["messages"] as { role: string; content: string }[];
     const user = String(msgs.find((m) => m.role === "user")?.content ?? "");
     const said = JSON.parse(/clinician_said: (".*")$/m.exec(user)?.[1] ?? '""') as string;
-    const clauses = (byText[said] ?? [{ class: "aside" }]).map((c) => ({ words: said, ...c }));
+    const clauses = (byText[said] ?? typed.get(said) ?? [{ class: "aside" }]).map((c) => ({ words: said, ...c, ...(typeof c["words"] === "string" ? { words: typedText(c["words"]) } : {}) }));
     const c: ChatCompletion = {
       id: `mock-${hash.slice(0, 12)}`, object: "chat.completion", created: 0, model: String(body["model"]),
       choices: [{ index: 0, finish_reason: "tool_calls", logprobs: null, message: { role: "assistant", content: null, refusal: null, tool_calls: [{ id: "call_1", type: "function", function: { name: "gate", arguments: JSON.stringify({ clauses }) } }] } }],
@@ -140,14 +142,14 @@ export const scriptKey = (s: JourneyScript): Record<string, Record<string, unkno
 // The clauses the live gate gave for each script line, read from the task streams, so a replay can play the same answers.
 export function recordedGate(rt: EmrRuntime, root: string, s: JourneyScript): Record<string, Record<string, unknown>[]> {
   const out: Record<string, Record<string, unknown>[]> = {};
-  const says = new Set(s.steps.filter(isTalk).map((t) => t.say));
+  const says = new Map(s.steps.filter(isTalk).flatMap((t) => [[t.say, t.say], [typedText(t.say), t.say]] as const));
   for (const id of rt.taskIds()) {
     const recs = readStream(root, `emr/${id}`);
     const text = new Map(recs.filter((e) => e.record_type === "utterance.heard").map((e) => [String((e.payload as Record<string, unknown>)["line_id"]), String((e.payload as Record<string, unknown>)["text"])]));
     for (const e of recs.filter((x) => x.record_type === "gate.decided")) {
       const p = e.payload as { line_id: string; clauses: Record<string, unknown>[]; outside_line?: Record<string, unknown>[] };
       const said = text.get(p.line_id);
-      if (said && says.has(said)) out[said] = [...p.clauses, ...(p.outside_line ?? [])].map((c) => Object.fromEntries(Object.entries(c).filter(([, v]) => v !== null && v !== undefined)));
+      if (said && says.has(said)) out[says.get(said)!] = [...p.clauses, ...(p.outside_line ?? [])].map((c) => Object.fromEntries(Object.entries(c).filter(([, v]) => v !== null && v !== undefined)));
     }
   }
   return out;
