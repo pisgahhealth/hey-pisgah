@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { ACK_KIND, CANCEL_TEST_KIND, DELEGATE_KIND, DELEGATION_RULE_KINDS, NUDGE_KIND, RECEIVE_KIND, cancelReason, labAsked, type DelegationRead, type DelegationTeam } from "../src/emr/delegate.js";
-import type { EmrCommit, Orderables, Provenance, WorkArgs } from "../src/emr/port.js";
+import type { EmrCommit, EmrContext, EmrTarget, Orderables, Provenance, WorkArgs } from "../src/emr/port.js";
 import type { SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
-import { CLERK_KINDS, ClerkFake, DOC, PAT, VISIT, clerkBoot, ins } from "./clerking-helpers.js";
+import { ADMIT, CLERK_KINDS, ClerkFake, DOC, PAT, VISIT, clerkBoot, ins } from "./clerking-helpers.js";
 
 // Lane LABE, RECONCILE 4.1: the lab scientist's agent receives and cancels a test handed to the lab, by rule, on her own voice.
 const LAB = "lab-1";
 const ORDER: Record<string, string> = { fbc: "f0000001-2222-4333-8444-555555555555", urinalysis: "f0000002-2222-4333-8444-555555555555" };
 const STATE: Record<string, string> = { fbc: "e0000001-2222-4333-8444-555555555555", urinalysis: "e0000002-2222-4333-8444-555555555555" };
+// The second patient's own orders, so two patients awaiting the same test have two lab orders.
+const ORDER2: Record<string, string> = { fbc: "f0000003-2222-4333-8444-555555555555", urinalysis: "f0000004-2222-4333-8444-555555555555" };
+const STATE2: Record<string, string> = { fbc: "e0000003-2222-4333-8444-555555555555", urinalysis: "e0000004-2222-4333-8444-555555555555" };
+const OTHER_PAT = "abababab-1111-4222-8333-444444444444", OTHER_VISIT = "acacacac-1111-4222-8333-444444444444";
 const TEAMS: Record<string, DelegationTeam> = { lab: { words: ["lab"], task_kind: "lab_order", title: "Receive the lab order", label: "Laboratory" } };
 const vp = (n: number): Voiceprint => ({ vector: [n], ms: 20, model: "nemo_en_titanet_small" });
 const DOC_V = vp(5), LAB_V = vp(6), DRB_V = vp(4);
@@ -22,6 +26,10 @@ class LabFake extends ClerkFake {
   conflictRetryable = false;
   private t = 0;
   override kindsFor(owner?: string): readonly string[] { return owner === LAB ? [NUDGE_KIND, ACK_KIND, RECEIVE_KIND, CANCEL_TEST_KIND] : [...CLERK_KINDS, "order_test", DELEGATE_KIND]; }
+  override async resolve(target: EmrTarget): Promise<EmrContext> {
+    if (target.patient_id === OTHER_PAT) return { admission_id: "", patient_id: OTHER_PAT, visit_id: OTHER_VISIT, label: "Second Patient", facts: { ward: null, bed: null }, keywords: [] };
+    return super.resolve(target);
+  }
   orderables(): Orderables { return { tests: { fbc: ["full blood count", "FBC"], urinalysis: ["urinalysis", "urine test"] }, drugs: {} }; }
   delegationHandoffs(owner: string) { return owner === DOC ? { order_test: { team: "lab", subject_table: "bench_orders" } } : {}; }
   delegationSide(owner: string) { return owner === DOC ? ("delegator" as const) : ("assignee" as const); }
@@ -39,13 +47,14 @@ class LabFake extends ClerkFake {
     if (again) return { ok: true, record_id: again.id, record_version: 1, event_ids: [], replayed: true };
     if (kind === "order_test") {
       const test = String(args["test"]);
-      this.writes.push({ kind, args, key, prov, id: STATE[test]! });
-      return { ok: true, record_id: STATE[test]!, record_version: 1, event_ids: [`voice_order:${STATE[test]}`, `bench_orders:${ORDER[test]}`], replayed: false };
+      const [st, ord] = args["patient_id"] === OTHER_PAT ? [STATE2, ORDER2] : [STATE, ORDER];
+      this.writes.push({ kind, args, key, prov, id: st[test]! });
+      return { ok: true, record_id: st[test]!, record_version: 1, event_ids: [`voice_order:${st[test]}`, `bench_orders:${ord[test]}`], replayed: false };
     }
     if (kind === DELEGATE_KIND) {
       const id = uuid();
       this.rows.set(id, {
-        id, kind: String(args["task_kind"]), title: String(args["title"]), patient_id: String(args["patient_id"]), admission_id: null, visit_id: VISIT, state: "assigned", assignee: null, rule: "on_duty",
+        id, kind: String(args["task_kind"]), title: String(args["title"]), patient_id: String(args["patient_id"]), admission_id: null, visit_id: args["visit_id"] ? String(args["visit_id"]) : VISIT, state: "assigned", assignee: null, rule: "on_duty",
         acknowledged_at: null, completed_at: null, completion_record_id: null, due_at: null, overdue: false, escalated_at: null, record: { status: "unsupported_or_incomplete", record_id: null, reason: null },
         instruction: String(args["instruction"]), nudged: [], subject_id: String(args["subject_id"]), subject_prepared: null, order_received: null, consult_finished: null, assignee_owner: LAB
       });
@@ -64,10 +73,10 @@ class LabFake extends ClerkFake {
 }
 
 const gate = (s: string) => (/full blood count/i.test(s) && /^Send/.test(s) ? [ins("order_test", { test: "fbc" })] : /urinalysis/i.test(s) && /^Send/.test(s) ? [ins("order_test", { test: "urinalysis" })] : [{ class: "aside" as const, confidence: 0.9 }]);
-async function handed(tests: string[]) {
+async function handed(tests: string[], patients: string[] = [PAT]) {
   const port = new LabFake();
   const b = clerkBoot(gate, { port });
-  for (const t of tests) await b.rt.say({ owner: DOC, target: { patient_id: PAT }, text: `Send a ${t === "fbc" ? "full blood count" : "urinalysis"}.`, source: "audio", voiceprint: DOC_V });
+  for (const p of patients) for (const t of tests) await b.rt.say({ owner: DOC, target: { patient_id: p }, text: `Send a ${t === "fbc" ? "full blood count" : "urinalysis"}.`, source: "audio", voiceprint: DOC_V });
   await b.rt.settled();
   await b.rt.pollOnce();
   await b.rt.settled();
@@ -75,7 +84,6 @@ async function handed(tests: string[]) {
 }
 const labSay = (b: Awaited<ReturnType<typeof handed>>, text: string, v: Voiceprint = LAB_V, o: { typed?: boolean; patient?: string } = {}) =>
   b.rt.say({ owner: LAB, target: { patient_id: o.patient ?? PAT }, text, source: o.typed ? "text" : "audio", ...(o.typed ? {} : { voiceprint: v }) });
-const OTHER_PAT = "abababab-1111-4222-8333-444444444444";
 const lab = (port: LabFake, kind: string) => port.writes.filter((w) => w.kind === kind && w.prov.owner === LAB);
 const labNotes = (b: Awaited<ReturnType<typeof handed>>) => b.rt.views(LAB).flatMap((v) => v.notes.map((x) => x.text));
 const labAsks = (b: Awaited<ReturnType<typeof handed>>) => b.rt.views(LAB).flatMap((v) => v.questions.map((x) => x.text));
@@ -209,6 +217,86 @@ describe("LABE 4.1: the lab scientist receives and cancels by voice", () => {
     await b.rt.settled();
     expect(b.port.writes.filter((w) => w.kind === "refused_receive")).toHaveLength(1);
     expect(b.rt.views(LAB).flatMap((v) => v.actions).find((a) => a.kind === RECEIVE_KIND)!.state).toBe("refused");
+    await b.rt.stop();
+  });
+});
+
+describe("SA-ENG 1: a lab question or conditional is answered or asked about, never sent", () => {
+  it("reads questions, conditionals and negations as not an act, and a plain statement as one", () => {
+    for (const q of ["Have we received the FBC?", "Have we received the FBC", "Did the FBC come?", "Did the FBC come", "Received the FBC?", "Has the urinalysis been cancelled?", "Sorry, is the FBC in"]) expect(labAsked(q), q).toBe("question");
+    for (const c of ["If the FBC comes, receive it and run it.", "When it's received, run the FBC.", "Cancel the urinalysis if the doctor cancelled it.", "Once the FBC is in, running it.", "As soon as the FBC comes in, receive it"]) expect(labAsked(c), c).toBe("conditional");
+    expect(labAsked("We have not received the FBC.")).toBe("unclear");
+    expect(labAsked("Received the FBC, running it.")).toBe("receive");
+    expect(labAsked("Cancel the FBC, she did not come.")).toBe("cancel");
+  });
+
+  it("sends nothing on a question, a conditional or a negation, then acts once on the plain statement", async () => {
+    const b = await handed(["fbc"]);
+    const notAct = ["Have we received the FBC?", "Did the FBC come?", "Received the FBC?", "Have we received the FBC", "If the FBC comes, receive it and run it.", "When it's received, run the FBC.", "We have not received the FBC."];
+    for (const t of notAct) { await labSay(b, t); await b.rt.settled(); }
+    expect(b.port.writes.filter((w) => w.prov.owner === LAB && w.kind !== NUDGE_KIND)).toHaveLength(0);
+    const asks = labAsks(b).concat(labNotes(b));
+    expect(asks.some((q) => /^I did not act: that was a question, not an instruction\. Say "received the full blood count"/.test(q))).toBe(true);
+    expect(asks.some((q) => /^I did not act: that line says if or when\. Say "received the full blood count" once it is/.test(q))).toBe(true);
+    await labSay(b, "Received the FBC, running it.");
+    await b.rt.settled();
+    expect(lab(b.port, RECEIVE_KIND).map((w) => w.args)).toEqual([expect.objectContaining({ order_id: ORDER["fbc"], test: "fbc" })]);
+    await b.rt.stop();
+  });
+
+  it("lets a question to a patient that names no test and no lab act pass by", async () => {
+    const b = await handed(["fbc"]);
+    await labSay(b, "Did you come in by yourself today?");
+    await b.rt.settled();
+    expect(labAsks(b).some((q) => /^I did not act/.test(q))).toBe(false);
+    expect(b.port.writes.filter((w) => w.prov.owner === LAB && w.kind !== NUDGE_KIND)).toHaveLength(0);
+    await b.rt.stop();
+  });
+
+  it("never cancels on a conditional cancel line", async () => {
+    const b = await handed(["urinalysis"]);
+    await labSay(b, "Cancel the urinalysis if the doctor cancelled it.");
+    await labSay(b, "Has the urinalysis been cancelled?");
+    await b.rt.settled();
+    expect(lab(b.port, CANCEL_TEST_KIND)).toHaveLength(0);
+    await b.rt.stop();
+  });
+});
+
+describe("SA-ENG 2: two patients awaiting the same test", () => {
+  it("takes the page's patient with no question when the line comes with a target", async () => {
+    const b = await handed(["fbc"], [PAT, OTHER_PAT]);
+    await labSay(b, "Received the FBC, running it.", LAB_V, { patient: OTHER_PAT });
+    await b.rt.settled();
+    expect(lab(b.port, RECEIVE_KIND).map((w) => w.args)).toEqual([expect.objectContaining({ order_id: ORDER2["fbc"], test: "fbc" })]);
+    expect(labAsks(b).some((q) => /more than one patient/.test(q))).toBe(false);
+    await labSay(b, "Received the FBC, running it.", LAB_V, { patient: PAT });
+    await b.rt.settled();
+    expect(lab(b.port, RECEIVE_KIND).map((w) => w.args["order_id"])).toEqual([ORDER2["fbc"], ORDER["fbc"]]);
+    await b.rt.stop();
+  });
+
+  it("asks and never guesses when the line comes with no target", async () => {
+    const b = await handed(["fbc"], [PAT, OTHER_PAT]);
+    // The strip's audio with no patient open reaches the hand-offs this way, with no target.
+    expect(b.rt.delegationLine(LAB, "Received the FBC, running it.", new Date().toISOString(), "audio", undefined, LAB_V)).not.toBeNull();
+    await b.rt.settled();
+    expect(b.port.writes.filter((w) => w.prov.owner === LAB && w.kind !== NUDGE_KIND)).toHaveLength(0);
+    expect(labAsks(b).some((q) => /^The full blood count is waiting for more than one patient\. Open the patient and say it again\./.test(q))).toBe(true);
+    await b.rt.stop();
+  });
+});
+
+describe("SA-ENG 2: an admitted patient's page target names only the stay", () => {
+  it("finds the lab task handed off before the admission through the stay's patient", async () => {
+    const b = await handed(["fbc"], [PAT, OTHER_PAT]);
+    // The doctor admits the first patient after the tests went to the lab, so the lab tasks carry no stay.
+    b.port.admitted = true;
+    await b.rt.open(DOC, { admission_id: ADMIT });
+    // The strip's audio for an admitted patient names the stay alone.
+    await b.rt.say({ owner: LAB, target: { admission_id: ADMIT }, text: "Received the FBC, running it.", source: "audio", voiceprint: LAB_V });
+    await b.rt.settled();
+    expect(lab(b.port, RECEIVE_KIND).map((w) => w.args["order_id"])).toEqual([ORDER["fbc"]]);
     await b.rt.stop();
   });
 });

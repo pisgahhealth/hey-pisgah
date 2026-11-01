@@ -106,9 +106,20 @@ export function delegationSummary(kind: string, a: Record<string, unknown>): str
   }
 }
 
-// What a lab scientist's line asks of a test handed to the lab: receive it, cancel it, or neither.
-export function labAsked(line: string): "receive" | "cancel" | "unclear" | null {
-  const low = line.toLowerCase();
+// A clause that opens like a question, such as "have we received", "did the FBC come" or "sorry, is it in", even when the ear dropped the question mark.
+const QUESTION_OPENER = /(?:^|[.!?;,]\s*)(?:(?:so|and|okay|ok|um|hey|pisgah)[,\s]+)*(?:have|has|had|did|do|does|is|are|was|were|can|could|should|shall|will|would)\s+(?:we|you|i|they|it|the|she|he|that|this|our|my|anyone|someone|somebody|there)\b/;
+// Words that make an act wait on something, so "if the FBC comes" or "when it's received" is not the act itself.
+const CONDITIONAL = /\b(?:if|unless|once|whenever|when|as soon as|in case)\b/;
+// The lab's own act words, receiving or cancelling, as a line says them.
+export const LAB_ACT_WORDS = /\b(?:received|receiving|is in|came in|running it|run it|processing it|cancel(?:l?ed|l?ing)?)\b/;
+// What a lab scientist's line asks of a test handed to the lab: receive it, cancel it, a question or a conditional about it (never acted on), or neither.
+export function labAsked(line: string): "receive" | "cancel" | "unclear" | "question" | "conditional" | null {
+  const low = line.toLowerCase().trim();
+  // A question or a conditional that names the lab's work is answered or asked about, never sent.
+  if (/\b(?:receiv\w*|is in|came in|comes? in|come|comes|came|arriv\w*|running it|run it|processing it|cancel\w*)\b|\bin\W*$/.test(low)) {
+    if (low.includes("?") || QUESTION_OPENER.test(low)) return "question";
+    if (CONDITIONAL.test(low)) return "conditional";
+  }
   // A negation outside a stated reason makes the line unclear, so "we have not received the FBC" is asked about, never acted on.
   const rest = low.replace(/\b(did not|didn'?t|never) (come|turn up|show)\b|\b(can ?not|cannot|could not|couldn'?t|unable to) (reach|contact|find|get hold of)\b|\b(does not|doesn'?t|did not|didn'?t) want\b/g, " ");
   const act = /\bcancel(l?ed|l?ing)?\b/.test(low) || /\b(received|receiving|is in|came in|running it|run it|processing it)\b/.test(low);

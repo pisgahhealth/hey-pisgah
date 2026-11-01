@@ -17,7 +17,7 @@ import { EMERGENCY_KIND, EMERGENCY_LINE, IDENTITY_KIND, IdentityArgs, RULE_ONLY_
 import { openableHref, screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
 import {
   ACK_KIND, COMPLETE_KIND, DELEGATE_KIND, DELEGATION_ARGS, DELEGATION_RULE_KINDS, DISPENSE_KIND, ESCALATE_KIND, NUDGE_KIND, PREPARE_KIND, REGISTER_KIND, WARD_REVIEW_KIND, RECEIVE_KIND, CANCEL_TEST_KIND,
-  ACCEPT_LINE, cancelReason, labAsked, patientSaid, CONSENT_PURPOSES, acceptedTask, consentSaid, consentScope, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
+  ACCEPT_LINE, LAB_ACT_WORDS, cancelReason, labAsked, patientSaid, CONSENT_PURPOSES, acceptedTask, consentSaid, consentScope, nameParts, onlyTeam, orderAsked, phoneSaid, registrationFrom, registrationInstruction, registrationNeeds, teamSaid,
   type ConsentPurpose, type DelegationRead, type EmrDelegation
 } from "./delegate.js";
 import { VERBAL_LINE, VERBAL_ORDER_ARGS, VERBAL_ORDER_KIND, verbalMissingNote, verbalOrderSaid } from "./verbal.js";
@@ -978,7 +978,8 @@ export class EmrRuntime {
     const sp = held ? spelledName(text, held.name) : null;
     if (sp && "ask" in sp) {
       this.append(live, "line.ruled", { line_id: lineId, classes: ["instruction"], as: "identity" });
-      this.ask(live, lineId, `Which part of ${held!.name} is ${sp.word}? Say the full name.`);
+      // The strip never shows the name; the clinician knows what was spelled, so the question asks for the full name.
+      this.ask(live, lineId, "That spelling is as close to two parts of the name, so I did not change it. Say the full name.");
       this.afterLine(live, lineId, true);
       this.settle(live, "identity_asked");
       return { task_id: live.task.task_id, line_id: lineId };
@@ -3052,7 +3053,8 @@ export class EmrRuntime {
     const line = t.lines.find((x) => x.id === lineId);
     if (line && !line.kept) this.append(l, "line.kept", { line_id: lineId, text: line.text, raw_text: line.ambient?.raw_text ?? null });
     if (prev) {
-      if (prev.name === name && (!phone || prev.phone === phone)) return this.note(l, `Already recorded: ${name}.`);
+      // Identity notes never carry the name or phone; those stay in the identity hold behind the strip's tap.
+      if (prev.name === name && (!phone || prev.phone === phone)) return this.note(l, "Already recorded: the name you said is on the arrival.");
       this.append(l, "identity.amended", { obligation_id: prev.obligation_id, name, phone: phone ?? prev.phone, line_id: lineId });
       return this.writeIdentity(l, lineId);
     }
@@ -3062,7 +3064,7 @@ export class EmrRuntime {
     };
     this.append(l, "identity.held", { identity: ob });
     if (writes) return this.writeIdentity(l, lineId);
-    this.note(l, `Held for the front desk to register: ${name}${phone ? `, phone ${phone}` : ", no phone yet"}.`);
+    this.note(l, `Name heard, held for the front desk to register${phone ? ", with a phone" : ", no phone yet"}.`);
     this.delegateRegistration(l, lineId, ob.obligation_id, name, phone);
   }
 
@@ -3071,7 +3073,7 @@ export class EmrRuntime {
     const t = l.task;
     const ob = t.identities.filter((i) => i.state === "open" && i.completes_by === "owner_agent").at(-1);
     if (!ob) return;
-    if (!t.visit_id || !t.patient_id) return this.note(l, `Name heard: ${ob.name}. I will record it once the arrival is saved.`, "hold");
+    if (!t.visit_id || !t.patient_id) return this.note(l, "Name heard. I will record it once the arrival is saved.", "hold");
     const parsed = IdentityArgs.safeParse({ visit_id: t.visit_id, patient_id: t.patient_id, name: ob.name, ...(ob.phone ? { phone: ob.phone } : {}) });
     if (!parsed.success) return this.note(l, "I could not use that name, so nothing was recorded. Say the name again.", "refusal");
     const prior = [...t.order].reverse().map((id) => t.actions.get(id)!).find((a) => a.kind === IDENTITY_KIND && !["cancelled", "refused", "failed"].includes(a.state));
@@ -3264,12 +3266,17 @@ export class EmrRuntime {
     const asked = labAsked(text);
     const kind = asked === "cancel" ? CANCEL_TEST_KIND : RECEIVE_KIND;
     const all = open.filter((x) => x.d.task_kind === "lab_order" && x.d.subject_id && x.d.delegation_id);
-    if (!asked || !all.length || !this.kinds(owner).includes(asked === "unclear" ? RECEIVE_KIND : kind)) return null;
+    const acts = asked === "receive" || asked === "cancel";
+    if (!asked || !all.length || !(acts ? this.kinds(owner).includes(kind) : this.kinds(owner).some((k) => k === RECEIVE_KIND || k === CANCEL_TEST_KIND))) return null;
     const tests = this.o.port.orderables?.().tests ?? {};
     const low = ` ${text.toLowerCase().replace(/[^a-z0-9]+/g, " ")} `;
     const said = Object.entries(tests).filter(([, ws]) => ws.some((w) => low.includes(` ${w.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `))).map(([k]) => k);
+    // A question or a conditional is about the lab only when it names a test or the lab's own act, so a question to a patient passes by.
+    if (!acts && asked !== "unclear" && !said.length && !LAB_ACT_WORDS.test(low)) return null;
     const testOf = (d: EmrDelegation) => Object.keys(tests).find((k) => new RegExp(`\\btest: ${k.replace(/_/g, " ")}(,|$)`, "i").test(d.instruction ?? "")) ?? null;
-    const here = all.filter((x) => target && ((target.patient_id && x.l.task.patient_id === target.patient_id) || (target.admission_id && x.l.task.admission_id === target.admission_id)));
+    // A stay alone names its patient through any task on that stay, so a test handed to the lab before the admission is still this patient's.
+    const pid = target?.patient_id ?? (target?.admission_id ? [...this.live.values()].find((x) => x.task.admission_id === target.admission_id && x.task.patient_id)?.task.patient_id : undefined);
+    const here = all.filter((x) => target && ((pid && x.l.task.patient_id === pid) || (target.admission_id && x.l.task.admission_id === target.admission_id)));
     // An explicit patient is never widened to everyone's lab tasks.
     const scoped = target && (target.patient_id || target.admission_id) ? here : all;
     if (!scoped.length) return null;
@@ -3282,8 +3289,12 @@ export class EmrRuntime {
     const home = (hits[0] ?? scoped.at(-1)!).l;
     const lineId = this.ruledLine(home, owner, text, spokenAt, source, "lab", vp, unverifiedReason);
     const name = (k: string | null) => (k ? tests[k]?.[0] ?? k : "a test");
-    if (asked === "unclear") {
-      this.ask(home, lineId, `I did not act: that line says ${said.length === 1 ? `the ${name(said[0]!)}` : "a test"} was not received or not cancelled. Say "received the ${said.length === 1 ? name(said[0]!) : "test"}" or "cancel the ${said.length === 1 ? name(said[0]!) : "test"}" with the reason if you want me to.`);
+    const which = said.length === 1 ? name(said[0]!) : "test";
+    // A question or a conditional is asked about with what to say to act, and nothing is sent.
+    if (!acts) {
+      this.ask(home, lineId, asked === "question" ? `I did not act: that was a question, not an instruction. Say "received the ${which}" or "cancel the ${which}" with the reason if you want me to.`
+        : asked === "conditional" ? `I did not act: that line says if or when. Say "received the ${which}" once it is, or "cancel the ${which}" with the reason.`
+        : `I did not act: that line says ${said.length === 1 ? `the ${which}` : "a test"} was not received or not cancelled. Say "received the ${which}" or "cancel the ${which}" with the reason if you want me to.`);
       this.settle(home, "lab_line");
       return { task_id: home.task.task_id, line_id: lineId };
     }
