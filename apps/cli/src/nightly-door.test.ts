@@ -64,13 +64,15 @@ const profile = (base: string, deny = ["ward/close"], alerts = false) => DoorPro
   targets: { admission_by_patient: {}, episode_by_admission: {} },
   memos: { path: "night/memo", ...(alerts ? { alerts_path: "night/memo/alerts" } : {}), sender: SENDER, sender_label: "Synthetic department lead (disclosed)" }
 });
-const publisherOver = (s: nightly.NightSources, base: string, deny?: string[], alerts = false) => {
-  const door = doorMemoTransport(new PisgahPort(profile(base, deny, alerts), { bearers: { [SENDER]: "test-bearer" } }), { run_id: "run-test", now: () => new Date("2026-10-30T01:00:00.000Z") });
+// Each recipient's own agent bearer, since the hospital takes a memo only from the agent of the person it is for.
+const OWN_BEARERS = { [DOC]: "doc-bearer", [INTRUDER]: "intruder-bearer", [NURSE]: "nurse-bearer" };
+const publisherOver = (s: nightly.NightSources, base: string, deny?: string[], alerts = false, bearers: Record<string, string> = OWN_BEARERS) => {
+  const door = doorMemoTransport(new PisgahPort(profile(base, deny, alerts), { bearers }), { run_id: "run-test", now: () => new Date("2026-10-30T01:00:00.000Z") });
   return { door, p: nightly.memoPublisher({ sources: s, transport: door, now: () => NOW }) };
 };
 
 describe("the nightly memo through the door", () => {
-  it("posts a verified memo under the profile's sender with the provenance headers and an idempotency key", async () => {
+  it("posts a verified memo under the recipient's own agent with the provenance headers and an idempotency key", async () => {
     const d = await fakeMemoDoor();
     try {
       const s = sources();
@@ -78,10 +80,22 @@ describe("the nightly memo through the door", () => {
       expect(r.status).toBe("delivered");
       expect(d.seen).toHaveLength(1);
       const h = d.seen[0]!.headers;
-      expect([d.seen[0]!.path, h["authorization"], h["x-door-for"], h["x-door-origin"], h["x-door-spoken"]]).toEqual(["night/memo", "Bearer test-bearer", SENDER, "voice", "2026-10-30T01:00:00.000Z"]);
+      expect([d.seen[0]!.path, h["authorization"], h["x-door-for"], h["x-door-origin"], h["x-door-spoken"]]).toEqual(["night/memo", "Bearer nurse-bearer", NURSE, "voice", "2026-10-30T01:00:00.000Z"]);
       expect(h["x-door-evidence"]).toMatch(/^nightly:run-test\/m-[0-9a-f]{8}$/);
       expect(h["x-door-key"]).toMatch(/^memo-m-[0-9a-f]{8}-[0-9a-f]{16}$/);
       expect(d.seen[0]!.body.payloadHash).toBe(nightly.payloadHash(memoFor(s, NURSE)));
+    } finally { await d.close(); }
+  });
+
+  it("never sends a memo whose recipient's own agent has no bearer here, not even under the profile's sender", async () => {
+    const d = await fakeMemoDoor();
+    try {
+      const s = sources();
+      const { door, p } = publisherOver(s, d.base, undefined, false, { [DOC]: "doc-bearer", [SENDER]: "sender-bearer" });
+      const r = await p.publish(memoFor(s, NURSE));
+      expect(r.status).not.toBe("delivered");
+      expect(d.seen).toHaveLength(0);
+      expect(door.log).toMatchObject([{ recipient_id: NURSE, outcome: "not_sent", reason: "no bearer for the recipient's own agent" }]);
     } finally { await d.close(); }
   });
 
