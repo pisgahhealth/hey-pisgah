@@ -509,8 +509,20 @@ describe("F6: a spelled surname always lands", () => {
   it("still asks when two parts are candidates, or none is", () => {
     expect(spelledName("spelt A-D-U", "Ada Ade")).toEqual({ ask: ["Ada", "Ade"], word: "Adu" });
     expect(spelledName("spelt A, D, E, Y, E, M, I", "Ada Abu")).toEqual({ ask: ["Ada", "Abu"], word: "Adeyemi" });
-    expect(spelledName("spelt O, K, O, R, O", "Blessing Adimi")).toEqual({ ask: ["Blessing", "Adimi"], word: "Okoro" });
+    expect(spelledName("spelt O, K, O, R, O", "Blessing Adimi")).toEqual({ ask: [], word: "Okoro" });
     expect(spelledName("Her first name and her surname, spelt A, D, U.", "Ada Ade")).toEqual({ ask: ["Ada", "Ade"], word: "Adu" });
+  });
+
+  it("says it could not tell which part when no part is named and none shares the first letter", async () => {
+    const b = boot(() => ASIDE);
+    const task = await arrival(b);
+    await sayOn(b.rt, task, "Her name is Blessing Adimi.");
+    await b.rt.settled();
+    await sayOn(b.rt, task, "It is spelt O, K, O, R, O.");
+    await b.rt.settled();
+    expect(of(b.port, IDENTITY_KIND).map((w) => w.args["name"])).toEqual(["Blessing Adimi"]);
+    expect(b.rt.view(task)!.questions.at(-1)!.text).toBe("I could not tell which part of the name that spelling is for, so I did not change it. Say the full name, or say which part.");
+    await b.rt.stop();
   });
 
   it("amends Adimi to Adeyemi on the record from A02S, and no note names her", async () => {

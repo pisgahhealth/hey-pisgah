@@ -100,7 +100,8 @@ export function spelledName(line: string, held: string): { name: string } | { as
   const near = same.length === 1 ? same : same.filter((x) => x.d <= Math.max(2, Math.floor(word.length / 3)));
   const best = Math.min(...near.map((x) => x.d));
   const top = named !== null ? [{ i: named }] : near.filter((x) => x.d === best);
-  if (top.length !== 1) return { ask: top.length ? top.map((x) => parts[x.i]!) : same.length ? same.map((x) => parts[x.i]!) : parts, word };
+  // The ask lists the parts the spelling could be for, and is empty when it fits none.
+  if (top.length !== 1) return { ask: (top.length ? top : same).map((x) => parts[x.i]!), word };
   if (parts[top[0]!.i] === word) return null;
   parts[top[0]!.i] = word;
   return { name: parts.join(" ") };
