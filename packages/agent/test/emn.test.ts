@@ -62,6 +62,8 @@ const gate = (s: string): W[] => {
   if (s === PC) return [{ class: "finding", section: "presenting_complaint", text: "highhigh fever and confusion", confidence: 0.9 }];
   if (s === EXAM) return [{ class: "finding", section: "examination", text: s, confidence: 0.9 }];
   if (s === RR) return [ins("record_triage_vitals", { resp_rate: 24, text: "Respiratory rate 24" })];
+  if (s === "Admit her for severe malaria") return [ins("admit_patient", { text: "severe malaria" })];
+  if (s === "Admit her to the children's ward for severe malaria") return [ins("admit_patient", { ward: "childrens", text: "severe malaria" })];
   if (/admit/i.test(s)) return [ins("request_admission", { text: "observation" })];
   return ASIDE;
 };
@@ -136,12 +138,30 @@ describe("EMN 3: an emergency admission asks no ward class", () => {
 
   it("asks the ward class only when the hospital refuses for want of one", async () => {
     const b = boot(gate);
-    b.port.refuseAdmission = "A ward class is needed: no Accident and Emergency ward is set up.";
+    b.port.refuseAdmission = "Say which ward class to admit to: general, private, ICU, HDU or another.";
     const task = await arrival(b);
     await sayOn(b, task, "Let's admit her for observation.");
     await b.rt.settled();
     expect(b.rt.view(task)!.questions.at(-1)!.text).toBe("Which ward class should I request: general, private, ICU, HDU or another?");
     await b.rt.stop();
+  });
+
+  it("sends 'Admit her for severe malaria' on an emergency arrival as a request with no class, and a named ward keeps the direct admission", async () => {
+    const b = boot(gate);
+    const task = await arrival(b);
+    await sayOn(b, task, "Admit her for severe malaria");
+    await b.rt.settled();
+    expect(b.rt.view(task)!.questions.map((q) => q.text).join(" ")).not.toMatch(/which ward|ward class|emergency or a planned/i);
+    expect(of(b, "admit_patient")).toHaveLength(0);
+    expect(of(b, "request_admission").map((w) => w.args)).toEqual([{ visit_id: ARRIVAL_VISIT, patient_id: ARRIVAL, admission_type: "emergency", reason: "severe malaria" }]);
+    const c = boot(gate);
+    const other = await arrival(c);
+    await sayOn(c, other, "Admit her to the children's ward for severe malaria");
+    await c.rt.settled();
+    expect(of(c, "request_admission")).toHaveLength(0);
+    expect(of(c, "admit_patient").map((w) => w.args)).toEqual([{ visit_id: ARRIVAL_VISIT, patient_id: ARRIVAL, ward: "childrens", admission_type: "emergency", reason: "severe malaria" }]);
+    await b.rt.stop();
+    await c.rt.stop();
   });
 
   it("still asks the ward class for an ordinary patient's admission", async () => {

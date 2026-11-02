@@ -1666,7 +1666,7 @@ export class EmrRuntime {
         if (!wardClass && !emergency) return this.ask(l, lineId, WARD_CLASS_ASK);
         const admissionType = c.admission_type && wordSaid(c.admission_type, line) ? c.admission_type : emergency ? "emergency" : null;
         if (!admissionType) return this.ask(l, lineId, "Is this an emergency or a planned admission?");
-        raw = { visit_id: t.visit_id, ...ids, ...(wardClass ? { ward_class: wardClass } : {}), admission_type: admissionType, reason: said(c.text) ?? words };
+        raw = { visit_id: t.visit_id, ...ids, ...(wardClass ? { ward_class: wardClass } : {}), admission_type: admissionType, reason: emergency ? admissionReason(line) : said(c.text) ?? words };
         break;
       }
       case "record_triage_vitals": {
@@ -1757,9 +1757,12 @@ export class EmrRuntime {
       case "admit_patient": {
         if (!needVisit()) return;
         const ward = this.wardSaid(c.ward, line);
+        // An emergency arrival with no ward or class said is requested with no class, so the hospital places it in its A&E ward or asks back by refusing.
+        if (!ward && t.entry === "emergency" && !(c.ward_class && wordSaid(c.ward_class, line)) && this.kinds(t.owner).includes("request_admission")) return this.applyWork(l, lineId, { ...c, kind: "request_admission" } as AnyClause, "request_admission");
         if (!ward) return this.ask(l, lineId, `Which ward should I admit to? I know ${Object.values(this.o.port.names?.().wards ?? {}).map((w) => w[0]).join(", ") || "none"}.`);
-        if (!c.admission_type || !wordSaid(c.admission_type, line)) return this.ask(l, lineId, "Is this an emergency or a planned admission?");
-        raw = { visit_id: t.visit_id, ...ids, ward, admission_type: c.admission_type, reason: admissionReason(line) };
+        const type = c.admission_type && wordSaid(c.admission_type, line) ? c.admission_type : t.entry === "emergency" ? "emergency" : null;
+        if (!type) return this.ask(l, lineId, "Is this an emergency or a planned admission?");
+        raw = { visit_id: t.visit_id, ...ids, ward, admission_type: type, reason: admissionReason(line) };
         break;
       }
       case "assign_bed": {
