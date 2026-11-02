@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { EMERGENCY_KIND, IDENTITY_KIND, spelledName } from "../src/emr/entry.js";
 import type { EmrCommit, EmrContext, EmrTarget, Provenance, WorkArgs } from "../src/emr/port.js";
 import type { SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
-import { cleanNoteText } from "../src/emr/work.js";
+import { fromLine } from "../src/emr/runtime.js";
+import { cleanNoteText, fromLineOrSwapped, personSwap } from "../src/emr/work.js";
 import { CLERK_KINDS, ClerkFake, DOC, PAT, clerkBoot, ins, type W } from "./clerking-helpers.js";
 
 // Lane EMN: a clean note, a spelling that never lands on the wrong part, and no ward class question on an emergency arrival.
@@ -27,7 +28,7 @@ class EmnFake extends ClerkFake {
     return v[0] === 5 ? { speaker: "owner", token: TOKEN(this.n) } : v[0] === 4 ? { speaker: "other_clinician", label: "Dr B", role: "doctor" } as SpeakerVerdict : { speaker: "unverified", reason: "no_match" };
   };
   override async resolve(target: EmrTarget): Promise<EmrContext> {
-    if (target.patient_id === ARRIVAL) return { admission_id: "", patient_id: ARRIVAL, visit_id: ARRIVAL_VISIT, label: "Unknown arrival 17:22", facts: { ward: null, bed: null }, keywords: [] };
+    if (target.patient_id === ARRIVAL) return { admission_id: "", patient_id: ARRIVAL, visit_id: ARRIVAL_VISIT, label: "Unknown arrival 17:22", facts: { ward: null, bed: null, sex: "female" }, keywords: [] };
     return super.resolve(target);
   }
 }
@@ -51,7 +52,13 @@ const PC = "Presenting complaint highhigh fever and confusion.";
 const EXAM = "um stomach seems a bit stiff, pale, febrile and drowsy, no neck stiffness";
 const RR = "Respiratory rate 24.";
 const SPELL = "um just to get the spelling right okay A F O R I'm going to try to check your vitals now Madam Okafor";
+const SAID = "I've been having fever for three days and I've been vomiting and very drowsy in fact I just fell off in the market";
+const THIRD = "Has been having fever for three days and has been vomiting and very drowsy, in fact just fell off in the market";
 const gate = (s: string): W[] => {
+  if (s === SAID) return [{ class: "patient_reported", text: s, confidence: 0.9 }];
+  if (s === "I've had a cough. My chest hurts.") return [{ class: "patient_reported", text: "Two weeks of productive cough with chest pain.", confidence: 0.9 }];
+  if (s === "Doctor, I've been coughing.") return [{ class: "patient_reported", text: "Has been coughing.", confidence: 0.9 }];
+  if (s === "I fell at home." || s === "I saw her in my clinic last week.") return [{ class: "finding", section: "history", text: s, confidence: 0.9 }];
   if (s === PC) return [{ class: "finding", section: "presenting_complaint", text: "highhigh fever and confusion", confidence: 0.9 }];
   if (s === EXAM) return [{ class: "finding", section: "examination", text: s, confidence: 0.9 }];
   if (s === RR) return [ins("record_triage_vitals", { resp_rate: 24, text: "Respiratory rate 24" })];
@@ -143,6 +150,43 @@ describe("EMN 3: an emergency admission asks no ward class", () => {
     await b.rt.settled();
     expect(of(b, "request_admission")).toHaveLength(0);
     expect(b.rt.view(a.task_id)!.questions.at(-1)!.text).toBe("Which ward class should I request: general, private, ICU, HDU or another?");
+    await b.rt.stop();
+  });
+});
+
+describe("EMN 4: the patient's own words in third person by a fixed table", () => {
+  it("swaps the 2 Nov line and nothing outside the table", () => {
+    expect(personSwap(SAID, "female")).toBe(THIRD);
+    expect(personSwap(SAID, null)).toBe(THIRD);
+    expect(personSwap("My head hurts. I fell at home.", "female")).toBe("Her head hurts. Fell at home.");
+    expect(personSwap("My head hurts and it hurts me.", "male")).toBe("His head hurts and it hurts him.");
+    expect(personSwap("I hurt myself.", null)).toBe("Hurt themselves.");
+    expect(personSwap("I'm tired. I was at work. I have a rash.", "f")).toBe("Is tired. Was at work. Has a rash.");
+    // A sentence keeping an "I" the table cannot place stays exactly as said, and third person stays as it is.
+    expect(personSwap("I feel dizzy and my head hurts.", "female")).toBe("I feel dizzy and my head hurts.");
+    expect(personSwap("I have a headache since I woke up.", "female")).toBe("I have a headache since I woke up.");
+    expect(personSwap(THIRD, "female")).toBe(THIRD);
+  });
+
+  it("accepts the gate's text when it is the line after the swap, and never free text", () => {
+    expect(fromLineOrSwapped(THIRD, SAID, "female", fromLine)).toBe(true);
+    expect(fromLineOrSwapped("Three days of fever and vomiting, drowsy, collapsed at the market.", SAID, "female", fromLine)).toBe(false);
+    expect(fromLine(THIRD, SAID)).toBe(true);
+    expect(fromLineOrSwapped("Her chest hurts.", "My chest hurts.", "female", fromLine)).toBe(true);
+    expect(fromLine("Her chest hurts.", "My chest hurts.")).toBe(false);
+    expect(fromLineOrSwapped("Her chest hurts.", "My chest hurts.", "male", fromLine)).toBe(false);
+  });
+
+  it("writes the patient's words and an unmatched voice's history in third person, and leaves a clinician's own history as said", async () => {
+    const b = boot(gate);
+    const task = await arrival(b);
+    for (const [line, v] of [[SAID, STRANGER], ["I've had a cough. My chest hurts.", STRANGER], ["Doctor, I've been coughing.", STRANGER], ["I fell at home.", STRANGER], ["I saw her in my clinic last week.", OWNER]] as const) {
+      await sayOn(b, task, line, v);
+      await b.rt.settled();
+    }
+    const by = (sec: string) => of(b, "record_clerking").filter((w) => w.args["section"] === sec).map((w) => String(w.args["text"]));
+    expect(by("patient_reported")).toEqual([THIRD, "Has had a cough. Her chest hurts.", "Has been coughing."]);
+    expect(by("history")).toEqual(["Fell at home.", "I saw her in my clinic last week."]);
     await b.rt.stop();
   });
 });

@@ -276,6 +276,33 @@ export function cleanNoteText(text: string): string {
     .replace(/\s+([,.;!?])/g, "$1").replace(/([,;])(?:\s*[,;])+/g, "$1").replace(/^[\s,;]+/, "").replace(/\s{2,}/g, " ").trim();
 }
 
+// Words a patient's "I" may be dropped before, at the start of a sentence or clause: a past or modal verb, optionally after one adverb, so "I just fell" reads "just fell" and "I feel" is never touched.
+const I_ADVERB = "(?:just|also|then|suddenly|really|actually|even|still|never|first|later)";
+const I_VERB = "(?:[a-z]{2,}ed|fell|had|felt|went|came|got|took|ate|drank|saw|began|lost|slept|woke|threw|bled|broke|hit|hurt|ran|left|did|didn't|couldn't|can't|cannot|could|can|won't|wouldn't|would|will|should|must|might)";
+// The fixed first-to-third person table, most specific first; the third person form depends on the patient's recorded sex.
+function swapTable(sex: string | null | undefined): readonly [RegExp, string][] {
+  const f = /^(?:f|female|woman|girl)$/i.test(sex ?? ""), m = /^(?:m|male|man|boy)$/i.test(sex ?? "");
+  const [poss, obj, refl] = f ? ["her", "her", "herself"] : m ? ["his", "him", "himself"] : ["their", "them", "themselves"];
+  return [
+    [/\bI(?:'|\u2019)ve been\b|\bI have been\b/g, "has been"], [/\bI(?:'|\u2019)ve\b|\bI have\b/g, "has"], [/\bI(?:'|\u2019)m\b|\bI am\b/g, "is"], [/\bI was\b/g, "was"],
+    [new RegExp(`(^|\\b(?:and|but|then|so|in fact)\\s+|,\\s*)I\\s+(?=(?:${I_ADVERB}\\s+)?${I_VERB}\\b)`, "gi"), "$1"],
+    [/\bmyself\b/gi, refl], [/\bmy\b/gi, poss], [/\bme\b/gi, obj]
+  ];
+}
+// The patient's own words in third person by the fixed table only; a sentence keeping an "I" the table cannot place stays exactly as said.
+export function personSwap(text: string, sex?: string | null): string {
+  const table = swapTable(sex);
+  return text.split(/(?<=[.!?])\s+/).map((sentence) => {
+    let out = sentence;
+    for (const [re, to] of table) out = out.replace(re, to);
+    if (out === sentence || /\bI\b|\bI(?:'|\u2019)(?:d|ll)\b/.test(out)) return sentence;
+    out = out.replace(/\s{2,}/g, " ").replace(/([^,.;:!?])\s+in fact\b/gi, "$1, in fact").trim();
+    return out.charAt(0).toUpperCase() + out.slice(1);
+  }).join(" ");
+}
+// True when a clause's text is the line's own words, or the line's words after the person swap and nothing else.
+export const fromLineOrSwapped = (words: string, line: string, sex: string | null | undefined, fromLine: (w: string, l: string) => boolean): boolean => fromLine(words, line) || fromLine(words, personSwap(line, sex));
+
 // The clinical reason an admission line states ("admit her for dehydration"), never the instruction words themselves; unstated stays honest.
 export const NO_ADMISSION_REASON = "Not yet stated";
 export function admissionReason(line: string): string {

@@ -8,7 +8,7 @@ import { primaryClass } from "./classes.js";
 import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
-import { BATCH_KINDS, admissionReason, cleanNoteText, NEW_RECORD_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
+import { BATCH_KINDS, admissionReason, cleanNoteText, fromLineOrSwapped, personSwap, NEW_RECORD_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
@@ -1543,16 +1543,21 @@ export class EmrRuntime {
   private applyClause(l: Live, lineId: string, c: AnyClause, floor: number, kinds: readonly string[], prov: Provenance): void {
     const t = l.task;
     const lineText = t.lines.find((x) => x.id === lineId)?.text ?? "";
+    // The patient's own words go into the note in third person by the fixed swap table only, with the patient's recorded sex or else "their".
+    const sex = l.ctxOf.get(lineId)?.facts["sex"] ?? null;
+    const reported = (x: string) => personSwap(cleanNoteText((c.text && fromLineOrSwapped(c.text, lineText, sex, fromLine) ? c.text : x).trim()), sex);
     // What the patient or a relative said goes only into its own section of the note; no kind it names is ever acted on.
     if (c.class === "patient_reported") {
-      if (kinds.includes(CLERKING_KIND) && t.visit_id) this.proposeClerking(l, lineId, "patient_reported", (c.text && fromLine(c.text, lineText) ? c.text : c.words).trim());
+      if (kinds.includes(CLERKING_KIND) && t.visit_id) this.proposeClerking(l, lineId, "patient_reported", reported(c.words));
       return;
     }
     // A finding said aloud is documentation, written into its section of the clerking note.
     if (c.class === "finding") {
       if (!kinds.includes(CLERKING_KIND)) return;
       if (!t.visit_id) { this.note(l, "Heard a finding, but no arrival is in context, so the note was not written."); return; }
-      this.proposeClerking(l, lineId, c.section ?? "history", (c.text && fromLine(c.text, lineText) ? c.text : c.words).trim());
+      // A clinician's own "I" and "my" are theirs, so history is swapped only when the voice heard matched no clinician.
+      const section = c.section ?? "history", unmatched = this.speakerOf(t, lineId)?.speaker === "unverified";
+      this.proposeClerking(l, lineId, section, section === "history" && unmatched ? reported(c.words) : (c.text && fromLine(c.text, lineText) ? c.text : c.words).trim());
       return;
     }
     if (c.class === "unclear") {
