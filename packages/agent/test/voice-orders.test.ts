@@ -80,7 +80,7 @@ describe("voice orders, attribution and countersign", () => {
     await rt.stop();
   });
 
-  it("records another clinician's finding as theirs and refuses their order, and marks an unmatched finding unverified", async () => {
+  it("records another clinician's finding with who said it on its line, refuses their order, and marks an unmatched line unverified, never inside the note", async () => {
     const { rt, port } = orderBoot((s) => (s.startsWith("Chest") ? [{ class: "finding", section: "examination", text: s }] : s.includes("paracetamol") ? [ins("prescribe", { drug: "paracetamol_iv" })] : []));
     const v = await sayAs(rt, "Chest is clear on both sides.", DR_B);
     await rt.settled();
@@ -89,7 +89,8 @@ describe("voice orders, attribution and countersign", () => {
     await sayAs(rt, "Chest sounds a little wheezy.", STRANGER);
     await rt.settled();
     const notes = port.writes.filter((w) => w.kind === "record_clerking").map((w) => String(w.args["text"]));
-    expect(notes).toEqual(["Dr. Bisi said: Chest is clear on both sides.", "Speaker not verified: Chest sounds a little wheezy."]);
+    expect(notes).toEqual(["Chest is clear on both sides.", "Chest sounds a little wheezy."]);
+    expect(port.writes.find((w) => w.kind === "record_clerking")!.prov.evidence).toBe(`transcript:${v.line_id}`);
     expect(port.writes.some((w) => w.kind === "prescribe")).toBe(false);
     const view = rt.view(v.task_id)!;
     expect(view.notes.some((n) => /Dr\. Bisi's orders need Dr\. Bisi's own session/.test(n.text))).toBe(true);

@@ -266,6 +266,15 @@ export function doseAgrees(dose: string, second: string): boolean {
   return dosesIn(second).some((d) => d.n === first.n && (first.unit === null || d.unit === first.unit));
 }
 
+// Real words that are one part said twice, which an ear stutter must never halve.
+const DOUBLED_WORDS = new Set(["beriberi", "couscous", "chowchow"]);
+// A note section as a clinician writes it: an ear stutter ("highhigh") halved and spoken fillers dropped, every other word kept as said.
+export function cleanNoteText(text: string): string {
+  return text.replace(/\b([A-Za-z]{4,})\1\b/g, (w: string, half: string) => (DOUBLED_WORDS.has(w.toLowerCase()) ? w : half))
+    .replace(/(^|[\s,;])(?:[Uu]h*m+|[Uu]h+|[Ee]rm+|er|[Hh]mm+)(?=$|[\s,.;!?])[,;]?/g, "$1")
+    .replace(/\s+([,.;!?])/g, "$1").replace(/([,;])(?:\s*[,;])+/g, "$1").replace(/^[\s,;]+/, "").replace(/\s{2,}/g, " ").trim();
+}
+
 // The clinical reason an admission line states ("admit her for dehydration"), never the instruction words themselves; unstated stays honest.
 export const NO_ADMISSION_REASON = "Not yet stated";
 export function admissionReason(line: string): string {

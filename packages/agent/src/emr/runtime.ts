@@ -8,7 +8,7 @@ import { primaryClass } from "./classes.js";
 import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
-import { BATCH_KINDS, admissionReason, NEW_RECORD_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
+import { BATCH_KINDS, admissionReason, cleanNoteText, NEW_RECORD_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
@@ -1550,7 +1550,7 @@ export class EmrRuntime {
     if (c.class === "finding") {
       if (!kinds.includes(CLERKING_KIND)) return;
       if (!t.visit_id) { this.note(l, "Heard a finding, but no arrival is in context, so the note was not written."); return; }
-      this.proposeClerking(l, lineId, c.section ?? "history", this.saidBy(t, lineId, (c.text && fromLine(c.text, lineText) ? c.text : c.words).trim()));
+      this.proposeClerking(l, lineId, c.section ?? "history", (c.text && fromLine(c.text, lineText) ? c.text : c.words).trim());
       return;
     }
     if (c.class === "unclear") {
@@ -1989,6 +1989,7 @@ export class EmrRuntime {
   // Writes one section of the clerking note; the consultation is opened for the owner first if this task has not opened it.
   private proposeClerking(l: Live, lineId: string, section: string, text: string, own: Record<string, unknown> = {}): void {
     const t = l.task;
+    text = cleanNoteText(text);
     if (!t.visit_id || !text) return;
     const kinds = this.kinds(t.owner);
     const opened = t.order.some((id) => { const a = t.actions.get(id)!; return a.kind === "open_consult" && !["cancelled", "refused", "failed"].includes(a.state); });
@@ -2278,18 +2279,17 @@ export class EmrRuntime {
     this.settle(l, "obligation_fired");
   }
 
-  private propose(l: Live, lineId: string, kind: string, rawArgs: WorkArgs, correctsId: string | null, own: Record<string, unknown> = {}): void {
+  private propose(l: Live, lineId: string, kind: string, args: WorkArgs, correctsId: string | null, own: Record<string, unknown> = {}): void {
     const t = l.task;
     const who = this.speakerOf(t, lineId);
-    const summary = kind === OBSERVATION_KIND ? summarise(rawArgs as ObservationArgs, correctsId) : summariseWork(kind, rawArgs);
-    // Only the owner's own matched voice changes the patient's care; documentation from another voice is kept and marked with who said it; a name said for an emergency arrival counts from anyone attending, the patient included (D39, D40).
+    const summary = kind === OBSERVATION_KIND ? summarise(args as ObservationArgs, correctsId) : summariseWork(kind, args);
+    // Only the owner's own matched voice changes the patient's care; documentation from another voice is kept, with who said it on the line the record cites, never inside the record's words; a name said for an emergency arrival counts from anyone attending, the patient included (D39, D40).
     const needsOwner = kind !== "countersign" && kind !== IDENTITY_KIND && (ORDER_KINDS.has(kind) || kind === VERBAL_ORDER_KIND || (who !== null && !DOCUMENTATION_KINDS.has(kind)));
     if (needsOwner && who?.speaker === "other_clinician") {
       this.append(l, "speaker.refused", { line_id: lineId, kind, speaker: who.label });
       this.note(l, `${who.label} said: ${summary}. Not done: ${who.label}'s orders need ${who.label}'s own session; a voice never changes whose agent this is.`);
       return this.settle(l, "other_clinician");
     }
-    const args = DOCUMENTATION_KINDS.has(kind) && who && who.speaker !== "owner" ? this.attributed(kind, rawArgs, who) : rawArgs;
     // A registration whose receptionist has no voice on file is taken on her session, and the hospital records it so (R-22); nothing else is.
     const bySession = kind === REGISTER_KIND && who?.speaker === "unverified" && who.reason === "owner_not_enrolled";
     let awaiting: EmrAction["awaiting"] = needsOwner && who?.speaker !== "owner" && !bySession ? "owner_voice" : null;
@@ -2346,21 +2346,6 @@ export class EmrRuntime {
     const rec = recordOf(r.v, r.embed_ms, r.match_ms);
     this.append(l, "speaker.attributed", { line_id: lineId, speaker: rec });
     return rec;
-  }
-
-  // Words another clinician said carry their name, and words nobody could be matched to say so.
-  private saidBy(t: EmrTask, lineId: string, text: string): string {
-    const who = this.speakerOf(t, lineId);
-    if (!who || who.speaker === "owner") return text;
-    return who.speaker === "other_clinician" ? `${who.label} said: ${text}` : `Speaker not verified: ${text}`;
-  }
-
-  private attributed(kind: string, a: WorkArgs, who: SpeakerRecord): WorkArgs {
-    const tag = who.speaker === "other_clinician" ? `${who.label} said` : "Speaker not verified";
-    if (kind === OBSERVATION_KIND) return { ...a, remark: [tag, a["remark"]].filter(Boolean).join(". ").slice(0, 300) };
-    if (kind === "record_triage_vitals") return { ...a, note: [tag, a["note"]].filter(Boolean).join(". ").slice(0, 500) };
-    if ((kind === "record_note" || kind === "draft_consult_note") && typeof a["text"] === "string" && !a["text"].startsWith(tag)) return { ...a, text: `${tag}: ${a["text"]}` };
-    return a;
   }
 
   // The test or medicine key the line names: the gate's key when its words were said, else the one key whose words were said.
@@ -2655,10 +2640,9 @@ export class EmrRuntime {
   }
 
   // Proposes one observation; when the line came with audio, the second ear reads the values said in it while the action waits on its hold.
-  private proposeObservation(l: Live, lineId: string, observed: ObservationArgs, correctsId: string | null, own: Record<string, unknown>): void {
+  // Who said the values stays on the line the record cites, never inside the chart's remark.
+  private proposeObservation(l: Live, lineId: string, args: ObservationArgs, correctsId: string | null, own: Record<string, unknown>): void {
     const t = l.task;
-    const who = this.speakerOf(t, lineId);
-    const args = who && who.speaker !== "owner" ? (this.attributed(OBSERVATION_KIND, observed, who) as ObservationArgs) : observed;
     const actionId = `a-${shortHash(t.task_id, lineId, t.order.length + 1)}`;
     const ears = this.startCheck(l, actionId, lineId, own);
     const anchor = this.anchorOf(t, lineId);
