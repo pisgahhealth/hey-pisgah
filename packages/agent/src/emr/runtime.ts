@@ -8,7 +8,7 @@ import { primaryClass } from "./classes.js";
 import { CLERKING_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
-import { BATCH_KINDS, admissionReason, cleanNoteText, fromLineOrSwapped, personSwap, NEW_RECORD_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, summariseWork, wordSaid, type WorkKind } from "./work.js";
+import { BATCH_KINDS, admissionReason, cleanNoteText, fromLineOrSwapped, personSwap, NEW_RECORD_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, sentNote, summariseWork, withoutDestination, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
@@ -790,7 +790,7 @@ export class EmrRuntime {
         // Voice tokens live in memory only, so an order a pre-restart line authorised can never be sent; it is cancelled with an honest note, never sent bare.
         if (a.state === "proposed" && this.tokenLost(l.task, a)) {
           this.append(l, "action.cancelled", { action_id: aid, reason: "voice_token_lost_in_restart" });
-          this.note(l, `${a.summary.replace(/, as a voice order awaiting your countersign$/, "")}: not sent. The agent restarted before it went, and your voice match did not survive the restart. Say it again.`, "refusal");
+          this.note(l, `${withoutDestination(a.summary)}: not sent. The agent restarted before it went, and your voice match did not survive the restart. Say it again.`, "refusal");
           continue;
         }
         if (a.state === "acknowledged" && !a.unverified) this.enqueueExec(l, () => this.execute(l, aid));
@@ -830,7 +830,7 @@ export class EmrRuntime {
       return this.execute(l, a.action_id);
     }
     this.append(l, "action.cancelled", { action_id: a.action_id, reason: "voice_token_lost_in_restart" });
-    this.note(l, `${a.summary.replace(/, as a voice order awaiting your countersign$/, "")}: the agent restarted while it was on its way and your voice match did not survive, so it was not sent again. Check the record before you say it again.`, "refusal");
+    this.note(l, `${withoutDestination(a.summary)}: the agent restarted while it was on its way and your voice match did not survive, so it was not sent again. Check the record before you say it again.`, "refusal");
     this.settle(l, "token_lost");
   }
 
@@ -2424,7 +2424,7 @@ export class EmrRuntime {
   // A yes past the confirm's window asks again with a fresh read-back; a yes naming none of several confirms asks which; nothing is sent either way.
   private confirmRefused(l: Live, lineId: string, q: EmrQuestion, why: "late" | "unbound"): void {
     const a = q.rule && "action_id" in q.rule ? l.task.actions.get(q.rule.action_id) : undefined;
-    const what = a ? a.summary.replace(/, as a voice order awaiting your countersign$/, "") : "it";
+    const what = a ? withoutDestination(a.summary) : "it";
     this.append(l, "confirm.refused", { line_id: lineId, question_id: q.question_id, reason: why });
     if (why === "late") {
       const secs = Math.round((this.o.confirmWindowMs ?? 60_000) / 1000);
@@ -3064,6 +3064,8 @@ export class EmrRuntime {
     }
     if (a.kind === "draft_handover" && a.draft) this.ask(l, a.line_id, `Handover draft for your review: "${a.draft.slice(0, 900)}" Say save the handover to record it, or tell me what to change.`);
     if (a.kind === "draft_stay_summary" && a.draft) this.ask(l, a.line_id, `Summary draft for your review: "${a.draft.slice(0, 900)}" Say save the summary to record it on the stay, or tell me what to change.`, null, null, this.offerOf(t, a)?.offer ?? null);
+    const sent = sentNote(a.kind, a.args);
+    if (sent) this.note(l, sent);
     if (a.kind === "prepare_bill" && a.report) this.note(l, a.report);
     // A pay link read back from the bill proves only that the request is recorded.
     if (a.kind === "send_pay_link") this.note(l, PAY_LINK_VERIFIED_NOTE);

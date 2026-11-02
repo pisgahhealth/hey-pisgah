@@ -77,6 +77,14 @@ describe("voice orders, attribution and countersign", () => {
     const second = port.writes.filter((w) => w.kind === "order_test")[1]!;
     expect(second.args["priority"]).toBe("urgent");
     expect(second.prov.voice?.authorisation).toContain(`transcript:${b.line_id}~`);
+    // The doctor's own order goes straight to the lab: no countersign is promised or proposed, and the strip says where it went.
+    const view = rt.view(b.task_id)!;
+    const orders = view.actions.filter((x) => x.kind === "order_test");
+    expect(orders.every((x) => !/countersign/i.test(x.summary))).toBe(true);
+    expect(orders.at(-1)!.summary).toMatch(/, to the lab$/);
+    expect(view.actions.some((x) => x.kind === "countersign")).toBe(false);
+    expect(view.notes.filter((n) => n.text === "Sent to the lab: fbc, urgent.")).toHaveLength(1);
+    expect(view.notes.every((n) => !/countersign/i.test(n.text))).toBe(true);
     await rt.stop();
   });
 
@@ -145,6 +153,9 @@ describe("voice orders, attribution and countersign", () => {
     expect(rx[0]!.args).toMatchObject({ drug: "morphine", dose: "5 mg", route: "iv", quantity: 1 });
     expect(rx[0]!.prov.voice?.confirmation).toContain(`transcript:${c.line_id}~`);
     expect(rx[0]!.prov.voice?.authorisation).toContain(`transcript:${a.line_id}~`);
+    const view = rt.view(a.task_id)!;
+    expect(view.actions.find((x) => x.kind === "prescribe")!.summary).toMatch(/, to pharmacy$/);
+    expect(view.notes.filter((n) => n.text === "Sent to pharmacy: morphine 5 mg IV, quantity 1.")).toHaveLength(1);
     await rt.stop();
   });
 

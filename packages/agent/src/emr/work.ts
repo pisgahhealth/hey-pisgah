@@ -146,6 +146,25 @@ export function cadenceSaid(code: string, line: string): boolean {
 // True when an enum value was said in the line, with underscores read as spaces.
 export const wordSaid = (value: string, line: string): boolean => ` ${line.toLowerCase().replace(/[^a-z0-9]+/g, " ")} `.includes(` ${value.toLowerCase().replace(/_/g, " ")} `);
 
+// The test as the strip names it, with its priority when it is not routine.
+const orderedTest = (a: Record<string, unknown>): string => `${String(a["test"]).replace(/_/g, " ")}${a["priority"] && a["priority"] !== "routine" ? `, ${a["priority"]}` : ""}`;
+
+// The medicine as the strip names it, from the words the order carries.
+const orderedMedicine = (a: Record<string, unknown>): string => {
+  const dose = a["dose"] ? ` ${String(a["dose"]).slice(0, 30)}` : "";
+  return `${String(a["drug"]).replace(/_/g, " ")}${dose}${a["route"] ? ` ${String(a["route"]).toUpperCase()}` : ""}${a["frequency"] ? `, ${a["frequency"]} times a day` : ""}${a["duration_days"] ? ` for ${a["duration_days"]} days` : ""}, quantity ${a["quantity"]}`;
+};
+
+// Where a doctor's own order went once the hospital proved it, for the strip; null for any other kind.
+export function sentNote(kind: string, a: Record<string, unknown>): string | null {
+  if (kind === "order_test") return `Sent to the lab: ${orderedTest(a)}.`;
+  if (kind === "prescribe") return `Sent to pharmacy: ${orderedMedicine(a)}.`;
+  return null;
+}
+
+// The summary without the place it goes, for a sentence that says it did not go.
+export const withoutDestination = (summary: string): string => summary.replace(/, to (?:the lab|pharmacy)$/, "");
+
 // A plain line for the strip, built from the arguments rather than from model text.
 export function summariseWork(kind: string, a: Record<string, unknown>): string {
   const t = (v: unknown, n = 80) => { const s = String(v ?? ""); return s.length > n ? `${s.slice(0, n - 3)}...` : s; };
@@ -171,8 +190,8 @@ export function summariseWork(kind: string, a: Record<string, unknown>): string 
     case "admit_patient": return `Admit, ${t(a["admission_type"])}, to the ${String(a["ward"]).replace(/_/g, " ")} ward on your authority: ${t(a["reason"], 60)}`;
     case "assign_bed": return `Put the patient on a free bed in the ${String(a["ward"]).replace(/_/g, " ")} ward`;
     case "schedule_review": return `Review due ${String(a["due_at"]).slice(11, 16)} UTC on the ward board: ${t(a["title"], 60)}`;
-    case "order_test": return `Send the test: ${String(a["test"]).replace(/_/g, " ")}${a["priority"] && a["priority"] !== "routine" ? `, ${a["priority"]}` : ""}, as a voice order awaiting your countersign`;
-    case "prescribe": return `Prescribe ${String(a["drug"]).replace(/_/g, " ")}${a["dose"] ? ` ${t(a["dose"], 30)}` : ""}${a["route"] ? ` ${String(a["route"]).toUpperCase()}` : ""}${a["frequency"] ? `, ${a["frequency"]} times a day` : ""}${a["duration_days"] ? ` for ${a["duration_days"]} days` : ""}, quantity ${a["quantity"]}, as a voice order awaiting your countersign`;
+    case "order_test": return `Send the test: ${orderedTest(a)}, to the lab`;
+    case "prescribe": return `Prescribe ${orderedMedicine(a)}, to pharmacy`;
     case "record_diagnosis": return `Record the diagnosis: "${t(a["diagnosis"], 120)}"`;
     // The name and phone stay in the args and the identity hold, behind the strip's tap, so no summary shows them.
     case "record_identity": return "Name recorded for the arrival; the desk completes the registration";
