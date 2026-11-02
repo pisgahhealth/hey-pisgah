@@ -96,6 +96,10 @@ export function spelledName(line: string, held: string): { name: string } | { as
   const parts = held.split(/\s+/).filter(Boolean);
   if (!parts.length) return null;
   const named = last !== first && parts.length > 1 ? (last ? parts.length - 1 : 0) : null;
+  // A run found inside a longer part is that part with letters the ear dropped, so it never replaces another part.
+  const holds = parts.map((p, i) => ({ i, p: p.toLowerCase() })).filter((x) => x.p !== word.toLowerCase() && x.p.includes(word.toLowerCase()));
+  if (holds.length && named === null) return null;
+  if (holds.length && !holds.some((x) => x.i === named)) return { ask: [parts[named!]!, ...holds.map((x) => parts[x.i]!)], word };
   const same = parts.map((p, i) => ({ i, d: editDistance(p.toLowerCase(), word.toLowerCase()) })).filter((x) => parts[x.i]![0]!.toLowerCase() === word[0]!.toLowerCase());
   const near = same.length === 1 ? same : same.filter((x) => x.d <= Math.max(2, Math.floor(word.length / 3)));
   const best = Math.min(...near.map((x) => x.d));

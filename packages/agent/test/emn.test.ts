@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { EMERGENCY_KIND, IDENTITY_KIND } from "../src/emr/entry.js";
+import { EMERGENCY_KIND, IDENTITY_KIND, spelledName } from "../src/emr/entry.js";
 import type { EmrCommit, EmrContext, EmrTarget, Provenance, WorkArgs } from "../src/emr/port.js";
 import type { SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
 import { cleanNoteText } from "../src/emr/work.js";
 import { CLERK_KINDS, ClerkFake, DOC, clerkBoot, ins, type W } from "./clerking-helpers.js";
 
-// Lane EMN: a clean note on an emergency arrival.
+// Lane EMN: a clean note and a spelling that never lands on the wrong part.
 const TOKEN = (n: number) => `v1.${String(1_761_700_000_000 + n)}.${"A".repeat(43)}`;
 const print = (n: number): Voiceprint => ({ vector: [n], ms: 20, model: "nemo_en_titanet_small" });
 const OWNER = print(5), DRB = print(4), STRANGER = print(1);
@@ -48,6 +48,7 @@ const ASIDE: W[] = [{ class: "aside", confidence: 0.9 }];
 const PC = "Presenting complaint highhigh fever and confusion.";
 const EXAM = "um stomach seems a bit stiff, pale, febrile and drowsy, no neck stiffness";
 const RR = "Respiratory rate 24.";
+const SPELL = "um just to get the spelling right okay A F O R I'm going to try to check your vitals now Madam Okafor";
 const gate = (s: string): W[] => {
   if (s === PC) return [{ class: "finding", section: "presenting_complaint", text: "highhigh fever and confusion", confidence: 0.9 }];
   if (s === EXAM) return [{ class: "finding", section: "examination", text: s, confidence: 0.9 }];
@@ -81,6 +82,29 @@ describe("EMN 1: the note reads as a clinician writes it", () => {
     const triage = of(b, "record_triage_vitals")[0]!;
     expect(triage.args["resp_rate"]).toBe(24);
     expect(String(triage.args["note"] ?? "")).not.toMatch(/said|not verified/i);
+    await b.rt.stop();
+  });
+});
+
+describe("EMN 2: a spelled run goes to the part it names or matches, never to a part it is not", () => {
+  it("leaves Amaka Okafor whole when the ear heard the surname's spelling as A F O R", () => {
+    expect(spelledName(SPELL, "Amaka Okafor")).toBeNull();
+    // A fragment of the surname said for the first name is asked, never written over it.
+    expect(spelledName("Spell her first name, A, F, O, R.", "Amaka Okafor")).toEqual({ ask: ["Amaka", "Okafor"], word: "Afor" });
+    // A named part still takes a run that is no fragment of another part.
+    expect(spelledName("Her surname is spelt O, K, O, R, O.", "Amaka Okafor")).toEqual({ name: "Amaka Okoro" });
+    expect(spelledName("A, M, A, K, A", "Amaka Okafo")).toBeNull();
+    expect(spelledName("O, K, A, F, O, R", "Amaka Okafo")).toEqual({ name: "Amaka Okafor" });
+  });
+
+  it("keeps the name the patient said when the spelling line follows it on the arrival", async () => {
+    const b = boot(() => ASIDE);
+    const task = await arrival(b);
+    await sayOn(b, task, "My name is Amaka Okafor", STRANGER);
+    await b.rt.settled();
+    await sayOn(b, task, SPELL);
+    await b.rt.settled();
+    expect(of(b, IDENTITY_KIND).map((w) => w.args["name"])).toEqual(["Amaka Okafor"]);
     await b.rt.stop();
   });
 });
