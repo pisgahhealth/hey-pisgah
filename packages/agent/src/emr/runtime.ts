@@ -504,6 +504,8 @@ export function earsSummary(rs: readonly EarsRecord[]): EmrTaskView["ears"] {
 export const answersOf = (c: QuestionChoice): string[] => [...(c.yes ? ["yes"] : []), ...c.options.map((o) => Object.values(o).join(" ")), "no"];
 
 const tokens = (t: string) => t.toLowerCase().replace(/[^a-z0-9.]+/g, " ").replace(/\.(?!\d)/g, " ").split(" ").filter(Boolean);
+// The one question for a ward class, asked before an ordinary request and after a refused emergency one.
+const WARD_CLASS_ASK = "Which ward class should I request: general, private, ICU, HDU or another?";
 // True when at least four in five of the clause's words are in the line, so a copied earlier line does not pass.
 export function fromLine(words: string, line: string): boolean {
   const w = tokens(words);
@@ -1653,9 +1655,13 @@ export class EmrRuntime {
       case "draft_consult_note": if (!needVisit()) return; raw = { visit_id: t.visit_id, ...ids, text: said(c.text) ?? words }; break;
       case "request_admission": {
         if (!needVisit()) return;
-        if (!c.ward_class || !wordSaid(c.ward_class, line)) return this.ask(l, lineId, "Which ward class should I request: general, private, ICU, HDU or another?");
-        if (!c.admission_type || !wordSaid(c.admission_type, line)) return this.ask(l, lineId, "Is this an emergency or a planned admission?");
-        raw = { visit_id: t.visit_id, ...ids, ward_class: c.ward_class, admission_type: c.admission_type, reason: said(c.text) ?? words };
+        // An emergency arrival is admitted as an emergency with no ward class asked; the hospital places it, and asks back only by refusing.
+        const emergency = t.entry === "emergency";
+        const wardClass = c.ward_class && wordSaid(c.ward_class, line) ? c.ward_class : null;
+        if (!wardClass && !emergency) return this.ask(l, lineId, WARD_CLASS_ASK);
+        const admissionType = c.admission_type && wordSaid(c.admission_type, line) ? c.admission_type : emergency ? "emergency" : null;
+        if (!admissionType) return this.ask(l, lineId, "Is this an emergency or a planned admission?");
+        raw = { visit_id: t.visit_id, ...ids, ...(wardClass ? { ward_class: wardClass } : {}), admission_type: admissionType, reason: said(c.text) ?? words };
         break;
       }
       case "record_triage_vitals": {
@@ -3099,6 +3105,8 @@ export class EmrRuntime {
       if (a.kind === "countersign") this.note(l, "Nothing was signed: the orders changed after they were read back, or one is not yours to sign now. Say sign everything to read them back again.");
       // Any other refused write says why in the hospital's own words, so a refusal never reads as nothing happening.
       else if (a.kind !== RECEIVE_KIND && a.kind !== CANCEL_TEST_KIND && a.kind !== EMERGENCY_KIND) this.note(l, `${a.summary}: not done. ${c.message ?? "The hospital refused it."}`, "refusal");
+      // A request sent with no ward class that the hospital refuses for want of one asks for it then, and only then.
+      if (a.kind === "request_admission" && !a.args["ward_class"] && /ward[\s_-]?class/i.test(`${c.reason} ${c.message ?? ""}`)) this.ask(l, a.line_id, WARD_CLASS_ASK);
       this.settle(l, "write_refused");
       return false;
     }

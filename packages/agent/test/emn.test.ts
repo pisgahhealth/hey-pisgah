@@ -3,19 +3,21 @@ import { EMERGENCY_KIND, IDENTITY_KIND, spelledName } from "../src/emr/entry.js"
 import type { EmrCommit, EmrContext, EmrTarget, Provenance, WorkArgs } from "../src/emr/port.js";
 import type { SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
 import { cleanNoteText } from "../src/emr/work.js";
-import { CLERK_KINDS, ClerkFake, DOC, clerkBoot, ins, type W } from "./clerking-helpers.js";
+import { CLERK_KINDS, ClerkFake, DOC, PAT, clerkBoot, ins, type W } from "./clerking-helpers.js";
 
-// Lane EMN: a clean note and a spelling that never lands on the wrong part.
+// Lane EMN: a clean note, a spelling that never lands on the wrong part, and no ward class question on an emergency arrival.
 const TOKEN = (n: number) => `v1.${String(1_761_700_000_000 + n)}.${"A".repeat(43)}`;
 const print = (n: number): Voiceprint => ({ vector: [n], ms: 20, model: "nemo_en_titanet_small" });
 const OWNER = print(5), DRB = print(4), STRANGER = print(1);
 const ARRIVAL = "dddddddd-1111-4222-8333-444444444444", ARRIVAL_VISIT = "eeeeeeee-1111-4222-8333-444444444444";
 
-// A doctor with a voice match (5 is the owner, 4 is Dr B) who opens arrivals and clerks.
+// A doctor with a voice match (5 is the owner, 4 is Dr B) who opens arrivals, clerks and requests admission.
 class EmnFake extends ClerkFake {
   private n = 0;
-  override kindsFor(): readonly string[] { return [...CLERK_KINDS, EMERGENCY_KIND, IDENTITY_KIND, "record_triage_vitals"]; }
+  refuseAdmission: string | null = null;
+  override kindsFor(): readonly string[] { return [...CLERK_KINDS, EMERGENCY_KIND, IDENTITY_KIND, "record_triage_vitals", "request_admission"]; }
   override async commit(kind: string, args: WorkArgs, key: string, prov: Provenance): Promise<EmrCommit> {
+    if (kind === "request_admission" && this.refuseAdmission) { this.writes.push({ kind, args, key, prov, id: "refused" }); return { ok: false, reason: "door_422", status: 422, retryable: false, counted: true, message: this.refuseAdmission }; }
     if (kind !== EMERGENCY_KIND) return super.commit(kind, args, key, prov);
     if (!this.writes.some((w) => w.key === key)) this.writes.push({ kind, args, key, prov, id: ARRIVAL });
     return { ok: true, record_id: ARRIVAL, record_version: 1, event_ids: [`patient:${ARRIVAL}`, `visit:${ARRIVAL_VISIT}`], replayed: false };
@@ -53,6 +55,7 @@ const gate = (s: string): W[] => {
   if (s === PC) return [{ class: "finding", section: "presenting_complaint", text: "highhigh fever and confusion", confidence: 0.9 }];
   if (s === EXAM) return [{ class: "finding", section: "examination", text: s, confidence: 0.9 }];
   if (s === RR) return [ins("record_triage_vitals", { resp_rate: 24, text: "Respiratory rate 24" })];
+  if (/admit/i.test(s)) return [ins("request_admission", { text: "observation" })];
   return ASIDE;
 };
 
@@ -105,6 +108,41 @@ describe("EMN 2: a spelled run goes to the part it names or matches, never to a 
     await sayOn(b, task, SPELL);
     await b.rt.settled();
     expect(of(b, IDENTITY_KIND).map((w) => w.args["name"])).toEqual(["Amaka Okafor"]);
+    await b.rt.stop();
+  });
+});
+
+describe("EMN 3: an emergency admission asks no ward class", () => {
+  it("requests the admission on an emergency arrival with no ward class and as an emergency", async () => {
+    const b = boot(gate);
+    const task = await arrival(b);
+    await sayOn(b, task, "Let's admit her for observation.");
+    await b.rt.settled();
+    const v = b.rt.view(task)!;
+    expect(v.questions.map((q) => q.text).join(" ")).not.toMatch(/ward class|emergency or a planned/i);
+    const req = of(b, "request_admission");
+    expect(req).toHaveLength(1);
+    expect(req[0]!.args).not.toHaveProperty("ward_class");
+    expect(req[0]!.args["admission_type"]).toBe("emergency");
+    await b.rt.stop();
+  });
+
+  it("asks the ward class only when the hospital refuses for want of one", async () => {
+    const b = boot(gate);
+    b.port.refuseAdmission = "A ward class is needed: no Accident and Emergency ward is set up.";
+    const task = await arrival(b);
+    await sayOn(b, task, "Let's admit her for observation.");
+    await b.rt.settled();
+    expect(b.rt.view(task)!.questions.at(-1)!.text).toBe("Which ward class should I request: general, private, ICU, HDU or another?");
+    await b.rt.stop();
+  });
+
+  it("still asks the ward class for an ordinary patient's admission", async () => {
+    const b = boot(gate);
+    const a = await b.rt.say({ owner: DOC, target: { patient_id: PAT }, text: "Let's admit him for observation.", source: "audio", voiceprint: OWNER });
+    await b.rt.settled();
+    expect(of(b, "request_admission")).toHaveLength(0);
+    expect(b.rt.view(a.task_id)!.questions.at(-1)!.text).toBe("Which ward class should I request: general, private, ICU, HDU or another?");
     await b.rt.stop();
   });
 });

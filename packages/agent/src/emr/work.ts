@@ -60,7 +60,8 @@ const anyVital = (a: Record<string, unknown>) => ["temp_c", "pulse", "resp_rate"
 // The arguments each kind is written with; every id is the record's own, and every value was said by the owner.
 export const WORK_ARGS: Record<Exclude<WorkKind, typeof OBSERVATION_KIND>, z.ZodType<Record<string, unknown>>> = {
   draft_consult_note: z.strictObject({ visit_id: EmrId, patient_id: EmrId.optional(), text: Text }),
-  request_admission: z.strictObject({ visit_id: EmrId, patient_id: EmrId.optional(), ward_class: z.enum(WARD_CLASSES), admission_type: z.enum(ADMISSION_TYPES), reason: Text.max(2000) }),
+  // An emergency arrival's request goes with no ward class, and the hospital places it.
+  request_admission: z.strictObject({ visit_id: EmrId, patient_id: EmrId.optional(), ward_class: z.enum(WARD_CLASSES).optional(), admission_type: z.enum(ADMISSION_TYPES), reason: Text.max(2000) }),
   record_triage_vitals: z.strictObject({ visit_id: EmrId, patient_id: EmrId.optional(), ...vitals, priority: z.enum(PRIORITIES).optional(), note: Text.max(500).optional() }).refine(anyVital, "triage needs at least one measurement"),
   add_care_plan_item: z.strictObject({ admission_id: EmrId, title: Text.max(200), item_kind: z.enum(ITEM_KINDS), cadence: z.string().min(1).max(8) }),
   record_note: z.strictObject({ admission_id: EmrId, note_type: z.enum(NOTE_TYPES), text: Text, label: z.enum(["handover", "stay_summary"]).optional() }),
@@ -150,7 +151,7 @@ export function summariseWork(kind: string, a: Record<string, unknown>): string 
   const t = (v: unknown, n = 80) => { const s = String(v ?? ""); return s.length > n ? `${s.slice(0, n - 3)}...` : s; };
   switch (kind) {
     case "draft_consult_note": return `Save the assessment to the consultation draft: "${t(a["text"])}"`;
-    case "request_admission": return `Request ${t(a["admission_type"])} admission, ${String(a["ward_class"]).replace(/_/g, " ")} ward: ${t(a["reason"], 60)}`;
+    case "request_admission": return `Request ${t(a["admission_type"])} admission${a["ward_class"] ? `, ${String(a["ward_class"]).replace(/_/g, " ")} ward` : ""}: ${t(a["reason"], 60)}`;
     case "record_triage_vitals": {
       const v = [a["temp_c"] !== undefined ? `temperature ${a["temp_c"]} C` : null, a["pulse"] !== undefined ? `pulse ${a["pulse"]}` : null, a["resp_rate"] !== undefined ? `respiratory rate ${a["resp_rate"]}` : null,
         a["bp"] !== undefined ? `blood pressure ${a["bp"]}` : null, a["spo2"] !== undefined ? `oxygen ${a["spo2"]}%` : null, a["weight_kg"] !== undefined ? `weight ${a["weight_kg"]} kg` : null].filter(Boolean).join(", ");
