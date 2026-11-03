@@ -7,7 +7,7 @@ import { DEFAULT_INTENT_ROUTE, FALLBACK_INTENT_ROUTE, decideIntent, tempText, ty
 import { primaryClass } from "./classes.js";
 import { CLERKING_KIND, DIAGNOSIS_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
-import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
+import { EmrId, EmrPortError, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
 import { BATCH_KINDS, addressSwap, admissionReason, cleanNoteText, personSwap, sourceClause, diagnosisIsTentative, statedDiagnosis, NEW_RECORD_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, sentNote, summariseWork, withoutDestination, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
@@ -216,6 +216,8 @@ const MIRROR_RETRY_MS = 15_000;
 const EVENTS_SWEEP_MS = 60_000;
 const OPEN_ACTION: ReadonlySet<EmrActionState> = new Set(["proposed", "sent", "uncertain", "acknowledged"]);
 const CLOSED_TASK: ReadonlySet<TaskState> = new Set(["cancelled", "failed"]);
+// A spoken new arrival, the way a clinician announces one.
+const NEW_ARRIVAL = /\b(?:new|unknown|another)\b[\w\s,]{0,20}\barrival\b/i;
 // A settled task last spoken about on an earlier day is a finished encounter, never another live patient for a for-whom question.
 const finishedBefore = (t: EmrTask, today: string): boolean => t.state === "done" && dayOf(new Date(t.lines.at(-1)?.at ?? t.created_at)) !== today;
 // An action that will never write: its order is not one a held result waits on.
@@ -954,6 +956,16 @@ export class EmrRuntime {
     return byPatient;
   }
 
+  // A page can still name a patient whose visit has closed; that stale target is refused with words saying what to do instead of a bare read error.
+  private async resolveOrDrop(target: EmrTarget, prov: Provenance): Promise<EmrContext> {
+    try {
+      return await this.o.port.resolve(target, prov);
+    } catch (error) {
+      if (!(error instanceof EmrPortError) || error.code !== "unknown_target" || !target.patient_id || target.admission_id) throw error;
+      throw new EmrPortError("stale_target", "That patient's visit is closed. Press Emergency or open a patient, then say it again.");
+    }
+  }
+
   // Opens or returns the owner's task for a patient without any words, so the agent starts watching the record for them.
   async open(owner: string, target: EmrTarget): Promise<{ task_id: string }> {
     if (this.stopped) throw new Error("runtime stopped");
@@ -1042,7 +1054,14 @@ export class EmrRuntime {
       checkWhom = !moved;
       const target = moved && JSON.stringify(moved.target) !== JSON.stringify(s.target) ? moved.target : s.target;
       if (target !== s.target) this.o.onSubject?.(s.owner, target, "spoken", spokenAt);
-      ctx = target === s.target && s.context && s.context.admission_id === s.target.admission_id ? s.context : await this.o.port.resolve(target, prov);
+      try {
+        ctx = target === s.target && s.context && s.context.admission_id === s.target.admission_id ? s.context : await this.resolveOrDrop(target, prov);
+      } catch (error) {
+        // A new arrival said while the page still names a closed patient opens that arrival and the line goes on there.
+        if (!(error instanceof EmrPortError) || error.code !== "stale_target" || !NEW_ARRIVAL.test(text) || !this.kinds(s.owner).includes(EMERGENCY_KIND)) throw error;
+        const r = await this.emergency(s.owner, { text, spoken_at: s.ambient?.ended_at ?? spokenAt, source: s.source ?? "text", args: { unidentified_ref: unidentifiedRef(new Date(spokenAt)), reason: emergencyReason(text), ...(this.o.emergencyClinicId ? { clinic_id: this.o.emergencyClinicId } : {}) } });
+        return { task_id: r.task_id, line_id: r.line_id };
+      }
       l = this.taskFor(s.owner, ctx) ?? this.openTask(s.owner, ctx);
     }
     if (CLOSED_TASK.has(l.task.state)) throw new Error(`the task is ${l.task.state}`);

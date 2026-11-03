@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EMERGENCY_KIND, IDENTITY_KIND, spelledName } from "../src/emr/entry.js";
-import type { EmrCommit, EmrContext, EmrTarget, Provenance, WorkArgs } from "../src/emr/port.js";
+import { EmrPortError, type EmrCommit, type EmrContext, type EmrTarget, type Provenance, type WorkArgs } from "../src/emr/port.js";
 import type { SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
 import { ClerkFake, DOC, clerkBoot, ins, type W } from "./clerking-helpers.js";
 
@@ -289,6 +289,26 @@ describe("D48: no yes before a test or drug when the line holds the owner's voic
       expect(of(b, "order_test")).toEqual([]);
       expect(b.rt.view(task)!.asked.map((q) => q.text).every((q) => /could not match the voice to you, so it waits until you say yes yourself/.test(q))).toBe(true);
       expect(b.rt.view(task)!.asked).toHaveLength(3);
+    } finally { await b.rt.stop(); }
+  });
+});
+
+describe("EMJ: a page that still names a closed patient", () => {
+  it("drops the stale patient and opens the new arrival the line asks for", async () => {
+    const b = boot(() => ASIDE);
+    const gone = "99999999-0000-4000-8000-000000000001";
+    const resolve = b.port.resolve.bind(b.port);
+    // The real port refuses a patient no longer on the list it reads with unknown_target.
+    b.port.resolve = async (t: EmrTarget) => { if (t.patient_id === gone) throw new EmrPortError("unknown_target", "the patient is not in the list the agent can read"); return resolve(t); };
+    try {
+      const r = await b.rt.say({ owner: DOC, target: { patient_id: gone }, text: "New unknown arrival in A and E, a woman about 30", source: "audio", voiceprint: OWNER, spoken_at: new Date(b.clock.now).toISOString() });
+      await b.rt.settled();
+      const v = b.rt.view(r.task_id)!;
+      expect(v.unidentified).toBe(true);
+      expect(v.patient_id).not.toBe(gone);
+      expect(of(b, EMERGENCY_KIND)).toHaveLength(1);
+      // Any other line on the closed patient is refused in words, never as a bare read error.
+      await expect(b.rt.say({ owner: DOC, target: { patient_id: gone }, text: "Pulse 110", source: "audio", voiceprint: OWNER, spoken_at: new Date(b.clock.now).toISOString() })).rejects.toThrow(/visit is closed/);
     } finally { await b.rt.stop(); }
   });
 });
