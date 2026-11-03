@@ -13,7 +13,7 @@ import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite }
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
 import { DOCUMENTATION_KINDS, ORDER_KINDS, lineVerdict, recordOf, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
-import { EMERGENCY_KIND, EMERGENCY_LINE, IDENTITY_KIND, IdentityArgs, RULE_ONLY_KINDS, afterIdentity, afterEmergency, afterSpelling, clockOf, currentPatientNamed, dayOf, emergencyHeardLoosely, emergencyReason, identityFrom, otherPatientsNamed, selfNamed, spellsLetters, spelledName, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
+import { EMERGENCY_KIND, EMERGENCY_LINE, IDENTITY_KIND, IdentityArgs, RULE_ONLY_KINDS, afterIdentity, afterEmergency, afterSpelling, clockOf, currentPatientNamed, dayOf, emergencyHeardLoosely, emergencyReason, identityFrom, lineParts, otherPatientsNamed, selfNamed, spellsLetters, spelledName, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
 import { openableHref, screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
 import { EventsLoop } from "./events.js";
 import type { EmrEvent, ObligationAnswer, ObligationOp } from "./port.js";
@@ -956,6 +956,19 @@ export class EmrRuntime {
   // One utterance opens or continues the owner's task for that patient; the decision runs on the task's serial queue.
   async say(s: SayInput, taskId?: string): Promise<{ task_id: string; line_id: string }> {
     if (this.stopped) throw new Error("runtime stopped");
+    // A long line is said part by part, in order and each as if alone, so no part waits on another and none is cut off.
+    const parts = lineParts(s.text.trim());
+    if (parts.length > 1) {
+      const resolved = this.whomResolved.has(s), loose = !s.target.admission_id && !s.target.patient_id;
+      let first: { task_id: string; line_id: string } | null = null;
+      for (const part of parts) {
+        const one: SayInput = { ...s, text: part, ...(s.ambient ? { ambient: { ...s.ambient, raw_text: part } } : {}) };
+        if (resolved) this.whomResolved.add(one);
+        const r = await this.say(one, taskId ?? (loose && first ? first.task_id : undefined));
+        first ??= r;
+      }
+      return first!;
+    }
     let text = s.text.trim().slice(0, 1000);
     if (!text) throw new Error("empty utterance");
     // A spoken acceptance or the front desk's registration details reach the task handed to this owner, by rule and before any read.
@@ -1777,7 +1790,7 @@ export class EmrRuntime {
         if (!wardClass && !emergency) return this.ask(l, lineId, WARD_CLASS_ASK);
         const admissionType = c.admission_type && wordSaid(c.admission_type, line) ? c.admission_type : emergency ? "emergency" : null;
         if (!admissionType) return this.ask(l, lineId, "Is this an emergency or a planned admission?");
-        raw = { visit_id: t.visit_id, ...ids, ...(wardClass ? { ward_class: wardClass } : {}), admission_type: admissionType, reason: emergency ? admissionReason(line) : said(c.text) ?? words };
+        raw = { visit_id: t.visit_id, ...ids, ...(wardClass ? { ward_class: wardClass } : {}), admission_type: admissionType, reason: emergency ? admissionReason(fromLine(words, line) ? words : line) : said(c.text) ?? words };
         break;
       }
       case "record_triage_vitals": {
@@ -1876,7 +1889,7 @@ export class EmrRuntime {
         if (!ward) return this.ask(l, lineId, `Which ward should I admit to? I know ${Object.values(this.o.port.names?.().wards ?? {}).map((w) => w[0]).join(", ") || "none"}.`);
         const type = c.admission_type && wordSaid(c.admission_type, line) ? c.admission_type : t.entry === "emergency" ? "emergency" : null;
         if (!type) return this.ask(l, lineId, "Is this an emergency or a planned admission?");
-        raw = { visit_id: t.visit_id, ...ids, ward, admission_type: type, reason: admissionReason(line) };
+        raw = { visit_id: t.visit_id, ...ids, ward, admission_type: type, reason: admissionReason(fromLine(words, line) ? words : line) };
         break;
       }
       case "assign_bed": {
@@ -1905,7 +1918,8 @@ export class EmrRuntime {
         // What the answer itself says wins over the held line, so "oral paracetamol" answering an IV request is written oral.
         if (answer?.own) { const mine = prescriptionSaid(answer.own, c); for (const k of ["frequency", "duration_days", "quantity", "route"] as const) if (mine[k] !== null) (rx as Record<string, unknown>)[k] = mine[k]; }
         if (rx.quantity === null && answer?.count) rx.quantity = answer.count;
-        if (rx.quantity === null) return this.ask(l, lineId, `How many should the pharmacy give for ${drugs[key]!.words[0]}? Say the number.`);
+        // The dose said is named, so one medicine said twice at two doses keeps two questions.
+        if (rx.quantity === null) return this.ask(l, lineId, `How many should the pharmacy give for ${drugs[key]!.words[0]}${rx.dose ? ` ${rx.dose}` : ""}? Say the number.`);
         raw = { visit_id: t.visit_id, patient_id: t.patient_id, drug: key, quantity: rx.quantity, ...(rx.dose ? { dose: rx.dose } : {}), ...(rx.frequency ? { frequency: rx.frequency } : {}), ...(rx.duration_days ? { duration_days: rx.duration_days } : {}), ...(rx.route ? { route: rx.route } : {}) };
         break;
       }
@@ -1986,7 +2000,12 @@ export class EmrRuntime {
     const otherWork = clauses.some((c) => c.class === "instruction" && c.kind && !open.some((q) => q.pending!.kind === c.kind));
     const picks: { q: EmrQuestion; c: AnyClause | null }[] = [];
     // A long line naming another medicine, test or target is a new request, not the answer.
-    const another = (q: EmrQuestion, c: AnyClause) => { const f = PRIMARY_FIELD[q.pending!.kind]; const was = f ? q.pending!.clause[f] : undefined; const now = f ? (c as Record<string, unknown>)[f] : undefined; return !short && was != null && now != null && was !== now; };
+    // A long line saying the same medicine at another dose is a new prescription too, never the count asked for the first.
+    const another = (q: EmrQuestion, c: AnyClause) => {
+      const f = PRIMARY_FIELD[q.pending!.kind]; const was = f ? q.pending!.clause[f] : undefined; const now = f ? (c as Record<string, unknown>)[f] : undefined;
+      const dose = q.pending!.clause["dose"], said = (c as Record<string, unknown>)["dose"];
+      return !short && ((was != null && now != null && was !== now) || (q.pending!.kind === "prescribe" && typeof dose === "string" && typeof said === "string" && !doseAgrees(dose, said)));
+    };
     for (const c of clauses) {
       if (!answers(c)) continue;
       const q = c.kind ? [...open].reverse().find((y) => y.pending!.kind === c.kind && (!named || y === named) && !another(y, c)) : shown;

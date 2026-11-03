@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { measuresIn } from "@hey-pisgah/voice";
 import { EmrId, type EmrTarget } from "./port.js";
 
 // The hands-free entry: the wake phrase, the emergency entry that needs no patient, the spoken identity, and the patient the clinician is with.
@@ -211,3 +212,25 @@ export function otherPatientsNamed<T extends { labels: readonly string[] }>(line
 }
 // True when the line names the patient in context by a word of their own name.
 export const currentPatientNamed = (line: string, current: readonly string[]): boolean => { const said = new Set(tokensOf(line)); return distinct(current).some((p) => said.has(p)); };
+
+// A line longer than this many words is split into its spoken parts before it is routed.
+export const LONG_LINE_WORDS = 40;
+// A part shorter than this many words joins the words after it, so a lone "okay" never goes alone.
+const PART_MIN_WORDS = 10;
+// Where a spoken part ends: after a sentence mark, or before a filler that opens the next stretch.
+const PART_CUT = /(?<=[.?!;])\s+|\s+(?=\b(?:okay|ok|um|uh|erm|hmm|alright)\b)/i;
+// The spoken parts of a long line in order, each to be routed as if said alone; vitals said across a cut stay in one part.
+export function lineParts(line: string): string[] {
+  const words = (x: string) => x.split(/\s+/).filter(Boolean).length;
+  if (words(line) <= LONG_LINE_WORDS) return [line];
+  const parts: string[] = [];
+  let cur = "";
+  for (const piece of line.split(new RegExp(PART_CUT.source, "gi")).map((x) => x.trim()).filter(Boolean)) {
+    const prev = parts.at(-1);
+    if (!cur && prev && measuresIn(prev).length && measuresIn(piece).length) { parts[parts.length - 1] = `${prev} ${piece}`; continue; }
+    cur = cur ? `${cur} ${piece}` : piece;
+    if (words(cur) >= PART_MIN_WORDS) { parts.push(cur); cur = ""; }
+  }
+  if (cur) { if (parts.length) parts[parts.length - 1] = `${parts.at(-1)} ${cur}`; else parts.push(cur); }
+  return parts;
+}
