@@ -220,3 +220,57 @@ describe("speed levers, each alone", () => {
     expect(v.calls).toBe(2);
   });
 });
+
+describe("ready observations beside a slow examination", () => {
+  const exam = "You look pale and drowsy.";
+  const script = (said: string): C[] => said === exam ? [{ class: "finding", section: "examination", confidence: 0.95 }] : said === "Chart his pulse 110." ? obs({ pulse: 110 }) : [{ class: "aside" }];
+
+  it("saves an independent ready observation before an unrelated examination gate finishes, once only", async () => {
+    const { rt, port, sayText } = bootSpeed({ parallelLines: 3, proofBeside: true }, { full: script, ms: (_tool, said) => said === exam ? 350 : 5 });
+    await sayText(exam);
+    await sayText("Chart his pulse 110.");
+    await sleep(150);
+    expect(port.writes.map((w) => w.kind)).toEqual(["record_observation"]);
+    await rt.settled();
+    expect(port.writes.filter((w) => w.kind === "record_observation")).toHaveLength(1);
+    expect(port.writes.some((w) => w.kind === "record_clerking")).toBe(true);
+    await rt.stop();
+  });
+
+  it.each([
+    "Cancel the last instruction.",
+    "Actually, correct the pulse to 90.",
+    "Yes, confirm it.",
+    "Now we are seeing another patient.",
+    "You look pale, but wait until I say to chart anything.",
+  ])("does not overtake an unresolved command or answer: %s", async (earlier) => {
+    const { rt, port, sayText } = bootSpeed({ parallelLines: 3, proofBeside: true }, { full: (said) => said === "Chart his pulse 110." ? obs({ pulse: 110 }) : [{ class: "aside" }], ms: (_tool, said) => said === earlier ? 350 : 5 });
+    await sayText(earlier);
+    await sayText("Chart his pulse 110.");
+    await sleep(150);
+    expect(port.writes).toEqual([]);
+    await rt.settled();
+    await rt.stop();
+  });
+
+  it("does not apply a correction beside an examination even when its model result says instruction", async () => {
+    const { rt, port, sayText } = bootSpeed({ parallelLines: 3, proofBeside: true }, { full: (said) => said === exam ? script(said) : obs({ pulse: 90 }), ms: (_tool, said) => said === exam ? 350 : 5 });
+    await sayText(exam);
+    await sayText("Actually, pulse 90.");
+    await sleep(150);
+    expect(port.writes).toEqual([]);
+    await rt.settled();
+    await rt.stop();
+  });
+
+  it("leaves the observation ordered when another instruction arrived before its decision", async () => {
+    const { rt, port, sayText } = bootSpeed({ parallelLines: 3, proofBeside: true }, { full: script, ms: (_tool, said) => said === exam ? 350 : 40 });
+    await sayText(exam);
+    await sayText("Chart his pulse 110.");
+    await sayText("Cancel that.");
+    await sleep(150);
+    expect(port.writes).toEqual([]);
+    await rt.settled();
+    await rt.stop();
+  });
+});

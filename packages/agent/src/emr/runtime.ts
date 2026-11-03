@@ -635,6 +635,13 @@ export const READ_BACK_YES = /^(?:(?:ok(?:ay)?|yeah|yes)\s+)?(?:go on|go ahead|s
 export const READ_BACK_MM = /^(?:m{2,}|m+h+m+|mm hmm|uh huh)$/;
 export const SPOKEN_RESUME = /\bwhere were we\b|\b(?:let'?s|we can) (?:carry on|continue|pick (?:this|it|that) (?:back )?up)\b|^(?:ok(?:ay)?,?\s+)?i'?m back\b/i;
 
+// Only this closed vocabulary of examination statements is known to contain no instruction before its gate returns.
+const SIMPLE_EXAM_WORDS = new Set("you youre your he hes his she shes her the patient looks look seems seem is are also pretty very a bit and it like neck chest too pale drowsy febrile alert awake comfortable unwell stiff clear normal dry warm cold clammy well ill appears appear".split(" "));
+const isSimpleExamination = (text: string): boolean => {
+  const words = text.toLowerCase().replace(/['’]/g, "").replace(/[.,!?;]/g, " ").trim().split(/\s+/);
+  return words.length >= 3 && words.length <= 50 && words.some((w) => ["pale", "drowsy", "febrile", "alert", "awake", "comfortable", "unwell", "stiff", "clear", "normal", "dry", "warm", "cold", "clammy", "ill"].includes(w)) && words.every((w) => SIMPLE_EXAM_WORDS.has(w));
+};
+
 // One open task: its decision queue, its write chain, the gate calls started before their turn, and the context each gated line was said in.
 type Live = {
   stream: Stream; task: EmrTask; queue: Promise<void>; writes: Promise<void>; inflight: number; pre: Map<string, Promise<GateResult>>; ctxOf: Map<string, EmrContext>; calling: string | null;
@@ -1280,7 +1287,35 @@ export class EmrRuntime {
       const p = this.callGate(l, line, ctx, true);
       p.catch(() => undefined);
       l.pre.set(line.id, p);
+      void this.track(p.then((result) => this.applyReadyObservation(l, line.id, result)).catch(() => undefined));
     }
+  }
+
+  // A ready observation may pass only plain examination prose on the same encounter; every command, answer or uncertain dependency stays ordered.
+  private mayApplyReadyObservation(l: Live, lineId: string, result: GateResult): boolean {
+    const t = l.task, line = t.lines.find((x) => x.id === lineId), ctx = l.ctxOf.get(lineId);
+    if (!this.lv.proofBeside || this.stopped || t.state !== "running" || !line || line.decided || line.question_id || !line.ambient || !ctx || l.calling === lineId || !l.pre.has(lineId)) return false;
+    if (t.questions.some((q) => q.answered_by === null) || ctx.patient_id !== t.patient_id || ctx.admission_id !== t.admission_id) return false;
+    const at = t.lines.indexOf(line), earlier = t.lines.slice(0, at).filter((x) => !x.decided);
+    if (!earlier.length || t.lines.slice(at + 1).some((x) => !x.decided)) return false;
+    if (!earlier.every((x) => x.ambient?.session_id === line.ambient!.session_id && isSimpleExamination(x.text) && l.ctxOf.get(x.id)?.patient_id === ctx.patient_id && l.ctxOf.get(x.id)?.admission_id === ctx.admission_id)) return false;
+    const clauses = result.value.clauses;
+    if (clauses.length !== 1) return false;
+    const c = clauses[0]!;
+    return c.class === "instruction" && (c.kind === OBSERVATION_KIND || c.kind === "record_triage_vitals") && (c.confidence ?? 0) >= (this.o.gate ?? GATE_SETTINGS).confidence_floor && !c.after && c.in_minutes == null && fromLine(c.words, line.text) && willWriteNumber(line.text) && !/\b(?:sorry|actually|instead|correct|correction|change|cancel|stop|wait|hold|yes|no|confirm|now|next|switch|another)\b/i.test(line.text);
+  }
+
+  private async applyReadyObservation(l: Live, lineId: string, result: GateResult): Promise<void> {
+    if (!this.mayApplyReadyObservation(l, lineId, result)) return;
+    await this.speakers.get(lineId);
+    if (!this.mayApplyReadyObservation(l, lineId, result)) return;
+    if (this.speakers.has(lineId)) await this.attribute(l, lineId);
+    if (!this.mayApplyReadyObservation(l, lineId, result)) return;
+    const line = l.task.lines.find((x) => x.id === lineId)!;
+    l.pre.delete(lineId);
+    this.applyGateResult(l, lineId, result, { owner: l.task.owner, evidence: `transcript:${lineId}`, spoken_at: line.at }, true);
+    l.ctxOf.delete(lineId);
+    this.afterLine(l, lineId, false);
   }
 
   // A line may be decided beside earlier undecided lines only when it names a measure, none of them names it too, and no rule answer would settle it.
@@ -1533,6 +1568,13 @@ export class EmrRuntime {
       return;
     } finally { l.calling = null; }
     if (who) await who;
+    this.applyGateResult(l, lineId, r, prov, !!pre);
+  }
+
+  private applyGateResult(l: Live, lineId: string, r: GateResult, prov: Provenance, pre: boolean): void {
+    const t = l.task, line = t.lines.find((x) => x.id === lineId);
+    if (!line || line.decided) return;
+    const settings = this.o.gate ?? GATE_SETTINGS, kinds = this.kinds(t.owner);
     // A clause is applied only when its words come from this line; the model sometimes classes the recent words it was shown again.
     const all = r.value.clauses as AnyClause[];
     const clauses = all.filter((c) => fromLine(c.words, line.text));
