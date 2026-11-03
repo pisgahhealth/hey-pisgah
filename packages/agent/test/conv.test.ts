@@ -392,13 +392,13 @@ describe("CONV 2: no line ends in silence, and a bound answer ignores the window
     await again.rt.stop();
   });
 
-  it("says so when the next instruction closes a question it did not name", async () => {
+  it("keeps an unanswered question when the next instruction does not name it", async () => {
     const b = boot((s) => (/^Chart the thing/.test(s) ? [{ class: "unclear", confidence: 0.9, words: s, question: "Which thing do you mean?" }] : /blood count/.test(s) ? [ins("order_test", { test: "fbc" })] : ASIDE));
     const a = await say(b.rt, "Chart the thing.");
     await b.rt.settled();
     await say(b.rt, "Send a full blood count.");
     await b.rt.settled();
-    expect(notes(b.rt, a.task_id)).toContain('Closed my question "Which thing do you mean?" when you went on.');
+    expect(b.rt.view(a.task_id)!.questions.map((q) => q.text)).toContain("Which thing do you mean?");
     await b.rt.stop();
   });
 

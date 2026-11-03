@@ -372,6 +372,19 @@ describe("EMF 4: the transcript is in speech order", () => {
   });
 });
 
+describe("capture-time transcript ordering", () => {
+  it("orders reliable timestamps within the same session and replays that order", async () => {
+    const b = boot(() => ASIDE);
+    const task = await arrival(b);
+    const line = (text: string, seq: number) => b.rt.say({ owner: DOC, target: { patient_id: ARRIVAL }, text, source: "audio", voiceprint: OWNER, spoken_at: new Date(b.clock.now + seq * 1000).toISOString(), ambient: { session_id: "same", seqs: [seq], captured: true, ended_at: new Date(b.clock.now + (seq + 1) * 1000).toISOString(), final_at: new Date().toISOString(), finished_by: "quiet_tail", raw_text: text, trailing_silence_ms: 700 } as never }, task);
+    const second = await line("second captured turn", 2);
+    const first = await line("first captured turn", 1);
+    await b.rt.settled();
+    expect(b.rt.view(task)!.transcript.slice(-2).map((l) => l.id)).toEqual([first.line_id, second.line_id]);
+    await b.rt.stop();
+  });
+});
+
 describe("EMF 5: a held admission says exactly what yes releases it", () => {
   it("asks for 'yes, admit her to A and E', releases on that reply in the owner's voice, and a bare yes from no matched voice stays refused", async () => {
     const b = boot(gate3);

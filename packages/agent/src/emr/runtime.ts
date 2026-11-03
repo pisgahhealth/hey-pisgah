@@ -246,10 +246,10 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
     case "utterance.heard": {
       const ambient = (x["ambient"] as AmbientMeta | undefined) ?? null;
       const text = String(x["text"]);
-      // A line one ear returned after another ear's later speech is placed before that speech; one ear's own lines keep the order it heard them.
+      // Capture timestamps order new speech across both ears; legacy same-ear timestamps keep their original order.
       const at = Date.parse(String(x["spoken_at"])), ear = ambient?.session_id ?? null;
       let pos = t.lines.length;
-      while (ear && pos > 0 && t.lines[pos - 1]!.ambient && t.lines[pos - 1]!.ambient!.session_id !== ear && Date.parse(t.lines[pos - 1]!.at) > at) pos -= 1;
+      while (ear && pos > 0 && t.lines[pos - 1]!.ambient && (t.lines[pos - 1]!.ambient!.session_id !== ear || (ambient?.captured && t.lines[pos - 1]!.ambient!.captured)) && Date.parse(t.lines[pos - 1]!.at) > at) pos -= 1;
       t.lines.splice(pos, 0, { id: String(x["line_id"]), text, at: String(x["spoken_at"]), source: x["source"] === "audio" ? "audio" : "text", decided: false, ambient, classes: [], kept: !x["withheld"], words: Number(x["words"] ?? text.split(/\s+/).filter(Boolean).length), speaker: null, question_id: (x["question_id"] as string | undefined) ?? null });
       if (!t.goal && !x["withheld"]) t.goal = text.slice(0, 200);
       // A typed or pushed line answers the open question; an ambient line answers only when the gate hears it as meant for the agent.

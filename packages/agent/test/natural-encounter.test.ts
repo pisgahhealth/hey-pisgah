@@ -74,6 +74,7 @@ describe("natural mixed instructions", () => {
     expect(first.rt.view(a.task_id)!.questions.map((q) => q.text)).toContain("Which blood test?");
     expect(port.writes.filter((w) => w.kind === "order_test")).toHaveLength(0);
     await first.rt.stop();
+    first.client.close();
     const second = clerkBoot(script, { port, root: first.root, clock: first.clock });
     try {
       await second.rt.say({ ...said, text: "FBC" }, a.task_id);
