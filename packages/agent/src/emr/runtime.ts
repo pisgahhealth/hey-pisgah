@@ -27,6 +27,7 @@ import { FROM_NOW_ON, PreferenceError, SCOPE_KINDS, describePref, describeScope,
 import { openObligations, retainClosed } from "./retention.js";
 export { openObligations };
 import { modelFailNote } from "./spend.js";
+import { coveredByNote, noteWrites, writeNote, type NoteResult } from "./note-writer.js";
 
 // uncertain: sent, but the answer said nothing about whether the hospital saved it; reconciled under its own key, never failed for it.
 export type EmrActionState = "proposed" | "sent" | "uncertain" | "acknowledged" | "completed" | "refused" | "cancelled" | "failed";
@@ -520,6 +521,8 @@ export const answersOf = (c: QuestionChoice): string[] => [...(c.yes ? ["yes"] :
 const tokens = (t: string) => t.toLowerCase().replace(/[^a-z0-9.]+/g, " ").replace(/\.(?!\d)/g, " ").split(" ").filter(Boolean);
 // The one question for a ward class, asked before an ordinary request and after a refused emergency one.
 const WARD_CLASS_ASK = "Which ward class should I request: general, private, ICU, HDU or another?";
+// The clause classes an accepted note section may stand in for: what the patient said, a finding, and a diagnosis kept in the assessment.
+const notedClass = (c: AnyClause): boolean => c.class === "patient_reported" || c.class === "finding" || c.class === "option" || (c.class === "instruction" && c.kind === DIAGNOSIS_KIND);
 // True when at least four in five of the clause's words are in the line, so a copied earlier line does not pass.
 export function fromLine(words: string, line: string): boolean {
   const w = tokens(words);
@@ -657,7 +660,13 @@ type Live = {
   stream: Stream; task: EmrTask; queue: Promise<void>; writes: Promise<void>; inflight: number; pre: Map<string, Promise<GateResult>>; ctxOf: Map<string, EmrContext>; calling: string | null;
   // Decisions started for a line still waiting at a number cut, by listening session and words.
   spec: Map<string, { gate: Promise<GateResult>; ear: EarlyEar | null }>;
+  // The said stretch each gated part of a long line belongs to, so its note is written once from the whole stretch.
+  stretchOf: Map<string, SaidStretch>;
 };
+// One said stretch, a whole line or a long line before it was split, with its note call once started and whether its sections were written.
+type SaidStretch = { text: string; at: string; note: Promise<NoteResult | null> | null; written: boolean };
+// A stretch shorter than this is left to the clause text, as a note call would add little.
+const NOTE_MIN_WORDS = 12;
 // When a line reached each step, in memory only, for the speed rows.
 type LineTimes = { asr_at?: number; delivered?: number; gate_start?: number; gate_end?: number; ear_done?: number };
 type EarlyEar = { p: Promise<{ reading: EarReading | null; error: string | null }>; uses: number };
@@ -724,6 +733,7 @@ export class EmrRuntime {
   private readonly whomHeld = new Map<string, { s: SayInput; spoken_at: string }>();
   // The held lines said again on the chosen patient's task, so that replay is not held for whom again.
   private readonly whomResolved = new WeakSet<SayInput>();
+  private readonly stretches = new WeakMap<SayInput, SaidStretch>();
   private fresh: string | null = null;
   private readonly early = new Map<string, EarlyEar>();
   private readonly times = new Map<string, LineTimes>();
@@ -775,7 +785,7 @@ export class EmrRuntime {
   }
 
   private liveOf(stream: Stream): Live {
-    return { stream, task: projectEmr(stream.records()), queue: Promise.resolve(), writes: Promise.resolve(), inflight: 0, pre: new Map(), ctxOf: new Map(), calling: null, spec: new Map() };
+    return { stream, task: projectEmr(stream.records()), queue: Promise.resolve(), writes: Promise.resolve(), inflight: 0, pre: new Map(), ctxOf: new Map(), calling: null, spec: new Map(), stretchOf: new Map() };
   }
   private timesOf(lineId: string): LineTimes {
     let x = this.times.get(lineId);
@@ -961,9 +971,11 @@ export class EmrRuntime {
     if (parts.length > 1) {
       const resolved = this.whomResolved.has(s), loose = !s.target.admission_id && !s.target.patient_id;
       let first: { task_id: string; line_id: string } | null = null;
+      const stretch: SaidStretch = { text: s.text.trim(), at: s.spoken_at ?? this.wall().toISOString(), note: null, written: false };
       for (const part of parts) {
         const one: SayInput = { ...s, text: part, ...(s.ambient ? { ambient: { ...s.ambient, raw_text: part } } : {}) };
         if (resolved) this.whomResolved.add(one);
+        this.stretches.set(one, stretch);
         const r = await this.say(one, taskId ?? (loose && first ? first.task_id : undefined));
         first ??= r;
       }
@@ -1109,6 +1121,8 @@ export class EmrRuntime {
     if (live.task.state !== "running") this.setState(live, "running", `heard_${lineId}`);
     if (viaGate) {
       live.ctxOf.set(lineId, ctx);
+      const stretch = this.stretches.get(s);
+      if (stretch) live.stretchOf.set(lineId, stretch);
       // A joining-window decision may already be complete. Give it the same
       // readiness path as pump decisions, once this final line has its context.
       const pre = live.pre.get(lineId);
@@ -1125,7 +1139,7 @@ export class EmrRuntime {
         this.append(live, "intent.failed", { line_id: lineId, reason: "runtime_error" });
         this.note(live, "I could not act on that line, so nothing was written from it. Say it again if it still stands.", "refusal");
         this.settle(live, "line_failed");
-      } finally { live.ctxOf.delete(lineId); this.afterLine(live, lineId, false); }
+      } finally { live.ctxOf.delete(lineId); live.stretchOf.delete(lineId); this.afterLine(live, lineId, false); }
     });
     this.pump(live);
     return { task_id: live.task.task_id, line_id: lineId };
@@ -1607,6 +1621,7 @@ export class EmrRuntime {
     l.pre.delete(lineId);
     // Only a line with a voiceprint waits on its match, so lines without one are decided exactly as before.
     const who = this.speakers.has(lineId) ? this.attribute(l, lineId) : null;
+    const stretch = this.startNote(l, lineId, line, kinds);
     let r: GateResult;
     l.calling = lineId;
     try {
@@ -1621,10 +1636,32 @@ export class EmrRuntime {
       return;
     } finally { l.calling = null; }
     if (who) await who;
-    this.applyGateResult(l, lineId, r, prov, !!pre);
+    // The note is waited for only when this line has a clause it may stand in for, so other lines lose no time.
+    const notable = stretch?.note && r.value.clauses.some((c) => fromLine(c.words, line.text) && notedClass(c as AnyClause));
+    const note = notable ? await stretch.note : null;
+    const write = !!note && !stretch!.written;
+    if (write) stretch!.written = true;
+    this.applyGateResult(l, lineId, r, prov, !!pre, note, write);
   }
 
-  private applyGateResult(l: Live, lineId: string, r: GateResult, prov: Provenance, pre: boolean): void {
+  // Starts the clinician's note beside the gate call for a clerking line of enough words, once per said stretch, and logs what it wrote.
+  private startNote(l: Live, lineId: string, line: EmrLine, kinds: readonly string[]): SaidStretch | null {
+    const t = l.task;
+    if (!kinds.includes(CLERKING_KIND) || !t.visit_id) return null;
+    const stretch = l.stretchOf.get(lineId) ?? { text: line.text, at: line.at, note: null, written: false };
+    if (stretch.text.split(/\s+/).filter(Boolean).length < NOTE_MIN_WORDS) return null;
+    if (stretch.note) return stretch;
+    const said = [{ text: stretch.text, at: stretch.at, speaker: line.speaker }], names = this.o.port.names?.();
+    stretch.note = writeNote(this.o.client, said, { run_id: t.run_id, task_id: t.task_id }, { settings: this.o.gate ?? GATE_SETTINGS, ...(names ? { names } : {}) }).catch(() => null);
+    void this.track(stretch.note.then((n) => {
+      if (!n || this.stopped) return;
+      const sections = Object.fromEntries(Object.entries(n.sections).map(([k, v]) => [k, { accepted: !!v.text, refused: v.refused, ...(line.kept ? { text: v.text, proposed: v.proposed } : {}) }]));
+      try { this.append(l, "note.written", { line_id: lineId, provider: n.provider, model: n.model, cost_usd: n.cost_usd, prompt_tokens: n.prompt_tokens, completion_tokens: n.completion_tokens, ms: n.ms, error: n.error, fallback_reason: n.fallback_reason, sections }); } catch { /* closed */ }
+    }));
+    return stretch;
+  }
+
+  private applyGateResult(l: Live, lineId: string, r: GateResult, prov: Provenance, pre: boolean, note: NoteResult | null = null, write = false): void {
     const t = l.task, line = t.lines.find((x) => x.id === lineId);
     if (!line || line.decided) return;
     const settings = this.o.gate ?? GATE_SETTINGS, kinds = this.kinds(t.owner);
@@ -1649,20 +1686,23 @@ export class EmrRuntime {
     this.fresh = lineId;
     try {
       const resumed = this.resumeWork(l, lineId, clauses);
-      for (const c of oneUnclear(mergeInstructions(clauses.filter((c) => !resumed.has(c)), settings.confidence_floor, kinds))) this.applyClause(l, lineId, c, settings.confidence_floor, kinds, prov);
+      if (note && write) for (const w of noteWrites(note)) this.proposeClerking(l, lineId, w.section, w.text);
+      for (const c of oneUnclear(mergeInstructions(clauses.filter((c) => !resumed.has(c)), settings.confidence_floor, kinds))) this.applyClause(l, lineId, c, settings.confidence_floor, kinds, prov, note);
     } finally { this.fresh = null; }
     this.settle(l, "heard");
   }
 
-  private applyClause(l: Live, lineId: string, c: AnyClause, floor: number, kinds: readonly string[], prov: Provenance): void {
+  private applyClause(l: Live, lineId: string, c: AnyClause, floor: number, kinds: readonly string[], prov: Provenance, note: NoteResult | null = null): void {
     const t = l.task;
     const lineText = t.lines.find((x) => x.id === lineId)?.text ?? "";
     // The patient's own words go into the note in third person by the fixed swap table only, with the patient's recorded sex or else "their".
     const sex = l.ctxOf.get(lineId)?.facts["sex"] ?? null;
     const reported = (source: string) => personSwap(cleanNoteText(source).replace(/^(?:Doctor|Doc),\s*/i, ""), sex);
     // What the patient or a relative said goes only into its own section of the note; no kind it names is ever acted on.
+    // A clause an accepted note section was written from is already in the note, so it is not written again as said.
+    const noted = !!note && coveredByNote(note, c.words);
     if (c.class === "patient_reported") {
-      if (kinds.includes(CLERKING_KIND) && t.visit_id) {
+      if (kinds.includes(CLERKING_KIND) && t.visit_id && !noted) {
         const source = sourceClause(c.words, lineText);
         if (!source) { this.ask(l, lineId, "I could not safely record what the patient said. Please say it again."); return; }
         this.proposeClerking(l, lineId, "patient_reported", reported(source));
@@ -1673,6 +1713,7 @@ export class EmrRuntime {
     if (c.class === "finding") {
       if (!kinds.includes(CLERKING_KIND)) return;
       if (!t.visit_id) { this.note(l, "Heard a finding, but no arrival is in context, so the note was not written."); return; }
+      if (noted) return;
       // A clinician's own "I" and "my" are theirs, so history is swapped only when the voice heard matched no clinician.
       const section = c.section ?? "history", unmatched = this.speakerOf(t, lineId)?.speaker === "unverified";
       const source = sourceClause(c.words, lineText);
@@ -1703,7 +1744,7 @@ export class EmrRuntime {
     const diagnosticOption = c.class === "option" && (c.kind === DIAGNOSIS_KIND || c.section === "assessment" || /\b(?:diagnos(?:is|es)|differential)\b/i.test(c.words));
     const tentativeInstruction = c.class === "instruction" && c.kind === DIAGNOSIS_KIND && source !== null && diagnosisIsTentative(source);
     if (diagnosticOption || tentativeInstruction) {
-      if (source && kinds.includes(CLERKING_KIND) && t.visit_id) this.proposeClerking(l, lineId, "assessment", source);
+      if (source && kinds.includes(CLERKING_KIND) && t.visit_id && !noted) this.proposeClerking(l, lineId, "assessment", source);
       return;
     }
     if (c.class !== "instruction" && c.class !== "correction") return;

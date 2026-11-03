@@ -291,7 +291,37 @@
     "the live runtime cut this line to its first 1000 characters",
     "completed record_clerking x2"
    ],
-   "raw_text": "um how you feeling how you feeling ah doctor I've been having fever for three days I've been vomiting I tried to take medication but today when I went to the market to buy some things I fell off I fainted doctor okay that's fine don't worry we're going to take care of you is there any medicine that you're allergic to doctor I think penicillin penicillin okay that's fine just lie down I'll have to do an examination for you real quick um you're quite pale open your eyes for me please okay um you look febrile and a bit drowsy well really drowsy your neck is also not stiff uh well my initial diagnosis for you is that you have severe malaria okay um what we'll do now is to send a request to the lab Nurse please come take a sample the lab needs to do a full blood count test the malaria parasite test and urinalysis okay and also get stats on IV paracetamol one twenty milligrams please get to the pharmacy and get that um maybe do it for twelve hours and then we observe her again also give her paracetamol one gram yeah one gram IV paracetamol and please get all of that from the pharmacy immediately admit her in the in the ward for severe malaria obviously um and do a four hourly obliques okay"
+   "raw_text": "um how you feeling how you feeling ah doctor I've been having fever for three days I've been vomiting I tried to take medication but today when I went to the market to buy some things I fell off I fainted doctor okay that's fine don't worry we're going to take care of you is there any medicine that you're allergic to doctor I think penicillin penicillin okay that's fine just lie down I'll have to do an examination for you real quick um you're quite pale open your eyes for me please okay um you look febrile and a bit drowsy well really drowsy your neck is also not stiff uh well my initial diagnosis for you is that you have severe malaria okay um what we'll do now is to send a request to the lab Nurse please come take a sample the lab needs to do a full blood count test the malaria parasite test and urinalysis okay and also get stats on IV paracetamol one twenty milligrams please get to the pharmacy and get that um maybe do it for twelve hours and then we observe her again also give her paracetamol one gram yeah one gram IV paracetamol and please get all of that from the pharmacy immediately admit her in the in the ward for severe malaria obviously um and do a four hourly obliques okay",
+   "note_origin": "authored in the note tool's shape from the note writer's lane, not captured live",
+   "note": {
+    "presenting_complaint": null,
+    "history": {
+     "text": "Three days of fever and vomiting; tried unspecified medication; fainted at the market today.",
+     "from": [
+      "I've been having fever for three days I've been vomiting I tried to take medication but today when I went to the market to buy some things I fell off I fainted"
+     ]
+    },
+    "allergies": {
+     "text": "Penicillin (patient unsure)",
+     "from": [
+      "I think penicillin"
+     ]
+    },
+    "examination": {
+     "text": "Pale, febrile, very drowsy; neck not stiff.",
+     "from": [
+      "you're quite pale",
+      "you look febrile and a bit drowsy well really drowsy",
+      "your neck is also not stiff"
+     ]
+    },
+    "assessment": {
+     "text": "Severe malaria",
+     "from": [
+      "my initial diagnosis for you is that you have severe malaria"
+     ]
+    }
+   }
   },
   {
    "line": "L9",

@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { ModelClient, type ChatCompletion, type MockResponder } from "@hey-pisgah/model";
 import { readStream } from "@hey-pisgah/store";
 import { GATE_TOOL, MAX_CLAUSES, ORDER_REFERENCE_KINDS } from "../src/emr/gate.js";
+import { NOTE_TOOL, type NoteOutput } from "../src/emr/note-writer.js";
 import { EMERGENCY_KIND, IDENTITY_KIND, emergencyReason, unidentifiedRef } from "../src/emr/entry.js";
 import type { EmrCommit, EmrContext, EmrTarget, Orderables, Provenance, WorkArgs } from "../src/emr/port.js";
 import type { SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
@@ -20,6 +21,7 @@ type Line = {
   speaker?: { speaker: "owner" | "unverified" | "other_clinician"; reason?: string; label?: string };
   ears?: { unused?: true; agree?: boolean; measures?: { measure: string; first: string; second: string; agree: boolean }[] };
   gate?: { clauses: Clause[]; outside_line?: Clause[]; assumed?: string };
+  note?: NoteOutput;
   live?: string[];
 };
 type Run = { run: string; lines: Line[]; earlier_arrival?: { note: string; lines: Line[] } };
@@ -90,23 +92,33 @@ function recordedAnswer(lines: readonly Line[], said: string): Clause[] | null {
   return inside.length ? inside : [{ words: said, class: "aside" }];
 }
 
-// Answers every gate call from the fixture; any other tool, or words the fixture never heard, fails the call so nothing is invented.
+// Answers every gate call and every note call from the fixture; any other tool, or words the fixture holds no answer for, fails the call so nothing is invented.
 function replayModel(lines: readonly Line[], seen: string[]): MockResponder {
   return ({ body, hash }) => {
     const name = (body["tools"] as { function: { name: string } }[] | undefined)?.[0]?.function.name;
     const user = String((body["messages"] as { role: string; content: string }[]).find((m) => m.role === "user")?.content ?? "");
-    const said = JSON.parse(/clinician_said: (".*")$/m.exec(user)?.[1] ?? '""') as string;
+    const said = name === NOTE_TOOL
+      ? [...user.matchAll(/\{"untrusted_text":(".*")\}$/gm)].map((m) => JSON.parse(m[1]!) as string).join(" ")
+      : JSON.parse(/clinician_said: (".*")$/m.exec(user)?.[1] ?? '""') as string;
     seen.push(`${name}:${said}`);
+    if (name === NOTE_TOOL) {
+      const recorded = lines.find((l) => l.text === said && l.note)?.note;
+      if (!recorded) throw new Error(`the replay holds no recorded note answer for: ${said.slice(0, 80)}`);
+      return answer(NOTE_TOOL, recorded, hash, body);
+    }
     if (name !== GATE_TOOL) throw new Error(`the replay holds no recorded answer for the ${String(name)} tool`);
     const clauses = recordedAnswer(lines, said);
     if (!clauses) throw new Error(`the replay holds no recorded gate answer for: ${said.slice(0, 80)}`);
-    const args = { clauses: clauses.map(({ describes: _d, ...c }) => c) };
-    const c: ChatCompletion = {
-      id: `replay-${hash.slice(0, 12)}`, object: "chat.completion", created: 0, model: String(body["model"]),
-      choices: [{ index: 0, finish_reason: "tool_calls", logprobs: null, message: { role: "assistant", content: null, refusal: null, tool_calls: [{ id: "call_1", type: "function", function: { name: GATE_TOOL, arguments: JSON.stringify(args) } }] } }],
-      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }
-    };
-    return c;
+    return answer(GATE_TOOL, { clauses: clauses.map(({ describes: _d, ...c }) => c) }, hash, body);
+  };
+}
+
+// One recorded answer as the route returns it: a single call of the tool asked for.
+function answer(tool: string, args: unknown, hash: string, body: Record<string, unknown>): ChatCompletion {
+  return {
+    id: `replay-${hash.slice(0, 12)}`, object: "chat.completion", created: 0, model: String(body["model"]),
+    choices: [{ index: 0, finish_reason: "tool_calls", logprobs: null, message: { role: "assistant", content: null, refusal: null, tool_calls: [{ id: "call_1", type: "function", function: { name: tool, arguments: JSON.stringify(args) } }] } }],
+    usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }
   };
 }
 
@@ -198,10 +210,12 @@ describe("the 14:36 run (Amaka Okafor), replayed", () => {
     expect(old.filter((w) => w.kind === IDENTITY_KIND).map((w) => w.args["name"])).toEqual(["Amaka Okafor"]);
   });
 
-  it("calls no model but the gate, and only for words the fixture holds", () => {
+  it("calls no model but the gate and the note writer, and writes the long stretch's note from its recorded answer", () => {
     expect(r.seen.length).toBeGreaterThan(0);
-    expect(r.seen.every((s) => s.startsWith(`${GATE_TOOL}:`))).toBe(true);
+    expect(r.seen.every((s) => s.startsWith(`${GATE_TOOL}:`) || s.startsWith(`${NOTE_TOOL}:`))).toBe(true);
     expect(stream(r).filter((e) => e.record_type === "intent.failed")).toEqual([]);
+    const long = run.lines.find((l) => l.line === "L8")!.text!;
+    expect(r.seen.filter((s) => s === `${NOTE_TOOL}:${long}`)).toHaveLength(1);
   });
 
   // What Samuel wants at the end of this run; each it.fails is red on the engine today and turns green when the lane that owns it lands.
@@ -222,7 +236,7 @@ describe("the 14:36 run (Amaka Okafor), replayed", () => {
     expect(writes(r, "record_allergy").map((w) => String(w.args["substance"]).toLowerCase())).toEqual(["penicillin"]);
   });
 
-  it.fails("records the examination in clinician wording", () => {
+  it("records the examination in clinician wording", () => {
     const exam = note(r)["examination"] ?? "";
     for (const f of [/pale/i, /febrile/i, /drowsy/i, /neck (is )?(also )?not stiff|no neck stiffness/i]) expect(exam).toMatch(f);
     expect(exam).not.toMatch(/open your eyes|for me please|\bum\b/i);
@@ -244,7 +258,7 @@ describe("the 14:36 run (Amaka Okafor), replayed", () => {
     expect(rx[0]!.args).toMatchObject({ drug: "paracetamol_iv", dose: "1 g" });
   });
 
-  it.fails("keeps orders, drugs and chatter out of every note section (D46)", () => {
+  it("keeps orders, drugs and chatter out of every note section (D46)", () => {
     const n = note(r);
     expect(n["presenting_complaint"] && n["examination"] && n["assessment"]).toBeTruthy();
     const all = Object.values(n).join(" | ");

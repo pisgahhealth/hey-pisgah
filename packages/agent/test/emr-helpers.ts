@@ -77,6 +77,8 @@ const clause = (c: C): GateClause => ({ words: "words", ...c }) as GateClause;
 // A mock model that answers each gate call from a script keyed by the clinician's words.
 export function gater(script: (said: string, user: string) => C[], seen: string[] = []): MockResponder {
   return ({ body, hash }) => {
+    // Only the gate is scripted here, so the note writer's call fails and falls back to the clause text.
+    if ((body["tools"] as { function: { name: string } }[] | undefined)?.[0]?.function.name === "note") throw new Error("this mock answers only the gate");
     const msgs = body["messages"] as { role: string; content: string }[];
     const user = String(msgs.find((m) => m.role === "user")?.content ?? "");
     const said = JSON.parse(/clinician_said: (".*")$/m.exec(user)?.[1] ?? '""') as string;
