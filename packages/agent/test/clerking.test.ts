@@ -31,7 +31,7 @@ describe("clerking by voice", () => {
     await rt.settled();
     expect(kindsOf(port)).toEqual(["open_consult", "record_clerking", "record_clerking"]);
     expect(port.writes[0]!.args).toEqual({ visit_id: VISIT, patient_id: PAT });
-    expect(port.writes[2]!.args["note"]).toEqual({ presenting_complaint: "She has had abdominal pain for two days", examination: "On examination the abdomen is tender in the right iliac fossa" });
+    expect(port.writes[2]!.args["note"]).toEqual({ presenting_complaint: "She has had abdominal pain for two days", examination: "On examination the abdomen is tender in the right iliac fossa." });
     const v = rt.view(a.task_id)!;
     expect(v.actions.every((x) => x.state === "completed")).toBe(true);
     expect(v.transcript.map((l) => l.class)).toEqual(["finding", "finding"]);

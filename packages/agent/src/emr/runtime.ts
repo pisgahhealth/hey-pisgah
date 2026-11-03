@@ -8,7 +8,7 @@ import { primaryClass } from "./classes.js";
 import { CLERKING_KIND, DIAGNOSIS_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
-import { BATCH_KINDS, addressSwap, admissionReason, cleanNoteText, fromLineOrSwapped, personSwap, workingDiagnosis, NEW_RECORD_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, sentNote, summariseWork, withoutDestination, wordSaid, type WorkKind } from "./work.js";
+import { BATCH_KINDS, addressSwap, admissionReason, cleanNoteText, fromLineOrSwapped, personSwap, sourceClause, diagnosisIsTentative, NEW_RECORD_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, sentNote, summariseWork, withoutDestination, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
@@ -1576,9 +1576,11 @@ export class EmrRuntime {
       if (!t.visit_id) { this.note(l, "Heard a finding, but no arrival is in context, so the note was not written."); return; }
       // A clinician's own "I" and "my" are theirs, so history is swapped only when the voice heard matched no clinician.
       const section = c.section ?? "history", unmatched = this.speakerOf(t, lineId)?.speaker === "unverified";
-      // A clinician's examination said to the patient loses its "you" by the fixed address table, with the same exact-words check.
-      const examined = (x: string) => addressSwap(cleanNoteText((c.text && (fromLine(c.text, lineText) || fromLine(c.text, addressSwap(lineText))) ? c.text : x).trim()));
-      this.proposeClerking(l, lineId, section, section === "history" && unmatched ? reported(c.words) : section === "examination" ? examined(c.words) : (c.text && fromLine(c.text, lineText) ? c.text : c.words).trim());
+      if (section === "examination" || section === "assessment") {
+        const source = sourceClause(c.words, lineText);
+        if (!source) { this.ask(l, lineId, `I could not safely record that ${section}. Please say it again.`); return; }
+        this.proposeClerking(l, lineId, section, section === "examination" ? addressSwap(cleanNoteText(source)) : source);
+      } else this.proposeClerking(l, lineId, section, section === "history" && unmatched ? reported(c.words) : (c.text && fromLine(c.text, lineText) ? c.text : c.words).trim());
       return;
     }
     if (c.class === "unclear") {
@@ -1597,9 +1599,15 @@ export class EmrRuntime {
     }
     // The gate may call the whole of "when the result comes back, let me know" conditional; a line that only asks to be told when a result is back is the same tell.
     if (c.class === "conditional" && tellMeSaid(lineText) && afterSaid("result", lineText) && !/\bif\b/i.test(lineText) && !measuresIn(lineText).length) return this.holdObligation(l, lineId, TELL_ME_KIND, c, { after: "result", due_at: null, reason: "tell_me" });
-    // A working diagnosis the clinician states in passing is the diagnosis said, read back for their confirm in their own matched voice; a differential stays an option.
-    const dx = c.class === "option" && kinds.includes(DIAGNOSIS_KIND) ? workingDiagnosis(lineText) : null;
-    if (dx && ![...t.actions.values()].some((a) => a.line_id === lineId && a.kind === DIAGNOSIS_KIND)) return this.applyWork(l, lineId, { ...c, class: "instruction", kind: DIAGNOSIS_KIND, text: dx, confidence: 1 } as AnyClause, DIAGNOSIS_KIND);
+    // Tentative or withdrawn diagnoses stay in the assessment exactly as spoken, without creating a diagnosis action.
+    const source = sourceClause(c.words, lineText);
+    if (c.class === "instruction" && c.kind === DIAGNOSIS_KIND && !source) { this.ask(l, lineId, "I could not safely record that diagnosis. Please say it again."); return; }
+    const diagnosticOption = c.class === "option" && (c.kind === DIAGNOSIS_KIND || c.section === "assessment" || /\b(?:diagnos(?:is|es)|differential)\b/i.test(c.words));
+    const tentativeInstruction = c.class === "instruction" && c.kind === DIAGNOSIS_KIND && source !== null && diagnosisIsTentative(source);
+    if (diagnosticOption || tentativeInstruction) {
+      if (source && kinds.includes(CLERKING_KIND) && t.visit_id) this.proposeClerking(l, lineId, "assessment", source);
+      return;
+    }
     if (c.class !== "instruction" && c.class !== "correction") return;
     // "When the result comes back, let me know" asks only to be told: held on the result, and fired as a note to the clinician, never as work.
     if (c.class === "instruction" && !c.kind && c.after === "result" && afterSaid("result", lineText)) return this.holdObligation(l, lineId, TELL_ME_KIND, c, { after: "result", due_at: null, reason: "tell_me" });
@@ -3019,7 +3027,15 @@ export class EmrRuntime {
   private hold(l: Live, actionId: string, anchor: number | null = null, holdMs = this.o.holdMs ?? 0): void {
     const gen = (this.holds.get(actionId) ?? 0) + 1;
     this.holds.set(actionId, gen);
-    const timer = setTimeout(() => { this.timers.delete(timer); if (!this.stopped && this.holds.get(actionId) === gen) this.enqueueExec(l, () => this.execute(l, actionId)); }, holdLeftMs(holdMs, anchor, this.wall().getTime()));
+    const timer = setTimeout(() => {
+      this.timers.delete(timer);
+      if (!this.stopped && this.holds.get(actionId) === gen) this.enqueueExec(l, async () => {
+        if (this.stopped || this.holds.get(actionId) !== gen || l.task.state !== "running") return;
+        const action = l.task.actions.get(actionId);
+        if (action?.state !== "proposed" || action.awaiting) return;
+        await this.execute(l, actionId);
+      });
+    }, holdLeftMs(holdMs, anchor, this.wall().getTime()));
     this.timers.add(timer);
   }
 

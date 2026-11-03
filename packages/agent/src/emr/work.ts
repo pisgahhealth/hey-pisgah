@@ -330,12 +330,20 @@ const ADDRESS_TABLE: readonly [RegExp, string][] = [
 ];
 // A clinician's examination words to the patient without the second person, by the fixed table only; a sentence keeping a "you" stays exactly as said.
 export const addressSwap = (text: string): string => swapBy(text, ADDRESS_TABLE, /\byou(?:rs?|rself)?\b|\byou(?:'|\u2019)(?:d|ll|re|ve)\b/i);
-// The working diagnosis a clinician states in passing ("my initial diagnosis is that you might have cerebral malaria"), in their words; a differential or none is null.
-export function workingDiagnosis(line: string): string | null {
-  const m = /\b(?:my|our|the)\s+(?:(?:initial|working|provisional|first|likely|main)\s+)?diagnosis\s+(?:is|would be)\s+(?:that\s+)?(?:(?:you|she|he|they|the patient)\s+(?:(?:might|may|probably|likely|could)\s+)?(?:have|has)\s+)?([a-z][a-z' -]{1,120}?)\s*(?:[.,;!?]|$)/i.exec(line);
-  const dx = m?.[1]?.trim() ?? "";
-  return dx.length >= 3 && !/\b(?:or|versus|vs|maybe|not|unclear|pending)\b/i.test(dx) ? dx : null;
+// Returns only a contiguous source clause, keeping its negation, uncertainty, numbers and alternatives intact.
+export function sourceClause(words: string, line: string): string | null {
+  const text = line.replace(/\s+/g, " ").trim();
+  const normalize = (s: string) => s.replace(/[’‘]/g, "'").toLowerCase();
+  const needle = normalize(words.replace(/\s+/g, " ").trim());
+  if (!needle) return null;
+  const start = normalize(text).indexOf(needle);
+  if (start < 0) return null;
+  const end = start + needle.length;
+  if ((start > 0 && /[\p{L}\p{N}]/u.test(text[start - 1]!)) || (end < text.length && /[\p{L}\p{N}]/u.test(text[end]!))) return null;
+  return text.slice(start, end);
 }
+// A diagnosis still being considered or withdrawn is documentation, never a settled diagnosis to confirm.
+export const diagnosisIsTentative = (text: string): boolean => /\b(?:initial|working|provisional|likely|possible|suspected|maybe|perhaps|might|may|could|would|differential|versus|vs|or|not|no longer|unlikely|doubt(?:ful)?|rule(?:d)? out|if)\b/i.test(text);
 // True when a clause's text is the line's own words, or the line's words after the person swap and nothing else.
 export const fromLineOrSwapped = (words: string, line: string, sex: string | null | undefined, fromLine: (w: string, l: string) => boolean): boolean => fromLine(words, line) || fromLine(words, personSwap(line, sex));
 

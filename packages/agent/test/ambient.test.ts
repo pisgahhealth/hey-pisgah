@@ -47,9 +47,15 @@ const say = (l: ListenSessions, seq: number, wav: Uint8Array, session = "s1") =>
 describe("speech gate", () => {
   it("is frozen in its commitment, holds no denied term and never shows vitals or record ids", () => {
     expect(committedGateHash()).toBe(hashJson(gateCommitment()));
-    const last = JSON.parse(readFileSync(GATE_COMMITMENT_FILE, "utf8")).revisions.at(-1).body;
-    expect(last.deny_hits).toEqual([]);
-    expect(last.clerking.deny_hits).toEqual([]);
+    const revisions = JSON.parse(readFileSync(GATE_COMMITMENT_FILE, "utf8")).revisions;
+    const current = revisions.at(-1).body;
+    expect(current.deny_hits).toEqual([]);
+    expect(current.clerking.deny_hits).toEqual([]);
+    expect(current.diagnosis.deny_hits).toEqual([]);
+    // Historical byte comparisons stay pinned to revision 11 after clinical documentation rules are revised.
+    const last = revisions[10].body;
+    expect(current.prompt_sha256).toBe(last.prompt_sha256);
+    expect(current.tool_sha256).toBe(last.tool_sha256);
     // The observation gate the labelled talk was scored on is unchanged by the clerking revision.
     const rev2 = JSON.parse(readFileSync(GATE_COMMITMENT_FILE, "utf8")).revisions[1].body;
     expect([last.prompt_sha256, last.tool_sha256]).toEqual([rev2.prompt_sha256, rev2.tool_sha256]);

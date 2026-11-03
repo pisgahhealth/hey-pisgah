@@ -4,7 +4,7 @@ import type { EmrCommit, EmrContext, EmrTarget, Provenance, WorkArgs } from "../
 import type { SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
 import type { SecondEar } from "../src/emr/ears.js";
 import { fromLine } from "../src/emr/runtime.js";
-import { addressSwap, cleanNoteText, fromLineOrSwapped, personSwap, workingDiagnosis } from "../src/emr/work.js";
+import { addressSwap, cleanNoteText, fromLineOrSwapped, personSwap, sourceClause, diagnosisIsTentative } from "../src/emr/work.js";
 import { CLERK_KINDS, ClerkFake, DOC, PAT, clerkBoot, ins, type W } from "./clerking-helpers.js";
 
 // Lane EMN: a clean note, a spelling that never lands on the wrong part, and no ward class question on an emergency arrival.
@@ -329,32 +329,27 @@ describe("EMF 2: a clinician's words to the patient in the examination by the fi
 });
 
 describe("EMF 3: a working diagnosis said in passing", () => {
-  it("reads the diagnosis from the clinician's own words and never from a differential", () => {
-    expect(workingDiagnosis(DX)).toBe("cerebral malaria");
-    expect(workingDiagnosis("my working diagnosis is severe malaria.")).toBe("severe malaria");
-    expect(workingDiagnosis("it could be malaria or meningitis, my working diagnosis is malaria or meningitis")).toBeNull();
-    expect(workingDiagnosis("we could try antibiotics")).toBeNull();
-    expect(workingDiagnosis("the diagnosis will come from the lab")).toBeNull();
+  it("keeps the source clause and recognises uncertainty without extracting a final diagnosis", () => {
+    expect(sourceClause(DX, DX)).toBe(DX);
+    expect(diagnosisIsTentative(DX)).toBe(true);
+    expect(diagnosisIsTentative("my working diagnosis is severe malaria.")).toBe(true);
+    expect(diagnosisIsTentative("the diagnosis is acute appendicitis.")).toBe(false);
   });
 
-  it("asks the owner to confirm the working diagnosis and records it on the confirm, and records nothing from Dr B or a differential", async () => {
+  it("documents a working diagnosis and differential without asking for or recording a final diagnosis", async () => {
     const b = boot(gate3, { port: new EmfFake() });
     const task = await arrival(b);
+    const differential = "it could be malaria or meningitis, my working diagnosis is malaria or meningitis";
     await sayOn(b, task, DX);
     await b.rt.settled();
-    expect(b.rt.view(task)!.questions.at(-1)!.text).toMatch(/cerebral malaria.*Say confirm/);
+    await sayOn(b, task, differential);
+    await b.rt.settled();
     await sayOn(b, task, "confirm the diagnosis");
     await b.rt.settled();
-    expect(of(b, "record_diagnosis").map((w) => w.args["diagnosis"])).toEqual(["cerebral malaria"]);
-    const c = boot(gate3, { port: new EmfFake() });
-    const other = await arrival(c);
-    await sayOn(c, other, DX, DRB);
-    await sayOn(c, other, "it could be malaria or meningitis, my working diagnosis is malaria or meningitis");
-    await sayOn(c, other, "we could try antibiotics");
-    await c.rt.settled();
-    expect(c.rt.view(other)!.actions.filter((a) => a.kind === "record_diagnosis")).toHaveLength(0);
+    expect(of(b, "record_diagnosis")).toHaveLength(0);
+    expect(of(b, "record_clerking").filter((w) => w.args["section"] === "assessment").map((w) => w.args["text"])).toEqual([DX, differential]);
+    expect(b.rt.view(task)!.questions.filter((q) => q.text.includes("confirm to record this diagnosis"))).toHaveLength(0);
     await b.rt.stop();
-    await c.rt.stop();
   });
 });
 

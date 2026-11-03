@@ -139,7 +139,7 @@ export const HOME_KIND = "release_home" as const;
 export const HOME_RULE = "Sending the patient home is release_home, only for the admitted patient and only when the clinician settles it now; nothing is done until the clinician confirms the paperwork read back from the record.";
 export const DIAGNOSIS_KIND = "record_diagnosis" as const;
 // Only a settled diagnosis is recorded, and only in the clinician's words; it waits for their spoken confirm.
-export const DIAGNOSIS_RULE = "Stating the diagnosis is record_diagnosis only when the clinician settles it now, such as the diagnosis is, put the diagnosis as or record the diagnosis as; copy the diagnosis into text in their words. A diagnosis weighed, doubted or given as one of several is option and is not recorded.";
+export const DIAGNOSIS_RULE = "Stating the diagnosis is record_diagnosis only when the clinician settles it now, such as the diagnosis is, put the diagnosis as or record the diagnosis as; copy the diagnosis into text in their words. A working, provisional, uncertain, negated or differential diagnosis is finding in section assessment: copy the whole clause with its uncertainty, negation and alternatives intact, and never use record_diagnosis for it.";
 // What the owner's kinds carry beside paging, and what stays with staff; both branches leave home with staff only when release_home is not permitted.
 export function staffRule(kinds: readonly EmrWriteKind[], orders = holdsOrders(kinds)): string {
   const home = kinds.includes(HOME_KIND) ? "" : " sending the patient home,";
@@ -162,6 +162,7 @@ export const CLERKING_CLASS_TEXT = [
 ] as const;
 // The clerking owner's rules after the kinds and names.
 export const CLERKING_RULES = [
+  "Working diagnoses, differentials and diagnostic uncertainty are findings in section assessment, with the whole clause copied exactly, including negation and alternatives; documentation orders nothing.",
   "Vitals the clinician says are an instruction of record_observation even before the patient is admitted; until then they are written into the clerking note.",
   "An allergy the clinician states, or confirms from what the patient said, is record_allergy; an allergy said only by the patient or a relative is patient_reported.",
   "The ward for admit_patient and assign_bed is one of the wards listed below; never choose one the clinician did not say.",
