@@ -205,12 +205,12 @@ describe("the 14:36 run (Amaka Okafor), replayed", () => {
   });
 
   // What Samuel wants at the end of this run; each it.fails is red on the engine today and turns green when the lane that owns it lands.
-  it.fails("writes the name Amaka Okafor on the new arrival with no for-whom question", () => {
+  it("writes the name Amaka Okafor on the new arrival with no for-whom question", () => {
     expect(writes(r, IDENTITY_KIND).map((w) => w.args["name"])).toEqual(["Amaka Okafor"]);
     expect(r.rt.view(r.task)!.asked.filter((q) => /^For /.test(q.text))).toEqual([]);
   });
 
-  it.fails("puts pulse 110 and blood pressure 90/60 on the triage row, with the other vitals said", () => {
+  it("puts pulse 110 and blood pressure 90/60 on the triage row, with the other vitals said", () => {
     const tri = writes(r, "record_triage_vitals");
     expect(tri.length).toBeGreaterThan(0);
     const got = Object.assign({}, ...tri.map((w) => w.args));
@@ -228,7 +228,7 @@ describe("the 14:36 run (Amaka Okafor), replayed", () => {
     expect(exam).not.toMatch(/open your eyes|for me please|\bum\b/i);
   });
 
-  it.fails("records severe malaria as the working diagnosis and nothing else in the assessment", () => {
+  it("records severe malaria as the working diagnosis and nothing else in the assessment", () => {
     const a = note(r)["assessment"] ?? "";
     expect(a).toMatch(/severe malaria/i);
     expect(a).not.toMatch(/penicillin|paracetamol|fever for three days|lab|nurse/i);
@@ -251,7 +251,7 @@ describe("the 14:36 run (Amaka Okafor), replayed", () => {
     expect(all).not.toMatch(/paracetamol|full blood count|urinalysis|don't worry|open your eyes|nurse please/i);
   });
 
-  it.fails("never stalls: no line is held for whom and every line after the arrival is decided", () => {
+  it("never stalls: no line is held for whom and every line after the arrival is decided", () => {
     const recs = stream(r);
     expect(recs.filter((e) => e.record_type === "line.handled" && (e.payload as { as: string }).as === "held_for_whom")).toEqual([]);
     const decided = new Set(recs.filter((e) => e.record_type === "gate.decided" || e.record_type === "line.ruled").map((e) => (e.payload as { line_id: string }).line_id));
