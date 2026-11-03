@@ -6,7 +6,7 @@ import { ModelClient } from "@hey-pisgah/model";
 import { readStream } from "@hey-pisgah/store";
 import { recordingSocket, replaySocket, type SocketFactory } from "@hey-pisgah/voice";
 import type { EarReading, SecondEar } from "../src/emr/ears.js";
-import type { ListenSessions } from "../src/emr/listen.js";
+import type { ListenSessions, StreamSegment } from "../src/emr/listen.js";
 import { asrSwitch } from "../src/emr/local-ears.js";
 import { MetaStreamListener } from "../src/emr/meta-stream.js";
 import type { EmrRuntime } from "../src/emr/runtime.js";
@@ -255,13 +255,14 @@ function chain() {
   const segments: string[] = [];
   const bySession: string[] = [];
   const partials: string[] = [];
+  const captures: StreamSegment[] = [];
   const l = {
-    hintsFor: async () => ["pulse"], nextWords: (_s: string, p: string) => { partials.push(p); }, segment: async (c: { raw: string; session_id: string }) => { segments.push(c.raw); bySession.push(`${c.session_id}: ${c.raw}`); return []; },
+    hintsFor: async () => ["pulse"], nextWords: (_s: string, p: string) => { partials.push(p); }, segment: async (c: StreamSegment) => { captures.push(c); segments.push(c.raw); bySession.push(`${c.session_id}: ${c.raw}`); return []; },
     flush: async () => undefined, unreportedOf: () => ({ utterances: [], errors: [] }),
     // The listen chain's live check passes every piece here; its own tests are in presence-heartbeat.test.ts.
     admit: () => ({ refused: null, presence: { live: null } })
   } as unknown as ListenSessions;
-  return { l, segments, bySession, partials };
+  return { l, segments, bySession, partials, captures };
 }
 const quiet = (ms: number) => new Float32Array((RATE * ms) / 1000);
 const tone = (ms: number) => { const x = new Float32Array((RATE * ms) / 1000); for (let k = 0; k < x.length; k++) x[k] = 0.3 * Math.sin((2 * Math.PI * 220 * k) / RATE); return x; };
@@ -528,4 +529,47 @@ describe.skipIf(process.env["META_LIVE"] !== "1")("the real realtime endpoint", 
     expect(rows.some((x) => x["model"] === "meta:muse-voice-transcribe-1.0:realtime" && x["purpose"] === "interpret_speech" && x["cost_usd"] > 0)).toBe(true);
     await s.close();
   }, 60_000);
+});
+
+
+describe("realtime capture order", () => {
+  const delayedTurns = (completeFirst = true): Scripted[] => [
+    { at_ms: 100, ev: { type: "speechStart", turnId: 0, audioProcessedMs: 100 } },
+    { at_ms: 800, ev: { type: "speechEnd", turnId: 0, audioProcessedMs: 800 } },
+    { at_ms: 1000, ev: { type: "speechStart", turnId: 1, audioProcessedMs: 1000 } },
+    { at_ms: 1500, ev: { type: "speechEnd", turnId: 1, audioProcessedMs: 1500 } },
+    { at_ms: 1700, ev: { type: "speechComplete", turnId: 1, transcript: "Sorry, pulse 100.", audioProcessedMs: 1500 } },
+    ...(completeFirst ? [{ at_ms: 2200, ev: { type: "speechComplete", turnId: 0, transcript: "Pulse 110.", audioProcessedMs: 800 } }] : [])
+  ];
+
+  it("delivers a late first turn before its correction and preserves capture times independently of completion", async () => {
+    const clock = { now: 10_000 }, meta = fakeMeta([delayedTurns()]);
+    const { l, segments, captures } = chain();
+    const m = new MetaStreamListener(l, { key: () => "k", socket: meta.factory, now: () => clock.now, padAfterMs: 0 });
+    await m.open({ owner: OWNER, target: { admission_id: ADM }, session_id: "order", rate: RATE });
+    await play(m, "order", clock, [["tone", 1800]]);
+    await m.drain("order");
+    expect(segments).toEqual([]);
+    await play(m, "order", clock, [["quiet", 500]]);
+    await m.drain("order");
+    expect(segments).toEqual(["Pulse 110.", "Sorry, pulse 100."]);
+    expect(captures.map((c) => [c.capture_start, c.capture_end, c.turn_seq])).toEqual([[10_100, 10_800, 0], [11_000, 11_500, 1]]);
+    expect(captures[0]!.arrived).toBeGreaterThan(captures[1]!.arrived);
+    await m.end("order");
+  });
+
+  it("reports a missing earlier turn, releases completed speech after a bounded wait and ignores its late completion", async () => {
+    const clock = { now: 10_000 }, meta = fakeMeta([delayedTurns()]);
+    const { l, segments } = chain();
+    const m = new MetaStreamListener(l, { key: () => "k", socket: meta.factory, now: () => clock.now, padAfterMs: 0, turnWaitMs: 20 });
+    await m.open({ owner: OWNER, target: { admission_id: ADM }, session_id: "missing", rate: RATE });
+    await play(m, "missing", clock, [["tone", 1800]]);
+    await new Promise((r) => setTimeout(r, 40));
+    await m.drain("missing");
+    expect(segments).toEqual(["Sorry, pulse 100."]);
+    await play(m, "missing", clock, [["quiet", 500]]);
+    await m.drain("missing");
+    expect(segments).toEqual(["Sorry, pulse 100."]);
+    expect((await m.end("missing")).errors.join(" ")).toMatch(/earlier realtime line did not finish/);
+  });
 });

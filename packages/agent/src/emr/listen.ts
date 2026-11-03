@@ -24,7 +24,7 @@ export const NUMBER_JOIN_WAIT_MS = 3000;
 export const HELD_END_WAIT_MS = CHUNK_CAP_MS + 2000;
 
 // One stretch the streaming ear ended at a pause, with its words, its audio and the quiet already heard at its end.
-export type StreamSegment = { owner: string; target: EmrTarget; session_id: string; samples: Float32Array; rate: number; raw: string; trailing_ms: number; arrived: number; heard_at?: number };
+export type StreamSegment = { owner: string; target: EmrTarget; session_id: string; samples: Float32Array; rate: number; raw: string; trailing_ms: number; arrived: number; heard_at?: number; capture_start?: number; capture_end?: number; turn_seq?: number };
 export type ListenChunk = { owner: string; target: EmrTarget; session_id: string; seq: number; wav: Uint8Array; arrived_at?: number; captured_at?: number; presence?: LivenessMarker | null };
 // The strip's end-of-utterance marker: no audio, only the place in the session where speech stopped.
 export type ListenEnd = Omit<ListenChunk, "wav">;
@@ -39,11 +39,11 @@ export type ListenOutcome = {
 };
 // What POST /tasks/listen answers: the utterances finished since the last answer, and, when the caller waited, this chunk's outcome.
 export type ListenReply = { session_id: string; seq: number; accepted: true; utterances: ListenUtterance[]; partial: null; outcome?: ListenOutcome; errors?: string[] };
-type Held = { samples: Float32Array[]; seqs: number[]; audio_ms: number; rate: number; trailing_ms: number; arrived: number };
+type Held = { samples: Float32Array[]; seqs: number[]; audio_ms: number; rate: number; trailing_ms: number; arrived: number; capture_start?: number; capture_end?: number };
 // One transcribed stretch of audio, either finished or waiting for the next chunk because it ends mid-number.
 type Heard = {
   samples: Float32Array[]; seqs: number[]; rate: number; audio_ms: number; trailing_ms: number; arrived: number;
-  text: string; raw: string; cost_usd: number; keywords_dropped: boolean; rewrites: Rewrite[]; strong: boolean; joined: boolean; heard_at: number;
+  text: string; raw: string; cost_usd: number; keywords_dropped: boolean; rewrites: Rewrite[]; strong: boolean; joined: boolean; heard_at: number; capture_start?: number; capture_end?: number; turn_seqs?: number[];
   // Other first-ear readings of the same audio, cleaned the same way, for the second-opinion rule.
   alternates?: string[];
   // Set when a whole-number line was delivered at once (D17) and still waits for a continuation; it is never delivered again.
@@ -259,7 +259,7 @@ export class ListenSessions {
       const print = this.o.embed ? printLine(this.o.embed, matchWindows([c.samples], c.rate), c.rate) : Promise.resolve(null);
       const heard: Heard = {
         samples: [c.samples], seqs: [seq], rate: c.rate, audio_ms: totalMs([c.samples], c.rate), trailing_ms: c.trailing_ms, arrived: c.arrived,
-        text: v.text, raw: c.raw, cost_usd: 0, keywords_dropped: false, rewrites: v.rewrites, strong: false, joined: false, heard_at: c.heard_at ?? this.now(), voiceprint: await print
+        text: v.text, raw: c.raw, cost_usd: 0, keywords_dropped: false, rewrites: v.rewrites, strong: false, joined: false, heard_at: c.heard_at ?? this.now(), voiceprint: await print, ...(c.capture_start !== undefined ? { capture_start: c.capture_start } : {}), ...(c.capture_end !== undefined ? { capture_end: c.capture_end } : {}), ...(c.turn_seq !== undefined ? { turn_seqs: [c.turn_seq] } : {})
       };
       if (!heard.text) return;
       this.adoptWaiting(s, c.session_id, c.rate);
@@ -273,7 +273,7 @@ export class ListenSessions {
           // The joined line is matched on every piece it was heard in, so a continuation in another voice never inherits the first speaker's authority.
           const samples = [...w.samples, c.samples];
           const voiceprint = this.o.embed ? await printLine(this.o.embed, matchWindows(samples, c.rate), c.rate) : null;
-          const joined: Heard = { ...heard, samples, seqs: [...w.seqs, seq], audio_ms: w.audio_ms + heard.audio_ms, text: jv.text, raw, rewrites: jv.rewrites, joined: true, voiceprint, ...(w.released ? { continues: w.released.line_id } : {}), ...(w.partial ? { partial: true } : {}) };
+          const joined: Heard = { ...heard, samples, seqs: [...w.seqs, seq], audio_ms: w.audio_ms + heard.audio_ms, text: jv.text, raw, rewrites: jv.rewrites, joined: true, voiceprint, ...(w.capture_start !== undefined ? { capture_start: w.capture_start } : {}), ...((w.turn_seqs || heard.turn_seqs) ? { turn_seqs: [...(w.turn_seqs ?? []), ...(heard.turn_seqs ?? [])] } : {}), ...(w.released ? { continues: w.released.line_id } : {}), ...(w.partial ? { partial: true } : {}) };
           await this.settleHeard(s, c.session_id, joined, "joined_across_cut", joined.trailing_ms);
           return;
         }
@@ -344,7 +344,7 @@ export class ListenSessions {
     s.held = null;
     this.clearHeld(s);
     try {
-      const heard = await this.ear(s, sessionId, h.samples, h.seqs, h.rate, h.trailing_ms, h.arrived);
+      const heard = await this.ear(s, sessionId, h.samples, h.seqs, h.rate, h.trailing_ms, h.arrived, { ...(h.capture_start !== undefined ? { capture_start: h.capture_start } : {}), ...(h.capture_end !== undefined ? { capture_end: h.capture_end } : {}) });
       if (!heard.text) { this.status(s, sessionId, h.seqs, { status: "completed", note: "nothing heard" }); return null; }
       return await this.settleHeard(s, sessionId, heard, why);
     } catch (e) {
@@ -411,6 +411,7 @@ export class ListenSessions {
     const { samples, sampleRate } = decodeWav(c.wav);
     const silence = trailingSilenceMs(samples, sampleRate);
     const audioMs = Math.round((samples.length / sampleRate) * 1000);
+    const capture = c.captured_at === undefined ? {} : { capture_start: c.captured_at, capture_end: c.captured_at + audioMs - silence };
     const base = { seq: c.seq, trailing_silence_ms: silence, audio_ms: audioMs, transcript: null, raw_transcript: null, cost_usd: 0, keywords_dropped: false, utterance: null };
     const done = (o: ListenOutcome): ListenOutcome => { s.outcomes.set(c.seq, o); return o; };
     if (c.seq < s.next) return { ...base, final: false, why: "late" };
@@ -435,10 +436,10 @@ export class ListenSessions {
       // A line that ended where a value must follow carries on into this capped audio; a line ending on a number does not wait on audio that cannot be read yet.
       const w = s.waiting;
       let h = s.held;
-      if (w && w.strong && !h) { this.clearWait(s); h = { samples: [...w.samples], seqs: [...w.seqs], audio_ms: w.audio_ms, rate: w.rate, trailing_ms: 0, arrived: w.arrived }; }
+      if (w && w.strong && !h) { this.clearWait(s); h = { samples: [...w.samples], seqs: [...w.seqs], audio_ms: w.audio_ms, rate: w.rate, trailing_ms: 0, arrived: w.arrived, ...(w.capture_start !== undefined ? { capture_start: w.capture_start } : {}) }; }
       else await alone();
-      h ??= { samples: [], seqs: [], audio_ms: 0, rate: sampleRate, trailing_ms: 0, arrived };
-      h.samples.push(samples); h.seqs.push(c.seq); h.audio_ms += audioMs; h.trailing_ms = silence; h.arrived = arrived;
+      h ??= { samples: [], seqs: [], audio_ms: 0, rate: sampleRate, trailing_ms: 0, arrived, ...capture };
+      h.samples.push(samples); h.seqs.push(c.seq); h.audio_ms += audioMs; h.trailing_ms = silence; h.arrived = arrived; if (capture.capture_end !== undefined) h.capture_end = capture.capture_end;
       s.held = h;
       if (h.audio_ms > (this.o.maxHeldMs ?? MAX_HELD_MS)) { this.status(s, c.session_id, h.seqs, { status: "failed", error: "Not heard: too long without a pause." }); s.held = null; s.dropped += 1; return done({ ...base, final: false, why: "held_too_long", utterance: delivered }); }
       this.armHeld(s, c.session_id);
@@ -449,6 +450,7 @@ export class ListenSessions {
     const why: ListenOutcome["why"] = gap ? "held_dropped_gap" : silence >= this.finalMs() ? "quiet_tail" : "short_chunk";
     const parts = [...(h?.samples ?? []), samples];
     const seqs = [...(h?.seqs ?? []), c.seq];
+    const captured = { ...capture, ...(h?.capture_start !== undefined ? { capture_start: h.capture_start } : {}) };
     let cost = 0;
     let heard: Heard;
     const w = s.waiting;
@@ -456,10 +458,10 @@ export class ListenSessions {
       this.clearWait(s);
       // A strong cut is always joined; a number is joined only when the next words carry it on.
       // Words kept without their audio are joined by their words, so these words are heard on their own first.
-      const next = w.strong && !w.partial ? null : await this.ear(s, c.session_id, parts, seqs, sampleRate, silence, arrived);
+      const next = w.strong && !w.partial ? null : await this.ear(s, c.session_id, parts, seqs, sampleRate, silence, arrived, captured);
       if (next) cost += next.cost_usd;
       if (w.strong || continuesNumber(next!.text)) {
-        heard = w.partial ? this.joinWords(w, next!) : await this.ear(s, c.session_id, [...w.samples, ...parts], [...w.seqs, ...seqs], sampleRate, silence, arrived);
+        heard = w.partial ? this.joinWords(w, next!) : await this.ear(s, c.session_id, [...w.samples, ...parts], [...w.seqs, ...seqs], sampleRate, silence, arrived, { ...captured, ...(w.capture_start !== undefined ? { capture_start: w.capture_start } : {}) });
         heard.cost_usd += w.cost_usd + cost;
         heard.joined = true;
         if (w.released) heard.continues = w.released.line_id;
@@ -470,7 +472,7 @@ export class ListenSessions {
       delivered = await this.deliver(s, c.session_id, w, "number_alone");
       heard = next!;
     } else {
-      heard = await this.ear(s, c.session_id, parts, seqs, sampleRate, silence, arrived);
+      heard = await this.ear(s, c.session_id, parts, seqs, sampleRate, silence, arrived, captured);
       cost = heard.cost_usd;
     }
     if (!heard.text) return done({ ...this.outcomeOf(base, heard, delivered, "empty", cost), final: true });
@@ -481,7 +483,7 @@ export class ListenSessions {
   private joinWords(w: Heard, next: Heard): Heard {
     const raw = `${w.raw.replace(/[.,;:!?]+$/, "")} ${next.raw}`;
     const jv = vitalsVocabulary(cleanTranscript(raw));
-    return { ...next, text: jv.text, raw, rewrites: jv.rewrites, partial: true, voiceprint: null };
+    return { ...next, text: jv.text, raw, rewrites: jv.rewrites, partial: true, voiceprint: null, ...(w.capture_start !== undefined ? { capture_start: w.capture_start } : {}) };
   }
 
   private outcomeOf(base: Omit<ListenOutcome, "final" | "why">, h: Heard, u: ListenUtterance | null, why: ListenOutcome["why"], cost: number): ListenOutcome {
@@ -511,7 +513,7 @@ export class ListenSessions {
   }
 
   // Transcribes one stretch of audio with vitals words first in the hints, then cleans it and applies the vitals vocabulary.
-  private async ear(s: Session, sessionId: string, parts: Float32Array[], seqs: number[], rate: number, silence: number, arrived: number): Promise<Heard> {
+  private async ear(s: Session, sessionId: string, parts: Float32Array[], seqs: number[], rate: number, silence: number, arrived: number, captured: { capture_start?: number; capture_end?: number } = {}): Promise<Heard> {
     const joined = encodeWav(concat(parts), rate);
     const keywords = this.keywordsOf(s);
     const asrId = `${sessionId}-${seqs.length > 1 ? `${seqs[0]}.` : ""}${seqs.at(-1)}`.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 64);
@@ -531,7 +533,7 @@ export class ListenSessions {
     const v = vitalsVocabulary(afterWake(cleanTranscript(heard.text)));
     const voiceprint = await print;
     const alternates = heard.alternates?.map((x) => vitalsVocabulary(afterWake(cleanTranscript(x))).text);
-    return { samples: parts, seqs, rate, audio_ms: totalMs(parts, rate), trailing_ms: silence, arrived, text: v.text, raw: heard.text, cost_usd: heard.cost_usd, keywords_dropped: dropped, rewrites: v.rewrites, strong: false, joined: false, heard_at: Date.now(), voiceprint, ...(alternates?.length ? { alternates } : {}) };
+    return { samples: parts, seqs, rate, audio_ms: totalMs(parts, rate), trailing_ms: silence, arrived, text: v.text, raw: heard.text, cost_usd: heard.cost_usd, keywords_dropped: dropped, rewrites: v.rewrites, strong: false, joined: false, heard_at: Date.now(), voiceprint, ...captured, ...(alternates?.length ? { alternates } : {}) };
   }
 
   // Hands one finished utterance to the runtime as an ambient line, with its audio kept in memory for the second ear.
@@ -549,9 +551,9 @@ export class ListenSessions {
     // A patient with no admission yet (or none the port knows after a restart) is named by the patient, so the line still reaches that patient's tasks.
     const target: EmrTarget = { admission_id: s.ctx.admission_id, ...(!s.ctx.admission_id && s.ctx.patient_id ? { patient_id: s.ctx.patient_id } : {}) };
     const r = await this.rt.say({
-      owner: s.owner, target, text: h.text, source: "audio", spoken_at: new Date(h.arrived - h.audio_ms).toISOString(),
+      owner: s.owner, target, text: h.text, source: "audio", spoken_at: new Date(h.capture_start ?? h.arrived - h.audio_ms).toISOString(),
       audio: { audio_ms: h.audio_ms, cost_usd: h.cost_usd, session_id: sessionId },
-      ambient: { session_id: sessionId, seqs: h.seqs, raw_text: h.raw.slice(0, 2000), ended_at: new Date(h.arrived - h.trailing_ms).toISOString(), final_at: new Date(h.arrived).toISOString(), trailing_silence_ms: h.trailing_ms, finished_by: finished, ...(why === "released_whole" ? { released: true } : {}), ...(h.continues ? { continues: h.continues } : {}) },
+      ambient: { session_id: sessionId, seqs: h.seqs, raw_text: h.raw.slice(0, 2000), ended_at: new Date(h.capture_end ?? h.arrived - h.trailing_ms).toISOString(), final_at: new Date(h.arrived).toISOString(), trailing_silence_ms: h.trailing_ms, finished_by: finished, ...(h.capture_start !== undefined ? { captured: true } : {}), ...(h.turn_seqs ? { turn_seqs: h.turn_seqs } : {}), ...(why === "released_whole" ? { released: true } : {}), ...(h.continues ? { continues: h.continues } : {}) },
       context: s.ctx, ...(h.samples.length && !h.partial ? { clip: encodeWav(concat(h.samples), h.rate) } : {}), rewrites: h.rewrites, heard_at: h.heard_at, ...(h.alternates ? { alternates: h.alternates } : {}), ...(this.o.embed ? absent ?? { voiceprint: h.voiceprint } : {})
     });
     const u: ListenUtterance = { id: r.line_id, line_id: r.line_id, task_id: r.task_id, text: h.text, seqs: h.seqs, class: null, classes: [] };

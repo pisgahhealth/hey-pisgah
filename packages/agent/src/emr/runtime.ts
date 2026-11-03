@@ -59,7 +59,7 @@ export type EmrAction = {
 };
 // Where an ambient line came from: its listening session, the chunks that made it, and when the speech ended.
 // `released` marks a whole-number line delivered without the continuation wait (D17); `continues` names the released line it carries on.
-export type AmbientMeta = { session_id: string; seqs: number[]; raw_text: string; ended_at: string; final_at: string; trailing_silence_ms: number; finished_by: string; released?: boolean; continues?: string };
+export type AmbientMeta = { session_id: string; seqs: number[]; raw_text: string; ended_at: string; final_at: string; trailing_silence_ms: number; finished_by: string; captured?: boolean; turn_seqs?: number[]; released?: boolean; continues?: string };
 // kept is false while an ambient line's words live only in memory; they are stored only once an action or a question rests on them.
 export type EmrLine = { id: string; text: string; at: string; source: "text" | "audio"; decided: boolean; ambient: AmbientMeta | null; classes: SpeechClass[]; kept: boolean; words: number; speaker: SpeakerRecord | null; question_id?: string | null; as?: string; remaining?: string };
 export type EmrRefusal = { line_id: string; kind: string | null; asked_for: string; at: string };

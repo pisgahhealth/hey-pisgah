@@ -19,6 +19,8 @@ export const META_PAD_LAG_MS = 100;
 export const META_LEAD_MAX_MS = 4_000;
 // A join waits at most this long for the old session to finish and close; past it the old one is closed and the join completes.
 export const META_JOIN_WAIT_MS = 8_000;
+// A completed turn waits at most this long for an earlier turn before the missing words are reported.
+export const META_TURN_WAIT_MS = 8_000;
 const PAD_TICK_MS = 100;
 // After a dropped connection or a patient change at most this much recent audio is sent again, inside Meta's five seconds ahead of processing.
 export const META_RESEND_MAX_MS = 4_000;
@@ -35,23 +37,24 @@ export const META_RECONNECTS = 3;
 export type MetaStreamOptions = {
   key: () => string; socket?: SocketFactory; url?: string; mode?: RealtimeMode; languageBias?: readonly string[];
   ledger?: ReadingLedger; runOf?: (taskId: string) => string | null; now?: () => number;
-  refuseFasterThanLive?: boolean; rollAtMs?: number; overlapMs?: number; joinQuietMs?: number; padAfterMs?: number; paceMs?: number; joinWaitMs?: number; reconnectDelayMs?: number;
+  refuseFasterThanLive?: boolean; rollAtMs?: number; overlapMs?: number; joinQuietMs?: number; padAfterMs?: number; paceMs?: number; joinWaitMs?: number; turnWaitMs?: number; reconnectDelayMs?: number;
   // Every utterance a completed turn became, as it is delivered, for a caller that reports lines while the stream is still open.
   onHeard?: (sessionId: string, us: ListenUtterance[]) => void;
 };
 
-type Turn = { start_ms: number; end_ms: number | null };
+type Turn = { start_ms: number; end_ms: number | null; seq: number };
 // A connection owns the turns that start in [from_ms, until_ms) for its own patient; until the session before it has closed, its finished turns wait in held.
 type Conn = {
   s: RealtimeSession; base_ms: number; turns: Map<number, Turn>; open: Set<number>; current: number | null; ending: boolean; opened: number; from_ms: number; until_ms: number; processed_ms: number;
+  completed: Map<number, () => void>; finished: Set<number>; turn_timer: ReturnType<typeof setTimeout> | null;
   target: EmrTarget; listen_sid: string; after: Promise<unknown> | null; held: (() => void)[]; on_empty: (() => void) | null; on_close: (() => void) | null;
 };
 type Live = {
-  owner: string; rate: number; send_rate: RealtimeRate; sids: Set<string>; delivered: { start_ms: number; end_ms: number; conn: Conn }[];
+  owner: string; next_turn: number; rate: number; send_rate: RealtimeRate; sids: Set<string>; delivered: { start_ms: number; end_ms: number; conn: Conn }[];
   conn: Conn | null; next: Conn | null; closing: Conn | null; rolling: Promise<void> | null; roll_since: number; roll_retry_at: number;
   draining: Promise<unknown>[]; ring: { at_ms: number; x: Float32Array }[]; fed_ms: number; fed: number; quiet_ms: number; padded_ms: number; resent_ms: number; last_end_ms: number;
   inbox: { x: Float32Array; at: number }[]; debt_ms: number; trimmed_ms: number;
-  wall: { ms: number; at: number }[]; billed_ms: number; work: Promise<unknown>; errors: string[]; opened: number; failed: Error | null;
+  wall: { ms: number; at: number; duration: number }[]; billed_ms: number; work: Promise<unknown>; errors: string[]; opened: number; failed: Error | null;
   reconnecting: Promise<void> | null; dropped_ms: number; ended: boolean; pad: ReturnType<typeof setInterval> | null;
 };
 
@@ -79,7 +82,7 @@ export class MetaStreamListener {
   async open(c: { owner: string; target: EmrTarget; session_id: string; rate: number; listen_sid?: string }): Promise<void> {
     if (this.live.has(c.session_id)) throw new Error("this listening session is already streaming");
     const l: Live = {
-      owner: c.owner, rate: c.rate, send_rate: sendRateOf(c.rate), sids: new Set(), delivered: [], conn: null, next: null, closing: null, rolling: null, roll_since: 0, roll_retry_at: 0,
+      owner: c.owner, next_turn: 0, rate: c.rate, send_rate: sendRateOf(c.rate), sids: new Set(), delivered: [], conn: null, next: null, closing: null, rolling: null, roll_since: 0, roll_retry_at: 0,
       draining: [], ring: [], fed_ms: 0, fed: 0, quiet_ms: 0, padded_ms: 0, resent_ms: 0, last_end_ms: -Infinity, inbox: [], debt_ms: 0, trimmed_ms: 0,
       wall: [], billed_ms: 0, work: Promise.resolve(), errors: [], opened: this.now(), failed: null, reconnecting: null, dropped_ms: 0, ended: false, pad: null
     };
@@ -93,7 +96,7 @@ export class MetaStreamListener {
   private async connect(sessionId: string, l: Live, target: EmrTarget, listenSid: string, fromMs: number): Promise<Conn> {
     l.sids.add(listenSid);
     const keywords = await this.listen.hintsFor(l.owner, target, listenSid, this.now());
-    const conn: Conn = { s: null as unknown as RealtimeSession, base_ms: l.fed_ms, turns: new Map(), open: new Set(), current: null, ending: false, opened: this.now(), from_ms: fromMs, until_ms: Infinity, processed_ms: 0, target, listen_sid: listenSid, after: null, held: [], on_empty: null, on_close: null };
+    const conn: Conn = { s: null as unknown as RealtimeSession, base_ms: l.fed_ms, turns: new Map(), open: new Set(), current: null, ending: false, opened: this.now(), from_ms: fromMs, until_ms: Infinity, processed_ms: 0, completed: new Map(), finished: new Set(), turn_timer: null, target, listen_sid: listenSid, after: null, held: [], on_empty: null, on_close: null };
     const sid = `hp-${sessionId}-${Date.now().toString(36)}`.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 64);
     conn.s = await RealtimeSession.open({
       key: this.o.key(), rate: l.send_rate, mode: this.o.mode ?? "ENDPOINTING", keywords, languageBias: this.o.languageBias ?? [], sessionId: sid,
@@ -161,7 +164,7 @@ export class MetaStreamListener {
     l.ring.push({ at_ms: l.fed_ms, x: samples });
     l.fed_ms += ms;
     while (l.ring.length > 1 && l.ring[1]!.at_ms < l.fed_ms - META_KEEP_MS) l.ring.shift();
-    l.wall.push({ ms: l.fed_ms, at: padded || capturedAt === undefined ? now : capturedAt + ms });
+    l.wall.push({ ms: l.fed_ms, duration: ms, at: padded || capturedAt === undefined ? now : capturedAt + ms });
     if (l.wall.length > 4000) l.wall.splice(0, l.wall.length - 3000);
     l.quiet_ms = padded || rms(samples) < SILENCE_RMS ? l.quiet_ms + ms : 0;
     if (padded) l.padded_ms += ms;
@@ -276,48 +279,91 @@ export class MetaStreamListener {
   private onEvent(sessionId: string, l: Live, conn: Conn, e: RealtimeEvent): void {
     if ("audioProcessedMs" in e) conn.processed_ms = Math.max(conn.processed_ms, e.audioProcessedMs);
     // Turns may overlap, so every turn is kept by its id and none is assumed to finish in order.
-    if (e.type === "speechStart") { conn.turns.set(e.turnId, { start_ms: this.abs(conn, e.audioProcessedMs), end_ms: null }); conn.open.add(e.turnId); conn.current = e.turnId; return; }
+    if (e.type === "speechStart") { if (conn.finished.has(e.turnId)) return; conn.turns.set(e.turnId, { start_ms: this.abs(conn, e.audioProcessedMs), end_ms: null, seq: l.next_turn++ }); conn.open.add(e.turnId); conn.current = e.turnId; return; }
     if (e.type === "transcript") {
       if (e.final || conn.current === null || !conn.open.has(conn.current) || !e.transcript.trim()) return;
       const t = conn.turns.get(conn.current);
       if (t && !this.owns(conn, t.start_ms)) return;
       const said = e.transcript, sid = conn.listen_sid;
+      if (t && [...conn.turns.values()].some((other) => other.seq < t.seq)) return;
       // The next words are looked at as they are said, after every turn before them.
       l.work = l.work.then(() => this.listen.nextWords(sid, said));
       return;
     }
     if (e.type === "speechEnd") { const t = conn.turns.get(e.turnId); if (t) t.end_ms = this.abs(conn, e.audioProcessedMs); return; }
     if (e.type === "error") { l.errors.push(`realtime: ${e.message}`.slice(0, 200)); return; }
-    if (e.type !== "speechComplete") return;
+    if (e.type !== "speechComplete" || conn.finished.has(e.turnId) || conn.completed.has(e.turnId)) return;
     conn.open.delete(e.turnId);
-    const t = conn.turns.get(e.turnId) ?? { start_ms: Math.max(0, this.abs(conn, e.audioProcessedMs) - 3000), end_ms: null };
-    conn.turns.delete(e.turnId);
+    const capturedStart = conn.turns.has(e.turnId);
+    const t = conn.turns.get(e.turnId) ?? { start_ms: Math.max(0, this.abs(conn, e.audioProcessedMs) - 3000), end_ms: null, seq: l.next_turn++ };
+    conn.turns.set(e.turnId, t);
     const end = t.end_ms ?? this.abs(conn, e.audioProcessedMs);
     const processed = this.abs(conn, e.audioProcessedMs);
     const at = this.now();
     const raw = e.transcript.trim();
+    const samples = this.slice(l, t.start_ms - META_TURN_PREROLL_MS, end + META_TURN_TAIL_MS);
+    const captureStart = this.wallAt(l, t.start_ms), captureEnd = this.wallAt(l, end);
+    const cost = centsOf(Math.max(0, processed - l.billed_ms));
+    l.billed_ms = Math.max(l.billed_ms, processed);
     const deliver = () => {
       if (!this.owns(conn, t.start_ms) || this.heardBefore(l, conn, t.start_ms, end)) return;
       l.delivered.push({ start_ms: t.start_ms, end_ms: end, conn });
       if (l.delivered.length > 50) l.delivered.shift();
       l.last_end_ms = Math.max(l.last_end_ms, end);
-      const samples = this.slice(l, t.start_ms - META_TURN_PREROLL_MS, end + META_TURN_TAIL_MS);
-      const cost = centsOf(Math.max(0, processed - l.billed_ms));
-      l.billed_ms = Math.max(l.billed_ms, processed);
       // Both are counted from when the end of the line was captured, so a late or paced upload is never measured as faster than it was.
-      const latency = Math.max(0, at - this.wallAt(l, end));
+      const latency = Math.max(0, at - captureEnd);
       const sid = conn.listen_sid, target = conn.target;
       l.work = l.work.then(async () => {
-        const us: ListenUtterance[] = raw ? await this.listen.segment({ owner: l.owner, target, session_id: sid, samples, rate: l.rate, raw, trailing_ms: latency, arrived: at, heard_at: at }) : [];
+        const us: ListenUtterance[] = raw ? await this.listen.segment({ owner: l.owner, target, session_id: sid, samples, rate: l.rate, raw, trailing_ms: latency, arrived: at, heard_at: at, ...(capturedStart ? { capture_start: captureStart } : {}), capture_end: captureEnd, turn_seq: t.seq }) : [];
         if (us.length) this.o.onHeard?.(sid, us);
         this.row(us[0]?.task_id ?? null, us[0]?.line_id ?? null, latency, cost, null);
       }).catch((err: unknown) => { l.errors.push(err instanceof Error ? err.message.slice(0, 200) : "segment failed"); });
     };
-    if (conn.after) conn.held.push(deliver); else deliver();
+    conn.completed.set(e.turnId, deliver);
+    this.releaseTurns(l, conn);
     if (conn === l.closing && !conn.open.size) { l.closing = null; conn.on_empty?.(); }
   }
 
+  // Completed turns are delivered in capture order while unfinished earlier turns get a bounded wait.
+  private releaseTurns(l: Live, conn: Conn, force = false): void {
+    if (force && conn.turn_timer) { clearTimeout(conn.turn_timer); conn.turn_timer = null; }
+    const ordered = [...conn.turns].sort((a, b) => a[1].start_ms - b[1].start_ms || a[1].seq - b[1].seq);
+    for (const [id, turn] of ordered) {
+      const deliver = conn.completed.get(id);
+      if (!deliver && !force) {
+        if (conn.completed.size && !conn.turn_timer) {
+          const timer = setTimeout(() => {
+            conn.turn_timer = null;
+            const firstReady = [...conn.turns].filter(([key]) => conn.completed.has(key)).sort((a, b) => a[1].start_ms - b[1].start_ms)[0];
+            if (!firstReady) return;
+            for (const [missing, t] of conn.turns) if (!conn.completed.has(missing) && (t.start_ms < firstReady[1].start_ms || (t.start_ms === firstReady[1].start_ms && t.seq < firstReady[1].seq))) this.dropTurn(l, conn, missing);
+            this.releaseTurns(l, conn);
+          }, this.o.turnWaitMs ?? META_TURN_WAIT_MS);
+          timer.unref?.();
+          conn.turn_timer = timer;
+        }
+        break;
+      }
+      if (!deliver) { conn.finished.add(id); if (this.owns(conn, turn.start_ms)) l.errors.push("a realtime line did not finish; say it again"); continue; }
+      conn.turns.delete(id);
+      conn.completed.delete(id);
+      conn.finished.add(id);
+      if (conn.finished.size > 256) conn.finished.delete(conn.finished.values().next().value!);
+      if (conn.after) conn.held.push(deliver); else deliver();
+    }
+    if (!conn.completed.size && conn.turn_timer) { clearTimeout(conn.turn_timer); conn.turn_timer = null; }
+  }
+
+  private dropTurn(l: Live, conn: Conn, id: number): void {
+    conn.turns.delete(id);
+    conn.open.delete(id);
+    conn.finished.add(id);
+    l.errors.push("an earlier realtime line did not finish; say it again");
+    l.work = l.work.then(() => this.listen.flush(conn.listen_sid));
+  }
+
   private onClose(sessionId: string, l: Live, conn: Conn, code: number, reason: string): void {
+    this.releaseTurns(l, conn, true);
     conn.on_close?.();
     if (conn.ending || l.ended) return;
     if (conn === l.next) { l.next = null; l.roll_retry_at = this.now() + 5000; l.errors.push(`the next realtime session closed (${code}) before the join`); return; }
@@ -358,7 +404,7 @@ export class MetaStreamListener {
     })().finally(() => { l.reconnecting = null; });
   }
 
-  private wallAt(l: Live, ms: number): number { return l.wall.find((w) => w.ms >= ms)?.at ?? l.wall.at(-1)?.at ?? this.now(); }
+  private wallAt(l: Live, ms: number): number { const w = l.wall.find((p) => p.ms >= ms); return w ? w.at - Math.min(w.duration, Math.max(0, w.ms - ms)) : l.wall.at(-1)?.at ?? this.now(); }
 
   private slice(l: Live, fromMs: number, toMs: number): Float32Array {
     const parts: Float32Array[] = [];

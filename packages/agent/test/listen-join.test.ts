@@ -42,3 +42,16 @@ describe("the join rule, from the first real-mic session", () => {
   });
 
 });
+
+
+describe("captured speech timestamps", () => {
+  it("keeps a delayed upload's capture start and speech end when the number waits for another line", async () => {
+    const { rt, listen, settle } = boot(() => [{ class: "aside" }], earOf({ 1700: "Pulse 96.", 2200: "Hand me the gloves." }));
+    await listen.chunk({ owner: OWNER, target: { admission_id: ADM }, session_id: "s1", seq: 0, wav: chunkWav(1000, 700), captured_at: 10_000, arrived_at: 20_000 }, true);
+    await listen.chunk({ owner: OWNER, target: { admission_id: ADM }, session_id: "s1", seq: 1, wav: chunkWav(1500, 700), captured_at: 12_000, arrived_at: 21_000 }, true);
+    await settle();
+    const lines = rt.views(OWNER)[0]!.transcript;
+    expect(lines.map((l) => l.at)).toEqual([new Date(10_000).toISOString(), new Date(12_000).toISOString()]);
+    expect(lines.map((l) => l.ambient?.ended_at)).toEqual([new Date(11_000).toISOString(), new Date(13_500).toISOString()]);
+  });
+});

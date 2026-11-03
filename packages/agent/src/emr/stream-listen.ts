@@ -128,6 +128,7 @@ export class StreamListener {
     const samples = concat(l.buf);
     const quiet = l.quiet_ms, endAt = l.capAt - l.quiet_ms;
     const { target, sid } = l.stretch ?? { target: l.target, sid: l.sid };
+    const captureStart = l.startAt, captureEnd = l.capAt - l.quiet_ms;
     l.dec = this.asr.open();
     l.speech = false; l.buf = []; l.quiet_ms = 0; l.speech_ms = 0; l.stretch = null;
     this.then(l, async () => {
@@ -137,7 +138,7 @@ export class StreamListener {
       const now = this.o.now?.() ?? Date.now();
       const trailing = Math.max(quiet, now - endAt);
       if (!raw) return;
-      l.work = l.work.then(() => this.listen.segment({ owner: l.owner, target, session_id: sid, samples, rate: l.rate, raw, trailing_ms: trailing, arrived: now, heard_at: now }))
+      l.work = l.work.then(() => this.listen.segment({ owner: l.owner, target, session_id: sid, samples, rate: l.rate, raw, trailing_ms: trailing, arrived: now, heard_at: now, capture_start: captureStart, capture_end: captureEnd }))
         .then((us) => { if (us.length) this.o.onHeard?.(sid, us); })
         .catch((e: unknown) => { l.errors.push(e instanceof Error ? e.message.slice(0, 200) : "segment failed"); });
     });
