@@ -308,16 +308,33 @@ function swapTable(sex: string | null | undefined): readonly [RegExp, string][] 
     [/\bmyself\b/gi, refl], [/\bmy\b/gi, poss], [/\bme\b/gi, obj]
   ];
 }
-// The patient's own words in third person by the fixed table only; a sentence keeping an "I" the table cannot place stays exactly as said.
-export function personSwap(text: string, sex?: string | null): string {
-  const table = swapTable(sex);
+// Each sentence through a fixed table; a sentence the table leaves a person word in stays exactly as said.
+function swapBy(text: string, table: readonly [RegExp, string][], left: RegExp): string {
   return text.split(/(?<=[.!?])\s+/).map((sentence) => {
     let out = sentence;
     for (const [re, to] of table) out = out.replace(re, to);
-    if (out === sentence || /\bI\b|\bI(?:'|\u2019)(?:d|ll)\b/.test(out)) return sentence;
+    if (out === sentence || left.test(out)) return sentence;
     out = out.replace(/\s{2,}/g, " ").replace(/([^,.;:!?])\s+in fact\b/gi, "$1, in fact").trim();
     return out.charAt(0).toUpperCase() + out.slice(1);
   }).join(" ");
+}
+// The patient's own words in third person by the fixed table only; a sentence keeping an "I" the table cannot place stays exactly as said.
+export function personSwap(text: string, sex?: string | null): string {
+  return swapBy(text, swapTable(sex), /\bI\b|\bI(?:'|\u2019)(?:d|ll)\b/);
+}
+// The fixed table for a clinician's examination said to the patient, most specific first: "you look" reads "looks", "you're" reads "is", "your neck" reads "neck".
+const ADDRESS_TABLE: readonly [RegExp, string][] = [
+  [/\bit seems (?:like|that) you(?:'|\u2019)re\b|\bit seems (?:like|that) you are\b/gi, "seems"],
+  [/\byou look\b/gi, "looks"], [/\byou seem\b/gi, "seems"], [/\byou(?:'|\u2019)re\b|\byou are\b/gi, "is"],
+  [/\byou(?:'|\u2019)ve got\b|\byou have got\b|\byou(?:'|\u2019)ve\b|\byou have\b/gi, "has"], [/\byour\s+/gi, ""]
+];
+// A clinician's examination words to the patient without the second person, by the fixed table only; a sentence keeping a "you" stays exactly as said.
+export const addressSwap = (text: string): string => swapBy(text, ADDRESS_TABLE, /\byou(?:rs?|rself)?\b|\byou(?:'|\u2019)(?:d|ll|re|ve)\b/i);
+// The working diagnosis a clinician states in passing ("my initial diagnosis is that you might have cerebral malaria"), in their words; a differential or none is null.
+export function workingDiagnosis(line: string): string | null {
+  const m = /\b(?:my|our|the)\s+(?:(?:initial|working|provisional|first|likely|main)\s+)?diagnosis\s+(?:is|would be)\s+(?:that\s+)?(?:(?:you|she|he|they|the patient)\s+(?:(?:might|may|probably|likely|could)\s+)?(?:have|has)\s+)?([a-z][a-z' -]{1,120}?)\s*(?:[.,;!?]|$)/i.exec(line);
+  const dx = m?.[1]?.trim() ?? "";
+  return dx.length >= 3 && !/\b(?:or|versus|vs|maybe|not|unclear|pending)\b/i.test(dx) ? dx : null;
 }
 // True when a clause's text is the line's own words, or the line's words after the person swap and nothing else.
 export const fromLineOrSwapped = (words: string, line: string, sex: string | null | undefined, fromLine: (w: string, l: string) => boolean): boolean => fromLine(words, line) || fromLine(words, personSwap(line, sex));

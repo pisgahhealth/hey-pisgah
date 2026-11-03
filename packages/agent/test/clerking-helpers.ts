@@ -2,6 +2,7 @@ import { ModelClient } from "@hey-pisgah/model";
 import { EmrRuntime } from "../src/emr/runtime.js";
 import type { EmrCommit, EmrContext, EmrPort, EmrProof, EmrTarget, Provenance, SayableNames, WatchRead, WorkArgs } from "../src/emr/port.js";
 import type { SpeechClass } from "../src/emr/gate.js";
+import type { SecondEar } from "../src/emr/ears.js";
 import { emrRoot, gater, type C } from "./emr-helpers.js";
 
 export const DOC = "doc-1", OTHER = "doc-2";
@@ -46,13 +47,13 @@ export class ClerkFake implements EmrPort {
 export type W = Omit<C, "class"> & { class: SpeechClass } & Record<string, unknown>;
 export const ins = (kind: string, f: Record<string, unknown> = {}): W => ({ class: "instruction", kind, confidence: 0.95, ...f });
 // A runtime over one store with a movable clock, so a test can restart it and move time past an obligation.
-export function clerkBoot(script: (said: string) => W[], o: { root?: string; port?: ClerkFake; clock?: { now: number }; watchMs?: number } = {}) {
+export function clerkBoot(script: (said: string) => W[], o: { root?: string; port?: ClerkFake; clock?: { now: number }; watchMs?: number; holdMs?: number; secondEar?: SecondEar } = {}) {
   const root = o.root ?? emrRoot();
   const port = o.port ?? new ClerkFake();
   const clock = o.clock ?? { now: Date.now() };
   let rt: EmrRuntime | null = null;
   const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater((s) => script(s) as unknown as C[]), taskStateOf: (id) => rt?.stateOf(id) ?? null });
-  rt = new EmrRuntime({ storeRoot: root, client, port, holdMs: 0, proofRetryMs: 1, obligationTickMs: 20, wallNow: () => new Date(clock.now), ...(o.watchMs ? { watchMs: o.watchMs } : {}) });
+  rt = new EmrRuntime({ storeRoot: root, client, port, holdMs: o.holdMs ?? 0, ...(o.secondEar ? { secondEar: o.secondEar } : {}), proofRetryMs: 1, obligationTickMs: 20, wallNow: () => new Date(clock.now), ...(o.watchMs ? { watchMs: o.watchMs } : {}) });
   rt.start();
   return { rt, port, root, clock, client };
 }

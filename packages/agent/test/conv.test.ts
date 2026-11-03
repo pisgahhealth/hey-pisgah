@@ -200,7 +200,7 @@ describe("CONV 1: the owner's agent writes the name said for an emergency arriva
     await b.rt.stop();
   });
 
-  it("on an emergency arrival before admission, the doctor's first vitals go to the triage row, later ones to the note (D32)", async () => {
+  it("on an emergency arrival before admission, the doctor's first and later vitals all go to the triage row, never only the note (D32, EMF)", async () => {
     const b = boot((s) => (/pulse/i.test(s) ? [ins("record_observation", { pulse: 84, spo2: 97 })] : ASIDE));
     b.port.kinds = [...b.port.kinds, "record_clerking", "open_consult"];
     const task = await arrival(b);
@@ -209,7 +209,8 @@ describe("CONV 1: the owner's agent writes the name said for an emergency arriva
     expect(of(b.port, "record_triage_vitals").map((w) => w.args)).toEqual([{ visit_id: ARRIVAL_VISIT, patient_id: ARRIVAL, pulse: 84, spo2: 97 }]);
     await sayOn(b.rt, task, "Pulse 84 again, sats 97.");
     await b.rt.settled();
-    expect(of(b.port, "record_triage_vitals")).toHaveLength(1);
+    expect(of(b.port, "record_triage_vitals")).toHaveLength(2);
+    expect(of(b.port, "record_clerking")).toHaveLength(0);
     await b.rt.stop();
   });
 });

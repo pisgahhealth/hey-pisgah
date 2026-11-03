@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import { EMERGENCY_KIND, IDENTITY_KIND, spelledName } from "../src/emr/entry.js";
 import type { EmrCommit, EmrContext, EmrTarget, Provenance, WorkArgs } from "../src/emr/port.js";
 import type { SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
+import type { SecondEar } from "../src/emr/ears.js";
 import { fromLine } from "../src/emr/runtime.js";
-import { cleanNoteText, fromLineOrSwapped, personSwap } from "../src/emr/work.js";
+import { addressSwap, cleanNoteText, fromLineOrSwapped, personSwap, workingDiagnosis } from "../src/emr/work.js";
 import { CLERK_KINDS, ClerkFake, DOC, PAT, clerkBoot, ins, type W } from "./clerking-helpers.js";
 
 // Lane EMN: a clean note, a spelling that never lands on the wrong part, and no ward class question on an emergency arrival.
@@ -33,9 +34,9 @@ class EmnFake extends ClerkFake {
   }
 }
 
-function boot(script: (said: string) => W[]) {
-  const port = new EmnFake();
-  return { ...clerkBoot(script, { port }), port };
+function boot(script: (said: string) => W[], o: { holdMs?: number; port?: EmnFake; secondEar?: SecondEar } = {}) {
+  const port = o.port ?? new EmnFake();
+  return { ...clerkBoot(script, { port, ...(o.holdMs ? { holdMs: o.holdMs } : {}), ...(o.secondEar ? { secondEar: o.secondEar } : {}) }), port };
 }
 type B = ReturnType<typeof boot>;
 async function arrival(b: B) {
@@ -207,6 +208,190 @@ describe("EMN 4: the patient's own words in third person by a fixed table", () =
     const by = (sec: string) => of(b, "record_clerking").filter((w) => w.args["section"] === sec).map((w) => String(w.args["text"]));
     expect(by("patient_reported")).toEqual([THIRD, "Has had a cough. Her chest hurts.", "Has been coughing."]);
     expect(by("history")).toEqual(["Fell at home.", "I saw her in my clinic last week."]);
+    await b.rt.stop();
+  });
+});
+
+// Lane EMF, from the 3 Nov live test: vitals after the first set, a clinician's "you" in the examination, a diagnosis said in passing, speech order and a held admission's yes.
+class EmfFake extends EmnFake {
+  override kindsFor(): readonly string[] { return [...super.kindsFor(), "record_diagnosis"]; }
+}
+const PULSE = "okay your pulse is about 110", BPT = "blood pressure 90 over 60, temperature 38.5", RRS = "respiratory rate 24, oxygen 94%";
+const EXAM3 = "you look pretty pale um and it seems like you're also drowsy and febrile your neck too is a bit stiff";
+const DX = "I think my initial diagnosis is that you might have cerebral malaria";
+const ADMIT_AE = "admit her to A and E for severe malaria";
+const gate3 = (s: string): W[] => {
+  if (s === PULSE) return [ins("record_observation", { pulse: 110 })];
+  if (s === BPT) return [ins("record_observation", { bp: "90/60" }), ins("record_observation", { temp_c: 38.5 })];
+  if (s === RRS) return [ins("record_triage_vitals", { resp_rate: 24, spo2: 94 })];
+  if (s === "pulse is actually 112") return [{ class: "correction", pulse: 112, confidence: 0.9 }];
+  if (s === EXAM3 || s === "Can you sit up for me. Your chest is clear.") return [{ class: "finding", section: "examination", text: s, confidence: 0.9 }];
+  if (s === DX || s === "it could be malaria or meningitis, my working diagnosis is malaria or meningitis" || s === "we could try antibiotics") return [{ class: "option", confidence: 0.9 }];
+  if (s === ADMIT_AE) return [ins("admit_patient", { ward: "a_and_e", text: "severe malaria" })];
+  return ASIDE;
+};
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+describe("EMF 1: every vitals line on an emergency arrival goes to the triage row", () => {
+  it("gathers vitals said within the hold into one triage write, and a later set or correction is its own write, never the note", async () => {
+    const b = boot(gate3, { holdMs: 150 });
+    const task = await arrival(b);
+    await sayOn(b, task, PULSE);
+    await sayOn(b, task, BPT);
+    await b.rt.settled();
+    await wait(400);
+    await b.rt.settled();
+    await sayOn(b, task, RRS);
+    await b.rt.settled();
+    await wait(400);
+    await sayOn(b, task, "pulse is actually 112");
+    await b.rt.settled();
+    await wait(400);
+    await b.rt.settled();
+    const triage = of(b, "record_triage_vitals").map((w) => w.args);
+    expect(triage).toEqual([
+      { visit_id: ARRIVAL_VISIT, patient_id: ARRIVAL, pulse: 110, bp: "90/60", temp_c: "38.5" },
+      { visit_id: ARRIVAL_VISIT, patient_id: ARRIVAL, resp_rate: 24, spo2: 94 },
+      { visit_id: ARRIVAL_VISIT, patient_id: ARRIVAL, pulse: 112 },
+    ]);
+    expect(of(b, "record_clerking").filter((w) => w.args["section"] === "vitals")).toHaveLength(0);
+    await b.rt.stop();
+  });
+});
+
+describe("EMF 1a: the hold runs again from the line that joins it", () => {
+  it("does not write a gathered set before the later line's hold is over", async () => {
+    const b = boot(gate3, { holdMs: 400 });
+    const task = await arrival(b);
+    // The runtime's settled() waits out every hold, so this test waits by the clock alone until the end.
+    await sayOn(b, task, PULSE);
+    await wait(250);
+    await sayOn(b, task, BPT);
+    await wait(250);
+    expect(of(b, "record_triage_vitals")).toHaveLength(0);
+    await wait(400);
+    await b.rt.settled();
+    expect(of(b, "record_triage_vitals").map((w) => w.args["bp"])).toEqual(["90/60"]);
+    await b.rt.stop();
+  });
+});
+
+describe("EMF 1b: a gathered triage set is written only when every line's second reading agrees", () => {
+  const earOf = (heard: string[]): SecondEar => async () => ({ text: heard.shift() ?? "", provider: "local", model: "test-ear", response_id: null, cost_usd: 0.001, fallback_reason: null });
+  const run = async (heard: string[]) => {
+    const b = boot(gate3, { holdMs: 150, secondEar: earOf(heard) });
+    const task = await arrival(b);
+    const clip = new Uint8Array(44);
+    await b.rt.say({ owner: DOC, target: { patient_id: ARRIVAL }, text: PULSE, source: "audio", voiceprint: OWNER, clip }, task);
+    await b.rt.say({ owner: DOC, target: { patient_id: ARRIVAL }, text: BPT, source: "audio", voiceprint: OWNER, clip }, task);
+    await b.rt.settled();
+    await wait(400);
+    await b.rt.settled();
+    return { b, task };
+  };
+  it("writes one set when both readings agree", async () => {
+    const { b } = await run([PULSE, BPT]);
+    expect(of(b, "record_triage_vitals").map((w) => w.args)).toEqual([{ visit_id: ARRIVAL_VISIT, patient_id: ARRIVAL, pulse: 110, bp: "90/60", temp_c: "38.5" }]);
+    await b.rt.stop();
+  });
+  it("writes nothing and asks when the earlier line's reading differs", async () => {
+    const { b, task } = await run(["okay your pulse is about 170", BPT]);
+    expect(of(b, "record_triage_vitals")).toHaveLength(0);
+    expect(b.rt.view(task)!.questions.at(-1)!.text).toMatch(/ulse/);
+    await b.rt.stop();
+  });
+  it("writes nothing and asks when the later line's reading differs", async () => {
+    const { b, task } = await run([PULSE, "blood pressure 90 over 60, temperature 39.5"]);
+    expect(of(b, "record_triage_vitals")).toHaveLength(0);
+    expect(b.rt.view(task)!.questions.at(-1)!.text).toMatch(/emperature/);
+    await b.rt.stop();
+  });
+});
+
+describe("EMF 2: a clinician's words to the patient in the examination by the fixed table", () => {
+  it("swaps you look, you're, your neck and your X, and leaves what the table cannot place", () => {
+    expect(addressSwap(cleanNoteText(EXAM3))).toBe("Looks pretty pale and seems also drowsy and febrile neck too is a bit stiff");
+    expect(addressSwap("You are febrile. Your abdomen is soft.")).toBe("Is febrile. Abdomen is soft.");
+    expect(addressSwap("Can you sit up for me. Your chest is clear.")).toBe("Can you sit up for me. Chest is clear.");
+    expect(addressSwap("Chest is clear.")).toBe("Chest is clear.");
+  });
+
+  it("writes the 3 Nov examination line without the second person, from any voice", async () => {
+    const b = boot(gate3);
+    const task = await arrival(b);
+    await sayOn(b, task, EXAM3);
+    await b.rt.settled();
+    await sayOn(b, task, "Can you sit up for me. Your chest is clear.", STRANGER);
+    await b.rt.settled();
+    expect(of(b, "record_clerking").map((w) => w.args["text"])).toEqual(["Looks pretty pale and seems also drowsy and febrile neck too is a bit stiff", "Can you sit up for me. Chest is clear."]);
+    await b.rt.stop();
+  });
+});
+
+describe("EMF 3: a working diagnosis said in passing", () => {
+  it("reads the diagnosis from the clinician's own words and never from a differential", () => {
+    expect(workingDiagnosis(DX)).toBe("cerebral malaria");
+    expect(workingDiagnosis("my working diagnosis is severe malaria.")).toBe("severe malaria");
+    expect(workingDiagnosis("it could be malaria or meningitis, my working diagnosis is malaria or meningitis")).toBeNull();
+    expect(workingDiagnosis("we could try antibiotics")).toBeNull();
+    expect(workingDiagnosis("the diagnosis will come from the lab")).toBeNull();
+  });
+
+  it("asks the owner to confirm the working diagnosis and records it on the confirm, and records nothing from Dr B or a differential", async () => {
+    const b = boot(gate3, { port: new EmfFake() });
+    const task = await arrival(b);
+    await sayOn(b, task, DX);
+    await b.rt.settled();
+    expect(b.rt.view(task)!.questions.at(-1)!.text).toMatch(/cerebral malaria.*Say confirm/);
+    await sayOn(b, task, "confirm the diagnosis");
+    await b.rt.settled();
+    expect(of(b, "record_diagnosis").map((w) => w.args["diagnosis"])).toEqual(["cerebral malaria"]);
+    const c = boot(gate3, { port: new EmfFake() });
+    const other = await arrival(c);
+    await sayOn(c, other, DX, DRB);
+    await sayOn(c, other, "it could be malaria or meningitis, my working diagnosis is malaria or meningitis");
+    await sayOn(c, other, "we could try antibiotics");
+    await c.rt.settled();
+    expect(c.rt.view(other)!.actions.filter((a) => a.kind === "record_diagnosis")).toHaveLength(0);
+    await b.rt.stop();
+    await c.rt.stop();
+  });
+});
+
+describe("EMF 4: the transcript is in speech order", () => {
+  it("places a line the ears returned late by when it was spoken", async () => {
+    const b = boot(() => ASIDE);
+    const task = await arrival(b);
+    const at = (s: number) => new Date(b.clock.now + s * 1000).toISOString();
+    // Two ears: the main ear and a second one that returned its earlier speech late; one ear's own lines keep their order.
+    const line = (text: string, s: number, session: string) => b.rt.say({ owner: DOC, target: { patient_id: ARRIVAL }, text, source: "audio", voiceprint: OWNER, spoken_at: at(s), ambient: { session_id: session, seqs: [s], ended_at: at(s + 1), final_at: at(s + 1), finished_by: "quiet_tail", raw_text: text, trailing_silence_ms: 700 } as never }, task);
+    const third = await line("third, said at ten", 10, "ear-1");
+    // One ear's backlog can stamp a later line with an earlier start; that ear's own order stands.
+    const fourth = await line("fourth, stamped nine and a half", 9.5, "ear-1");
+    const first = await line("first, said at two", 2, "ear-1.f1.0");
+    const second = await line("second, said at five", 5, "ear-1.f1.0");
+    await b.rt.settled();
+    const ids = [first, second, third, fourth].map((x) => x.line_id);
+    expect(b.rt.view(task)!.transcript.map((l) => l.id).filter((id) => ids.includes(id))).toEqual(ids);
+    await b.rt.stop();
+  });
+});
+
+describe("EMF 5: a held admission says exactly what yes releases it", () => {
+  it("asks for 'yes, admit her to A and E', releases on that reply in the owner's voice, and a bare yes from no matched voice stays refused", async () => {
+    const b = boot(gate3);
+    const task = await arrival(b);
+    await sayOn(b, task, ADMIT_AE, STRANGER);
+    await b.rt.settled();
+    const held = b.rt.view(task)!.questions.at(-1)!.text;
+    expect(held).toMatch(/Say: "yes, admit her to A and E"\./);
+    await sayOn(b, task, "yes", STRANGER);
+    await b.rt.settled();
+    expect(of(b, "admit_patient")).toHaveLength(0);
+    expect(b.rt.view(task)!.questions.at(-1)!.text).toMatch(/Say: "yes, admit her to A and E"\./);
+    await sayOn(b, task, "yes, admit her to A and E");
+    await b.rt.settled();
+    expect(of(b, "admit_patient").map((w) => w.args["ward"])).toEqual(["a_and_e"]);
     await b.rt.stop();
   });
 });
