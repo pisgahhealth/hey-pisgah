@@ -107,6 +107,7 @@ export function gatePrompt(kinds: readonly EmrWriteKind[], names?: SayableNames)
     "confidence is how sure you are, from 0 to 1, that an instruction or correction is settled and meant to be acted on now."
   ];
   if (!isWide(kinds)) return base.join("\n");
+  base.push("For an unclear instruction whose operation is known, keep its kind and only the uncontested values; leave disputed or missing values null and ask only about that detail. Never fill an uncertain value merely to make the action complete.");
   const list = (m: Record<string, readonly string[]> | undefined) => Object.entries(m ?? {}).map(([k, w]) => `${k} (${w.join(", ")})`).join("; ") || "none";
   if (holdsClerking(kinds)) {
     const at = base.indexOf("- unclear: words that seem meant for you, but you cannot tell what to do or which value is meant. Put one short question in question.");

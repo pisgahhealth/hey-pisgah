@@ -353,11 +353,19 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   // The rest of an arrival line waits for that same arrival, carrying only its own voice evidence.
   const continueArrival = async (owner: string, taskId: string, text: string, spokenAt: string, source: "text" | "audio", evidence: Pick<Parameters<EmrRuntime["say"]>[0], "voiceprint" | "clip"> = {}) => {
     if (!text.trim()) return;
-    const bind = async (target: EmrTarget) => { await rt.say({ owner, target, text, spoken_at: spokenAt, source, ...evidence }, taskId); };
+    const held = rt.holdArrivalContinuation(owner, taskId);
+    const drop = (why: string) => rt.finishArrivalContinuation(owner, taskId, held, why === "arrival_not_confirmed" ? "not applied because the arrival is not confirmed" : "interrupted");
+    const bind = async (target: EmrTarget) => {
+      try {
+        await rt.say({ owner, target, text, spoken_at: spokenAt, source, ...evidence }, taskId);
+        rt.finishArrivalContinuation(owner, taskId, held);
+      } catch (error) { drop("failed"); throw error; }
+    };
     const p = pending.get(owner);
-    if (p?.task_id === taskId) { p.held.push({ bind, drop: (why) => o.log?.(`Arrival continuation not applied: ${why}`) }); return; }
+    if (p?.task_id === taskId) { p.held.push({ bind, drop }); return; }
     const task = rt.view(taskId);
     if (task?.patient_id) await bind(task.admission_id ? { admission_id: task.admission_id } : { patient_id: task.patient_id });
+    else drop("arrival_not_confirmed");
   };
   // One chunk on its way to the patient it belongs to; each patient gets its own listening session, so a line about one never joins audio heard about another.
   const toSubject = async (owner: string, session: string, seq: number, target: EmrTarget, wav: Uint8Array | null, arrived: number, wait: boolean, live: { captured_at?: number | undefined; presence?: LivenessMarker | undefined } = {}) => {
@@ -398,7 +406,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     o.log?.(`listen with no patient: ${hint ? `${hint === "emergency" ? "device heard emergency" : "just after the wake phrase"}, ` : ""}${text ? `${text.split(/\s+/).length} words` : "silence"}, phrase ${said ? "said" : "not said"}`);
     if (said && rt.kinds(owner).includes("open_unnamed_encounter")) {
       const r = await openArrival(owner, { text, spoken_at: spokenAt, source: "audio" });
-      await continueArrival(owner, r.task_id, afterEmergency(text), spokenAt, "audio", { voiceprint: print ? await print : undefined, clip: wav });
+      await continueArrival(owner, r.task_id, afterEmergency(text), spokenAt, "audio", { ...(print ? { voiceprint: await print } : {}), clip: wav });
       setStatus(owner, sessionId, seq, { status: "completed", task_id: r.task_id, line_id: r.line_id });
       return { session_id: sessionId, seq, accepted: true, utterances: [{ id: r.line_id, line_id: r.line_id, task_id: r.task_id, text, class: "instruction", classes: ["instruction"] }], partial: null, entry: "emergency" };
     }
@@ -410,7 +418,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     const moved = spokenPatient(text, known);
     if (moved) onSubject(owner, moved.target, "spoken", spokenAt);
     // Words that receive a new patient open the same pending arrival as the phrase, so the lines after them are bound to it.
-    const newcomer = !moved && text ? await arrivalHeard(owner, text, spokenAt, "audio", { voiceprint: print ? await print : undefined, clip: wav }) : null;
+    const newcomer = !moved && text ? await arrivalHeard(owner, text, spokenAt, "audio", { ...(print ? { voiceprint: await print } : {}), clip: wav }) : null;
     if (newcomer && "capped" in newcomer) {
       setStatus(owner, sessionId, seq, { status: "failed", error: SPEND_CAP_NOTE });
       return { session_id: sessionId, seq, accepted: true, utterances: [], partial: null, errors: [SPEND_CAP_NOTE] };

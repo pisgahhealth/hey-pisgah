@@ -330,17 +330,37 @@ const ADDRESS_TABLE: readonly [RegExp, string][] = [
 ];
 // A clinician's examination words to the patient without the second person, by the fixed table only; a sentence keeping a "you" stays exactly as said.
 export const addressSwap = (text: string): string => swapBy(text, ADDRESS_TABLE, /\byou(?:rs?|rself)?\b|\byou(?:'|\u2019)(?:d|ll|re|ve)\b/i);
-// Returns only a contiguous source clause, keeping its negation, uncertainty, numbers and alternatives intact.
+// Expands an exact source span to its punctuation-delimited clause so a shortened model span cannot drop negation or uncertainty.
 export function sourceClause(words: string, line: string): string | null {
   const text = line.replace(/\s+/g, " ").trim();
   const normalize = (s: string) => s.replace(/[’‘]/g, "'").toLowerCase();
   const needle = normalize(words.replace(/\s+/g, " ").trim());
   if (!needle) return null;
-  const start = normalize(text).indexOf(needle);
-  if (start < 0) return null;
+  const normalized = normalize(text), matches: number[] = [];
+  for (let at = normalized.indexOf(needle); at >= 0; at = normalized.indexOf(needle, at + 1)) {
+    const end = at + needle.length;
+    if ((at > 0 && /[\p{L}\p{N}]/u.test(text[at - 1]!)) || (end < text.length && /[\p{L}\p{N}]/u.test(text[end]!))) continue;
+    matches.push(at);
+  }
+  if (matches.length !== 1) return null;
+  const start = matches[0]!;
   const end = start + needle.length;
-  if ((start > 0 && /[\p{L}\p{N}]/u.test(text[start - 1]!)) || (end < text.length && /[\p{L}\p{N}]/u.test(text[end]!))) return null;
-  return text.slice(start, end);
+  // Commas and colons can introduce a correction or alternative, and decimal points and title abbreviations do not end the clause.
+  const boundary = (at: number): boolean => {
+    const char = text[at];
+    if (char === ";" || char === "!" || char === "?") return true;
+    if (char !== ".") return false;
+    if (/\d/.test(text[at - 1] ?? "") && /\d/.test(text[at + 1] ?? "")) return false;
+    if (/[\p{L}]/u.test(text[at - 1] ?? "") && /[\p{L}]/u.test(text[at + 1] ?? "")) return false;
+    return !/\b(?:dr|mr|mrs|ms|prof|st|vs|e\.g|i\.e)\.$/i.test(text.slice(0, at + 1));
+  };
+  let left = start, right = end;
+  while (left > 0 && !boundary(left - 1)) left--;
+  if (!boundary(right - 1)) {
+    while (right < text.length && !boundary(right)) right++;
+    if (right < text.length) right++;
+  }
+  return text.slice(left, right).trim();
 }
 // A diagnosis still being considered or withdrawn is documentation, never a settled diagnosis to confirm.
 export const diagnosisIsTentative = (text: string): boolean => /\b(?:initial|working|provisional|likely|possible|suspected|maybe|perhaps|might|may|could|would|differential|versus|vs|or|not|no longer|unlikely|doubt(?:ful)?|rule(?:d)? out|if)\b/i.test(text);

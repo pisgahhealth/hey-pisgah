@@ -6,7 +6,7 @@ import { ListenSessions } from "../src/emr/listen.js";
 import type { SecondEar } from "../src/emr/ears.js";
 import type { EmrProof } from "../src/emr/port.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leversFrom, sharedMeasures, willWriteNumber, type SpeedLevers } from "../src/emr/speed.js";
-import { ADMIT, ClerkFake, DOC } from "./clerking-helpers.js";
+import { ADMIT, ClerkFake, DOC, type W } from "./clerking-helpers.js";
 import { emrRoot, ledgerRows, type C } from "./emr-helpers.js";
 import { chunkWav, earOf } from "./mic-helpers.js";
 
@@ -22,7 +22,7 @@ const reply = (tool: string, args: unknown, model: string): ChatCompletion => ({
 // A mock model that answers the first look and the full gate from scripts, each after its own delay, and logs when each call started.
 class SlowModel extends ModelClient {
   readonly seen: Seen[] = [];
-  constructor(root: string, o: { full: (said: string) => C[]; first?: (said: string) => Record<string, unknown>; ms?: (tool: string, said: string) => number }, stateOf: () => EmrRuntime | null) {
+  constructor(root: string, o: { full: (said: string) => W[]; first?: (said: string) => Record<string, unknown>; ms?: (tool: string, said: string) => number }, stateOf: () => EmrRuntime | null) {
     super({
       storeRoot: root, mode: "mock", taskStateOf: (id) => stateOf()?.stateOf(id) ?? null,
       mock: ({ body }) => {
@@ -47,7 +47,7 @@ class SlowModel extends ModelClient {
 }
 
 // A clerking doctor's task on an admitted patient, with the levers named and a listener in front of it.
-function bootSpeed(levers: Partial<SpeedLevers>, o: { full: (said: string) => C[]; first?: (said: string) => Record<string, unknown>; ms?: (tool: string, said: string) => number; holdMs?: number; second?: SecondEar; prove?: (n: number, written: { record_id: string; record_version: number; event_ids: string[] }) => Promise<EmrProof | null>; transcripts?: Record<number, string>; numberMs?: number }) {
+function bootSpeed(levers: Partial<SpeedLevers>, o: { full: (said: string) => W[]; first?: (said: string) => Record<string, unknown>; ms?: (tool: string, said: string) => number; holdMs?: number; second?: SecondEar; prove?: (n: number, written: { record_id: string; record_version: number; event_ids: string[] }) => Promise<EmrProof | null>; transcripts?: Record<number, string>; numberMs?: number }) {
   const root = emrRoot();
   const port = new ClerkFake();
   port.admitted = true;
@@ -223,7 +223,7 @@ describe("speed levers, each alone", () => {
 
 describe("ready observations beside a slow examination", () => {
   const exam = "You look pale and drowsy.";
-  const script = (said: string): C[] => said === exam ? [{ class: "finding", section: "examination", confidence: 0.95 }] : said === "Chart his pulse 110." ? obs({ pulse: 110 }) : [{ class: "aside" }];
+  const script = (said: string): W[] => said === exam ? [{ class: "finding", section: "examination", confidence: 0.95 }] : said === "Chart his pulse 110." ? obs({ pulse: 110 }) : [{ class: "aside" }];
 
   it("saves an independent ready observation before an unrelated examination gate finishes, once only", async () => {
     const { rt, port, sayText } = bootSpeed({ parallelLines: 3, proofBeside: true }, { full: script, ms: (_tool, said) => said === exam ? 350 : 5 });
@@ -235,6 +235,30 @@ describe("ready observations beside a slow examination", () => {
     expect(port.writes.filter((w) => w.kind === "record_observation")).toHaveLength(1);
     expect(port.writes.some((w) => w.kind === "record_clerking")).toBe(true);
     await rt.stop();
+  });
+
+  it("applies a completed joining-window decision beside a slow examination without calling the gate again", async () => {
+    let numericReplied = false;
+    const { rt, port, client, sayText } = bootSpeed({ parallelLines: 3, proofBeside: true, decideWhileJoining: true }, {
+      full: (said) => { if (said === "Chart his pulse 110.") numericReplied = true; return script(said); },
+      ms: (_tool, said) => said === exam ? 1000 : 5
+    });
+    try {
+      await sayText(exam);
+      const ctx = await port.resolve({ admission_id: ADMIT });
+      expect(rt.speculate({ owner: DOC, ctx, session_id: "s1", text: "Chart his pulse 110." })).toBe(true);
+      await expect.poll(() => numericReplied).toBe(true);
+      // Let the reply's promise chain finish before the final line is delivered.
+      await sleep(0);
+      expect(port.writes).toEqual([]);
+      await sayText("Chart his pulse 110.");
+      await sleep(150);
+      expect(port.writes.map((w) => w.kind)).toEqual(["record_observation"]);
+      expect(client.seen.filter((x) => x.said === "Chart his pulse 110.")).toHaveLength(1);
+      await rt.settled();
+      expect(port.writes.filter((w) => w.kind === "record_observation")).toHaveLength(1);
+      expect(port.writes.some((w) => w.kind === "record_clerking")).toBe(true);
+    } finally { await rt.stop(); }
   });
 
   it.each([

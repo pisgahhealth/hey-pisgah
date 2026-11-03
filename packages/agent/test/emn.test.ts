@@ -87,7 +87,7 @@ describe("EMN 1: the note reads as a clinician writes it", () => {
     await sayOn(b, task, RR, STRANGER);
     await b.rt.settled();
     const notes = of(b, "record_clerking").map((w) => String(w.args["text"]));
-    expect(notes).toEqual(["high fever and confusion", "stomach seems a bit stiff, pale, febrile and drowsy, no neck stiffness"]);
+    expect(notes).toEqual(["high fever and confusion.", "stomach seems a bit stiff, pale, febrile and drowsy, no neck stiffness"]);
     const last = of(b, "record_clerking").at(-1)!;
     expect(Object.values(last.args["note"] as Record<string, string>).join(" ")).not.toMatch(/said:|not verified|highhigh|\bum\b/);
     expect(last.prov.evidence).toBe(`transcript:${exam.line_id}`);

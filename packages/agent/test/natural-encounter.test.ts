@@ -5,7 +5,7 @@ import { ClerkFake, DOC, clerkBoot, ins, type W } from "./clerking-helpers.js";
 
 const PATIENT = "dddddddd-1111-4222-8333-444444444444";
 const VISIT = "eeeeeeee-1111-4222-8333-444444444444";
-const OWNER = { vector: [5], ms: 20, model: "nemo_en_titanet_small" };
+const OWNER = { vector: [5], ms: 20, model: "nemo_en_titanet_small" as const };
 class Hospital extends ClerkFake {
   override kindsFor(): readonly string[] { return [...super.kindsFor(), EMERGENCY_KIND, IDENTITY_KIND, "record_triage_vitals", "order_test"]; }
   orderables() { return { tests: { fbc: ["FBC", "full blood count"] }, drugs: {} }; }
@@ -93,6 +93,37 @@ describe("natural mixed instructions", () => {
       await b.rt.say({ owner: DOC, target: { patient_id: PATIENT }, text: "Pulse 110", source: "audio", voiceprint: OWNER }, a.task_id);
       await b.rt.settled();
       expect(b.rt.view(a.task_id)!.questions.map((q) => q.text)).toContain("What should I send?");
+    } finally { await b.rt.stop(); }
+  });
+
+  it("shows interrupted arrival continuations after restart without replaying their authority", async () => {
+    const port = new Hospital();
+    const first = clerkBoot(gate, { port });
+    const task = await first.rt.emergency(DOC, { text: "Hey Pisgah, emergency, pulse 110, send FBC", spoken_at: new Date().toISOString(), args: { unidentified_ref: "Unknown arrival", reason: "Emergency arrival" } });
+    first.rt.holdArrivalContinuation(DOC, task.task_id);
+    await first.rt.settled();
+    await first.rt.stop();
+    first.client.close();
+    const second = clerkBoot(gate, { port, root: first.root });
+    try {
+      await second.rt.settled();
+      expect(second.rt.view(task.task_id)!.notes.some((n) => /interrupted by restart/.test(n.text))).toBe(true);
+      expect(port.writes.filter((w) => w.kind === "order_test" || w.kind === "record_triage_vitals")).toHaveLength(0);
+      expect(second.rt.task(task.task_id)!.continuations).toEqual([expect.objectContaining({ state: "dropped" })]);
+    } finally { await second.rt.stop(); }
+  });
+
+  it.each(["unclear", "instruction"] as const)("does not let an uncertain %s answer release a pending order", async (answerClass) => {
+    const port = new Hospital();
+    const b = clerkBoot((text) => text === "Send a blood test" ? [{ words: text, class: "unclear", kind: "order_test", question: "Which blood test?" }] : [{ words: text, class: answerClass, kind: "order_test", test: "fbc", confidence: 0.1, question: "Did you mean FBC?" }], { port });
+    try {
+      const input = { owner: DOC, target: { patient_id: PATIENT }, source: "audio" as const, voiceprint: OWNER };
+      const task = await b.rt.say({ ...input, text: "Send a blood test" });
+      await b.rt.settled();
+      await b.rt.say({ ...input, text: "FBC" }, task.task_id);
+      await b.rt.settled();
+      expect(port.writes.filter((w) => w.kind === "order_test")).toHaveLength(0);
+      expect(b.rt.view(task.task_id)!.questions.map((q) => q.text)).toContain("Which blood test?");
     } finally { await b.rt.stop(); }
   });
 
