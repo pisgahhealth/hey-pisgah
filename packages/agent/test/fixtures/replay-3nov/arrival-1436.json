@@ -1,0 +1,455 @@
+{
+ "run": "1436",
+ "lines": [
+  {
+   "line": "L1",
+   "spoken_at": "2026-11-03T13:36:39.481Z",
+   "heard_at": "2026-11-03T13:36:50.479Z",
+   "source": "audio",
+   "entry": "emergency",
+   "text": "Um so I've got a new arrival, arrival",
+   "words": 8,
+   "live": [
+    "proposed open_unnamed_encounter",
+    "completed open_unnamed_encounter"
+   ]
+  },
+  {
+   "line": "L2",
+   "spoken_at": "2026-11-03T13:36:39.481Z",
+   "heard_at": "2026-11-03T13:36:50.743Z",
+   "source": "audio",
+   "via": "gate",
+   "text": "Um so I've got a new arrival, arrival",
+   "words": 8,
+   "speaker": {
+    "speaker": "unverified",
+    "reason": "no_match"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "Um so I've got a new arrival, arrival",
+      "class": "aside"
+     }
+    ]
+   }
+  },
+  {
+   "line": "L3",
+   "spoken_at": "2026-11-03T13:36:44.191Z",
+   "heard_at": "2026-11-03T13:36:52.631Z",
+   "source": "audio",
+   "text": null,
+   "words": 8,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     1
+    ],
+    "ended_at": "2026-11-03T13:36:48.171Z",
+    "final_at": "2026-11-03T13:36:50.513Z",
+    "trailing_silence_ms": 680,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 4660,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": null,
+      "class": "aside",
+      "word_count": 8
+     }
+    ]
+   }
+  },
+  {
+   "line": "L4",
+   "spoken_at": "2026-11-03T13:36:48.841Z",
+   "heard_at": "2026-11-03T13:36:54.632Z",
+   "source": "audio",
+   "text": "well, I said she, so she's a woman,",
+   "words": 8,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     2
+    ],
+    "ended_at": "2026-11-03T13:36:50.681Z",
+    "final_at": "2026-11-03T13:36:51.396Z",
+    "trailing_silence_ms": 700,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 2540,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "well, I said she, so she's a woman,",
+      "class": "finding",
+      "section": "history",
+      "text": "she's a woman"
+     }
+    ]
+   },
+   "live": [
+    "proposed open_consult",
+    "proposed record_clerking history",
+    "completed open_consult",
+    "completed record_clerking"
+   ],
+   "raw_text": null
+  },
+  {
+   "line": "L5",
+   "spoken_at": "2026-11-03T13:36:51.400Z",
+   "heard_at": "2026-11-03T13:37:02.188Z",
+   "source": "audio",
+   "text": "she's about she looks about 30 years old uh she was brought in with high fever and a bit of confusion. Um madam please would you tell me your name?",
+   "words": 30,
+   "ambient": {
+    "session": "s1.f1.0",
+    "seqs": [
+     0
+    ],
+    "turn_seqs": [
+     0
+    ],
+    "ended_at": "2026-11-03T13:37:01.300Z",
+    "final_at": "2026-11-03T13:37:02.102Z",
+    "trailing_silence_ms": 802,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 10200,
+   "speaker": {
+    "speaker": "unverified",
+    "reason": "no_match"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "she's about she looks about 30 years old uh she was brought in with high fever and a bit of confusion.",
+      "class": "finding",
+      "section": "presenting_complaint",
+      "text": "she's about she looks about 30 years old uh she was brought in with high fever and a bit of confusion."
+     },
+     {
+      "words": "Um madam please would you tell me your name?",
+      "class": "question_to_staff"
+     }
+    ]
+   },
+   "live": [
+    "proposed record_clerking presenting_complaint",
+    "completed record_clerking"
+   ],
+   "raw_text": "she's about she looks about thirty years old uh she was brought in with high fever and a bit of confusion. Um madam please would you tell me your name?"
+  },
+  {
+   "line": "L6",
+   "spoken_at": "2026-11-03T13:37:02.260Z",
+   "heard_at": "2026-11-03T13:37:05.965Z",
+   "source": "audio",
+   "text": "My name is Amaka Okafor.",
+   "words": 5,
+   "ambient": {
+    "session": "s1.f1.0",
+    "seqs": [
+     1
+    ],
+    "turn_seqs": [
+     1
+    ],
+    "ended_at": "2026-11-03T13:37:05.140Z",
+    "final_at": "2026-11-03T13:37:05.918Z",
+    "trailing_silence_ms": 778,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 3480,
+   "gate": {
+    "clauses": [],
+    "assumed": "the live gate never read this line alone; the replay answers with the clauses the gate gave for these words on a later call, else aside"
+   },
+   "live": [
+    "handled as held_for_whom",
+    "asked: For Unnamed arrival or for Unnamed arrival? I have not written it anywhere yet."
+   ],
+   "raw_text": null
+  },
+  {
+   "line": "L7",
+   "spoken_at": "2026-11-03T13:37:05.620Z",
+   "heard_at": "2026-11-03T13:37:36.626Z",
+   "source": "audio",
+   "text": "Amaka Okafor A M A K A O K A F O R Okay um I'm going to check your blood pressure now I'm going to check all your vitals please just bear with me okay your pulse is about 110 the blood pressure is quite low it's 90 over 60 your temperature is about 38.5 hmm your SpO2 is about 94 percent and your respiratory rate is 24",
+   "words": 69,
+   "ambient": {
+    "session": "s1.f1.0",
+    "seqs": [
+     2
+    ],
+    "turn_seqs": [
+     2
+    ],
+    "ended_at": "2026-11-03T13:37:33.540Z",
+    "final_at": "2026-11-03T13:37:34.354Z",
+    "trailing_silence_ms": 814,
+    "finished_by": "number_alone"
+   },
+   "audio_ms": 28520,
+   "gate": {
+    "clauses": [],
+    "assumed": "the live gate never read this line alone; the replay answers with the clauses the gate gave for these words on a later call, else aside"
+   },
+   "live": [
+    "handled as held_for_whom",
+    "asked: For Unnamed arrival or for Unnamed arrival? I have not written it anywhere yet."
+   ],
+   "raw_text": "Amaka Okafor A M A K A O K A F O R Okay um I'm going to check your blood pressure now I'm going to check all your vitals please just bear with me okay your pulse is about a hundred and ten the blood pressure is quite low it's ninety over sixty your temperature is about thirty eight point five hmm your SpO2 is about ninety four percent and your respiratory rate is twenty four"
+  },
+  {
+   "line": "L8",
+   "spoken_at": "2026-11-03T13:37:34.420Z",
+   "heard_at": "2026-11-03T13:39:13.364Z",
+   "source": "audio",
+   "text": "um how you feeling how you feeling ah doctor I've been having fever for three days I've been vomiting I tried to take medication but today when I went to the market to buy some things I fell off I fainted doctor okay that's fine don't worry we're going to take care of you is there any medicine that you're allergic to doctor I think penicillin okay that's fine just lie down I'll have to do an examination for you real quick um you're quite pale open your eyes for me please okay um you look febrile and a bit drowsy well really drowsy your neck is also not stiff uh well my initial diagnosis for you is that you have severe malaria okay um what we'll do now is to send a request to the lab Nurse please come take a sample the lab needs to do a full blood count test the malaria parasite test and urinalysis okay and also get stats on IV paracetamol 120 milligrams please get to the pharmacy and get that um maybe do it for 12 hours and then we observe her again also give her paracetamol one gram yeah one gram IV paracetamol and please get all of that from the pharmacy immediately admit her in the in the ward for severe malaria obviously um and do a four hourly obliques okay",
+   "words": 197,
+   "ambient": {
+    "session": "s1.f1.0",
+    "seqs": [
+     3
+    ],
+    "turn_seqs": [
+     3
+    ],
+    "ended_at": "2026-11-03T13:39:12.180Z",
+    "final_at": "2026-11-03T13:39:13.138Z",
+    "trailing_silence_ms": 958,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 59640,
+   "speaker": {
+    "speaker": "unverified",
+    "reason": "mixed_speakers"
+   },
+   "ears": {
+    "unused": true
+   },
+   "gate": {
+    "calls": 2,
+    "repairs": 1,
+    "clauses": [
+     {
+      "words": "um how you feeling how you feeling",
+      "class": "question_to_staff"
+     },
+     {
+      "words": "ah doctor I've been having fever for three days I've been vomiting I tried to take medication but today when I went to the market to buy some things I fell off I fainted",
+      "class": "patient_reported",
+      "text": "I've been having fever for three days I've been vomiting I tried to take medication but today when I went to the market to buy some things I fell off I fainted"
+     },
+     {
+      "words": "is there any medicine that you're allergic to",
+      "class": "question_to_staff"
+     },
+     {
+      "words": "doctor I think penicillin",
+      "class": "patient_reported",
+      "text": "I think penicillin"
+     },
+     {
+      "words": "please okay um you look febrile and a bit drowsy well really drowsy your neck is also not stiff",
+      "class": "finding",
+      "section": "examination",
+      "text": "quite pale, febrile and a bit drowsy well really drowsy, neck is also not stiff"
+     },
+     {
+      "words": "well my initial diagnosis for you is that you have severe malaria",
+      "class": "finding",
+      "section": "assessment",
+      "text": "initial diagnosis is severe malaria"
+     }
+    ]
+   },
+   "live": [
+    "proposed record_clerking patient_reported",
+    "asked: I could not safely record that examination. Please say it again.",
+    "proposed record_clerking assessment",
+    "the live runtime cut this line to its first 1000 characters",
+    "completed record_clerking x2"
+   ],
+   "raw_text": "um how you feeling how you feeling ah doctor I've been having fever for three days I've been vomiting I tried to take medication but today when I went to the market to buy some things I fell off I fainted doctor okay that's fine don't worry we're going to take care of you is there any medicine that you're allergic to doctor I think penicillin penicillin okay that's fine just lie down I'll have to do an examination for you real quick um you're quite pale open your eyes for me please okay um you look febrile and a bit drowsy well really drowsy your neck is also not stiff uh well my initial diagnosis for you is that you have severe malaria okay um what we'll do now is to send a request to the lab Nurse please come take a sample the lab needs to do a full blood count test the malaria parasite test and urinalysis okay and also get stats on IV paracetamol one twenty milligrams please get to the pharmacy and get that um maybe do it for twelve hours and then we observe her again also give her paracetamol one gram yeah one gram IV paracetamol and please get all of that from the pharmacy immediately admit her in the in the ward for severe malaria obviously um and do a four hourly obliques okay"
+  },
+  {
+   "line": "L9",
+   "spoken_at": "2026-11-03T13:39:12.820Z",
+   "heard_at": "2026-11-03T13:39:21.285Z",
+   "source": "audio",
+   "text": "so however it goes just let me know but Madam Okafor don't worry you're going to be very okay you're in good hands",
+   "words": 23,
+   "ambient": {
+    "session": "s1.f1.0",
+    "seqs": [
+     4
+    ],
+    "turn_seqs": [
+     4
+    ],
+    "ended_at": "2026-11-03T13:39:20.260Z",
+    "final_at": "2026-11-03T13:39:21.234Z",
+    "trailing_silence_ms": 974,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 8040,
+   "gate": {
+    "clauses": [],
+    "assumed": "the live gate never read this line alone; the replay answers with the clauses the gate gave for these words on a later call, else aside"
+   },
+   "live": [
+    "handled as held_for_whom",
+    "asked: For Unnamed arrival or for Unnamed arrival? I have not written it anywhere yet."
+   ],
+   "raw_text": "so however it goes just let me know but Madam Okafor don't worry you're going to be very okay okay you're in good hands"
+  },
+  {
+   "line": "L10",
+   "spoken_at": "2026-11-03T13:39:20.580Z",
+   "heard_at": "2026-11-03T13:39:22.526Z",
+   "source": "audio",
+   "text": null,
+   "words": 3,
+   "ambient": {
+    "session": "s1.f1.0",
+    "seqs": [
+     5
+    ],
+    "turn_seqs": [
+     5
+    ],
+    "ended_at": "2026-11-03T13:39:21.540Z",
+    "final_at": "2026-11-03T13:39:22.494Z",
+    "trailing_silence_ms": 954,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 1560,
+   "speaker": {
+    "speaker": "unverified",
+    "reason": "no_match"
+   },
+   "gate": {
+    "calls": 2,
+    "repairs": 1,
+    "clauses": [],
+    "outside_line": [
+     {
+      "words": "I'm going to check your blood pressure now I'm going to check all your vitals please just bear with me okay your pulse is about 110 the blood pressure is quite low it's 90 over 60 your temperature is about 38.5 hmm your SpO2 is about 94 percent and your respiratory rate is 24",
+      "bp": "90/60",
+      "class": "instruction",
+      "confidence": 0.92,
+      "kind": "record_triage_vitals",
+      "pulse": 110,
+      "resp_rate": 24,
+      "spo2": 94,
+      "temp_c": 38.5,
+      "describes": "L7"
+     },
+     {
+      "words": "lab Nurse please come take a sample the lab needs to do a full blood count",
+      "class": "instruction",
+      "confidence": 0.95,
+      "kind": "order_test",
+      "test": "fbc",
+      "describes": "L8"
+     },
+     {
+      "words": "test the malaria parasite",
+      "class": "instruction",
+      "confidence": 0.95,
+      "kind": "order_test",
+      "test": "malaria",
+      "describes": "L8"
+     },
+     {
+      "words": "and urinalysis",
+      "class": "instruction",
+      "confidence": 0.95,
+      "kind": "order_test",
+      "test": "urinalysis",
+      "describes": "L8"
+     },
+     {
+      "words": "also get stats on IV paracetamol 120 milligrams",
+      "class": "instruction",
+      "confidence": 0.88,
+      "dose": "120 mg",
+      "drug": "paracetamol_iv",
+      "kind": "prescribe",
+      "route": "iv",
+      "describes": "L8"
+     },
+     {
+      "words": "also give her paracetamol one gram",
+      "class": "instruction",
+      "confidence": 0.88,
+      "dose": "1 g",
+      "drug": "paracetamol_oral",
+      "kind": "prescribe",
+      "route": "oral",
+      "describes": "L8"
+     }
+    ]
+   }
+  }
+ ],
+ "earlier_arrival": {
+  "note": "A finished arrival from 2 Nov, named Amaka Okafor, still in the same owner store.",
+  "lines": [
+   {
+    "line": "E1",
+    "spoken_at": "2026-11-02T17:22:48.123Z",
+    "heard_at": "2026-11-02T17:22:59.876Z",
+    "source": "audio",
+    "entry": "emergency",
+    "text": "um Well, I have a new unknown arrival here in the emergency ward. She's a woman. She's about 30 years old..",
+    "words": 21
+   },
+   {
+    "line": "E2",
+    "spoken_at": "2026-11-02T17:23:08.351Z",
+    "heard_at": "2026-11-02T17:23:12.014Z",
+    "source": "audio",
+    "text": "My name is Amaka Okafor",
+    "words": 5,
+    "ambient": {
+     "session": "s1.f1.0",
+     "seqs": [
+      1
+     ],
+     "ended_at": "2026-11-02T17:23:11.206Z",
+     "final_at": "2026-11-02T17:23:11.991Z",
+     "trailing_silence_ms": 785,
+     "finished_by": "quiet_tail"
+    },
+    "audio_ms": 3640,
+    "speaker": {
+     "speaker": "unverified",
+     "reason": "no_match"
+    },
+    "raw_text": "My name is Amaka Amaka Okafor"
+   }
+  ]
+ }
+}

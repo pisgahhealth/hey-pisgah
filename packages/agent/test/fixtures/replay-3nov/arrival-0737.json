@@ -1,0 +1,994 @@
+{
+ "run": "0737",
+ "lines": [
+  {
+   "line": "L1",
+   "spoken_at": "2026-11-03T06:37:06.548Z",
+   "heard_at": "2026-11-03T06:37:53.758Z",
+   "source": "audio",
+   "entry": "emergency",
+   "text": "Um so I have a new arrival here in the emergency ward and uh",
+   "words": 14,
+   "live": [
+    "proposed open_unnamed_encounter",
+    "completed open_unnamed_encounter"
+   ]
+  },
+  {
+   "line": "L2",
+   "spoken_at": "2026-11-03T06:37:57.513Z",
+   "heard_at": "2026-11-03T06:38:02.468Z",
+   "source": "audio",
+   "text": "one, she looks about 30.",
+   "words": 5,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     1
+    ],
+    "ended_at": "2026-11-03T06:37:59.263Z",
+    "final_at": "2026-11-03T06:37:59.953Z",
+    "trailing_silence_ms": 690,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 2440,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "gate": {
+    "calls": 2,
+    "repairs": 1,
+    "clauses": [
+     {
+      "words": "one, she looks about 30.",
+      "class": "finding",
+      "section": "history",
+      "text": "she looks about 30"
+     }
+    ]
+   },
+   "live": [
+    "proposed open_consult",
+    "proposed record_clerking history",
+    "completed open_consult",
+    "completed record_clerking"
+   ],
+   "raw_text": "one, she looks about thirty."
+  },
+  {
+   "line": "L3",
+   "spoken_at": "2026-11-03T06:38:00.646Z",
+   "heard_at": "2026-11-03T06:38:03.602Z",
+   "source": "audio",
+   "text": "on your respiratory rate is 24",
+   "words": 6,
+   "ambient": {
+    "session": "s1.f1.0",
+    "seqs": [
+     0
+    ],
+    "ended_at": "2026-11-03T06:38:02.756Z",
+    "final_at": "2026-11-03T06:38:03.566Z",
+    "trailing_silence_ms": 810,
+    "finished_by": "released_whole",
+    "released": true
+   },
+   "audio_ms": 2920,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "ears": {
+    "agree": false,
+    "measures": [
+     {
+      "measure": "resp_rate",
+      "first": "24",
+      "second": "204",
+      "agree": false
+     }
+    ]
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "on your respiratory rate is 24",
+      "class": "instruction",
+      "confidence": 0.95,
+      "kind": "record_observation",
+      "resp_rate": 24
+     }
+    ]
+   },
+   "live": [
+    "proposed record_triage_vitals",
+    "cancelled record_triage_vitals (readings_differ)",
+    "asked: Respiratory rate: one reading heard 24, the other 204. Say 24 or 204."
+   ],
+   "raw_text": null
+  },
+  {
+   "line": "L4",
+   "spoken_at": "2026-11-03T06:37:56.147Z",
+   "heard_at": "2026-11-03T06:38:05.164Z",
+   "source": "audio",
+   "text": "should be been brought in with high fever and confusion. Um",
+   "words": 11,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     2
+    ],
+    "ended_at": "2026-11-03T06:37:59.417Z",
+    "final_at": "2026-11-03T06:38:00.107Z",
+    "trailing_silence_ms": 690,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 3960,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "should be been brought in with high fever and confusion.",
+      "class": "finding",
+      "section": "presenting_complaint",
+      "text": "brought in with high fever and confusion"
+     }
+    ]
+   },
+   "live": [
+    "proposed record_clerking presenting_complaint",
+    "completed record_clerking"
+   ],
+   "raw_text": "should be been brought in with high fever fever and confusion. Um"
+  },
+  {
+   "line": "L5",
+   "spoken_at": "2026-11-03T06:38:04.167Z",
+   "heard_at": "2026-11-03T06:38:05.338Z",
+   "source": "audio",
+   "text": null,
+   "words": 5,
+   "ambient": {
+    "session": "s1.f1.0",
+    "seqs": [
+     1
+    ],
+    "ended_at": "2026-11-03T06:38:04.516Z",
+    "final_at": "2026-11-03T06:38:05.327Z",
+    "trailing_silence_ms": 811,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 1160,
+   "speaker": {
+    "speaker": "unverified",
+    "reason": "no_match"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": null,
+      "class": "aside",
+      "word_count": 5
+     }
+    ]
+   }
+  },
+  {
+   "line": "L6",
+   "spoken_at": "2026-11-03T06:37:57.719Z",
+   "heard_at": "2026-11-03T06:38:07.077Z",
+   "source": "audio",
+   "text": null,
+   "words": 6,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     3
+    ],
+    "ended_at": "2026-11-03T06:37:59.419Z",
+    "final_at": "2026-11-03T06:38:00.119Z",
+    "trailing_silence_ms": 700,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 2400,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": null,
+      "class": "question_to_staff",
+      "word_count": 6
+     }
+    ]
+   }
+  },
+  {
+   "line": "L7",
+   "spoken_at": "2026-11-03T06:37:58.003Z",
+   "heard_at": "2026-11-03T06:38:08.586Z",
+   "source": "audio",
+   "text": null,
+   "words": 4,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     4
+    ],
+    "ended_at": "2026-11-03T06:37:59.433Z",
+    "final_at": "2026-11-03T06:38:00.123Z",
+    "trailing_silence_ms": 690,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 2120,
+   "speaker": {
+    "speaker": "unverified",
+    "reason": "no_match"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": null,
+      "class": "aside",
+      "word_count": 4
+     }
+    ]
+   }
+  },
+  {
+   "line": "L8",
+   "spoken_at": "2026-11-03T06:37:58.287Z",
+   "heard_at": "2026-11-03T06:38:09.700Z",
+   "source": "audio",
+   "text": null,
+   "words": 1,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     5
+    ],
+    "ended_at": "2026-11-03T06:37:59.427Z",
+    "final_at": "2026-11-03T06:38:00.127Z",
+    "trailing_silence_ms": 700,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 1840,
+   "speaker": {
+    "speaker": "unverified",
+    "reason": "no_match"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": null,
+      "class": "aside",
+      "word_count": 1
+     }
+    ]
+   }
+  },
+  {
+   "line": "L9",
+   "spoken_at": "2026-11-03T06:37:58.979Z",
+   "heard_at": "2026-11-03T06:38:10.747Z",
+   "source": "audio",
+   "text": null,
+   "words": 1,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     6
+    ],
+    "ended_at": "2026-11-03T06:37:59.439Z",
+    "final_at": "2026-11-03T06:38:00.139Z",
+    "trailing_silence_ms": 700,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 1160,
+   "speaker": {
+    "speaker": "unverified",
+    "reason": "no_match"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": null,
+      "class": "aside",
+      "word_count": 1
+     }
+    ]
+   }
+  },
+  {
+   "line": "L10",
+   "spoken_at": "2026-11-03T06:37:54.641Z",
+   "heard_at": "2026-11-03T06:38:12.835Z",
+   "source": "audio",
+   "text": null,
+   "words": 8,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     7
+    ],
+    "ended_at": "2026-11-03T06:37:59.431Z",
+    "final_at": "2026-11-03T06:38:00.141Z",
+    "trailing_silence_ms": 710,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 5500,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": null,
+      "class": "aside",
+      "word_count": 8
+     }
+    ]
+   }
+  },
+  {
+   "line": "L11",
+   "spoken_at": "2026-11-03T06:37:50.364Z",
+   "heard_at": "2026-11-03T06:38:15.725Z",
+   "source": "audio",
+   "text": null,
+   "words": 18,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     8,
+     9
+    ],
+    "ended_at": "2026-11-03T06:37:59.484Z",
+    "final_at": "2026-11-03T06:38:00.164Z",
+    "trailing_silence_ms": 680,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 9800,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "gate": {
+    "calls": 2,
+    "repairs": 1,
+    "clauses": [
+     {
+      "words": null,
+      "class": "aside",
+      "word_count": 3
+     },
+     {
+      "words": null,
+      "class": "question_to_staff",
+      "word_count": 15
+     }
+    ]
+   }
+  },
+  {
+   "line": "L12",
+   "spoken_at": "2026-11-03T06:37:56.507Z",
+   "heard_at": "2026-11-03T06:38:17.722Z",
+   "source": "audio",
+   "text": "okay your pulse is about 110",
+   "words": 6,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     10
+    ],
+    "ended_at": "2026-11-03T06:37:59.487Z",
+    "final_at": "2026-11-03T06:38:00.167Z",
+    "trailing_silence_ms": 680,
+    "finished_by": "released_whole",
+    "released": true
+   },
+   "audio_ms": 3660,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "ears": {
+    "agree": true,
+    "measures": [
+     {
+      "measure": "pulse",
+      "first": "110",
+      "second": "110",
+      "agree": true
+     }
+    ]
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "okay your pulse is about 110",
+      "class": "instruction",
+      "confidence": 0.85,
+      "kind": "record_observation",
+      "pulse": 110
+     }
+    ]
+   },
+   "live": [
+    "proposed record_triage_vitals",
+    "completed record_triage_vitals"
+   ],
+   "raw_text": null
+  },
+  {
+   "line": "L13",
+   "spoken_at": "2026-11-03T06:37:54.178Z",
+   "heard_at": "2026-11-03T06:38:22.430Z",
+   "source": "audio",
+   "text": "your blood pressure is 90 over 60, your temperature, ooh, is 38.5.",
+   "words": 12,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     11
+    ],
+    "ended_at": "2026-11-03T06:37:59.628Z",
+    "final_at": "2026-11-03T06:38:00.178Z",
+    "trailing_silence_ms": 550,
+    "finished_by": "number_alone"
+   },
+   "audio_ms": 6000,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "ears": {
+    "agree": true,
+    "measures": [
+     {
+      "measure": "temp_c",
+      "first": "38.5",
+      "second": "38.5",
+      "agree": true
+     },
+     {
+      "measure": "bp",
+      "first": "90/60",
+      "second": "90/60",
+      "agree": true
+     }
+    ]
+   },
+   "gate": {
+    "calls": 2,
+    "repairs": 1,
+    "clauses": [
+     {
+      "words": "your blood pressure is 90 over 60,",
+      "bp": "90/60",
+      "class": "instruction",
+      "confidence": 0.95,
+      "kind": "record_observation"
+     },
+     {
+      "words": "your temperature, ooh, is 38.5.",
+      "class": "instruction",
+      "confidence": 0.95,
+      "kind": "record_observation",
+      "temp_c": 38.5
+     }
+    ]
+   },
+   "live": [
+    "proposed record_clerking vitals",
+    "completed record_clerking"
+   ],
+   "raw_text": null
+  },
+  {
+   "line": "L14",
+   "spoken_at": "2026-11-03T06:37:58.046Z",
+   "heard_at": "2026-11-03T06:38:22.449Z",
+   "source": "audio",
+   "text": "your SpO2 is 94% and your respiratory rate is 24.",
+   "words": 10,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     13
+    ],
+    "ended_at": "2026-11-03T06:38:02.826Z",
+    "final_at": "2026-11-03T06:38:03.526Z",
+    "trailing_silence_ms": 700,
+    "finished_by": "released_whole",
+    "released": true
+   },
+   "audio_ms": 5480,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "ears": {
+    "agree": false,
+    "measures": [
+     {
+      "measure": "resp_rate",
+      "first": "24",
+      "second": "204",
+      "agree": false
+     },
+     {
+      "measure": "spo2",
+      "first": "94",
+      "second": "94",
+      "agree": true
+     }
+    ]
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "your SpO2 is 94% and your respiratory rate is 24.",
+      "class": "instruction",
+      "confidence": 0.98,
+      "kind": "record_triage_vitals",
+      "resp_rate": 24,
+      "spo2": 94
+     }
+    ]
+   },
+   "live": [
+    "proposed record_triage_vitals",
+    "cancelled record_triage_vitals (readings_differ)",
+    "asked: Respiratory rate: one reading heard 24, the other 204. Say 24 or 204."
+   ],
+   "raw_text": null
+  },
+  {
+   "line": "L15",
+   "spoken_at": "2026-11-03T06:38:43.834Z",
+   "heard_at": "2026-11-03T06:38:47.129Z",
+   "source": "audio",
+   "text": "and do some checks.",
+   "words": 4,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     24
+    ],
+    "ended_at": "2026-11-03T06:38:44.404Z",
+    "final_at": "2026-11-03T06:38:45.094Z",
+    "trailing_silence_ms": 690,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 1260,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "and do some checks.",
+      "class": "unclear",
+      "question": "What checks should be done? Please specify observations, tests or care plan items."
+     }
+    ]
+   },
+   "live": [
+    "asked: What checks should be done? Please specify observations, tests or care plan items."
+   ],
+   "raw_text": null
+  },
+  {
+   "line": "L16",
+   "spoken_at": "2026-11-03T06:38:46.511Z",
+   "heard_at": "2026-11-03T06:38:47.842Z",
+   "source": "audio",
+   "text": null,
+   "words": 3,
+   "ambient": {
+    "session": "s1.f3.0",
+    "seqs": [
+     0
+    ],
+    "ended_at": "2026-11-03T06:38:47.022Z",
+    "final_at": "2026-11-03T06:38:47.831Z",
+    "trailing_silence_ms": 809,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 1320,
+   "speaker": {
+    "speaker": "unverified",
+    "reason": "no_match"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": null,
+      "class": "question_to_staff",
+      "word_count": 3
+     }
+    ]
+   }
+  },
+  {
+   "line": "L17",
+   "spoken_at": "2026-11-03T06:38:49.584Z",
+   "heard_at": "2026-11-03T06:39:26.773Z",
+   "source": "audio",
+   "text": "okay uh you look pretty pale um and it seems like you're also drowsy and febrile your neck too is a bit stiff I think my initial diagnosis is that you might have cerebral malaria right but uh we would need to do some tests okay so nurse please send a test for FBC or full blood count malaria parasite and urinalysis right um okay doctor full blood count malaria parasite and urinalysis yes please send that to",
+   "words": 78,
+   "ambient": {
+    "session": "s1.f3.0",
+    "seqs": [
+     1
+    ],
+    "ended_at": "2026-11-03T06:39:23.502Z",
+    "final_at": "2026-11-03T06:39:26.584Z",
+    "trailing_silence_ms": 3082,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 37000,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "okay uh you look pretty pale um and it seems like you're also drowsy and febrile your neck too is a bit stiff",
+      "class": "finding",
+      "section": "examination",
+      "text": "you look pretty pale um and it seems like you're also drowsy and febrile your neck too is a bit stiff"
+     },
+     {
+      "words": "I think my initial diagnosis is that you might have cerebral malaria right",
+      "class": "option"
+     },
+     {
+      "words": "but uh we would need to do some tests okay so nurse please send a test for FBC or full blood count",
+      "class": "instruction",
+      "confidence": 0.95,
+      "kind": "order_test",
+      "test": "fbc"
+     },
+     {
+      "words": "malaria parasite",
+      "class": "instruction",
+      "confidence": 0.95,
+      "kind": "order_test",
+      "test": "malaria"
+     },
+     {
+      "words": "parasite and urinalysis",
+      "class": "instruction",
+      "confidence": 0.95,
+      "kind": "order_test",
+      "test": "urinalysis"
+     },
+     {
+      "words": "right um okay doctor full blood count malaria parasite and urinalysis yes please send that",
+      "class": "aside"
+     }
+    ]
+   },
+   "live": [
+    "proposed record_clerking examination",
+    "proposed order_test x3",
+    "completed record_clerking",
+    "cancelled order_test (voice_token_lost_in_restart) x3"
+   ],
+   "raw_text": "okay uh you look pretty pale um and it seems like you're also drowsy and febrile your neck too is a bit stiff I think my initial diagnosis is that you might have cerebral malaria right but uh we would need to do some tests okay so nurse please send a test for FBC or full blood count malaria parasite and urinalysis right um okay doctor full blood count malaria parasite and urinalysis yes yes please send that to"
+  },
+  {
+   "line": "L18",
+   "spoken_at": "2026-11-03T06:39:25.791Z",
+   "heard_at": "2026-11-03T06:39:51.382Z",
+   "source": "audio",
+   "text": "um I also need the pharmacy to supply IV paracetamol 120 milligrams now and then in 12 and 24 hours so give paracetamol one gram IV um Nurse I hope you get that get those drugs from the from the pharmacy IV paracetamol 120 milligrams and the paracetamol please give her immediately",
+   "words": 52,
+   "ambient": {
+    "session": "s2.f0.0",
+    "seqs": [
+     0
+    ],
+    "ended_at": "2026-11-03T06:39:50.531Z",
+    "final_at": "2026-11-03T06:39:51.271Z",
+    "trailing_silence_ms": 740,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 25480,
+   "speaker": {
+    "speaker": "unverified",
+    "reason": "mixed_speakers"
+   },
+   "ears": {
+    "unused": true
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "one gram IV um Nurse I hope you get that get those drugs from the from the pharmacy IV paracetamol 120 milligrams and the paracetamol please",
+      "class": "unclear",
+      "question": "IV paracetamol dose is 120 milligrams or 1 gram? Please confirm."
+     },
+     {
+      "words": "um Nurse I hope you get that get those drugs from the from the pharmacy IV paracetamol 120 milligrams and the paracetamol please give her immediately",
+      "class": "question_to_staff"
+     }
+    ]
+   },
+   "live": [
+    "asked: IV paracetamol dose is 120 milligrams or 1 gram? Please confirm."
+   ],
+   "raw_text": "um I also need the pharmacy to supply IV paracetamol one twenty milligrams now and then in twelve and twenty four hours so give paracetamol one gram IV um Nurse I hope you get that get those drugs from the from the pharmacy IV paracetamol one twenty milligrams and the paracetamol please give her immediately"
+  },
+  {
+   "line": "L19",
+   "spoken_at": "2026-11-03T06:39:52.211Z",
+   "heard_at": "2026-11-03T06:40:01.591Z",
+   "source": "audio",
+   "text": "Um what else what else what else admit her obviously admit her for severe malaria of course in the emergency ward A and E",
+   "words": 24,
+   "ambient": {
+    "session": "s2.f0.0",
+    "seqs": [
+     1
+    ],
+    "ended_at": "2026-11-03T06:40:00.691Z",
+    "final_at": "2026-11-03T06:40:01.531Z",
+    "trailing_silence_ms": 840,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 9320,
+   "speaker": {
+    "speaker": "unverified",
+    "reason": "no_match"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "Um what else what else what else",
+      "class": "aside"
+     },
+     {
+      "words": "Um what else what else what else admit her obviously admit her for severe malaria of course",
+      "class": "instruction",
+      "confidence": 0.95,
+      "kind": "admit_patient",
+      "text": "severe malaria",
+      "ward": "a_and_e"
+     }
+    ]
+   },
+   "live": [
+    "proposed admit_patient",
+    "asked: Held: Admit, emergency, to the a and e ward on your authority: severe malaria of course in the emergency ward A and E. I could not match the voice to you, so it waits until you say yes yourself.",
+    "cancelled admit_patient (question_expired)"
+   ],
+   "raw_text": null
+  },
+  {
+   "line": "L20",
+   "spoken_at": "2026-11-03T06:40:02.197Z",
+   "heard_at": "2026-11-03T06:40:13.762Z",
+   "source": "audio",
+   "text": "and then you have to do a four hourly obs so try and watch her for every four hours and ensure her vitals and everything is okay",
+   "words": 27,
+   "ambient": {
+    "session": "s2.f0.0",
+    "seqs": [
+     2
+    ],
+    "ended_at": "2026-11-03T06:40:12.851Z",
+    "final_at": "2026-11-03T06:40:13.677Z",
+    "trailing_silence_ms": 826,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 11480,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "and then you have to do a four hourly obs so try and watch her for every four hours and ensure her vitals and everything is okay",
+      "cadence": "q4h",
+      "class": "instruction",
+      "confidence": 0.9,
+      "item_kind": "observation",
+      "kind": "add_care_plan_item",
+      "title": "four hourly obs"
+     }
+    ]
+   },
+   "raw_text": null
+  },
+  {
+   "line": "L21",
+   "spoken_at": "2026-11-03T06:40:13.374Z",
+   "heard_at": "2026-11-03T06:40:26.933Z",
+   "source": "audio",
+   "text": null,
+   "words": 42,
+   "ambient": {
+    "session": "s2.f0.0",
+    "seqs": [
+     3
+    ],
+    "ended_at": "2026-11-03T06:40:26.131Z",
+    "final_at": "2026-11-03T06:40:26.854Z",
+    "trailing_silence_ms": 723,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 13480,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": null,
+      "class": "aside",
+      "word_count": 8
+     },
+     {
+      "words": null,
+      "class": "aside",
+      "word_count": 34
+     }
+    ]
+   }
+  },
+  {
+   "line": "L22",
+   "spoken_at": "2026-11-03T06:40:26.860Z",
+   "heard_at": "2026-11-03T06:40:28.673Z",
+   "source": "audio",
+   "text": null,
+   "words": 5,
+   "ambient": {
+    "session": "s2.f0.0",
+    "seqs": [
+     4
+    ],
+    "ended_at": "2026-11-03T06:40:27.891Z",
+    "final_at": "2026-11-03T06:40:28.660Z",
+    "trailing_silence_ms": 769,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 1800,
+   "speaker": {
+    "speaker": "unverified",
+    "reason": "no_match"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": null,
+      "class": "aside",
+      "word_count": 5
+     }
+    ]
+   }
+  },
+  {
+   "line": "L23",
+   "spoken_at": "2026-11-03T06:40:39.252Z",
+   "heard_at": "2026-11-03T06:40:39.310Z",
+   "source": "text",
+   "via": "gate",
+   "text": "24",
+   "words": 1,
+   "live": [
+    "proposed record_triage_vitals",
+    "refused record_triage_vitals (door_409_conflict)"
+   ],
+   "answers": "L14"
+  },
+  {
+   "line": "L24",
+   "spoken_at": "2026-11-03T06:40:46.624Z",
+   "heard_at": "2026-11-03T06:40:49.751Z",
+   "source": "audio",
+   "text": "Yes for the A and E please yes",
+   "words": 8,
+   "ambient": {
+    "session": "s2.f0.0",
+    "seqs": [
+     5
+    ],
+    "ended_at": "2026-11-03T06:40:48.931Z",
+    "final_at": "2026-11-03T06:40:49.704Z",
+    "trailing_silence_ms": 773,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 3080,
+   "speaker": {
+    "speaker": "unverified",
+    "reason": "no_match"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "Yes for the A and E please yes",
+      "admission_type": "emergency",
+      "class": "instruction",
+      "confidence": 0.95,
+      "kind": "admit_patient",
+      "ward": "a_and_e"
+     }
+    ]
+   },
+   "live": [
+    "proposed admit_patient",
+    "asked: Held: Admit, emergency, to the a and e ward on your authority: the A and E please yes. I could not match the voice to you, so it waits until you say yes yourself.",
+    "cancelled admit_patient (question_expired)"
+   ],
+   "raw_text": null
+  },
+  {
+   "line": "L25",
+   "spoken_at": "2026-11-03T06:40:58.465Z",
+   "heard_at": "2026-11-03T06:40:58.525Z",
+   "source": "text",
+   "via": "gate",
+   "text": "yes",
+   "words": 1,
+   "live": [
+    "asked: Held: Admit, emergency, to the a and e ward on your authority: severe malaria of course in the emergency ward A and E. I could not match the voice to you, so it waits until you say yes yourself. Say a longer yes that names it, such as \"yes, go ahead with the admit\"."
+   ],
+   "answers": "L19"
+  },
+  {
+   "line": "L26",
+   "spoken_at": "2026-11-03T06:41:04.302Z",
+   "heard_at": "2026-11-03T06:41:04.340Z",
+   "source": "text",
+   "via": "gate",
+   "text": "yes",
+   "words": 1,
+   "live": [
+    "asked: Held: Admit, emergency, to the a and e ward on your authority: the A and E please yes. I could not match the voice to you, so it waits until you say yes yourself. Say a longer yes that names it, such as \"yes, go ahead with the admit\"."
+   ],
+   "answers": "L24"
+  }
+ ]
+}

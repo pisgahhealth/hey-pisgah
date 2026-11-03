@@ -1,0 +1,306 @@
+{
+ "run": "1158",
+ "lines": [
+  {
+   "line": "L1",
+   "spoken_at": "2026-11-03T10:58:35.493Z",
+   "heard_at": "2026-11-03T10:59:14.739Z",
+   "source": "audio",
+   "entry": "emergency",
+   "text": "uh so I have a new unknown arrival in the A and E.",
+   "words": 13,
+   "live": [
+    "proposed open_unnamed_encounter",
+    "completed open_unnamed_encounter"
+   ]
+  },
+  {
+   "line": "L2",
+   "spoken_at": "2026-11-03T10:58:35.493Z",
+   "heard_at": "2026-11-03T10:59:16.354Z",
+   "source": "audio",
+   "via": "gate",
+   "text": "uh so I have a new unknown arrival in the A and E.",
+   "words": 13,
+   "speaker": {
+    "speaker": "unverified",
+    "reason": "no_match"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "uh so I have a new unknown arrival in the A and E.",
+      "class": "aside"
+     }
+    ]
+   }
+  },
+  {
+   "line": "L3",
+   "spoken_at": "2026-11-03T10:58:41.503Z",
+   "heard_at": "2026-11-03T10:59:18.241Z",
+   "source": "audio",
+   "text": "the accident and emergency it's a woman she's about 30 years old",
+   "words": 12,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     1
+    ],
+    "ended_at": "2026-11-03T10:58:46.123Z",
+    "final_at": "2026-11-03T10:59:14.897Z",
+    "trailing_silence_ms": 700,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 5320,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "the accident and emergency it's a woman she's about 30 years old",
+      "class": "finding",
+      "section": "history",
+      "text": "woman about 30 years old in accident and emergency"
+     }
+    ]
+   },
+   "live": [
+    "proposed open_consult",
+    "proposed record_clerking history",
+    "completed open_consult",
+    "completed record_clerking"
+   ],
+   "raw_text": "the accident and emergency it's a woman she's about thirty years old"
+  },
+  {
+   "line": "L4",
+   "spoken_at": "2026-11-03T10:58:46.823Z",
+   "heard_at": "2026-11-03T10:59:20.204Z",
+   "source": "audio",
+   "text": "uh she's been brought in",
+   "words": 5,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     2
+    ],
+    "ended_at": "2026-11-03T10:58:48.643Z",
+    "final_at": "2026-11-03T10:59:14.901Z",
+    "trailing_silence_ms": 700,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 2520,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "gate": {
+    "calls": 2,
+    "repairs": 1,
+    "clauses": [
+     {
+      "words": "uh she's been brought in",
+      "class": "finding",
+      "section": "history",
+      "text": "she's been brought in"
+     }
+    ]
+   },
+   "live": [
+    "proposed record_clerking history",
+    "completed record_clerking"
+   ],
+   "raw_text": null
+  },
+  {
+   "line": "L5",
+   "spoken_at": "2026-11-03T10:58:49.343Z",
+   "heard_at": "2026-11-03T10:59:21.638Z",
+   "source": "audio",
+   "text": "because of really high fever",
+   "words": 5,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     3
+    ],
+    "ended_at": "2026-11-03T10:58:51.193Z",
+    "final_at": "2026-11-03T10:59:14.904Z",
+    "trailing_silence_ms": 670,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 2520,
+   "speaker": {
+    "speaker": "unverified",
+    "reason": "no_match"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "because of really high fever",
+      "class": "finding",
+      "section": "presenting_complaint",
+      "text": "because of really high fever"
+     }
+    ]
+   },
+   "live": [
+    "proposed record_clerking presenting_complaint",
+    "completed record_clerking"
+   ],
+   "raw_text": null
+  },
+  {
+   "line": "L6",
+   "spoken_at": "2026-11-03T10:58:51.923Z",
+   "heard_at": "2026-11-03T10:59:22.972Z",
+   "source": "audio",
+   "text": "on a little bit of dementia.",
+   "words": 6,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     4
+    ],
+    "ended_at": "2026-11-03T10:58:53.393Z",
+    "final_at": "2026-11-03T10:59:14.907Z",
+    "trailing_silence_ms": 690,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 2160,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "on a little bit of dementia.",
+      "class": "finding",
+      "section": "history",
+      "text": "on a little bit of dementia."
+     }
+    ]
+   },
+   "live": [
+    "proposed record_clerking history",
+    "completed record_clerking"
+   ],
+   "raw_text": null
+  },
+  {
+   "line": "L7",
+   "spoken_at": "2026-11-03T10:58:54.163Z",
+   "heard_at": "2026-11-03T10:59:24.328Z",
+   "source": "audio",
+   "text": "and i think she fell off",
+   "words": 6,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     5
+    ],
+    "ended_at": "2026-11-03T10:58:55.363Z",
+    "final_at": "2026-11-03T10:59:14.910Z",
+    "trailing_silence_ms": 700,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 1900,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": "and i think she fell off",
+      "class": "finding",
+      "section": "history",
+      "text": "and i think she fell off"
+     }
+    ]
+   },
+   "live": [
+    "proposed record_clerking history",
+    "completed record_clerking"
+   ],
+   "raw_text": null
+  },
+  {
+   "line": "L8",
+   "spoken_at": "2026-11-03T10:58:56.063Z",
+   "heard_at": "2026-11-03T10:59:25.995Z",
+   "source": "audio",
+   "text": null,
+   "words": 7,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     6
+    ],
+    "ended_at": "2026-11-03T10:58:59.973Z",
+    "final_at": "2026-11-03T10:59:14.912Z",
+    "trailing_silence_ms": 710,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 4620,
+   "speaker": {
+    "speaker": "unverified",
+    "reason": "no_match"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": null,
+      "class": "aside",
+      "word_count": 7
+     }
+    ]
+   }
+  },
+  {
+   "line": "L9",
+   "spoken_at": "2026-11-03T10:59:00.711Z",
+   "heard_at": "2026-11-03T10:59:28.020Z",
+   "source": "audio",
+   "text": null,
+   "words": 6,
+   "ambient": {
+    "session": "s1",
+    "seqs": [
+     7
+    ],
+    "ended_at": "2026-11-03T10:59:02.371Z",
+    "final_at": "2026-11-03T10:59:14.925Z",
+    "trailing_silence_ms": 700,
+    "finished_by": "quiet_tail"
+   },
+   "audio_ms": 2360,
+   "speaker": {
+    "speaker": "owner"
+   },
+   "gate": {
+    "calls": 1,
+    "repairs": 0,
+    "clauses": [
+     {
+      "words": null,
+      "class": "question_to_staff",
+      "word_count": 6
+     }
+    ]
+   }
+  }
+ ]
+}
