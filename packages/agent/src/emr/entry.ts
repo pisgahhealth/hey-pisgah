@@ -39,6 +39,12 @@ export function emergencyHeardLoosely(line: string): boolean {
   return /h[aeiy]{0,2}\W*p[iy]\W*[sz]?\W*[gk]|pisg|pizg|pisk|pesk/i.test(before.replace(/\s+/g, "")) || /^h[aeiy]{1,3}p\w{0,3}[sz]/.test(joined) || /^(?:hey|hi|hay|okay|ok)\W*$/i.test(before);
 }
 
+// Only the opening phrase is consumed; clinical words after it belong to the new arrival.
+export function afterEmergency(line: string): string {
+  const prefix = EMERGENCY_LINE.test(line) ? EMERGENCY_LINE : /^\W*(?:\S+\W+){0,4}?emergency\b/i;
+  return line.replace(prefix, "").replace(/^[\s,.:;!?-]+/, "").trim();
+}
+
 // The line an Emergency press leaves as its evidence: what happened, not words nobody said.
 export const EMERGENCY_PRESS = "Emergency button pressed";
 
@@ -80,6 +86,21 @@ export function identityFrom(line: string): SpokenIdentity | null {
   const digits = p ? p[0].replace(/\D/g, "") : null;
   const phone = digits ? (digits.startsWith("234") ? `0${digits.slice(3)}` : digits) : null;
   return { name, phone: phone && /^0[789][01]\d{8}$/.test(phone) ? phone : null, words: `${m[0]} ${name}` };
+}
+
+// Only the recognised naming words are removed; other facts and instructions in the same breath keep their original words.
+export function afterIdentity(line: string, identity: SpokenIdentity): string {
+  const intro = NAMING.exec(line);
+  if (!intro) return line;
+  const escape = (word: string) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const name = new RegExp(identity.name.split(/\s+/).map(escape).join("[\\s,]+"), "i").exec(line.slice(intro.index + intro[0].length));
+  if (!name) return line;
+  const start = intro.index + intro[0].length + name.index;
+  let rest = `${line.slice(0, intro.index)} ${line.slice(intro.index + intro[0].length, start)} ${line.slice(start + name[0].length)}`;
+  // A phone-only tail is already handled with the identity; any words after it still go through the gate.
+  rest = digitsSpoken(rest).replace(/\b(?:(?:and\s+)?(?:her|his|their|the)\s+)?(?:phone(?:\s+number)?|number)\s*(?:is|na|now|no)?\s*[:,-]?\s*(?:\+?234|0)\s*[789]\s*[01](?:[\s-]*\d){8}/gi, " ");
+  rest = rest.replace(/^[\s,.:;!?-]+|[\s,.:;!?-]+$/g, "").replace(/\s+/g, " ").replace(/^(?:and|then)\s+/i, "").trim();
+  return rest && rest.toLowerCase() !== identity.name.split(" ")[0]!.toLowerCase() ? rest : "";
 }
 
 // True when the patient named themselves ("my name is"), which counts unless the voice is the owner's own (D40).

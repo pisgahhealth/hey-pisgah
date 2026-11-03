@@ -13,7 +13,7 @@ import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite }
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
 import { DOCUMENTATION_KINDS, ORDER_KINDS, lineVerdict, recordOf, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
-import { EMERGENCY_KIND, EMERGENCY_LINE, IDENTITY_KIND, IdentityArgs, RULE_ONLY_KINDS, currentPatientNamed, emergencyHeardLoosely, emergencyReason, identityFrom, otherPatientsNamed, selfNamed, spelledName, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
+import { EMERGENCY_KIND, EMERGENCY_LINE, IDENTITY_KIND, IdentityArgs, RULE_ONLY_KINDS, afterIdentity, afterEmergency, currentPatientNamed, emergencyHeardLoosely, emergencyReason, identityFrom, otherPatientsNamed, selfNamed, spelledName, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
 import { openableHref, screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
 import { EventsLoop } from "./events.js";
 import type { EmrEvent, ObligationAnswer, ObligationOp } from "./port.js";
@@ -61,7 +61,7 @@ export type EmrAction = {
 // `released` marks a whole-number line delivered without the continuation wait (D17); `continues` names the released line it carries on.
 export type AmbientMeta = { session_id: string; seqs: number[]; raw_text: string; ended_at: string; final_at: string; trailing_silence_ms: number; finished_by: string; released?: boolean; continues?: string };
 // kept is false while an ambient line's words live only in memory; they are stored only once an action or a question rests on them.
-export type EmrLine = { id: string; text: string; at: string; source: "text" | "audio"; decided: boolean; ambient: AmbientMeta | null; classes: SpeechClass[]; kept: boolean; words: number; speaker: SpeakerRecord | null; question_id?: string | null; as?: string };
+export type EmrLine = { id: string; text: string; at: string; source: "text" | "audio"; decided: boolean; ambient: AmbientMeta | null; classes: SpeechClass[]; kept: boolean; words: number; speaker: SpeakerRecord | null; question_id?: string | null; as?: string; remaining?: string };
 export type EmrRefusal = { line_id: string; kind: string | null; asked_for: string; at: string };
 // A question may carry a choice: the values a one-word answer can pick, and the action it completes.
 export type QuestionChoice = Choice & { kind: string; base: Record<string, unknown>; corrects_action_id: string | null };
@@ -287,7 +287,7 @@ export function applyEmr(t: EmrTask | null, e: Envelope): EmrTask | null {
       if (!t.goal) t.goal = String(x["text"]).slice(0, 200);
       break;
     }
-    case "line.ruled": { const l = t.lines.find((y) => y.id === x["line_id"]); if (l) { l.decided = true; l.classes = (x["classes"] as SpeechClass[] | undefined) ?? []; if (typeof x["as"] === "string") l.as = x["as"]; } break; }
+    case "line.ruled": { const l = t.lines.find((y) => y.id === x["line_id"]); if (l) { l.remaining = typeof x["remaining"] === "string" ? x["remaining"] : undefined; l.decided = !l.remaining; l.classes = (x["classes"] as SpeechClass[] | undefined) ?? []; if (typeof x["as"] === "string") l.as = x["as"]; } break; }
     case "ears.compared":
       t.ears.push({ action_id: String(x["action_id"]), line_id: String(x["line_id"]), session_id: (x["session_id"] as string | null) ?? null, agree: !!x["agree"], measures: (x["measures"] as EarsCheck["measures"]) ?? [], error: (x["error"] as string | null) ?? null });
       t.calls += Number(x["calls"] ?? 0); t.usd += Number(x["cost_usd"] ?? 0);
@@ -966,11 +966,17 @@ export class EmrRuntime {
         const recentTask = [...this.live.values()].find((x) => x.task.owner === s.owner && x.task.unidentified && Date.now() - Date.parse(x.task.created_at) < 10_000);
         const recent = !!recentTask;
         // The device already opened the arrival for these words, so the phrase is the wake itself: alone it is dropped, and any words after it go on without it.
-        const rest = recentTask ? text.replace(/^\W*(?:\S+\W+){0,4}?emergency\b/i, "").replace(/^[\s,.:;!?-]+/, "").trim() : "";
+        const rest = afterEmergency(text);
         if (recentTask && !/\w/.test(rest)) return { task_id: recentTask.task.task_id, line_id: lineId };
         if (recentTask) { text = rest; s = { ...s, text: rest }; }
         if (!recent) {
           const r = await this.emergency(s.owner, { text, spoken_at: s.ambient?.ended_at ?? spokenAt, source: s.source ?? "text", args: { unidentified_ref: unidentifiedRef(new Date(spokenAt)), reason: emergencyReason(text), ...(this.o.emergencyClinicId ? { clinic_id: this.o.emergencyClinicId } : {}) } });
+          if (rest) {
+            const opened = this.live.get(r.task_id)!;
+            await opened.queue;
+            if (opened.task.patient_id) return this.say({ ...s, text: rest, target: this.subjectOf(opened.task) }, r.task_id);
+            this.note(opened, "The arrival is not confirmed, so the remaining words have not been acted on. Say them again once the arrival is open.", "refusal");
+          }
           return { task_id: r.task_id, line_id: r.line_id };
         }
       }
@@ -1034,24 +1040,24 @@ export class EmrRuntime {
       return { task_id: live.task.task_id, line_id: lineId };
     }
     const spelled = sp?.name ?? null;
-    // The naming line is handled whole by rule; anything else said in it waits for the next line.
+    // Naming handles only its own words; other clauses keep the same line, patient and voice evidence.
     if (named || spelled) {
       const name = named?.name ?? spelled!, phone = named?.phone ?? null;
+      const remaining = named ? afterIdentity(text, named) : "";
       // The patient's own "my name is" counts; the owner's own voice saying it is the clinician's name, never the patient's.
       if (named && selfNamed(text) && this.speakers.has(lineId)) {
-        this.append(live, "line.ruled", { line_id: lineId, classes: ["instruction"], as: "identity" });
-        this.whenAttributed(live, lineId, (who) => {
-          if (who?.speaker === "owner") { this.note(live, "That was your own voice saying my name is, so I did not take it as the patient's name.", "refusal"); return this.settle(live, "identity_own_name"); }
-          this.holdIdentity(live, lineId, name, phone);
-          this.settle(live, "identity_held");
-        });
+        const who = await this.attribute(live, lineId);
+        if (who?.speaker === "owner") {
+          this.append(live, "line.ruled", { line_id: lineId, classes: ["instruction"], as: "identity", ...(remaining ? { remaining } : {}) });
+          this.note(live, "That was your own voice saying my name is, so I did not take it as the patient's name.", "refusal");
+        } else this.holdIdentity(live, lineId, name, phone, remaining);
+      } else this.holdIdentity(live, lineId, name, phone, remaining);
+      if (remaining && live.pre.has(lineId)) { const pre = live.pre.get(lineId)!; live.pre.delete(lineId); this.chargeUnused(live, lineId, pre); }
+      if (!remaining) {
         this.afterLine(live, lineId, true);
+        this.settle(live, "identity_held");
         return { task_id: live.task.task_id, line_id: lineId };
       }
-      this.holdIdentity(live, lineId, name, phone);
-      this.afterLine(live, lineId, true);
-      this.settle(live, "identity_held");
-      return { task_id: live.task.task_id, line_id: lineId };
     }
     // "From now on ..." is read by rule as a candidate preference, with no model call; it fills nothing until its scope is chosen.
     if (this.o.preferences && FROM_NOW_ON.test(text)) {
@@ -1293,7 +1299,7 @@ export class EmrRuntime {
     const at = t.lines.findIndex((x) => x.id === line.id);
     return {
       kinds, context: ctx, actions: this.gateActions(t), openQuestion: openQ?.text ?? null,
-      recent: t.lines.slice(0, at < 0 ? t.lines.length : at).filter((x) => x.text && (!early || x.decided)).slice(-6).map((x) => x.text), said: line.text,
+      recent: t.lines.slice(0, at < 0 ? t.lines.length : at).filter((x) => x.text && (!early || x.decided)).slice(-6).map((x) => x.text), said: t.lines.find((x) => x.id === line.id)?.remaining ?? line.text,
       ...(wide ? { today: this.wall().toISOString().slice(0, 10), ...(names ? { names } : {}) } : {})
     };
   }
@@ -1584,7 +1590,9 @@ export class EmrRuntime {
         this.ask(l, lineId, q.text, q.choice && kind ? { ...q.choice, kind, base, corrects_action_id: null } : null);
         return;
       }
-      this.ask(l, lineId, c.question ?? `I did not catch what to record from "${c.words.slice(0, 120)}". Please say it again.`);
+      const previous = this.asking;
+      if (c.kind && kinds.includes(c.kind)) this.asking = { kind: c.kind, clause: Object.fromEntries(Object.entries(c).filter(([k, v]) => v != null && !["confidence", "question", "asked_for"].includes(k))), text: lineText };
+      try { this.ask(l, lineId, c.question ?? `I did not catch what to record from "${c.words.slice(0, 120)}". Please say it again.`); } finally { this.asking = previous; }
       return;
     }
     // The gate may call the whole of "when the result comes back, let me know" conditional; a line that only asks to be told when a result is back is the same tell.
@@ -1860,10 +1868,8 @@ export class EmrRuntime {
     const open = t.questions.filter((y) => y.answered_by === null);
     const named = t.lines.find((x) => x.id === lineId)?.question_id;
     const q = (named ? open.find((y) => y.question_id === named) : undefined) ?? open.at(-1);
-    if (q && !q.rule && !q.pending && !q.whom) {
+    if (named && q && !q.rule && !q.pending && !q.whom) {
       this.append(l, "question.answered", { question_id: q.question_id, line_id: lineId });
-      // A question the next instruction closes without naming it is said, so it never disappears in silence.
-      if (!named) this.note(l, `Closed my question "${q.text.slice(0, 120)}" when you went on.`);
     }
   }
 
@@ -1899,6 +1905,7 @@ export class EmrRuntime {
     for (const { q, c } of picks) {
       const p = q.pending!;
       const mine = c ? Object.fromEntries(Object.entries(c).filter(([k, v]) => v !== null && v !== undefined && v !== "" && !["class", "kind", "words", "confidence", "question", "asked_for"].includes(k))) : {};
+      if (p.clause["class"] === "unclear" && (!c || !Object.keys(mine).length)) continue;
       const merged = { ...p.clause, ...mine, class: "instruction", kind: p.kind, words: `${String(p.clause["words"] ?? "")} ${c?.words ?? line.text}`.trim() } as AnyClause;
       const count = p.kind === "prescribe" ? bareCount(line.text) : null;
       this.append(l, "line.resumed", { line_id: lineId, question_id: q.question_id, kind: p.kind });
@@ -3293,11 +3300,11 @@ export class EmrRuntime {
   }
 
   // A spoken identity: on an emergency arrival the owner's own agent writes it and a later name or spelling amends it (D39); elsewhere it is held for the front desk.
-  private holdIdentity(l: Live, lineId: string, name: string, phone: string | null): void {
+  private holdIdentity(l: Live, lineId: string, name: string, phone: string | null, remaining = ""): void {
     const t = l.task;
     const writes = t.entry === "emergency" && this.kinds(t.owner).includes(IDENTITY_KIND);
     const prev = writes ? t.identities.filter((i) => i.state === "open" && i.completes_by === "owner_agent").at(-1) : undefined;
-    if (!t.lines.find((x) => x.id === lineId)?.decided) this.append(l, "line.ruled", { line_id: lineId, classes: ["instruction"], as: "identity" });
+    if (!t.lines.find((x) => x.id === lineId)?.decided) this.append(l, "line.ruled", { line_id: lineId, classes: ["instruction"], as: "identity", ...(remaining ? { remaining } : {}) });
     // The obligation rests on the line, so its words are kept as the evidence now.
     const line = t.lines.find((x) => x.id === lineId);
     if (line && !line.kept) this.append(l, "line.kept", { line_id: lineId, text: line.text, raw_text: line.ambient?.raw_text ?? null });
