@@ -213,4 +213,18 @@ describe("EMG 2: a held part never stalls the rest", () => {
     } finally { await b.rt.stop(); }
   });
 
+  it("says and drops one line that cannot be decided, and the encounter takes the next line", async () => {
+    const b = boot(parted);
+    try {
+      const task = await arrival(b);
+      const real = b.port.orderables.bind(b.port);
+      b.port.orderables = () => { throw new Error("orderables unreadable"); };
+      await sayOn(b, task, "okay um what we'll do now is to send a request to the lab Nurse please come take a sample the lab needs to do a full blood count test the malaria parasite test and urinalysis");
+      b.port.orderables = real;
+      expect(b.rt.view(task)!.state).not.toBe("failed");
+      expect(b.rt.view(task)!.notes.map((n) => n.text)).toContain("I could not act on that line, so nothing was written from it. Say it again if it still stands.");
+      await sayOn(b, task, "okay your pulse is about 110 the blood pressure is quite low it's 90 over 60 your temperature is about 38.5 hmm your SpO2 is about 94 percent and your respiratory rate is 24");
+      expect(of(b, "record_triage_vitals").map((w) => w.args["pulse"])).toEqual([110]);
+    } finally { await b.rt.stop(); }
+  });
 });

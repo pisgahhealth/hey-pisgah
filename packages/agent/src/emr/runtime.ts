@@ -1118,6 +1118,13 @@ export class EmrRuntime {
       try {
         if (this.orderRuleApplies(live, lineId) && (await this.orderRule(live, lineId, prov))) return;
         if (!this.answerByRule(live, lineId)) await (viaGate ? this.gate(live, lineId, ctx, prov) : this.decide(live, lineId, ctx, prov));
+      } catch (e) {
+        // One line that cannot be decided is said and dropped, so the encounter and every later line go on.
+        if (this.stopped || CLOSED_TASK.has(live.task.state)) throw e;
+        this.log(`emr task ${live.task.task_id} line ${lineId} error: ${e instanceof Error ? e.message : String(e)}`);
+        this.append(live, "intent.failed", { line_id: lineId, reason: "runtime_error" });
+        this.note(live, "I could not act on that line, so nothing was written from it. Say it again if it still stands.", "refusal");
+        this.settle(live, "line_failed");
       } finally { live.ctxOf.delete(lineId); this.afterLine(live, lineId, false); }
     });
     this.pump(live);
