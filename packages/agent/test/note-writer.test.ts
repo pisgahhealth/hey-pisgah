@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ModelClient, ModelError, type ChatCompletion, type MockResponder } from "@hey-pisgah/model";
-import { NOTE_PROMPT, NOTE_SECTIONS, faithful, noteMessage, noteTool, writeNote, type NoteOutput, type SaidLine } from "../src/emr/note-writer.js";
+import { NOTE_PROMPT, NOTE_SECTIONS, coveredByNote, faithful, noteMessage, noteTool, noteWrites, writeNote, type NoteOutput, type SaidLine } from "../src/emr/note-writer.js";
 import { denyHits } from "../src/emr/gate.js";
 import { addressSwap, cleanNoteText, sourceClause } from "../src/emr/work.js";
 
@@ -139,6 +139,25 @@ describe("the clinician's note from the encounter's said lines", () => {
     const r = await writeNote(clientWith(recorded(one("assessment", GOOD.assessment!))), LINES, meta);
     expect(r.sections.history).toMatchObject({ text: null, refused: [], proposed: null });
     expect(r.sections.assessment.text).toBe("Severe malaria");
+  });
+
+  it("gives the record's clerking writes and says which of the gate's clauses the note stands in for", async () => {
+    const r = await writeNote(clientWith(recorded(GOOD)), LINES, meta);
+    expect(noteWrites(r)).toEqual([
+      { section: "presenting_complaint", text: "High fever and mild confusion" },
+      { section: "history", text: GOOD.history!.text },
+      { section: "history", text: "Allergies: Penicillin (patient unsure)" },
+      { section: "examination", text: "Pale, febrile, very drowsy; neck not stiff." },
+      { section: "assessment", text: "Severe malaria" }
+    ]);
+    // The 14:36 gate's clause words: each the note covers is replaced, and the age the note left out keeps today's clause path.
+    expect(coveredByNote(r, "I've been having fever for three days I've been vomiting I tried to take medication but today when I went to the market to buy some things I fell off I fainted")).toBe(true);
+    expect(coveredByNote(r, "I think penicillin")).toBe(true);
+    expect(coveredByNote(r, "you're quite pale open your eyes for me please okay you look febrile and a bit drowsy well really drowsy your neck is also not stiff")).toBe(true);
+    expect(coveredByNote(r, "she's about she looks about 30 years old")).toBe(false);
+    const refused = await writeNote(clientWith(recorded({ ...GOOD, examination: { text: "Neck stiff", from: GOOD.examination!.from } })), LINES, meta);
+    expect(coveredByNote(refused, "your neck is also not stiff")).toBe(false);
+    expect(noteWrites(refused).map((w) => w.section)).not.toContain("examination");
   });
 
   it("the note prompt and tool hold no denied term and ask for strict JSON", () => {

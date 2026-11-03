@@ -191,3 +191,26 @@ export async function writeNote(client: ModelClient, lines: readonly SaidLine[],
   const row = out.result.row;
   return { sections, provider: route.provider, model: route.model, cost_usd: row.cost_usd, prompt_tokens: row.prompt_tokens, completion_tokens: row.completion_tokens, ms: Date.now() - t0, error: null, fallback_reason };
 }
+
+// The clerking writes an accepted note makes, in the record's own sections; the allergy is its own sentence in history.
+export function noteWrites(r: NoteResult): { section: "presenting_complaint" | "history" | "examination" | "assessment"; text: string }[] {
+  return NOTE_SECTIONS.flatMap((s) => {
+    const text = r.sections[s].text;
+    if (!text) return [];
+    return [s === "allergies" ? { section: "history" as const, text: `Allergies: ${text}` } : { section: s, text }];
+  });
+}
+
+// True when four in five of a clause's content words, chatter and person words aside, are in one accepted section's source words, so that section stands in for the clause.
+export function coveredByNote(r: NoteResult, words: string): boolean {
+  let all = toks(words);
+  for (const c of CHATTER.map(toks)) all = all.filter((_, i, ts) => !c.some((_, k) => c.every((w, j) => ts[i - k + j] === w)));
+  const ws = all.filter((w) => !STOP.has(w) && !PERSON.has(w));
+  if (!ws.length) return false;
+  return NOTE_SECTIONS.some((s) => {
+    const v = r.sections[s];
+    if (!v.text) return false;
+    const have = new Set(toks(v.from.join(" ")));
+    return ws.filter((w) => have.has(w)).length / ws.length >= 0.8;
+  });
+}
