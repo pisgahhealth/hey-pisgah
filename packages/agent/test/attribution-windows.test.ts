@@ -59,25 +59,34 @@ describe("attribution covers every word that is acted on", () => {
     expect(ten.reduce((n, w) => n + w.length, 0)).toBe(10 * 6 * RATE);
   });
 
-  it("gives a line the owner only when every window is the owner", () => {
-    const own = verdictOf([5]), drb = verdictOf([2]);
+  it("gives a line the owner only when every window is the owner, and a mixed line the owner window's token (D48)", () => {
+    const own = verdictOf([5]), drb = verdictOf([2]), token = (own as { token: string }).token;
     expect(lineVerdict([own, own])).toBe(own);
-    expect(lineVerdict([own, drb])).toEqual({ speaker: "unverified", reason: "mixed_speakers" });
+    expect(lineVerdict([own, drb])).toEqual({ speaker: "unverified", reason: "mixed_speakers", owner_token: token });
     expect(lineVerdict([drb, drb])).toBe(drb);
-    expect(lineVerdict([own, { speaker: "unverified", reason: "no_match" }])).toEqual({ speaker: "unverified", reason: "mixed_speakers" });
+    expect(lineVerdict([own, { speaker: "unverified", reason: "no_match" }])).toEqual({ speaker: "unverified", reason: "mixed_speakers", owner_token: token });
+    expect(lineVerdict([drb, { speaker: "unverified", reason: "no_match" }])).toEqual({ speaker: "unverified", reason: "mixed_speakers" });
   });
 
   for (const door of [false, true]) {
     const how = door ? "from audio at the hospital" : "by the agent's vectors";
-    it(`holds an order whose closing words were said by another voice, ${how}`, async () => {
+    it(`sends an order from a mixed line that holds an owner window, under that window's token (D48), ${how}`, async () => {
       const r = rig(door);
       await chunks(r, OWNER_AMP, OTHER_AMP);
-      expect(r.orders()).toHaveLength(0);
+      expect(r.orders()).toHaveLength(1);
+      expect(r.orders()[0]!.prov.voice?.authorisation).toMatch(/^transcript:.+~v2\./);
       const v = r.rt.views()[0]!;
       expect(v.transcript.at(-1)!.speaker).toMatchObject({ speaker: "unverified", reason: "mixed_speakers" });
-      expect(v.actions.find((a) => a.kind === "order_test")).toMatchObject({ awaiting: "owner_voice" });
       // Every window went to the match: two vectors, or one request carrying both windows' audio.
       expect(door ? (r.port.sent[0] as { pcm16k: Uint8Array[] }).pcm16k.length : r.port.sent.length).toBe(2);
+      await r.rt.stop();
+    });
+
+    it(`never sends an order from a line with no window in the owner's voice, ${how}`, async () => {
+      const r = rig(door);
+      await chunks(r, OTHER_AMP, OTHER_AMP);
+      expect(r.orders()).toHaveLength(0);
+      expect(r.rt.views()[0]!.actions.filter((a) => a.kind === "order_test" && a.state === "completed")).toEqual([]);
       await r.rt.stop();
     });
 

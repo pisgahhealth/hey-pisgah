@@ -254,3 +254,41 @@ describe("D47: a stated initial diagnosis is recorded on the owner's confirm, a 
     } finally { await b.rt.stop(); }
   });
 });
+
+describe("D48: no yes before a test or drug when the line holds the owner's voice", () => {
+  const TESTS = "okay um what we'll do now is to send a request to the lab Nurse please come take a sample the lab needs to do a full blood count test the malaria parasite test and urinalysis";
+  const windows = (...ns: number[]): Voiceprint => ({ ...print(ns[0]!), segments: ns.map((n) => ({ vector: [n], ms: 20 })) });
+
+  it("sends the tests at once from a mixed line with an owner window, under that window's token", async () => {
+    const b = boot(parted);
+    try {
+      const task = await arrival(b);
+      await sayOn(b, task, TESTS, windows(5, 1));
+      expect(of(b, "order_test").map((w) => w.args["test"]).sort()).toEqual(["fbc", "malaria", "urinalysis"]);
+      for (const w of of(b, "order_test")) expect(w.prov.voice?.authorisation).toMatch(/~v1\./);
+      expect(b.rt.view(task)!.asked).toEqual([]);
+    } finally { await b.rt.stop(); }
+  });
+
+  it("sends the emergency admission from a mixed line with an owner window, with no yes asked", async () => {
+    const admit = "immediately admit her in the in the ward for severe malaria obviously and do four hourly obs";
+    const b = boot((said) => (said === admit ? [ins("admit_patient", { words: "admit her in the in the ward for severe malaria" })] : ASIDE));
+    try {
+      const task = await arrival(b);
+      await sayOn(b, task, admit, windows(5, 1));
+      expect(of(b, "request_admission")).toHaveLength(1);
+      expect(b.rt.view(task)!.asked).toEqual([]);
+    } finally { await b.rt.stop(); }
+  });
+
+  it("still asks his yes when no window of the line matched him", async () => {
+    const b = boot(parted);
+    try {
+      const task = await arrival(b);
+      await sayOn(b, task, TESTS, windows(1, 1));
+      expect(of(b, "order_test")).toEqual([]);
+      expect(b.rt.view(task)!.asked.map((q) => q.text).every((q) => /could not match the voice to you, so it waits until you say yes yourself/.test(q))).toBe(true);
+      expect(b.rt.view(task)!.asked).toHaveLength(3);
+    } finally { await b.rt.stop(); }
+  });
+});

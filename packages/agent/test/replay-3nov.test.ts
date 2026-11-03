@@ -34,6 +34,8 @@ const TOKEN = (n: number) => `v1.${String(1_761_700_000_000 + n)}.${"A".repeat(4
 // Each recorded verdict travels as a voiceprint the fake hospital matches back to it.
 const VOICE: Record<string, number> = { owner: 5, other_clinician: 4, no_match: 1, mixed_speakers: 2 };
 const print = (n: number): Voiceprint => ({ vector: [n], ms: 20, model: "nemo_en_titanet_small" });
+// A mixed line is matched window by window as it was live, one window in the owner's voice and one in no enrolled voice.
+const mixed = (): Voiceprint => ({ ...print(VOICE["no_match"]!), segments: [{ vector: [VOICE["owner"]!], ms: 20 }, { vector: [VOICE["no_match"]!], ms: 20 }] });
 
 // The A&E doctor's hospital: arrivals in the order opened, the tests and drugs the live run named, and the voice verdicts recorded.
 class ReplayFake extends ClerkFake {
@@ -163,7 +165,7 @@ async function replay(run: Run): Promise<Replay> {
         ...(l.via ? { via: l.via } : {}), ...(q ? { question_id: q } : {}),
         ...(l.ambient ? { ambient: { session_id: l.ambient.session, seqs: l.ambient.seqs, raw_text: l.raw_text ?? l.text, ended_at: l.ambient.ended_at, final_at: l.ambient.final_at, trailing_silence_ms: l.ambient.trailing_silence_ms, finished_by: l.ambient.finished_by, captured: true, ...(l.ambient.turn_seqs ? { turn_seqs: l.ambient.turn_seqs } : {}), ...(l.ambient.released ? { released: true } : {}) } } : {}),
         ...(l.audio_ms && l.ambient ? { audio: { audio_ms: l.audio_ms, cost_usd: 0, session_id: l.ambient.session } } : {}),
-        ...(l.speaker ? { voiceprint: print(VOICE[l.speaker.speaker === "unverified" ? l.speaker.reason ?? "no_match" : l.speaker.speaker]!) } : { unverified_reason: "not_matched_in_the_live_run" }),
+        ...(l.speaker ? { voiceprint: l.speaker.reason === "mixed_speakers" ? mixed() : print(VOICE[l.speaker.speaker === "unverified" ? l.speaker.reason ?? "no_match" : l.speaker.speaker]!) } : { unverified_reason: "not_matched_in_the_live_run" }),
         ...(l.ears && l.ambient ? { clip: new TextEncoder().encode(l.line) } : {})
       };
       const r = await rt!.say(s, task);
@@ -237,11 +239,10 @@ describe("the 14:36 run (Amaka Okafor), replayed", () => {
     expect(note(r)["history"]).toMatch(/Penicillin \(patient unsure\)/);
   });
 
-  it("puts severe malaria for recording as the diagnosis, and as the line held more than one voice asks him to say it himself (D47)", () => {
-    const refused = stream(r).filter((e) => e.record_type === "speaker.refused").map((e) => (e.payload as { kind: string }).kind);
-    expect(refused).toEqual(["record_diagnosis"]);
+  it("reads severe malaria back as the diagnosis to confirm, from the long line holding his voice (D47, D48)", () => {
+    expect(stream(r).filter((e) => e.record_type === "speaker.refused")).toEqual([]);
+    expect(r.rt.view(r.task)!.asked.map((q) => q.text)).toContainEqual(expect.stringMatching(/^Record the diagnosis: "severe malaria"\. Say confirm to record this diagnosis\./));
     expect(writes(r, "record_diagnosis")).toEqual([]);
-    expect(r.rt.view(r.task)!.notes.map((n) => n.text)).toContain("I could not match that voice to you, so no diagnosis was recorded. Say it yourself.");
   });
 
   it("records the examination in clinician wording", () => {
@@ -256,10 +257,20 @@ describe("the 14:36 run (Amaka Okafor), replayed", () => {
     expect(a).not.toMatch(/penicillin|paracetamol|fever for three days|lab|nurse/i);
   });
 
-  it.fails("sends FBC, malaria parasite and urinalysis", () => {
+  it("sends FBC, malaria parasite and urinalysis with no yes asked, the long line holding the owner's voice (D48)", () => {
     expect(writes(r, "order_test").map((w) => w.args["test"]).sort()).toEqual(["fbc", "malaria", "urinalysis"]);
+    // Each test reaches the door under the token the hospital gave the owner's window of that line.
+    for (const w of writes(r, "order_test")) expect(w.prov.voice?.authorisation).toMatch(/^transcript:u-[0-9a-f]+~v1\./);
+    expect(r.rt.view(r.task)!.asked.filter((q) => /say yes yourself/.test(q.text))).toEqual([]);
   });
 
+  it("holds each paracetamol the recorded answers name only on its how-many question, never on his yes (D48)", () => {
+    expect(r.rt.view(r.task)!.asked.map((q) => q.text).filter((q) => /paracetamol/.test(q))).toEqual(["How many should the pharmacy give for IV paracetamol 120 mg? Say the number.", "How many should the pharmacy give for paracetamol 1 g? Say the number."]);
+    expect(r.rt.view(r.task)!.asked.filter((q) => /say yes yourself/.test(q.text))).toEqual([]);
+    expect(writes(r, "prescribe")).toEqual([]);
+  });
+
+  // The recorded answers give IV 120 mg and oral 1 g, so IV 1 g once waits on a ruling on which dose stands.
   it.fails("prescribes paracetamol IV 1 g once", () => {
     const rx = writes(r, "prescribe");
     expect(rx).toHaveLength(1);

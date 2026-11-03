@@ -13,7 +13,7 @@ export const VOICEPRINT_DIM = 192;
 export type SpeakerVerdict =
   | { speaker: "owner"; token: string }
   | { speaker: "other_clinician"; label: string; role: string }
-  | { speaker: "unverified"; reason: string };
+  | { speaker: "unverified"; reason: string; owner_token?: string };
 // The verdict as the task stream keeps it, with the token left out.
 export type SpeakerRecord = { speaker: SpeakerVerdict["speaker"]; label: string | null; reason: string | null; embed_ms: number | null; match_ms: number | null };
 export const recordOf = (v: SpeakerVerdict, embed_ms: number | null, match_ms: number | null): SpeakerRecord =>
@@ -77,8 +77,12 @@ export function lineVerdict(vs: readonly SpeakerVerdict[]): SpeakerVerdict {
   if (!first) return { speaker: "unverified", reason: "no_voiceprint" };
   if (vs.every((v) => v.speaker === "owner")) return first;
   if (first.speaker === "other_clinician" && vs.every((v) => v.speaker === "other_clinician" && v.label === first.label)) return first;
-  return { speaker: "unverified", reason: vs.some((v) => v.speaker !== "unverified") ? "mixed_speakers" : (vs.find((v) => v.speaker === "unverified") as { reason: string }).reason };
+  // A mixed line keeps the token the hospital gave its owner window, so his tests and drugs on it can go (D48).
+  const owned = vs.find((v): v is { speaker: "owner"; token: string } => v.speaker === "owner");
+  return { speaker: "unverified", reason: vs.some((v) => v.speaker !== "unverified") ? "mixed_speakers" : (vs.find((v) => v.speaker === "unverified") as { reason: string }).reason, ...(owned ? { owner_token: owned.token } : {}) };
 }
+// The work a mixed line that holds the owner's voice does as a line in his voice does: tests, drugs and admissions at once, the diagnosis under its confirm (D48).
+export const MIXED_OWNER_KINDS: ReadonlySet<string> = new Set(["order_test", "prescribe", "admit_patient", "request_admission", "record_diagnosis"]);
 // Where the voiceprint is computed: by the agent (the default, so every kept run replays) or by the hospital from the line's audio.
 export type VoiceprintAt = "agent" | "door";
 export const voiceprintAt = (v: string | undefined): VoiceprintAt => (v === "door" ? "door" : "agent");

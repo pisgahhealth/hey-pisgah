@@ -12,7 +12,7 @@ import { BATCH_KINDS, addressSwap, admissionReason, cleanNoteText, personSwap, s
 import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
-import { DOCUMENTATION_KINDS, ORDER_KINDS, lineVerdict, recordOf, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
+import { DOCUMENTATION_KINDS, MIXED_OWNER_KINDS, ORDER_KINDS, lineVerdict, recordOf, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
 import { EMERGENCY_KIND, EMERGENCY_LINE, IDENTITY_KIND, IdentityArgs, RULE_ONLY_KINDS, afterIdentity, afterEmergency, afterSpelling, clockOf, currentPatientNamed, dayOf, emergencyHeardLoosely, emergencyReason, identityFrom, lineParts, otherPatientsNamed, selfNamed, spellsLetters, spelledName, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
 import { openableHref, screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
 import { EventsLoop } from "./events.js";
@@ -1894,9 +1894,9 @@ export class EmrRuntime {
       case "draft_handover": case "draft_stay_summary": case "prepare_bill": case "send_pay_link": if (!needAdmission()) return; raw = { admission_id: t.admission_id }; break;
       case "record_diagnosis": {
         if (!needVisit() || !t.patient_id) return;
-        // Only the owner's own matched voice states the diagnosis; Dr B's words and an unverified voice never record it.
+        // Only the owner's voice states the diagnosis, his own line or a mixed line holding his window (D48); Dr B's words and an unmatched voice never record it.
         const who = this.speakerOf(t, lineId);
-        if (who?.speaker !== "owner") {
+        if (!this.ownerSaid(t, lineId, kind)) {
           this.append(l, "speaker.refused", { line_id: lineId, kind, speaker: who?.label ?? who?.speaker ?? "no_voice" });
           this.note(l, `${who?.speaker === "other_clinician" ? `${who.label} said a diagnosis` : "I could not match that voice to you"}, so no diagnosis was recorded. Say it yourself.`);
           return this.settle(l, "needs_owner_voice");
@@ -2522,14 +2522,15 @@ export class EmrRuntime {
     }
     // A registration whose receptionist has no voice on file is taken on her session, and the hospital records it so (R-22); nothing else is.
     const bySession = kind === REGISTER_KIND && who?.speaker === "unverified" && who.reason === "owner_not_enrolled";
-    let awaiting: EmrAction["awaiting"] = needsOwner && who?.speaker !== "owner" && !bySession ? "owner_voice" : null;
+    const owned = this.ownerSaid(t, lineId, kind);
+    let awaiting: EmrAction["awaiting"] = needsOwner && !owned && !bySession ? "owner_voice" : null;
     const controlled = (kind === "prescribe" && !!this.o.port.orderables?.().drugs[String(args["drug"])]?.controlled) || OWNER_CONFIRM_KINDS.has(kind);
     const repeat = this.repeatOf(t, lineId, kind, args);
     const unsure = this.unsureRepeat.get(lineId);
     if (unsure !== undefined && !repeat) { this.ask(l, lineId, unsure); return; }
     if (!awaiting && repeat) awaiting = "repeat";
     if (!awaiting && (controlled || CONFIRM_KINDS.has(kind))) awaiting = "confirm";
-    const authorisedBy = kind === "countersign" || ((ORDER_KINDS.has(kind) || kind === VERBAL_ORDER_KIND) && who?.speaker === "owner") ? lineId : null;
+    const authorisedBy = kind === "countersign" || ((ORDER_KINDS.has(kind) || kind === VERBAL_ORDER_KIND) && owned) ? lineId : null;
     const actionId = `a-${shortHash(t.task_id, lineId, t.order.length + 1)}`;
     const ears = this.startCheck(l, actionId, lineId, own);
     if (kind === "prescribe" && typeof args["dose"] === "string") this.startDoseCheck(l, actionId, lineId, args["dose"]);
@@ -2564,6 +2565,12 @@ export class EmrRuntime {
     return prior ? { action_id: prior.a.action_id, at: prior.at } : null;
   }
 
+  // True when the owner said the line, or for D48's kinds when a mixed line holds a window in his voice, under the token that window was given.
+  private ownerSaid(t: EmrTask, lineId: string, kind: string): boolean {
+    const who = this.speakerOf(t, lineId);
+    return who?.speaker === "owner" || (MIXED_OWNER_KINDS.has(kind) && who?.reason === "mixed_speakers" && this.tokens.has(lineId));
+  }
+
   // The line's matched speaker, once the hospital answered; null when the line had no voice to match.
   private speakerOf(t: EmrTask, lineId: string): SpeakerRecord | null { return t.lines.find((x) => x.id === lineId)?.speaker ?? null; }
 
@@ -2574,6 +2581,7 @@ export class EmrRuntime {
     this.speakers.delete(lineId);
     const r = await p;
     if (r.v.speaker === "owner") this.tokens.set(lineId, r.v.token);
+    else if (r.v.speaker === "unverified" && r.v.owner_token) this.tokens.set(lineId, r.v.owner_token);
     const rec = recordOf(r.v, r.embed_ms, r.match_ms);
     this.append(l, "speaker.attributed", { line_id: lineId, speaker: rec });
     return rec;
