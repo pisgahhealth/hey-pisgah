@@ -13,7 +13,7 @@ import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite }
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
 import { DOCUMENTATION_KINDS, ORDER_KINDS, lineVerdict, recordOf, type SpeakerRecord, type SpeakerVerdict, type Voiceprint } from "./speaker.js";
-import { EMERGENCY_KIND, EMERGENCY_LINE, IDENTITY_KIND, IdentityArgs, RULE_ONLY_KINDS, afterIdentity, afterEmergency, currentPatientNamed, emergencyHeardLoosely, emergencyReason, identityFrom, otherPatientsNamed, selfNamed, spelledName, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
+import { EMERGENCY_KIND, EMERGENCY_LINE, IDENTITY_KIND, IdentityArgs, RULE_ONLY_KINDS, afterIdentity, afterEmergency, afterSpelling, clockOf, currentPatientNamed, dayOf, emergencyHeardLoosely, emergencyReason, identityFrom, otherPatientsNamed, selfNamed, spellsLetters, spelledName, spokenPatient, unidentifiedRef, type EmergencyArgs, type EmrIdentityHold } from "./entry.js";
 import { openableHref, screenFor, SCREEN_PAGES, type ScreenPage, type ScreenPlan } from "./screens.js";
 import { EventsLoop } from "./events.js";
 import type { EmrEvent, ObligationAnswer, ObligationOp } from "./port.js";
@@ -215,6 +215,8 @@ const MIRROR_RETRY_MS = 15_000;
 const EVENTS_SWEEP_MS = 60_000;
 const OPEN_ACTION: ReadonlySet<EmrActionState> = new Set(["proposed", "sent", "uncertain", "acknowledged"]);
 const CLOSED_TASK: ReadonlySet<TaskState> = new Set(["cancelled", "failed"]);
+// A settled task last spoken about on an earlier day is a finished encounter, never another live patient for a for-whom question.
+const finishedBefore = (t: EmrTask, today: string): boolean => t.state === "done" && dayOf(new Date(t.lines.at(-1)?.at ?? t.created_at)) !== today;
 // An action that will never write: its order is not one a held result waits on.
 const DEAD_STATES: ReadonlySet<EmrActionState> = new Set(["refused", "cancelled", "failed"]);
 // The waits between verification reads of a saved write; a restart reads it again after the last.
@@ -1068,7 +1070,7 @@ export class EmrRuntime {
     // Naming handles only its own words; other clauses keep the same line, patient and voice evidence.
     if (named || spelled) {
       const name = named?.name ?? spelled!, phone = named?.phone ?? null;
-      const remaining = named ? afterIdentity(text, named) : "";
+      const remaining = named ? afterIdentity(text, named) : afterSpelling(text);
       // The patient's own "my name is" counts; the owner's own voice saying it is the clinician's name, never the patient's.
       if (named && selfNamed(text) && this.speakers.has(lineId)) {
         const who = await this.attribute(live, lineId);
@@ -1111,16 +1113,21 @@ export class EmrRuntime {
 
   private holdForWhom(l: Live, lineId: string, s: SayInput, text: string, spokenAt: string): boolean {
     const t = l.task;
-    // A name said for an arrival not yet named is this patient's own name, never a line about someone else.
-    if (t.unidentified && !patientNames(t).length && identityFrom(text)) return false;
-    const others = [...this.live.values()].map((x) => x.task).filter((x) => x !== t && x.owner === s.owner && !CLOSED_TASK.has(x.state) && (x.admission_id || x.patient_id) && (!t.patient_id || x.patient_id !== t.patient_id))
+    // On an unnamed arrival a naming line or a spelling is always this arrival's name, whatever names other patients share.
+    if (t.unidentified && (identityFrom(text) || spellsLetters(text))) return false;
+    const today = dayOf(this.wall());
+    const others = [...this.live.values()].map((x) => x.task).filter((x) => x !== t && x.owner === s.owner && !CLOSED_TASK.has(x.state) && !finishedBefore(x, today) && (x.admission_id || x.patient_id) && (!t.patient_id || x.patient_id !== t.patient_id))
       .map((x) => ({ labels: patientNames(x), task_id: x.task_id, label: x.label }));
     const mine = patientNames(t);
     const hit = others.length ? otherPatientsNamed(text, others, mine) : [];
     if (!hit.length || currentPatientNamed(text, mine)) return false;
-    // Two unnamed arrivals read alike, so each choice carries the name it holds or its arrival time.
-    const shown = (x: EmrTask) => patientNames(x)[0] ?? (x.unidentified ? unidentifiedRef(new Date(x.created_at)) : x.label) ?? "this patient";
-    const choices = [{ label: shown(t), task_id: t.task_id }, ...hit.map((h) => ({ label: shown(this.live.get(h.task_id)!.task), task_id: h.task_id }))];
+    // An arrival shows the name it holds or its arrival time, and two choices that still read alike carry their arrival times.
+    const arrived = (x: EmrTask) => new Date(x.lines[0]?.at ?? x.created_at);
+    const shown = (x: EmrTask) => (x.unidentified ? x.identities.filter((i) => i.state !== "cancelled").at(-1)?.name ?? unidentifiedRef(arrived(x)) : patientNames(x)[0] ?? x.label) || "this patient";
+    const tasks = [t, ...hit.map((h) => this.live.get(h.task_id)!.task)];
+    const labels = tasks.map(shown);
+    const timed = labels.map((label, i) => (labels.filter((x) => x === label).length > 1 ? `${label}, arrived ${clockOf(arrived(tasks[i]!))}` : label));
+    const choices = tasks.map((x, i) => ({ label: timed.filter((y) => y === timed[i]).length > 1 ? `${timed[i]} (${i + 1})` : timed[i]!, task_id: x.task_id }));
     const questionId = `q-${shortHash(t.task_id, t.questions.length + 1)}`;
     this.append(l, "line.handled", { line_id: lineId, as: "held_for_whom" });
     this.append(l, "question.asked", { question_id: questionId, line_id: lineId, text: `For ${choices.map((c) => c.label).join(" or for ")}? I have not written it anywhere yet.`.slice(0, 300), whom: { choices } });
@@ -1140,7 +1147,9 @@ export class EmrRuntime {
       const q = bound ? t.questions.find((y) => y.question_id === bound && y.answered_by === null && y.whom) : t.questions.filter((y) => y.answered_by === null && y.whom).at(-1);
       if (!q || (!bound && Date.parse(spokenAt) - Date.parse(q.at) > (this.o.answerWindowMs ?? 120_000))) continue;
       const choices = q.whom!.choices.map((c) => ({ ...c, labels: this.live.get(c.task_id) ? patientNames(this.live.get(c.task_id)!.task) : [c.label] }));
-      const picks = otherPatientsNamed(text, choices, []);
+      // A choice's own label, as a tap sends it, picks that choice even when two patients share a name.
+      const exact = choices.filter((c) => c.label.toLowerCase() === text.trim().replace(/[.!]+$/, "").toLowerCase());
+      const picks = exact.length === 1 ? exact : otherPatientsNamed(text, choices, []);
       if (picks.length !== 1) continue;
       const lineId = this.nextLineId(s.owner, text);
       this.append(l, "utterance.heard", { line_id: lineId, text, source: s.source ?? "text", spoken_at: spokenAt, via: "rule" });

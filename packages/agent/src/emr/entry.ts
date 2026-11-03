@@ -57,9 +57,12 @@ export function emergencyReason(line: string): string {
 
 // A short reference for an unnamed arrival from its spoken time, such as "Unknown arrival 19:42".
 export function unidentifiedRef(at: Date, timeZone = "Africa/Lagos"): string {
-  const hm = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone }).format(at);
-  return `Unknown arrival ${hm}`;
+  return `Unknown arrival ${clockOf(at, timeZone)}`;
 }
+// The hospital's wall clock time of a moment, such as "14:36".
+export const clockOf = (at: Date, timeZone = "Africa/Lagos"): string => new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone }).format(at);
+// The hospital's calendar day of a moment, such as "2026-11-03".
+export const dayOf = (at: Date, timeZone = "Africa/Lagos"): string => new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone }).format(at);
 
 export type SpokenIdentity = { name: string; phone: string | null; words: string };
 // The words that introduce a name, as people say them, Nigerian English included ("her name na").
@@ -109,13 +112,23 @@ export const selfNamed = (line: string): boolean => /\bmy\s+name\s+(?:is|na|now|
 // The part of a name a spelling line names: "surname", "last name" or "family name" is the last part, "first name" or "given name" the first.
 const LAST_PART = /\b(?:sur\s?name|last\s+name|family\s+name)\b/i, FIRST_PART = /\b(?:first|given)\s+name\b/i;
 // A name spelled letter by letter ("A-D-E-Y-E-M-I"), read as the word, put in place of the part the line names, else the one part sharing its first letter, else the one closest; two or no candidates are asked.
+const LETTER_RUN = /(?<![A-Za-z])(?:[A-Za-z](?:[\s,.-]+|$)){3,}/g;
+// True when a line spells a word letter by letter.
+export const spellsLetters = (line: string): boolean => [...line.matchAll(LETTER_RUN)].some((m) => m[0].replace(/[^A-Za-z]/g, "").length >= 3);
+// The words after the last spelled run, so what else the line says still goes through the gate.
+export function afterSpelling(line: string): string {
+  const last = [...line.matchAll(LETTER_RUN)].filter((m) => m[0].replace(/[^A-Za-z]/g, "").length >= 3).at(-1);
+  return last ? line.slice(last.index + last[0].length).replace(/^[\s,.:;!?-]+/, "").trim() : line;
+}
 export function spelledName(line: string, held: string): { name: string } | { ask: string[]; word: string } | null {
-  const runs = [...line.matchAll(/(?<![A-Za-z])(?:[A-Za-z](?:[\s,.-]+|$)){3,}/g)].map((m) => m[0].replace(/[^A-Za-z]/g, "")).filter((w) => w.length >= 3);
+  const runs = [...line.matchAll(LETTER_RUN)].map((m) => m[0].replace(/[^A-Za-z]/g, "")).filter((w) => w.length >= 3);
   const last = LAST_PART.test(line), first = FIRST_PART.test(line);
   if (!runs.length || !(/\bspel(?:l(?:ed|ing|s)?|t)\b/i.test(line) || last || first || runs[0]!.length >= 4)) return null;
   const word = runs[0]![0]!.toUpperCase() + runs[0]!.slice(1).toLowerCase();
   const parts = held.split(/\s+/).filter(Boolean);
   if (!parts.length) return null;
+  // The whole name spelled in one run is the name already held, never a new first name.
+  if (parts.length > 1 && word.toLowerCase() === parts.join("").toLowerCase()) return null;
   const named = last !== first && parts.length > 1 ? (last ? parts.length - 1 : 0) : null;
   // A run found inside a longer part is that part with letters the ear dropped, so it never replaces another part.
   const holds = parts.map((p, i) => ({ i, p: p.toLowerCase() })).filter((x) => x.p !== word.toLowerCase() && x.p.includes(word.toLowerCase()));
