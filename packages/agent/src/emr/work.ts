@@ -363,7 +363,13 @@ export function sourceClause(words: string, line: string): string | null {
   return text.slice(left, right).trim();
 }
 // A diagnosis still being considered or withdrawn is documentation, never a settled diagnosis to confirm.
-export const diagnosisIsTentative = (text: string): boolean => /\b(?:initial|working|provisional|likely|possible|suspected|maybe|perhaps|might|may|could|would|differential|versus|vs|or|not|no longer|unlikely|doubt(?:ful)?|rule(?:d)? out|if)\b/i.test(text);
+export const diagnosisIsTentative = (text: string): boolean => /\b(?:likely|possible|suspected|maybe|perhaps|might|may|could|would|differential|versus|vs|or|not|no longer|unlikely|doubt(?:ful)?|rule(?:d)? out|if)\b/i.test(text);
+// The diagnosis a clinician states, initial and working ones included (D47), as said after "diagnosis is"; null when it is hedged or none is stated.
+export function statedDiagnosis(text: string): string | null {
+  if (diagnosisIsTentative(text)) return null;
+  const m = /\bdiagnosis\b(?:\s+for\s+(?:you|her|him|them|the patient))?\s+(?:is|of|as)\s+(?:that\s+)?(?:(?:you|she|he|they|the patient)\s+(?:have|has)\s+)?(.+?)[\s.,;!?]*$/i.exec(text.trim());
+  return m?.[1]?.trim() || null;
+}
 // True when a clause's text is the line's own words, or the line's words after the person swap and nothing else.
 export const fromLineOrSwapped = (words: string, line: string, sex: string | null | undefined, fromLine: (w: string, l: string) => boolean): boolean => fromLine(words, line) || fromLine(words, personSwap(line, sex));
 

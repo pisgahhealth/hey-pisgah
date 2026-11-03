@@ -228,3 +228,29 @@ describe("EMG 2: a held part never stalls the rest", () => {
     } finally { await b.rt.stop(); }
   });
 });
+
+describe("D47: a stated initial diagnosis is recorded on the owner's confirm, a hedged one stays assessment", () => {
+  it("asks to confirm severe malaria from the 14:39 line in the owner's voice and records it on his confirm", async () => {
+    const b = boot(parted);
+    try {
+      const task = await arrival(b);
+      await sayOn(b, task, "uh well my initial diagnosis for you is that you have severe malaria");
+      expect(b.rt.view(task)!.asked.map((q) => q.text)).toEqual([expect.stringMatching(/^Record the diagnosis: "severe malaria"\. Say confirm to record this diagnosis\./)]);
+      expect(of(b, "record_diagnosis")).toEqual([]);
+      await sayOn(b, task, "Confirm.");
+      expect(of(b, "record_diagnosis").map((w) => w.args["diagnosis"])).toEqual(["severe malaria"]);
+      expect(of(b, "record_clerking").map((w) => w.args["section"])).toContain("assessment");
+    } finally { await b.rt.stop(); }
+  });
+
+  it("keeps a hedged diagnosis in the assessment and asks nothing", async () => {
+    const hedged = "my working diagnosis is that she might have severe malaria";
+    const b = boot((s) => (s === hedged ? [{ class: "finding", section: "assessment", words: hedged, confidence: 0.9 }] : ASIDE));
+    try {
+      const task = await arrival(b);
+      await sayOn(b, task, hedged);
+      expect(b.rt.view(task)!.actions.filter((a) => a.kind === "record_diagnosis")).toEqual([]);
+      expect(of(b, "record_clerking").map((w) => [w.args["section"], w.args["text"]])).toEqual([["assessment", hedged]]);
+    } finally { await b.rt.stop(); }
+  });
+});

@@ -201,16 +201,24 @@ export function noteWrites(r: NoteResult): { section: "presenting_complaint" | "
   });
 }
 
-// True when four in five of a clause's content words, chatter and person words aside, are in one accepted section's source words, so that section stands in for the clause.
-export function coveredByNote(r: NoteResult, words: string): boolean {
+// The accepted section four in five of a clause's content words, chatter and person words aside, come from, so that section stands in for the clause.
+export function noteSectionFor(r: NoteResult, words: string): NoteSection | null {
   let all = toks(words);
   for (const c of CHATTER.map(toks)) all = all.filter((_, i, ts) => !c.some((_, k) => c.every((w, j) => ts[i - k + j] === w)));
   const ws = all.filter((w) => !STOP.has(w) && !PERSON.has(w));
-  if (!ws.length) return false;
-  return NOTE_SECTIONS.some((s) => {
+  if (!ws.length) return null;
+  return NOTE_SECTIONS.find((s) => {
     const v = r.sections[s];
     if (!v.text) return false;
     const have = new Set(toks(v.from.join(" ")));
     return ws.filter((w) => have.has(w)).length / ws.length >= 0.8;
-  });
+  }) ?? null;
+}
+
+export const coveredByNote = (r: NoteResult, words: string): boolean => noteSectionFor(r, words) !== null;
+
+// The substance of the accepted allergies section, its bracketed doubt left in the note ("Penicillin (patient unsure)" is Penicillin).
+export function noteAllergen(r: NoteResult): string | null {
+  const text = r.sections.allergies.text;
+  return text ? text.replace(/\s*\([^)]*\)/g, "").replace(/[\s.]+$/, "").trim().slice(0, 120) || null : null;
 }

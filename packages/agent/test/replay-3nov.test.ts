@@ -232,8 +232,16 @@ describe("the 14:36 run (Amaka Okafor), replayed", () => {
     expect(Number(got["temp_c"])).toBe(38.5);
   });
 
-  it.fails("records the penicillin allergy", () => {
-    expect(writes(r, "record_allergy").map((w) => String(w.args["substance"]).toLowerCase())).toEqual(["penicillin"]);
+  it("records the penicillin allergy as reported by the patient, the doubt kept in the note (D47)", () => {
+    expect(writes(r, "record_allergy").map((w) => [String(w.args["substance"]).toLowerCase(), w.args["source"]])).toEqual([["penicillin", "patient"]]);
+    expect(note(r)["history"]).toMatch(/Penicillin \(patient unsure\)/);
+  });
+
+  it("puts severe malaria for recording as the diagnosis, and as the line held more than one voice asks him to say it himself (D47)", () => {
+    const refused = stream(r).filter((e) => e.record_type === "speaker.refused").map((e) => (e.payload as { kind: string }).kind);
+    expect(refused).toEqual(["record_diagnosis"]);
+    expect(writes(r, "record_diagnosis")).toEqual([]);
+    expect(r.rt.view(r.task)!.notes.map((n) => n.text)).toContain("I could not match that voice to you, so no diagnosis was recorded. Say it yourself.");
   });
 
   it("records the examination in clinician wording", () => {

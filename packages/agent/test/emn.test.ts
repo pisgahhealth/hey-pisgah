@@ -332,7 +332,7 @@ describe("EMF 3: a working diagnosis said in passing", () => {
   it("keeps the source clause and recognises uncertainty without extracting a final diagnosis", () => {
     expect(sourceClause(DX, DX)).toBe(DX);
     expect(diagnosisIsTentative(DX)).toBe(true);
-    expect(diagnosisIsTentative("my working diagnosis is severe malaria.")).toBe(true);
+    expect(diagnosisIsTentative("my working diagnosis is severe malaria.")).toBe(false);
     expect(diagnosisIsTentative("the diagnosis is acute appendicitis.")).toBe(false);
   });
 

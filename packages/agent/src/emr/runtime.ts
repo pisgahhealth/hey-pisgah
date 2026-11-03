@@ -8,7 +8,7 @@ import { primaryClass } from "./classes.js";
 import { CLERKING_KIND, DIAGNOSIS_KIND, GATE_SETTINGS, gateTwoStage, gateUtterance, holdsClerking, isWide, type GateAction, type GateClause, type GateInput, type GateResult, type GateSettings, type OrderClause, type SpeechClass } from "./gate.js";
 import { LEVERS_OFF, hedgedRead, holdLeftMs, leverList, sharedMeasures, willWriteNumber, PROOF_HEDGE_MS, type SpeedLevers } from "./speed.js";
 import { EmrId, OBSERVATION_KIND, ObservationArgs, type EmrContext, type EmrPort, type EmrProof, type EmrTarget, type InboxPage, type OrderResult, type PaperworkReadBack, type Provenance, type WorkArgs } from "./port.js";
-import { BATCH_KINDS, addressSwap, admissionReason, cleanNoteText, personSwap, sourceClause, diagnosisIsTentative, NEW_RECORD_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, sentNote, summariseWork, withoutDestination, wordSaid, type WorkKind } from "./work.js";
+import { BATCH_KINDS, addressSwap, admissionReason, cleanNoteText, personSwap, sourceClause, diagnosisIsTentative, statedDiagnosis, NEW_RECORD_KINDS, OWNER_CONFIRM_KINDS, READ_ONLY_KINDS, SAVED_DRAFTS, WORK_ARGS, afterSaid, confirmAsk, cadenceSaid, tellMeSaid, dateSaid, doseAgrees, dosesIn, minutesSaid, prescriptionSaid, saysDose, sentNote, summariseWork, withoutDestination, wordSaid, type WorkKind } from "./work.js";
 import { cleanTranscript, measuresIn, wholeInRange, type Measure, type Rewrite } from "@hey-pisgah/voice";
 import { answerChoice, compareAll, compareReadings, disagreementQuestion, normValue, quotedQuestion, readingsOf, type Choice, type EarReading, type EarsCheck, type SecondEar } from "./ears.js";
 import type { VersionWiring } from "./version-offers.js";
@@ -27,7 +27,7 @@ import { FROM_NOW_ON, PreferenceError, SCOPE_KINDS, describePref, describeScope,
 import { openObligations, retainClosed } from "./retention.js";
 export { openObligations };
 import { modelFailNote } from "./spend.js";
-import { coveredByNote, noteWrites, writeNote, type NoteResult } from "./note-writer.js";
+import { noteAllergen, noteSectionFor, noteWrites, writeNote, type NoteResult } from "./note-writer.js";
 
 // uncertain: sent, but the answer said nothing about whether the hospital saved it; reconciled under its own key, never failed for it.
 export type EmrActionState = "proposed" | "sent" | "uncertain" | "acknowledged" | "completed" | "refused" | "cancelled" | "failed";
@@ -1700,8 +1700,11 @@ export class EmrRuntime {
     const reported = (source: string) => personSwap(cleanNoteText(source).replace(/^(?:Doctor|Doc),\s*/i, ""), sex);
     // What the patient or a relative said goes only into its own section of the note; no kind it names is ever acted on.
     // A clause an accepted note section was written from is already in the note, so it is not written again as said.
-    const noted = !!note && coveredByNote(note, c.words);
+    const noted = note ? noteSectionFor(note, c.words) : null;
     if (c.class === "patient_reported") {
+      // D47: an allergy the patient reports, which the note's allergies section stands in for, goes on the allergy list as reported by the patient.
+      const allergen = note && noted === "allergies" && kinds.includes("record_allergy") ? noteAllergen(note) : null;
+      if (allergen) this.applyWork(l, lineId, { ...c, class: "instruction", kind: "record_allergy", substance: allergen } as AnyClause, "record_allergy");
       if (kinds.includes(CLERKING_KIND) && t.visit_id && !noted) {
         const source = sourceClause(c.words, lineText);
         if (!source) { this.ask(l, lineId, "I could not safely record what the patient said. Please say it again."); return; }
@@ -1713,10 +1716,13 @@ export class EmrRuntime {
     if (c.class === "finding") {
       if (!kinds.includes(CLERKING_KIND)) return;
       if (!t.visit_id) { this.note(l, "Heard a finding, but no arrival is in context, so the note was not written."); return; }
-      if (noted) return;
       // A clinician's own "I" and "my" are theirs, so history is swapped only when the voice heard matched no clinician.
       const section = c.section ?? "history", unmatched = this.speakerOf(t, lineId)?.speaker === "unverified";
       const source = sourceClause(c.words, lineText);
+      // D47: a stated initial or working diagnosis is also put for recording as the diagnosis, under the confirm record_diagnosis asks.
+      const dx = section === "assessment" && kinds.includes(DIAGNOSIS_KIND) ? statedDiagnosis(source ?? c.words) : null;
+      if (dx) this.applyWork(l, lineId, { ...c, class: "instruction", kind: DIAGNOSIS_KIND, text: dx } as AnyClause, DIAGNOSIS_KIND);
+      if (noted) return;
       if (!source) { this.ask(l, lineId, `I could not safely record that ${section}. Please say it again.`); return; }
       const cleaned = cleanNoteText(source);
       this.proposeClerking(l, lineId, section, section === "history" && unmatched ? reported(source) : section === "examination" ? addressSwap(cleaned) : section === "presenting_complaint" ? cleaned.replace(/^Presenting complaint[:\s]+/i, "") : cleaned);
