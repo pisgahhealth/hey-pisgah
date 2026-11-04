@@ -3,7 +3,7 @@ import { decodeWav, encodeWav } from "@hey-pisgah/voice";
 import { ORDER_REFERENCE_KINDS } from "../src/emr/gate.js";
 import { ListenSessions } from "../src/emr/listen.js";
 import type { Orderables, Provenance } from "../src/emr/port.js";
-import { DOOR_AUDIO_MAX_MS, lineVerdict, matchWindows, withDoorAudio, type Embedder, type SpeakerInput, type SpeakerVerdict } from "../src/emr/speaker.js";
+import { DOOR_AUDIO_MAX_MS, LISTEN_WINDOW_MS, lineVerdict, matchWindows, withDoorAudio, type Embedder, type SpeakerInput, type SpeakerVerdict } from "../src/emr/speaker.js";
 import { ADMIT, ClerkFake, DOC, clerkBoot, ins } from "./clerking-helpers.js";
 import { RATE, earOf } from "./mic-helpers.js";
 
@@ -51,6 +51,8 @@ describe("attribution covers every word that is acted on", () => {
     expect(sizes(matchWindows([tone(300, 1), tone(6000, 1)], RATE))).toEqual([6.3]);
     expect(sizes(matchWindows([tone(6000, 1), tone(6000, 1), tone(200, 1)], RATE))).toEqual([6, 6.2]);
     expect(sizes(matchWindows([tone(20_000, 1)], RATE))).toEqual([10, 10]);
+    // A heard line is matched on shorter windows, so a stretch with the patient's voice in it still has windows in the owner's alone.
+    expect(sizes(matchWindows([tone(20_000, 1)], RATE, LISTEN_WINDOW_MS))).toEqual([5, 5, 5, 5]);
     expect(sizes(matchWindows([tone(14_800, 1), tone(300, 1)], RATE))).toEqual([7.55, 7.55]);
     expect(matchWindows([tone(31_000, 1)], RATE).every((w) => w.length <= (RATE * DOOR_AUDIO_MAX_MS) / 1000)).toBe(true);
     // Ten 6 s pieces become at most eight windows, every sample kept.
@@ -103,7 +105,7 @@ describe("attribution covers every word that is acted on", () => {
       await r.rt.settled();
       expect(r.orders()).toHaveLength(1);
       if (door) expect((r.port.sent[0] as { pcm16k: Uint8Array[] }).pcm16k.reduce((n, w) => n + w.byteLength, 0)).toBe(20 * RATE * 2);
-      else expect(r.port.sent).toHaveLength(2);
+      else expect(r.port.sent).toHaveLength(4);
       await r.rt.stop();
     });
   }

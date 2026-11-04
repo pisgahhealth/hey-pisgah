@@ -88,6 +88,8 @@ export type VersionsSpec = z.infer<typeof VersionsSpec>;
 export const DoorProfile = z.strictObject({
   base_url: z.url(),
   timeout_ms: z.number().int().min(1000).max(900_000).default(300_000),
+  // The door's request budget for one agent session, mirroring the hospital's own rate limit; absent, the adapter assumes 60 at once and one a second.
+  budget: z.strictObject({ capacity: z.number().int().min(1).max(10_000), per_second: z.number().positive().max(1000), write_reserve: z.number().int().min(0).max(10_000), read_wait_ms: z.number().int().min(0).max(120_000) }).refine((b) => b.write_reserve < b.capacity, "write_reserve must stay below capacity").optional(),
   headers: z.strictObject({ on_behalf_of: HeaderName, origin: HeaderName, evidence: HeaderName, spoken_at: HeaderName, idempotency: HeaderName, replayed: HeaderName, authorisation: HeaderName.optional(), confirmation: HeaderName.optional(), authorisation_batch: HeaderName.optional(), read_back_digest: HeaderName.optional(), audio_segments: HeaderName.optional() }),
   origin_value: z.string().regex(/^[a-z][a-z_]{0,39}$/),
   // Paths the port never calls, whatever asks; checked before the allowlist.

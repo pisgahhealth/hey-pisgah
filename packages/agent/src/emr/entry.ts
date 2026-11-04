@@ -20,10 +20,22 @@ export const IdentityArgs = z.strictObject({ visit_id: EmrId, patient_id: EmrId,
 // "hey Pisgah, emergency" as a transcript reads it; the wake word alone is spotted on the device.
 export const EMERGENCY_LINE = /^\s*(?:(?:ok(?:ay)?|hey|hi|hay|a)[,\s]+)?(?:pisgah|pizgah|pisga|pisgar|pisca)[,.!\s]+(?:this is an?\s+|we have an?\s+)?emergency\b/i;
 export const WAKE_LINE = /^\s*(?:(?:ok(?:ay)?|hey|hi|hay|a)[,\s]+)(?:pisgah|pizgah|pisga|pisgar|pisca)\b[,.!\s]*/i;
+// The wake said on a line of its own, with filler at most, as an ear may cut "Hey Pisgah." from the words after it.
+export const WAKE_ALONE = /^\W*(?:(?:ok(?:ay)?|hey|hi|hay|a)[,\s]+)?(?:pisgah|pizgah|pisga|pisgar|pisca)\b(?:\W+(?:um|uh|erm|er|okay|ok|so|yeah|yes|please))*\W*$/i;
+// A ward, team or admission named after the word is about the hospital's emergency service, never a new arrival.
+const NOT_ARRIVAL_AFTER = String.raw`(?!\s+(?:admission|ward|team|room|department|unit|bay|theatre|surgery|contact|number|drug|dose|kit|trolley|tray)\b)`;
+// A line whose first words are the emergency, said on the line after the wake ("Emergency, another patient", "we have an emergency").
+export const EMERGENCY_START = new RegExp(String.raw`^\W*(?:(?:um|uh|erm|er|okay|ok|so|yes|yeah|right)\W+)*(?:(?:we|i)(?:\s+have|(?:'|\u2019)ve)?(?:\s+got)?\s+(?:an|another)\s+|another\s+|this\s+is\s+an?\s+)?emergency\b${NOT_ARRIVAL_AFTER}`, "i");
+const EMERGENCY_INSIDE = new RegExp(String.raw`\b(?:pisgah|pizgah|pisga|pisgar|pisca)[,.!\s]+(?:(?:um|uh|erm)[,.!\s]+)?(?:this\s+is\s+an?\s+|we\s+have\s+(?:an?|another)\s+|another\s+)?emergency\b${NOT_ARRIVAL_AFTER}`, "i");
+// The words after the wake and emergency phrase when the phrase starts within a line's first forty characters, else null.
+export function emergencyInside(line: string): string | null {
+  const m = EMERGENCY_INSIDE.exec(line);
+  return m && m.index < 40 ? line.slice(m.index + m[0].length).replace(/^[\s,.:;!?-]+/, "").trim() : null;
+}
 
-// Audio carried across the wake starts with the phrase itself, so the phrase is dropped unless it is the emergency phrase, which is kept whole.
+// Audio carried across the wake starts with the phrase itself, so the phrase is dropped unless it is the emergency phrase, with or without filler, which is kept whole.
 export function afterWake(line: string): string {
-  if (EMERGENCY_LINE.test(line) || !CARRIED_WAKE.test(line)) return line;
+  if (EMERGENCY_LINE.test(line) || emergencyInside(line) !== null || !CARRIED_WAKE.test(line)) return line;
   const rest = line.replace(CARRIED_WAKE, "").trim();
   return rest || line;
 }
@@ -52,7 +64,7 @@ export const EMERGENCY_PRESS = "Emergency button pressed";
 // What the clinician said after the phrase, kept as the arrival reason when it is more than the phrase.
 export function emergencyReason(line: string): string {
   if (line === EMERGENCY_PRESS) return "Emergency arrival, opened by a press; reason not yet stated";
-  const rest = line.replace(EMERGENCY_LINE, "").replace(/^[\s,.:;-]+/, "").trim();
+  const rest = (emergencyInside(line) ?? line.replace(EMERGENCY_LINE, "")).replace(/^[\s,.:;-]+/, "").trim();
   return rest.length >= 3 ? `Emergency arrival: ${rest}`.slice(0, 500) : "Emergency arrival, opened by voice; reason not yet stated";
 }
 
@@ -69,14 +81,47 @@ export type SpokenIdentity = { name: string; phone: string | null; words: string
 // The words that introduce a name, as people say them, Nigerian English included ("her name na").
 // "now" and "no" are how the local streaming ear hears the Nigerian "na" after "her name".
 const NAMING = /\b(?:(?:her|his|my|their|the patient'?s|patient'?s)\s+name\s+(?:is|na|now|no)|(?:she|he)\s+(?:is called|is named|says (?:she|he) is|says (?:her|his) name is)|(?:she|he)'s called|(?:they|people) call (?:her|him)|the patient is(?:\s+called)?)\b/i;
-const NAME_RUN = /[A-Z][a-z'-]+(?:\s+[A-Z][a-z'-]+){1,3}/g;
+// A hyphen joins two capitalised parts into one ("Carter-Jones").
+const NAME_RUN = /[A-Z][a-z'-]+(?:[A-Z][a-z'-]+)?(?:\s+[A-Z][a-z'-]+(?:[A-Z][a-z'-]+)?){1,3}/g;
 const NOT_NAME = /^(?:And|Phone|Her|His|She|He|The|Number|Em|Eh|Er|Um|Uh|Mr|Mrs|Ms|Miss|Dr|Doctor|Madam|Sir)$/;
 const PHONE = /(?:\+?234|0)\s*[789]\s*[01](?:[\s-]*\d){8}/;
+
+// Ordinary words that name the patient only when the name follows at once, after a courtesy title at most ("this is Ngozi Ada", "you are Ngozi Ada", "call her Ngozi").
+const NAMING_AT_ONCE = /\b(?:this is|you are|you(?:'|\u2019)re|call (?:her|him|them|the patient))\s+/gi;
+const COURTESY = /^(?:(?:Mr|Mrs|Ms|Miss|Madam|Master|Baby)\.?\s+)?/;
+// A clinician's title or a place ends any chance that the words name the patient.
+const NOT_PATIENT = /^(?:Doctor|Dr|Nurse|Sister|Matron|Prof|Professor|Pastor)\b|\b(?:Hospital|Ward|Clinic|Centre|Center|Unit|Road|Street|State)\b/;
+// The name said before the naming words ("Ngozi Ada is her name").
+const NAMED_BEFORE = /\b([A-Z][a-z'-]+(?:\s+[A-Z][a-z'-]+){1,3})\s+is\s+(?:her|his|their|the patient'?s)\s+name\b/;
+
+// The name and its span from the ordinary naming words, the name right after them or before "is her name"; one word is a name only after "call her".
+function namedAtOnce(line: string): { name: string; at: number; end: number } | null {
+  const before = NAMED_BEFORE.exec(line);
+  // A sentence's capitalised opening word ("Okay Ngozi Ada is her name") is not part of the name.
+  const run = before ? before[1]!.split(/\s+/) : [];
+  const said = run.slice(run.reduce((at, w, i) => (NOT_NAME.test(w) || LEAD_WORD.test(w) ? i + 1 : at), 0));
+  if (before && said.length >= 2 && !NOT_PATIENT.test(said.join(" "))) return { name: said.join(" "), at: before.index, end: before.index + before[0].length };
+  for (const m of line.matchAll(NAMING_AT_ONCE)) {
+    const rest = line.slice(m.index + m[0].length);
+    const title = COURTESY.exec(rest)![0];
+    const run = /^[A-Z][a-z'-]+(?:\s+[A-Z][a-z'-]+){0,3}/.exec(rest.slice(title.length))?.[0];
+    if (!run || NOT_PATIENT.test(run)) continue;
+    // The name ends where a word that is never a name starts, as an ear runs "Ngozi Ada She came in" together.
+    const all = run.split(/\s+/), cut = all.findIndex((w) => NOT_NAME.test(w) || LEAD_WORD.test(w));
+    const words = cut < 0 ? all : all.slice(0, cut);
+    if (!words.length || words.some((w) => /'s$/.test(w)) || (words.length < 2 && !/^call\b/i.test(m[0]))) continue;
+    const name = words.join(" ");
+    return { name, at: m.index, end: m.index + m[0].length + title.length + rest.slice(title.length).indexOf(name) + name.length };
+  }
+  return null;
+}
+// Capitalised words that open a sentence and are never part of a name.
+const LEAD_WORD = /^(?:Okay|Ok|So|Yes|Yeah|Well|Now|Right|Alright|Please|Is|Are|Was|Can|Let|Then|This|That|You|We|I|Back|In|Up|Over|Again)$/;
 
 // The name, and the phone when said, from a line that names the patient: the longest run of two to four capitalised words after the naming words, so "Grace, Grace Okafor" reads as Grace Okafor.
 export function identityFrom(line: string): SpokenIdentity | null {
   const m = NAMING.exec(line);
-  if (!m) return null;
+  if (!m) { const o = namedAtOnce(line); return o ? { name: o.name, phone: phoneIn(line), words: line.slice(o.at, o.end) } : null; }
   // The name is in the first sentence after the naming words, or the next one when an ear broke the sentence after a lone first name.
   const parts = line.slice(m.index + m[0].length).replace(/\.{2,}|…/g, ",").split(/\bnumber\b|\bphone\b/i)[0]!.split(/[.!?;]\s/);
   const runsIn = (t: string) => [...t.matchAll(NAME_RUN)].map((r) => r[0].split(/\s+/).filter((w) => !NOT_NAME.test(w)).join(" ")).filter((n) => n.split(" ").length >= 2);
@@ -85,22 +130,36 @@ export function identityFrom(line: string): SpokenIdentity | null {
   const paused = /([A-Z][a-z'-]+),\s+([A-Z][a-z'-]+)\b/.exec(parts[0] ?? "");
   if (!runs.length && paused && paused[1] !== paused[2] && !NOT_NAME.test(paused[1]!) && !NOT_NAME.test(paused[2]!)) runs.push(`${paused[1]} ${paused[2]}`);
   const name = runs.sort((x, y) => y.length - x.length)[0];
-  if (!name) return null;
+  if (!name) { const o = namedAtOnce(line); return o ? { name: o.name, phone: phoneIn(line), words: line.slice(o.at, o.end) } : null; }
+  return { name, phone: phoneIn(line), words: `${m[0]} ${name}` };
+}
+// The Nigerian mobile number a line says, in digits or spoken digits.
+function phoneIn(line: string): string | null {
   const p = PHONE.exec(digitsSpoken(line));
   const digits = p ? p[0].replace(/\D/g, "") : null;
   const phone = digits ? (digits.startsWith("234") ? `0${digits.slice(3)}` : digits) : null;
-  return { name, phone: phone && /^0[789][01]\d{8}$/.test(phone) ? phone : null, words: `${m[0]} ${name}` };
+  return phone && /^0[789][01]\d{8}$/.test(phone) ? phone : null;
 }
 
 // Only the recognised naming words are removed; other facts and instructions in the same breath keep their original words.
+// A line that is nothing but a name of two or three parts ("Ngozi Ada"), as a clinician answers "what is the patient's name?" or finishes "her name is" after a cut.
+export function bareName(line: string): SpokenIdentity | null {
+  const t = line.trim().replace(/[.!?,]+$/, "");
+  const m = new RegExp(`^${NAME_RUN.source}$`).exec(t);
+  if (!m) return null;
+  const words = t.split(/\s+/);
+  return words.length <= 3 && !words.some((w) => NOT_NAME.test(w)) ? { name: t, phone: null, words: t } : null;
+}
+
 export function afterIdentity(line: string, identity: SpokenIdentity): string {
   const intro = NAMING.exec(line);
-  if (!intro) return line;
   const escape = (word: string) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const name = new RegExp(identity.name.split(/\s+/).map(escape).join("[\\s,]+"), "i").exec(line.slice(intro.index + intro[0].length));
-  if (!name) return line;
-  const start = intro.index + intro[0].length + name.index;
-  let rest = `${line.slice(0, intro.index)} ${line.slice(intro.index + intro[0].length, start)} ${line.slice(start + name[0].length)}`;
+  const name = intro ? new RegExp(identity.name.split(/\s+/).map(escape).join("[\\s,]+"), "i").exec(line.slice(intro.index + intro[0].length)) : null;
+  const once = name ? null : namedAtOnce(line);
+  if (!intro && !once) return line;
+  if (!name && (!once || once.name !== identity.name)) return line;
+  const start = intro && name ? intro.index + intro[0].length + name.index : 0;
+  let rest = intro && name ? `${line.slice(0, intro.index)} ${line.slice(intro.index + intro[0].length, start)} ${line.slice(start + name[0].length)}` : `${line.slice(0, once!.at)} ${line.slice(once!.end)}`;
   // A phone-only tail is already handled with the identity; any words after it still go through the gate.
   rest = digitsSpoken(rest).replace(/\b(?:(?:and\s+)?(?:her|his|their|the)\s+)?(?:phone(?:\s+number)?|number)\s*(?:is|na|now|no)?\s*[:,-]?\s*(?:\+?234|0)\s*[789]\s*[01](?:[\s-]*\d){8}/gi, " ");
   rest = rest.replace(/^[\s,.:;!?-]+|[\s,.:;!?-]+$/g, "").replace(/\s+/g, " ").replace(/^(?:and|then)\s+/i, "").trim();

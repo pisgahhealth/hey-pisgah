@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { VoiceError, encodeWav } from "@hey-pisgah/voice";
 import { startEmrServe } from "../src/emr/serve.js";
@@ -10,14 +13,14 @@ const post = (url: string, b: unknown, origin = STRIP) => fetch(url, { method: "
 const pulse = (said: string) => Number(/pulse (\d+)/.exec(said)?.[1] ?? 0);
 
 const refuseHints = { on: false };
-async function boot(holdMs = 0) {
+async function boot(holdMs = 0, kwsDir?: string) {
   const root = emrRoot();
   const port = new FakeEmr();
   let rt: EmrRuntime | null = null;
   const heard: { keywords: readonly string[]; bytes: number }[] = [];
   const client = mockClient(root, (said) => (/^stop/i.test(said) ? { decision: "aside", summary: "x" } : { decision: "record", pulse: pulse(said), summary: "Record" }), () => rt?.stateOf ?? null);
   const s = await startEmrServe({ strip: { mode: "open" },
-    storeRoot: root, port, client, listenPort: 0, runtime: { holdMs, proofRetryMs: 1 },
+    storeRoot: root, port, client, listenPort: 0, runtime: { holdMs, proofRetryMs: 1 }, ...(kwsDir ? { kwsDir } : {}),
     transcribe: async (wav, keywords, sessionId) => {
       heard.push({ keywords, bytes: wav.length });
       if (keywords.includes("Ward A") && refuseHints.on) throw new VoiceError("upstream", "Voice Transcribe answered 400 (invalid_request_error)", 400);
@@ -89,6 +92,15 @@ describe("EMR serve", () => {
     expect((await post(`${s.url}/tasks/${id}/say`, { owner: "someone-else", text: "x" })).status).toBe(403);
     expect((await post(`${s.url}/tasks/${id}/interrupt`, { owner: "someone-else" })).status).toBe(403);
     expect((await fetch(`${s.url}/nope`)).status).toBe(404);
+    await s.close();
+  });
+
+  it("serves the spotter's keyword list and worker uncached, and its model and wasm for a day", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kws-"));
+    for (const name of ["keywords.json", "worker.js", "encoder.onnx", "sherpa.wasm"]) writeFileSync(join(dir, name), name.endsWith(".json") ? "{}" : "x");
+    const { s } = await boot(0, dir);
+    const cache = async (name: string) => (await fetch(`${s.url}/kws/${name}`)).headers.get("cache-control");
+    expect([await cache("keywords.json"), await cache("worker.js"), await cache("encoder.onnx"), await cache("sherpa.wasm")]).toEqual(["no-store", "no-store", "max-age=86400", "max-age=86400"]);
     await s.close();
   });
 

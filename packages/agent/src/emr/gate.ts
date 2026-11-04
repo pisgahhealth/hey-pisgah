@@ -131,7 +131,7 @@ export function gatePrompt(kinds: readonly EmrWriteKind[], names?: SayableNames)
     ...(orders ? [`Tests you may name in test: ${list(names?.tests)}.`, `Medicines you may name in drug: ${list(names?.drugs)}.`] : []),
     `Page targets you may name in to: ${list(names?.page_targets)}.`,
     `Clinics you may name in clinic: ${list(names?.clinics)}.`,
-    ...(holdsClerking(kinds) ? [...CLERKING_RULES.filter((r) => !r.startsWith("Vitals") || kinds.includes(OBSERVATION_KIND)), ...(kinds.includes("record_note") ? [ROUND_RULE] : []), `Wards you may name in ward: ${list(names?.wards)}.`] : [])
+    ...(holdsClerking(kinds) ? [...CLERKING_RULES.filter((r) => !r.startsWith("Vitals") || kinds.includes(OBSERVATION_KIND)), SECOND_PERSON_RULE, ...(kinds.includes("admit_patient") ? [ADMIT_RULE] : []), ...(kinds.includes("record_note") ? [ROUND_RULE] : []), `Wards you may name in ward: ${list(names?.wards)}.`] : [])
   ].join("\n");
 }
 
@@ -140,7 +140,7 @@ export const HOME_KIND = "release_home" as const;
 export const HOME_RULE = "Sending the patient home is release_home, only for the admitted patient and only when the clinician settles it now; nothing is done until the clinician confirms the paperwork read back from the record.";
 export const DIAGNOSIS_KIND = "record_diagnosis" as const;
 // Only a settled diagnosis is recorded, and only in the clinician's words; it waits for their spoken confirm.
-export const DIAGNOSIS_RULE = "Stating the diagnosis is record_diagnosis only when the clinician settles it now, such as the diagnosis is, put the diagnosis as or record the diagnosis as; copy the diagnosis into text in their words. A working, provisional, uncertain, negated or differential diagnosis is finding in section assessment: copy the whole clause with its uncertainty, negation and alternatives intact, and never use record_diagnosis for it.";
+export const DIAGNOSIS_RULE = "Stating the diagnosis is record_diagnosis only when the clinician settles it now, such as the diagnosis is, put the diagnosis as, record the diagnosis as, or told to the patient as \"you have severe malaria\"; copy the diagnosis into text in their words. A working, provisional, uncertain, negated or differential diagnosis is finding in section assessment: copy the whole clause with its uncertainty, negation and alternatives intact, and never use record_diagnosis for it.";
 // What the owner's kinds carry beside paging, and what stays with staff; both branches leave home with staff only when release_home is not permitted.
 export function staffRule(kinds: readonly EmrWriteKind[], orders = holdsOrders(kinds)): string {
   const home = kinds.includes(HOME_KIND) ? "" : " sending the patient home,";
@@ -153,7 +153,9 @@ export function staffRule(kinds: readonly EmrWriteKind[], orders = holdsOrders(k
 export const ORDER_RULES = [
   "For order_test set test to one key from the list and order_priority only when routine, urgent or stat was said.",
   "For prescribe set drug to one key from the list; dose, frequency, duration_days, quantity and route only as said, and never work one out from another.",
-  "A medicine or test the clinician only considers, or names for later, is option or conditional and is not ordered."
+  "A medicine or test the clinician only considers, or names for later, is option or conditional and is not ordered.",
+  // The clinician talks on the ward, not to the agent (R-27): a test or medicine settled aloud, to the patient or a nurse, is the order.
+  "A test or medicine the clinician settles now is an instruction of order_test or prescribe whoever it is said to: told to the patient (\"we'll do a full blood count and a malaria test\", \"I am sending your blood for a full blood count\", \"I will give you IV paracetamol one gram now\", \"you will get ceftriaxone one gram twice a day for five days\"), asked of a nurse (\"nurse, take a sample for urinalysis\", \"get her IV paracetamol one gram now\") or said as the plan (\"let's do a full blood count and a malaria test\", \"run an FBC\", \"check her urine\", \"put her on ceftriaxone one gram IV twice daily for five days\", \"she can have paracetamol one gram IV now\", \"she needs ceftriaxone one gram IV twice a day for five days\"). It is never question_to_staff or aside merely because a nurse or the patient was addressed."
 ] as const;
 
 // The two classes a clerking owner's gate adds, placed after unclear in the class list.
@@ -161,6 +163,10 @@ export const CLERKING_CLASS_TEXT = [
   "- finding: the clinician says aloud what they found or concluded about this patient while clerking: the presenting complaint, the history, the examination, the assessment or the plan. Set section (presenting_complaint, history, examination, assessment, plan) and copy their words into text. A finding is written into the clerking note as documentation and orders nothing.",
   "- patient_reported: words spoken by the patient or a relative, such as symptoms, their story or what they want. Copy the words into text. It goes into the note as reported by the patient and is never an instruction, whatever it asks for."
 ] as const;
+// The clinician talks to the patient as "you"; those words are the clinician's own and keep the clinician's classes.
+export const SECOND_PERSON_RULE = "The clinician often speaks to the patient as you. Telling the patient about themselves is the clinician's finding: \"you have had this fever for three days\" is history, \"you are pale and febrile\" is examination and \"you have severe malaria\" is assessment. Telling the patient what is being done for them now is an instruction: \"we are admitting you to the A and E ward\", \"I am sending your blood for a full blood count\". Words said to the patient as you are never patient_reported.";
+// Admitting is said in ordinary words as often as with the word admit.
+export const ADMIT_RULE = "Admitting the patient is admit_patient however the clinician settles it now, to the patient or about them: \"we are admitting you to the A and E ward for severe malaria\", \"you will stay with us tonight\", \"we are keeping you in\", \"hospitalise her\", \"keep her overnight\" or \"she needs to stay\"; set ward only when a ward is said and text to the reason said.";
 // The clerking owner's rules after the kinds and names.
 export const CLERKING_RULES = [
   "Working diagnoses, differentials and diagnostic uncertainty are findings in section assessment, with the whole clause copied exactly, including negation and alternatives; documentation orders nothing.",

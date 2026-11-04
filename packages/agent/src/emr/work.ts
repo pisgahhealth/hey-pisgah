@@ -241,19 +241,23 @@ const ROUTE_WORDS: readonly [RegExp, (typeof DRUG_ROUTES)[number]][] = [
 const COUNT_WORDS: Record<string, number> = { one: 1, a: 1, an: 1, single: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, twelve: 12, fourteen: 14, fifteen: 15, twenty: 20, thirty: 30 };
 const countOf = (w: string) => (/^\d+$/.test(w) ? Number(w) : COUNT_WORDS[w] ?? null);
 
-// The parts of a prescription the line itself says; nothing is worked out from anything else, except that stat or a single dose means one.
-export function prescriptionSaid(line: string, c: { dose?: string | null | undefined }): { dose: string | null; frequency: number | null; duration_days: number | null; quantity: number | null; route: (typeof DRUG_ROUTES)[number] | null } {
+// The parts of a prescription the line itself says, the schedule from the clause's words and the dose checked against the whole line with a dose said in words counting as its digits; nothing is worked out from anything else, except that stat or a single dose means one.
+export function prescriptionSaid(line: string, c: { dose?: string | null | undefined }, whole: string = line): { dose: string | null; frequency: number | null; duration_days: number | null; quantity: number | null; route: (typeof DRUG_ROUTES)[number] | null } {
   const low = ` ${line.toLowerCase().replace(/[,.!?]/g, " ").replace(/\s+/g, " ")} `;
-  const nums = new Set((doseDigits(line).match(/\d+(?:\.\d+)?/g) ?? []).map((x) => String(Number(x))));
-  const dose = c.dose && (c.dose.match(/\d+(?:\.\d+)?/g) ?? []).every((n) => nums.has(String(Number(n)))) && /\d/.test(c.dose) ? c.dose.trim() : null;
+  const nums = new Set((doseDigits(whole).match(/\d+(?:\.\d+)?/g) ?? []).map((x) => String(Number(x))));
+  const said = c.dose ? doseDigits(c.dose).trim() : "";
+  const dose = said && /\d/.test(said) && (said.match(/\d+(?:\.\d+)?/g) ?? []).every((n) => nums.has(String(Number(n)))) ? said : null;
   const frequency = FREQUENCY_WORDS.find(([re]) => re.test(low))?.[1] ?? null;
   // A course is "for N days" or "N days"; "a day" belongs to the frequency, not the course.
   const dm = / for (\d+|[a-z]+) days? /.exec(low) ?? / (\d+|two|three|four|five|six|seven|ten|fourteen) days /.exec(low);
   const duration_days = dm ? countOf(dm[1]!) : null;
   const qm = / (?:quantity|dispense|supply) (\d+|[a-z]+) /.exec(low) ?? / (\d+|[a-z]+) (?:tablets?|vials?|ampoules?|doses?|bottles?|packs?) /.exec(low);
-  const quantity = (qm ? countOf(qm[1]!) : null) ?? (/ (stat|a single dose|one dose|once only) /.test(low) ? 1 : null);
+  const days = duration_days && duration_days >= 1 ? duration_days : null;
+  // A dose followed within a few words by now or at once is one dose; a course said with its frequency and its days is that many doses.
+  const nowAfterDose = /\b\d+(?:\.\d+)?\s*(?:mg|milligrams?|milligrammes?|g|grams?|grammes?|gm|mcg|micrograms?|ug|ml|millilit(?:er|re)s?|mils?|units?|iu)\b(?:\s+\S+){0,6}?\s+(?:now|immediately|at once|straight away|right away)\b/.test(` ${doseDigits(low)} `);
+  const quantity = (qm ? countOf(qm[1]!) : null) ?? (/ (stat|a single dose|one dose|once only) /.test(low) || nowAfterDose ? 1 : null) ?? (frequency && days ? frequency * days : null);
   const route = ROUTE_WORDS.find(([re]) => re.test(low))?.[1] ?? null;
-  return { dose, frequency: frequency ?? null, duration_days: duration_days && duration_days >= 1 ? duration_days : null, quantity: quantity && quantity >= 1 ? quantity : null, route };
+  return { dose, frequency: frequency ?? null, duration_days: days, quantity: quantity && quantity >= 1 ? quantity : null, route };
 }
 
 const UNIT_WORDS: readonly [RegExp, string][] = [
@@ -325,10 +329,10 @@ export function personSwap(text: string, sex?: string | null): string {
 // The fixed table for a clinician's examination said to the patient, most specific first: "you look" reads "looks", "you're" reads "is", "your neck" reads "neck".
 const ADDRESS_TABLE: readonly [RegExp, string][] = [
   [/\bit seems (?:like|that) you(?:'|\u2019)re\b|\bit seems (?:like|that) you are\b/gi, "seems"],
-  [/\byou look\b/gi, "looks"], [/\byou seem\b/gi, "seems"], [/\byou(?:'|\u2019)re\b|\byou are\b/gi, "is"],
+  [/\byou look\b/gi, "looks"], [/\byou seem\b/gi, "seems"], [/\byou feel\b/gi, "feels"], [/\byou(?:'|\u2019)re\b|\byou are\b/gi, "is"], [/\byou were\b/gi, "was"], [/\byou had\b/gi, "had"],
   [/\byou(?:'|\u2019)ve got\b|\byou have got\b|\byou(?:'|\u2019)ve\b|\byou have\b/gi, "has"], [/\byour\s+/gi, ""]
 ];
-// A clinician's examination words to the patient without the second person, by the fixed table only; a sentence keeping a "you" stays exactly as said.
+// A clinician's findings and history said to the patient, without the second person, by the fixed table only; a sentence keeping a "you" stays exactly as said.
 export const addressSwap = (text: string): string => swapBy(text, ADDRESS_TABLE, /\byou(?:rs?|rself)?\b|\byou(?:'|\u2019)(?:d|ll|re|ve)\b/i);
 // Expands an exact source span to its punctuation-delimited clause so a shortened model span cannot drop negation or uncertainty.
 export function sourceClause(words: string, line: string): string | null {
@@ -366,9 +370,17 @@ export function sourceClause(words: string, line: string): string | null {
 export const diagnosisIsTentative = (text: string): boolean => /\b(?:likely|possible|suspected|maybe|perhaps|might|may|could|would|differential|versus|vs|or|not|no longer|unlikely|doubt(?:ful)?|rule(?:d)? out|if)\b/i.test(text);
 // The diagnosis a clinician states, initial and working ones included (D47), as said after "diagnosis is"; null when it is hedged or none is stated.
 export function statedDiagnosis(text: string): string | null {
-  if (diagnosisIsTentative(text)) return null;
-  const m = /\bdiagnosis\b(?:\s+for\s+(?:you|her|him|them|the patient))?\s+(?:is|of|as)\s+(?:that\s+)?(?:(?:you|she|he|they|the patient)\s+(?:have|has)\s+)?(.+?)[\s.,;!?]*$/i.exec(text.trim());
-  return m?.[1]?.trim() || null;
+  // The diagnosis ends where the sentence turns to what comes next ("severe malaria but we need to do a test").
+  const m = /\bdiagnosis\b(?:\s+for\s+(?:you|her|him|them|the patient))?\s+(?:is|of|as)\s+(?:that\s+)?(?:(?:you|she|he|they|the patient)\s+(?:have|has)\s+)?(.+?)(?:[\s,]+(?:but|although|though|so|and\s+(?:we|i|let|then|please|now))\b.*)?[\s.,;!?]*$/i.exec(text.trim());
+  if (!m?.[1]) return toPatient(text);
+  // Hedging is judged on the diagnosis sentence from a few words before "diagnosis", never on an earlier finding such as "the neck is not stiff".
+  const before = text.trim().slice(0, m.index).trimEnd().split(/\s+/).slice(-3).join(" ");
+  return diagnosisIsTentative(`${before} ${m[0]}`) ? null : m[1].trim() || null;
+}
+// A settled diagnosis said to the patient as the whole sentence ("you have severe malaria"); history ("you have had") and hedged words are not one.
+function toPatient(text: string): string | null {
+  const m = /^(?:(?:so|okay|ok|well|um|uh|right|madam|sir|i think)[,\s]+)*you(?:(?:'|\u2019)ve got| have got| have)\s+(?!had\b|been\b|got\b)(.+?)(?:[\s,]+(?:but|although|though|so|and\s+(?:we|i|let|then|please|now))\b.*)?[\s.,;!?]*$/i.exec(text.trim());
+  return m?.[1] && !diagnosisIsTentative(m[0]) ? m[1].trim() : null;
 }
 // True when a clause's text is the line's own words, or the line's words after the person swap and nothing else.
 export const fromLineOrSwapped = (words: string, line: string, sex: string | null | undefined, fromLine: (w: string, l: string) => boolean): boolean => fromLine(words, line) || fromLine(words, personSwap(line, sex));
@@ -376,8 +388,9 @@ export const fromLineOrSwapped = (words: string, line: string, sex: string | nul
 // The clinical reason an admission line states ("admit her for dehydration"), never the instruction words themselves; unstated stays honest.
 export const NO_ADMISSION_REASON = "Not yet stated";
 export function admissionReason(line: string): string {
-  const m = /\b(?:for|because(?: of)?|with|due to|as she has|as he has|since she has|since he has)\s+(.+)$/i.exec(line.replace(/\s+/g, " ").trim());
-  const tail = m?.[1]?.replace(/\b(?:and|then)\s+(?:let'?s|get|put)\b.*$/i, "").replace(/[\s.,;]+$/, "").trim() ?? "";
-  const words = tail.split(" ").filter(Boolean).filter((w) => !/^(?:the|a|an|her|him|now|please|ward|bed|admission|a&e|emergency)$/i.test(w));
+  // "With us" is where the patient stays, never why, and "you have" said to the patient is dropped from the reason.
+  const m = /\b(?:for|because(?: of)?|with(?!\s+us\b)|due to|(?:as|since) (?:she|he|you) (?:has|have))\s+(.+)$/i.exec(line.replace(/\s+/g, " ").trim());
+  const tail = m?.[1]?.replace(/\b(?:and|then)\s+(?:let'?s|get|put)\b.*$/i, "").replace(/^(?:you|she|he)\s+(?:have|has)\s+(?:got\s+)?/i, "").replace(/[\s.,;]+$/, "").trim() ?? "";
+  const words = tail.split(" ").filter(Boolean).filter((w) => !/^(?:the|a|an|her|him|you|us|now|tonight|overnight|please|ward|bed|admission|a&e|emergency)$/i.test(w));
   return words.length >= 1 && !/^(?:a and e|the ward|observation|now)$/i.test(tail) ? tail.slice(0, 300) : NO_ADMISSION_REASON;
 }

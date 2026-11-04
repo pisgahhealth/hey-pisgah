@@ -1,5 +1,5 @@
 import { ModelError, type ChatMessage, type ModelClient, type ProviderId } from "@hey-pisgah/model";
-import { cleanTranscript, measuresIn, numbersIn, readVitals, vitalsVocabulary, type Measure } from "@hey-pisgah/voice";
+import { MEASURES, cleanTranscript, measuresIn, numbersIn, readVitals, vitalsVocabulary, type Measure } from "@hey-pisgah/voice";
 import type { IntentRoute } from "./intent.js";
 
 // The second reading of one clip, from a model that hears the audio itself; `also` holds further readings that must each agree too.
@@ -165,4 +165,12 @@ export function answerChoice(text: string, c: Choice): Record<string, string> | 
     out[hits[0]!] = n;
   }
   return Object.keys(out).length === c.measures.length ? out : null;
+}
+
+// A measure the clause's own words name with exactly one value, plainly and not by a guessed sound-alike, that the gate left out of its vitals clause is filled from those words, so the SpO2 said last is written with the rest.
+export function fillSaidVitals<T extends object>(c: T, words: string): T {
+  const named = readVitals(vitalsVocabulary(cleanTranscript(words), { guesses: false }).text);
+  const out = { ...c } as Record<string, unknown>;
+  for (const m of MEASURES) if (out[m] == null && named[m]?.length === 1) out[m] = m === "bp" ? named[m]![0] : Number(named[m]![0]);
+  return out as T;
 }

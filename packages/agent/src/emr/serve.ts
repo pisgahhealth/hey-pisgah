@@ -17,7 +17,7 @@ import { bearerOf, stripKey, verifyStripToken, type StripAuth } from "./strip-to
 import { EmrId, EmrPortError, type EmrPort, type EmrTarget } from "./port.js";
 import { gateArrival } from "./gate.js";
 import { SCREEN_PAGES, type ScreenPage } from "./screens.js";
-import { EMERGENCY_KIND, EMERGENCY_LINE, EMERGENCY_PRESS, afterWake, afterEmergency, emergencyHeardLoosely, emergencyReason, spokenPatient, unidentifiedRef } from "./entry.js";
+import { EMERGENCY_KIND, EMERGENCY_LINE, EMERGENCY_PRESS, EMERGENCY_START, afterWake, afterEmergency, emergencyHeardLoosely, emergencyInside, emergencyReason, spokenPatient, unidentifiedRef } from "./entry.js";
 import { shortHash } from "../ids.js";
 import { SPEND_CAP_NOTE, arrivalRunId, spendingTranscriber } from "./spend.js";
 import { openStream } from "@hey-pisgah/store";
@@ -77,6 +77,8 @@ export type EmrServeOptions = {
   kwsDir?: string;
   // The A&E clinic an emergency opened by voice lands on.
   emergencyClinicId?: string;
+  // How long captured speech waits for a realtime turn before the local ear reads it, for tests; META_FALLBACK_MS by default.
+  fallbackMs?: number;
   // How long held speech waits for an arrival, for tests; PENDING_MAX_MS by default.
   pendingMaxMs?: number;
   // Preference memory is on unless turned off; it lives in the same store as the tasks.
@@ -211,8 +213,16 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     if (!p) throw new Error("the Parakeet second ear was switched on but its model or library did not load");
     base = p;
   } else base = o.ears === "off" ? undefined : typeof o.ears === "function" ? o.ears : o.ears === "spark" ? sparkEar(client) : o.runtime?.secondEar;
+  // Speech the realtime ear never put into words is read by the local Parakeet ear (or one a test gives), never by a billed model; the reading has no line yet.
+  const localEar = o.asr === "meta-stream" && (o.ears === "parakeet" || typeof o.ears === "function") ? base : undefined;
+  const fallback = localEar ? async (wav: Uint8Array) => (await localEar(wav, { run_id: null, task_id: null, line_id: null } as unknown as Parameters<SecondEar>[1])).text : undefined;
   // With a local first ear, Voice Transcribe reads every line that writes a number as well, so Meta still reads each number before it is written.
-  const secondEar = base && streamAsr ? allEars([base, transcriberEar(spendingTranscriber(metaAsr, client.spend, { ledgered: true }), { ledger })]) : base;
+  const restEar = base && (streamAsr || fallback) ? transcriberEar(spendingTranscriber(metaAsr, client.spend, { ledgered: true }), { ledger }) : undefined;
+  // The clips of lines the fallback ear read get their second reading from Voice Transcribe, never the same local ear again.
+  const fallbackClips = new WeakSet<Uint8Array>();
+  const firstSecondEar = base && streamAsr && restEar ? allEars([base, restEar]) : base;
+  const secondEar: SecondEar | undefined = firstSecondEar && fallback && restEar ? (wav, meta) => (fallbackClips.has(wav) ? restEar(wav, meta) : firstSecondEar(wav, meta)) : firstSecondEar;
+  const fallbackClip = (clip: Uint8Array): "meta_rest" | "none" => { if (!restEar) return "none"; fallbackClips.add(clip); return "meta_rest"; };
   const streaming = !!streamAsr || o.asr === "meta-stream";
   // The strip reads frames from here: present only when a streaming ear is on, so an older strip or a chunk-only serve keeps posting chunks.
   const footprint = { first_ear: streamAsr ? streamAsr.model : o.asr === "meta-stream" ? META_STREAM_MODEL : "meta:muse-voice-transcribe-1.0", second_ear: typeof o.ears === "string" ? o.ears : base ? "given" : "off", meta_reading_on_numbers: !!(base && streamAsr), frames: streaming ? { route: "/tasks/listen/stream", parts: true, frame_ms: FRAME_MS, rate: 16_000, idle_ms: o.framesIdleMs ?? FRAME_IDLE_MS } : null };
@@ -269,6 +279,14 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     moveTo(owner, target, since);
     if (by === "emergency") void release(owner, target, null);
   };
+  // Strip sessions whose patient the owner said they are done with, answered as done on their status read, with any arrival the same line opened.
+  const finished = new Map<string, { state: "done"; reason: "owner_done"; task_id: string; line_id: string; arrival?: { task_id: string; line_id: string } }>();
+  const onOwnerDone: NonNullable<EmrRuntimeOptions["onOwnerDone"]> = (owner, d) => {
+    const mark = (sid: string) => { finished.set(`${owner}\u0000${clientOf.get(sid) ?? sid}`, { state: "done", reason: "owner_done", task_id: d.task_id, line_id: d.line_id, ...(d.arrival ? { arrival: d.arrival } : {}) }); if (finished.size > 200) finished.delete(finished.keys().next().value!); };
+    if (d.session_id) mark(d.session_id);
+    o.log?.(`owner done with ${d.task_id}${d.arrival ? `, next arrival ${d.arrival.task_id}` : ""}`);
+    void listening.endFor(owner, d.target, d.session_id).then((ids) => ids.forEach(mark), (e: unknown) => o.log?.(`listening not ended after done: ${e instanceof Error ? e.message : String(e)}`));
+  };
   const onArrivalFailed = (owner: string, taskId: string, reason: string) => { if (pending.get(owner)?.task_id === taskId) void release(owner, null, reason); };
   const prefs = o.preferences === false ? null : o.runtime?.preferences ?? new PreferenceMemory(o.storeRoot);
   const several = !streamAsr && (o.vtReadings ?? 1) > 1;
@@ -276,7 +294,7 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   const heartbeats = new Heartbeats();
   const clientOf = new Map<string, string>();
   const onOwnerVoice = (owner: string, sid: string | null) => { if (sid) heartbeats.ownerVoice(owner, clientOf.get(sid) ?? sid); };
-  const rt = new EmrRuntime({ ...(o.runtime ?? {}), onOwnerVoice, storeRoot: o.storeRoot, client, port: o.port, ...(secondEar ? { secondEar } : {}), ...(several ? { secondOpinion: true } : {}), ...(o.releaseWhole ? { releaseWhole: true } : {}), ...(o.log ? { log: o.log } : {}), onSubject, onArrivalFailed, ...(o.emergencyClinicId ? { emergencyClinicId: o.emergencyClinicId } : {}), ...(prefs ? { preferences: prefs } : {}) });
+  const rt = new EmrRuntime({ ...(o.runtime ?? {}), onOwnerVoice, onArrivalOpened: (owner, r, spokenAt) => pendArrival(owner, r, spokenAt), storeRoot: o.storeRoot, client, port: o.port, ...(secondEar ? { secondEar } : {}), ...(several ? { secondOpinion: true } : {}), ...(o.releaseWhole ? { releaseWhole: true } : {}), ...(o.log ? { log: o.log } : {}), onSubject, onArrivalFailed, onOwnerDone, ...(o.emergencyClinicId ? { emergencyClinicId: o.emergencyClinicId } : {}), ...(prefs ? { preferences: prefs } : {}) });
   runtime = rt;
   rt.start();
   // Only Meta's billed transcription is held against the day cap; the local streaming ear costs nothing.
@@ -294,14 +312,14 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
   // Each patient's listening session reports its utterances' statuses under the strip's own session id, and is present only while that strip session beats.
   const seqBase = new Map<string, number>();
   // A line waiting for its number keeps its words beside the tracked patient (serve/tracking), so a restart finishes it; the file holds no line once it is joined or delivered.
-  const listening = new ListenSessions(rt, { joinFile: join(o.storeRoot, "serve", "join-pending.json"), ...(o.listen ?? {}), heartbeat: (owner, sid) => heartbeats.present(owner, clientOf.get(sid) ?? sid), transcribe, ...(o.releaseWhole ? { releaseWhole: true } : {}), ...(o.staffHints?.length ? { staff: o.staffHints } : {}), ...(o.embed ? { embed: o.embed } : {}), onStatus: (owner, sid, seq, st) => setStatus(owner, clientOf.get(sid) ?? sid, seq + (seqBase.get(sid) ?? 0), st) });
+  const listening = new ListenSessions(rt, { joinFile: join(o.storeRoot, "serve", "join-pending.json"), ...(o.listen ?? {}), heartbeat: (owner, sid) => heartbeats.present(owner, clientOf.get(sid) ?? sid), transcribe, ...(fallback ? { fallbackClip } : {}), ...(o.releaseWhole ? { releaseWhole: true } : {}), ...(o.staffHints?.length ? { staff: o.staffHints } : {}), ...(o.embed ? { embed: o.embed } : {}), onStatus: (owner, sid, seq, st) => setStatus(owner, clientOf.get(sid) ?? sid, seq + (seqBase.get(sid) ?? 0), st) });
   const joinProblem = listening.joinProblem();
   if (joinProblem) o.log?.(`join-pending unreadable, kept aside as ${joinProblem.kept}: ${joinProblem.error}`);
   // Lines a frames stream finished, kept for the answer to its next part.
   const frameHeard = new Map<string, ListenUtterance[]>();
   const onHeard = (sid: string, us: ListenUtterance[]) => { const h = frameHeard.get(sid); if (h) h.push(...us); };
   const streamer = streamAsr ? new StreamListener(listening, streamAsr, { refuseFasterThanLive: o.listen?.replay === "refuse", onHeard })
-    : o.asr === "meta-stream" ? new MetaStreamListener(listening, { key: realtimeKey, ...(o.realtimeSocket ? { socket: o.realtimeSocket } : {}), languageBias: o.languageBias ?? [], ledger, runOf: (id) => rt.task(id)?.run_id ?? null, refuseFasterThanLive: o.listen?.replay === "refuse", onHeard })
+    : o.asr === "meta-stream" ? new MetaStreamListener(listening, { key: realtimeKey, ...(o.realtimeSocket ? { socket: o.realtimeSocket } : {}), languageBias: o.languageBias ?? [], ledger, runOf: (id) => rt.task(id)?.run_id ?? null, refuseFasterThanLive: o.listen?.replay === "refuse", onHeard, ...(fallback ? { fallback } : {}), ...(o.fallbackMs !== undefined ? { fallbackMs: o.fallbackMs } : {}) })
     : null;
   const wakeLog = join(o.storeRoot, "..", "wake.jsonl");
   // The patient each listening session started with keeps the session's own id, so a session that never moves reads as before.
@@ -332,6 +350,11 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
     if (!e.press && last && Math.abs(said - last.at) < ARRIVAL_SAME_PHRASE_MS) return last.reply;
     const r = await rt.emergency(owner, { text: e.text, spoken_at: e.spoken_at, source: e.source, ...(e.wake ? { wake: e.wake } : {}), args: { unidentified_ref: unidentifiedRef(new Date(e.spoken_at)), reason: emergencyReason(e.text), ...(o.emergencyClinicId ? { clinic_id: o.emergencyClinicId } : {}) } });
     arrivals.set(owner, { reply: r, at: said });
+    pendArrival(owner, r, e.spoken_at);
+    return r;
+  };
+  // Lines said after an arrival opened, by the phrase, the press or the clinician's own words, wait for its patient rather than the page's until the write lands.
+  const pendArrival = (owner: string, r: { task_id: string; line_id: string; action_id: string }, spokenAt: string) => {
     const v = rt.view(r.task_id);
     if (!v?.patient_id && !pending.has(owner)) {
       const wait = o.pendingMaxMs ?? PENDING_MAX_MS;
@@ -346,9 +369,8 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       };
       const timer = setTimeout(expire, wait);
       timer.unref?.();
-      pending.set(owner, { task_id: r.task_id, reply: r, since: Date.parse(e.spoken_at), page: trackOf(owner).page, held: [], timer });
+      pending.set(owner, { task_id: r.task_id, reply: r, since: Date.parse(spokenAt), page: trackOf(owner).page, held: [], timer });
     }
-    return r;
   };
   // The rest of an arrival line waits for that same arrival, carrying only its own voice evidence.
   const continueArrival = async (owner: string, taskId: string, text: string, spokenAt: string, source: "text" | "audio", evidence: Pick<Parameters<EmrRuntime["say"]>[0], "voiceprint" | "clip"> = {}) => {
@@ -401,12 +423,13 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       return { session_id: sessionId, seq, accepted: true, utterances: [], partial: null, errors: [error] };
     }
     const spokenAt = new Date(arrived).toISOString();
-    // Just after the device heard the wake phrase, "emergency" alone at the start of the next words completes "hey Pisgah, emergency".
-    const said = EMERGENCY_LINE.test(text) || (hint === "emergency" && emergencyHeardLoosely(text)) || (hint === "after_wake" && /^\W*emergency\b/i.test(text));
+    // The phrase is taken as it is with a patient open: strict, written loosely by the ear, inside the first forty characters, or the emergency first on the line after the wake (4 Nov rehearsal).
+    const inside = emergencyInside(text);
+    const said = EMERGENCY_LINE.test(text) || inside !== null || (emergencyHeardLoosely(text) && (hint === "emergency" || !/^\W*(?:hey|hi|hay|okay|ok)\W*emergency/i.test(text))) || (hint === "after_wake" && EMERGENCY_START.test(text));
     o.log?.(`listen with no patient: ${hint ? `${hint === "emergency" ? "device heard emergency" : "just after the wake phrase"}, ` : ""}${text ? `${text.split(/\s+/).length} words` : "silence"}, phrase ${said ? "said" : "not said"}`);
     if (said && rt.kinds(owner).includes("open_unnamed_encounter")) {
       const r = await openArrival(owner, { text, spoken_at: spokenAt, source: "audio" });
-      await continueArrival(owner, r.task_id, afterEmergency(text), spokenAt, "audio", { ...(print ? { voiceprint: await print } : {}), clip: wav });
+      await continueArrival(owner, r.task_id, inside ?? afterEmergency(text), spokenAt, "audio", { ...(print ? { voiceprint: await print } : {}), clip: wav });
       setStatus(owner, sessionId, seq, { status: "completed", task_id: r.task_id, line_id: r.line_id });
       return { session_id: sessionId, seq, accepted: true, utterances: [{ id: r.line_id, line_id: r.line_id, task_id: r.task_id, text, class: "instruction", classes: ["instruction"] }], partial: null, entry: "emergency" };
     }
@@ -804,11 +827,11 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       const owner = own(req, parse(Owner, url.searchParams.get("owner") ?? ""));
       return [200, { owner, target: current(owner), ...(pending.has(owner) ? { pending: pending.get(owner)!.task_id } : {}) }];
     }
-    // Each utterance's status in one listening session: accepted, processing, failed or completed, with the error when it failed.
+    // Each utterance's status in one listening session: accepted, processing, failed or completed, with the error when it failed, and state done once the owner is done with its patient.
     if (parts.length === 2 && parts[1] === "listen" && m === "GET") {
       const owner = own(req, parse(Owner, url.searchParams.get("owner") ?? ""));
       const session = parse(SessionId, url.searchParams.get("session_id") ?? "");
-      return [200, { session_id: session, utterances: [...(statuses.get(`${owner}\u0000${session}`)?.values() ?? [])].sort((x, y) => x.seq - y.seq) }];
+      return [200, { session_id: session, utterances: [...(statuses.get(`${owner}\u0000${session}`)?.values() ?? [])].sort((x, y) => x.seq - y.seq), ...finished.get(`${owner}\u0000${session}`) }];
     }
     if (parts.length === 2 && parts[1] === "listen" && m === "POST") return listen(req);
     // D30 presence: a strip session takes a key, then beats with it while its tab is visible and its microphone is live.
@@ -881,7 +904,8 @@ export async function startEmrServe(o: EmrServeOptions): Promise<EmrServe> {
       const name = kws[1]!;
       const file = o.kwsDir && KWS_FILE.test(name) ? join(o.kwsDir, name) : null;
       if (!file || !existsSync(file)) { send(res, 404, { error: "no such file" }, cors); return; }
-      res.writeHead(200, { ...cors, "content-type": KWS_TYPES[name.slice(name.lastIndexOf("."))] ?? "application/octet-stream", "cache-control": "max-age=86400" });
+      // The keyword list and worker change with the spotter's settings, so the browser asks for them each time; the model and wasm keep a day.
+      res.writeHead(200, { ...cors, "content-type": KWS_TYPES[name.slice(name.lastIndexOf("."))] ?? "application/octet-stream", "cache-control": name === "keywords.json" || name === "worker.js" ? "no-store" : "max-age=86400" });
       res.end(readFileSync(file));
       return;
     }

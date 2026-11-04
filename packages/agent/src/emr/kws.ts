@@ -14,7 +14,7 @@ export const KWS_SOURCES = {
 export const KWS_MODEL_FILES = ["encoder-epoch-12-avg-2-chunk-16-left-64.onnx", "decoder-epoch-12-avg-2-chunk-16-left-64.onnx", "joiner-epoch-12-avg-2-chunk-16-left-64.onnx", "tokens.txt"] as const;
 // The two phrases as the model's BPE tokens; a boost and threshold per phrase, tuned on synthetic voices and kept here so the strip and the measurement agree.
 export const KWS_KEYWORDS = {
-  wake: ["▁HE Y ▁PI S G A H :1.5 #0.2 @wake", "▁HE Y ▁PI Z G A H :1.5 #0.2 @wake", "▁HE Y ▁PI S G A :1.5 #0.2 @wake"],
+  wake: ["▁HE Y ▁PI S G A H :3.0 #0.08 @wake", "▁HE Y ▁PI Z G A H :3.0 #0.08 @wake", "▁HE Y ▁PI S G A :3.0 #0.08 @wake", "▁HE Y ▁PI S ▁GA :3.0 #0.08 @wake", "▁HE Y ▁P IS G A :3.0 #0.08 @wake", "▁HA Y ▁PI S G A :3.0 #0.08 @wake", "▁A ▁PI S G A H :3.0 #0.08 @wake"],
   emergency: ["▁E M ER G EN C Y :1.5 #0.2 @emergency"]
 } as const;
 

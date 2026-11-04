@@ -1,10 +1,10 @@
-import { mkdtempSync, readdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ModelClient } from "@hey-pisgah/model";
 import { readStream } from "@hey-pisgah/store";
-import { recordingSocket, replaySocket, type SocketFactory } from "@hey-pisgah/voice";
+import { concat, recordingSocket, replaySocket, type SocketFactory } from "@hey-pisgah/voice";
 import type { EarReading, SecondEar } from "../src/emr/ears.js";
 import type { ListenSessions, StreamSegment } from "../src/emr/listen.js";
 import { asrSwitch } from "../src/emr/local-ears.js";
@@ -71,7 +71,7 @@ function turn(id: number, startMs: number, endMs: number, words: string, final =
   ];
 }
 
-async function boot(scripts: Parameters<typeof fakeMeta>[0], o: { gate?: (said: string) => ReturnType<typeof obs>; socket?: (f: SocketFactory) => SocketFactory; numberMs?: number; release?: boolean; holdMs?: number; heard?: string; levers?: boolean } = {}) {
+async function boot(scripts: Parameters<typeof fakeMeta>[0], o: { gate?: (said: string) => ReturnType<typeof obs>; socket?: (f: SocketFactory) => SocketFactory; numberMs?: number; release?: boolean; holdMs?: number; heard?: string; levers?: boolean; rest?: string } = {}) {
   const root = emrRoot();
   const port = new FakeEmr();
   let rt: EmrRuntime | null = null;
@@ -79,11 +79,13 @@ async function boot(scripts: Parameters<typeof fakeMeta>[0], o: { gate?: (said: 
   const meta = fakeMeta(scripts);
   const gate = o.gate ?? ((said: string) => (said.includes("37.6") ? obs(said, { temp_c: "37.6" }) : said.includes("116") ? obs(said, { pulse: 116 }) : [{ class: "aside" as const }]));
   const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater(gate, seen), taskStateOf: (id) => rt?.stateOf(id) ?? null });
-  const ear: SecondEar = async () => reading(o.heard ?? "temperature 37.6 pulse 116");
+  // Every clip the local ear and Voice Transcribe were each given, so a test can tell which ear read which line.
+  const earClips: number[] = [], restClips: number[] = [];
+  const ear: SecondEar = async (wav) => { earClips.push(wav.length); return reading(o.heard ?? "temperature 37.6 pulse 116"); };
   const s = await startEmrServe({ strip: { mode: "open" },
     storeRoot: root, port, client, listenPort: 0, runtime: { holdMs: o.holdMs ?? 0, proofRetryMs: 1, ...(o.levers ? { speed: leversFrom(KEPT_LEVERS) } : {}) }, preferences: false, ears: ear, asr: "meta-stream", ...(o.release ? { releaseWhole: true } : {}),
     realtimeSocket: o.socket ? o.socket(meta.factory) : meta.factory, realtimeKey: () => "k-test",
-    transcribe: async () => { throw new Error("the chunk ear is not used on the frames route"); },
+    transcribe: async (wav, _k, sid) => { if (o.rest === undefined) throw new Error("the chunk ear is not used on the frames route"); restClips.push(wav.length); return { final: true, text: o.rest, audio_ms: 0, session_id: sid, cost_usd: 0.0001 }; },
     listen: { numberJoinWaitMs: o.numberMs ?? 5000, strongJoinWaitMs: 5000 }
   });
   rt = s.runtime;
@@ -95,7 +97,7 @@ async function boot(scripts: Parameters<typeof fakeMeta>[0], o: { gate?: (said: 
     return { status: r.status, body: (await r.json()) as Record<string, any> };
   };
   const ledger = () => readdirSync(join(root, "ledger")).filter((f) => f.endsWith(".jsonl")).flatMap((f) => readStream(root, `ledger/${f.replace(/\.jsonl$/, "")}`)).filter((e) => e.record_type === "reading.call").map((e) => e.payload as Record<string, any>);
-  return { s, port, root, seen, meta, stream, ledger };
+  return { s, port, root, seen, meta, stream, ledger, earClips, restClips };
 }
 
 describe("the Meta realtime switch", () => {
@@ -130,6 +132,34 @@ describe("the Meta realtime first ear", () => {
     expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, temp_c: "37.6" }, { admission_id: ADM, pulse: 116 }]);
     const health = (await (await fetch(`${s.url}/health`)).json()) as Record<string, any>;
     expect(health["ears"]["first_ear"]).toBe("meta:muse-voice-transcribe-1.0:realtime");
+    await s.close();
+  });
+
+  it("reads a line the realtime ear never turned into words with the local ear, and the runtime gets it once, finished by the fallback", async () => {
+    // The endpoint hears the first line only; the second, 1.8 s of speech, gets no turn at all, as on 3 Nov.
+    const { s, port, seen, stream } = await boot([[], [...turn(0, 400, 1900, "Chart his pulse 116.")]], { heard: "Chart his temperature 37.6.", rest: "Chart his temperature 37.6." });
+    expect((await stream(pcm([["quiet", 400], ["tone", 1500], ["quiet", 900], ["tone", 1800], ["quiet", 1500]]))).status).toBe(202);
+    await s.runtime.settled();
+    // The gate decides lines side by side, so the order it saw them in is not the order they were said.
+    expect([...seen].sort()).toEqual(["Chart his pulse 116.", "Chart his temperature 37.6."]);
+    expect(port.writes.map((w) => w.args)).toContainEqual({ admission_id: ADM, temp_c: "37.6" });
+    expect(s.runtime.views(OWNER)[0]!.transcript.map((l) => [l.text, l.ambient?.finished_by])).toEqual([["Chart his pulse 116.", "number_alone"], ["Chart his temperature 37.6.", "fallback_parakeet"]]);
+    await s.close();
+  });
+
+  it("gives a fallback line its second reading from Voice Transcribe, never from the local ear that read it, and says so on the line", async () => {
+    const { s, port, root, stream, earClips, restClips } = await boot([[], []], { heard: "Chart his temperature 37.6.", rest: "Chart his temperature 37.6." });
+    expect((await stream(pcm([["quiet", 400], ["tone", 1800], ["quiet", 1500]]))).status).toBe(202);
+    await s.runtime.settled();
+    expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, temp_c: "37.6" }]);
+    // The local ear read the line once, as its first reading; the same clip went to Voice Transcribe for the second.
+    expect(earClips).toHaveLength(1);
+    expect(restClips).toEqual(earClips);
+    const records = readdirSync(join(root, "emr")).filter((f) => f.endsWith(".jsonl")).flatMap((f) => readFileSync(join(root, "emr", f), "utf8").trim().split("\n")).map((x) => JSON.parse(x) as { record_type: string; payload: Record<string, any> });
+    const compared = records.filter((r) => r.record_type === "ears.compared").map((r) => r.payload);
+    expect(compared).toEqual([expect.objectContaining({ provider: "meta", model: "muse-voice-transcribe-1.0" })]);
+    const line = s.runtime.views(OWNER)[0]!.transcript[0]!;
+    expect(line.ambient).toMatchObject({ finished_by: "fallback_parakeet", second_reading: "meta_rest" });
     await s.close();
   });
 
@@ -423,15 +453,15 @@ describe("the realtime session rules", () => {
     expect(Math.max(...leads.slice(5))).toBeLessThan(500);
   }, 10_000);
 
-  it("sends the audio held while the session opened at once, so the whole stream is not heard late", async () => {
+  it("sends the audio held while the session opened at once, its pause cut to a second, so the whole stream is not heard late", async () => {
     const meta = fakeMeta([[]]);
     const { l } = chain();
     const m = new MetaStreamListener(l, { key: () => "k", socket: meta.factory, now: () => 0, padAfterMs: 0 });
     await m.open({ owner: OWNER, target: { admission_id: ADM }, session_id: "held", rate: RATE });
-    // The strip kept 2.5 s while the handshake ran, and it arrives in one part.
-    m.feed("held", quiet(2500), -2500);
-    expect((meta.conns[0]!.sentBytes / 2 / RATE) * 1000).toBe(2500);
-    await m.end("held");
+    // The strip kept 2.5 s while the handshake ran, and it arrives in one part; Meta hears no faster than real time, so its long pause is cut.
+    m.feed("held", concat([tone(1000), quiet(1500)]), -2500);
+    expect((meta.conns[0]!.sentBytes / 2 / RATE) * 1000).toBe(2000);
+    expect((await m.end("held")).trimmed_ms).toBe(500);
   });
 
   it("opens the session again after a dropped connection and sends the line it was cut in again, so its words are not lost", async () => {

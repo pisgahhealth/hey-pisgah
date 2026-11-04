@@ -31,6 +31,8 @@ export type SpeakerInput = readonly number[] | { readonly pcm16k: readonly Uint8
 export const DOOR_AUDIO_MAX_MS = 15_000;
 // The shortest window that carries enough voice to match; a shorter piece is matched with its neighbour.
 export const WINDOW_MIN_MS = 500;
+// The longest window a heard line is matched on: a stretch that holds the patient's voice too still has windows in the owner's voice alone.
+export const LISTEN_WINDOW_MS = 6_000;
 // The longest line that is matched at all; a longer one is unverified, said so, rather than matched in part.
 export const LINE_MATCH_MAX_MS = 60_000;
 
@@ -81,8 +83,8 @@ export function lineVerdict(vs: readonly SpeakerVerdict[]): SpeakerVerdict {
   const owned = vs.find((v): v is { speaker: "owner"; token: string } => v.speaker === "owner");
   return { speaker: "unverified", reason: vs.some((v) => v.speaker !== "unverified") ? "mixed_speakers" : (vs.find((v) => v.speaker === "unverified") as { reason: string }).reason, ...(owned ? { owner_token: owned.token } : {}) };
 }
-// The work a mixed line that holds the owner's voice does as a line in his voice does: tests, drugs and admissions at once, the diagnosis under its confirm (D48).
-export const MIXED_OWNER_KINDS: ReadonlySet<string> = new Set(["order_test", "prescribe", "admit_patient", "request_admission", "record_diagnosis"]);
+// The work a mixed line that holds the owner's voice does as a line in his voice does: tests, drugs, admissions and care plan items at once, the diagnosis under its confirm (D48).
+export const MIXED_OWNER_KINDS: ReadonlySet<string> = new Set(["order_test", "prescribe", "admit_patient", "request_admission", "record_diagnosis", "add_care_plan_item"]);
 // Where the voiceprint is computed: by the agent (the default, so every kept run replays) or by the hospital from the line's audio.
 export type VoiceprintAt = "agent" | "door";
 export const voiceprintAt = (v: string | undefined): VoiceprintAt => (v === "door" ? "door" : "agent");

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DELEGATE_KIND, type DelegationHandoff, type DelegationTeam } from "../src/emr/delegate.js";
 import { ORDER_REFERENCE_KINDS } from "../src/emr/gate.js";
 import type { EmrCommit, EmrTarget, OrderResult, Orderables, Provenance, WatchRead, WorkArgs } from "../src/emr/port.js";
-import type { SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
+import type { SpeakerInput, SpeakerVerdict, Voiceprint } from "../src/emr/speaker.js";
 import { ClerkFake, DOC, PAT, VISIT, clerkBoot, ins } from "./clerking-helpers.js";
 
 const KINDS = [...new Set([...ORDER_REFERENCE_KINDS, "record_note", DELEGATE_KIND])];
@@ -24,7 +24,9 @@ class LabFake extends ClerkFake {
   delegationHandoffs(): Record<string, DelegationHandoff> { return { order_test: { team: "lab", subject_table: "orders" } }; }
   resultStates(): readonly string[] { return RESULTED; }
   async orderResults(_owner: string, _subject: EmrTarget & { visit_id?: string | null }): Promise<OrderResult[]> { return [...this.states].map(([id, s]) => ({ id, test: s.test, state: s.state })); }
-  readonly speaker = async (): Promise<SpeakerVerdict> => { this.t += 1; return { speaker: "owner", token: `v1.${String(1_761_700_000_000 + this.t)}.${"A".repeat(43)}` }; };
+  // With byWindow on, only a window whose vector is 5 is the owner's, so a line with other windows is mixed.
+  byWindow = false;
+  readonly speaker = async (_o: string, v: SpeakerInput): Promise<SpeakerVerdict> => { this.t += 1; return !this.byWindow || (Array.isArray(v) && v[0] === 5) ? { speaker: "owner", token: `v1.${String(1_761_700_000_000 + this.t)}.${"A".repeat(43)}` } : { speaker: "unverified", reason: "no_match" }; };
   override async commit(kind: string, args: WorkArgs, key: string, prov: Provenance): Promise<EmrCommit> {
     const hit = this.writes.find((w) => w.key === key);
     if (hit) return { ok: true, record_id: hit.id, record_version: 1, event_ids: [], replayed: true };
@@ -187,5 +189,23 @@ describe("hand-offs keyed by the order, conditions keyed by the result", () => {
     expect(port.of("record_note")).toHaveLength(0);
     void VISIT;
     await a.rt.stop();
+  });
+});
+
+describe("a hand-off carries the authority of the order it follows", () => {
+  it("hands the tests of a mixed line to the lab under the order's own authority, never held for a second voice match", async () => {
+    const port = new LabFake();
+    port.byWindow = true;
+    const a = clerkBoot(script, { port });
+    // One window in the owner's voice and one in the patient's: the line is mixed, and D48 sends its tests under the owner window's token.
+    const mixed: Voiceprint = { ...OWNER, segments: [{ vector: [5], ms: 20 }, { vector: [1], ms: 20 }] };
+    const said = await a.rt.say({ owner: DOC, target: { patient_id: PAT }, text: "Send a full blood count and a malaria test.", source: "audio", voiceprint: mixed });
+    await a.rt.settled();
+    await wait(50);
+    await a.rt.settled();
+    const orders = port.of("order_test");
+    expect(orders.map((w) => w.args["test"])).toEqual(["fbc", "malaria"]);
+    expect(port.of(DELEGATE_KIND).map((w) => w.args["subject_id"]).sort()).toEqual(orders.map((w) => w.id).sort());
+    expect(a.rt.view(said.task_id)!.asked).toEqual([]);
   });
 });

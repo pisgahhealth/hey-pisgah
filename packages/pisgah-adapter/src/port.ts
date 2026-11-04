@@ -45,6 +45,8 @@ export type PisgahPortOptions = {
 export type DoorBudget = { capacity: number; perSecond: number; writeReserve: number; readWaitMs: number };
 // Pisgah's door gives an agent session 60 requests at once and one a second after that (rate-limit.ts).
 export const PISGAH_AGENT_BUDGET: DoorBudget = { capacity: 60, perSecond: 1, writeReserve: 15, readWaitMs: 15_000 };
+// The budget a profile names for its door, in the adapter's own field names.
+const profileBudget = (p: { budget?: { capacity: number; per_second: number; write_reserve: number; read_wait_ms: number } | undefined }): DoorBudget | null => (p.budget ? { capacity: p.budget.capacity, perSecond: p.budget.per_second, writeReserve: p.budget.write_reserve, readWaitMs: p.budget.read_wait_ms } : null);
 
 // One owner's share of the door budget: a write always goes and spends a token, a read waits for a token above the write reserve and gives up after its wait.
 // The hospital's own words for a refused write, kept short and plain so the owner's strip can say why.
@@ -164,6 +166,9 @@ export class PisgahPort implements EmrPort {
     return Object.fromEntries(Object.entries(this.profile.verbal_issuers).filter(([, v]) => v.receivers.includes(owner)).map(([k, v]) => [k, { words: v.words, label: v.label }]));
   }
 
+  // The kinds this door demands a spoken confirm for, read from the profile so the runtime asks exactly for those.
+  confirmKinds(): readonly string[] { return this.profile.confirm_kinds; }
+
   orderables(): Orderables {
     const o = this.profile.orders;
     return { tests: Object.fromEntries(Object.entries(o?.tests ?? {}).map(([k, v]) => [k, v.words])), drugs: Object.fromEntries(Object.entries(o?.drugs ?? {}).map(([k, v]) => [k, { words: v.words, controlled: v.controlled }])) };
@@ -280,7 +285,7 @@ export class PisgahPort implements EmrPort {
   }
 
   private readonly pacers = new Map<string, DoorPacer>();
-  private pacerOf(owner: string): DoorPacer { let p = this.pacers.get(owner); if (!p) { p = new DoorPacer(this.o.budget ?? PISGAH_AGENT_BUDGET); this.pacers.set(owner, p); } return p; }
+  private pacerOf(owner: string): DoorPacer { let p = this.pacers.get(owner); if (!p) { p = new DoorPacer(this.o.budget ?? profileBudget(this.profile) ?? PISGAH_AGENT_BUDGET); this.pacers.set(owner, p); } return p; }
   refusedCount(): number { return this.refusals.length; }
   private now(): Date { return this.o.now?.() ?? new Date(); }
 

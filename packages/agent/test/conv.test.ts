@@ -120,7 +120,9 @@ describe("CONV 0: the answer to which medicine is the owner's own request, throu
     const { rt, port } = boot((s) => (/^IV paracetamol one gram/.test(s) ? [ins("prescribe", { drug: "paracetamol_iv", dose: "1 g" })] : ASIDE));
     const a = await say(rt, "IV paracetamol one gram.", DRB);
     await rt.settled();
-    expect(rt.view(a.task_id)!.questions.some((q) => /How many/.test(q.text))).toBe(true);
+    // Dr B's order missing its count is refused in words, never asked of the owner (4 Nov rehearsal).
+    expect(rt.view(a.task_id)!.questions.some((q) => /How many/.test(q.text))).toBe(false);
+    expect(rt.view(a.task_id)!.notes.map((n) => n.text)).toContain("Dr B said that, so nothing was sent. Say it yourself.");
     await say(rt, "Three.", OWNER, { task: a.task_id });
     await rt.settled();
     expect(rx(port)).toHaveLength(0);
@@ -422,7 +424,8 @@ describe("CONV review fixes (codex review of ce4de52)", () => {
     await b.rt.settled();
     await say(b.rt, "IV paracetamol one gram.", DRB, { task: a.task_id });
     await b.rt.settled();
-    expect(b.rt.view(a.task_id)!.questions.at(-1)!.text).toMatch(/How many/);
+    // Dr B's count is never asked of the owner, so only the owner's own question stays open (4 Nov rehearsal).
+    expect(b.rt.view(a.task_id)!.questions.map((q) => q.text)).toEqual([expect.stringMatching(/^Which test should I send\?/)]);
     await say(b.rt, "Three.", OWNER, { task: a.task_id });
     await b.rt.settled();
     expect(rx(b.port)).toHaveLength(0);
@@ -539,5 +542,16 @@ describe("F6: a spelled surname always lands", () => {
     expect(v.identities).toEqual([expect.objectContaining({ name: "Blessing Adeyemi", amended: [{ from: "Blessing Adimi", line_id: c.line_id }] })]);
     for (const x of [...v.notes.map((n) => n.text), ...v.questions.map((q) => q.text)].slice(from)) expect(x, x).not.toMatch(/Blessing|Adeyemi|Adimi/);
     await b.rt.stop();
+  });
+});
+
+describe("a medicine said plainly with its dose goes without a question", () => {
+  it("sends paracetamol one gram IV now as one dose of IV paracetamol, asking neither which medicine nor how many", async () => {
+    const { rt, port } = boot((s) => (/paracetamol/.test(s) ? [ins("prescribe", { drug: "paracetamol_iv", dose: "1 g" })] : ASIDE));
+    const a = await say(rt, "Start her on paracetamol one gram IV now.");
+    await rt.settled();
+    expect(rx(port)).toHaveLength(1);
+    expect(rx(port)[0]!.args).toMatchObject({ drug: "paracetamol_iv", dose: "1 g", quantity: 1, route: "iv" });
+    expect(rt.view(a.task_id)!.asked).toEqual([]);
   });
 });

@@ -6,6 +6,8 @@ import { decodeWav, encodeWav, resample, type FinalTranscript } from "@hey-pisga
 import { Timeline as TimelineSchema, talkChunks } from "@hey-pisgah/evaluator";
 import type { StreamAsr } from "../src/emr/local-ears.js";
 import { replayTranscriber } from "../src/emr/listen.js";
+import { EMERGENCY_KIND } from "../src/emr/entry.js";
+import { EmrPortError, OBSERVATION_KIND, type EmrTarget, type Provenance } from "../src/emr/port.js";
 import type { EmrRuntime } from "../src/emr/runtime.js";
 import { startEmrServe } from "../src/emr/serve.js";
 import { ADM, FakeEmr, OWNER, emrRoot, gater, until } from "./emr-helpers.js";
@@ -48,9 +50,9 @@ const vitalsGate = (said: string) => {
   return Object.keys(v).length ? obs(said, v) : [{ class: "aside" as const }];
 };
 
-async function boot(o: { asr: "stream" | "rest"; lines?: string[]; transcribe?: Parameters<typeof startEmrServe>[0]["transcribe"]; idleMs?: number }) {
+async function boot(o: { asr: "stream" | "rest"; lines?: string[]; transcribe?: Parameters<typeof startEmrServe>[0]["transcribe"]; idleMs?: number; port?: FakeEmr }) {
   const root = emrRoot();
-  const port = new FakeEmr();
+  const port = o.port ?? new FakeEmr();
   let rt: EmrRuntime | null = null;
   const seen: string[] = [];
   const client = new ModelClient({ storeRoot: root, mode: "mock", mock: gater(vitalsGate, seen), taskStateOf: (id) => rt?.stateOf(id) ?? null });
@@ -62,13 +64,13 @@ async function boot(o: { asr: "stream" | "rest"; lines?: string[]; transcribe?: 
   });
   rt = s.runtime;
   // One numbered part of a frames stream, as the strip posts it.
-  const part = async (q: { stream?: number; part: number; last?: boolean; session?: string; admissionId?: string | null; rate?: number; t?: number }, body: Buffer) => {
-    const page = q.admissionId === null ? "" : `&admissionId=${q.admissionId ?? ADM}`;
+  const part = async (q: { stream?: number; part: number; last?: boolean; session?: string; admissionId?: string | null; patientId?: string; rate?: number; t?: number }, body: Buffer) => {
+    const page = q.admissionId === null ? (q.patientId ? `&patientId=${q.patientId}` : "") : `&admissionId=${q.admissionId ?? ADM}`;
     const r = await fetch(`${s.url}/tasks/listen/stream?owner=${OWNER}&session_id=${q.session ?? "strip-1"}&rate=${q.rate ?? RATE}&stream=${q.stream ?? 0}&part=${q.part}${q.last ? "&last=1" : ""}${q.t ? `&t=${q.t}` : ""}${page}`, { method: "POST", headers: { "content-type": "audio/pcm" }, body: new Uint8Array(body) });
     return { status: r.status, body: (await r.json()) as Record<string, any> };
   };
   // A whole recording as parts of 80 ms frames, the last part closing the stream.
-  const frames = async (body: Buffer, o2: { stream?: number; session?: string; perPart?: number; admissionId?: string | null; rate?: number } = {}) => {
+  const frames = async (body: Buffer, o2: { stream?: number; session?: string; perPart?: number; admissionId?: string | null; patientId?: string; rate?: number } = {}) => {
     const rate = o2.rate ?? RATE;
     const size = ((rate * 80) / 1000) * 2 * (o2.perPart ?? 1);
     const answers: Record<string, any>[] = [];
@@ -127,6 +129,20 @@ describe("the strip's frames route", () => {
     await s.close();
   });
 
+  it("opens the stream on a page that still names a closed patient and refuses its words in words, instead of failing the stream", async () => {
+    const { s, port, frames } = await boot({ asr: "stream", lines: ["Chart his pulse 116"] });
+    const gone = "99999999-0000-4000-8000-000000000001";
+    const resolve = port.resolve.bind(port);
+    // The real port refuses a patient no longer on the list it reads with unknown_target.
+    port.resolve = async (t: EmrTarget, prov: Provenance) => { if (t.patient_id === gone) throw new EmrPortError("unknown_target", "the patient is not in the list the agent can read"); return resolve(t, prov); };
+    const answers = await frames(pcm([["quiet", 200], ["tone", 1000], ["quiet", 1000]]), { admissionId: null, patientId: gone, perPart: 2 });
+    expect(answers.every((a) => a["accepted"] === true)).toBe(true);
+    await s.runtime.settled();
+    expect(answers.flatMap((a) => a["errors"] ?? [])).toEqual([expect.stringMatching(/visit is closed/)]);
+    expect(port.writes).toEqual([]);
+    await s.close();
+  });
+
   it("sends the strip back to chunks when no patient is open, and a stream ended while the strip was away reopens with the patient it was with", async () => {
     const { s, port, part } = await boot({ asr: "stream", lines: ["Chart his pulse 116", "Chart his pulse 120"], idleMs: 300 });
     expect(await part({ session: "fresh", part: 0, admissionId: null }, pcm([["quiet", 80]]))).toMatchObject({ status: 409, body: { fallback: "chunks", reason: "no_patient" } });
@@ -141,6 +157,20 @@ describe("the strip's frames route", () => {
     expect(two).toMatchObject({ status: 202, body: { tracking: { admission_id: ADM } } });
     await s.runtime.settled();
     expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, pulse: 116 }, { admission_id: ADM, pulse: 120 }]);
+    await s.close();
+  });
+
+  it("closes at once on the strip's empty last part from a hidden page, finishing the held line with no idle wait and no padding", async () => {
+    const { s, port, part } = await boot({ asr: "stream", lines: ["Chart his pulse 116"] });
+    expect((await part({ part: 0 }, pcm([["quiet", 200], ["tone", 1000]]))).status).toBe(202);
+    const t0 = Date.now();
+    const closed = await part({ part: 1, last: true }, Buffer.alloc(0));
+    expect(closed).toMatchObject({ status: 202, body: { last: true, audio_ms: 1200 } });
+    expect(closed.body["padded_ms"] ?? 0).toBe(0);
+    expect(Date.now() - t0).toBeLessThan(2000);
+    await s.runtime.settled();
+    expect(port.writes.map((w) => w.args)).toEqual([{ admission_id: ADM, pulse: 116 }]);
+    expect(await part({ part: 2 }, pcm([["quiet", 80]]))).toMatchObject({ status: 409, body: { restart: true, reason: "unknown_stream" } });
     await s.close();
   });
 
@@ -224,4 +254,44 @@ describe("the strip's frames route", () => {
     expect(streamed.port.writes.map((w) => w.args)).toEqual(viaChunks);
     await streamed.s.close();
   }, 60_000);
+});
+
+describe("the owner's done line on the chunk path (Samuel, 4 Nov)", () => {
+  // The ward's hospital with arrivals allowed, so the next patient said after the done line opens one.
+  class ArrivalEmr extends FakeEmr { kindsFor(): readonly string[] { return [OBSERVATION_KIND, EMERGENCY_KIND]; } }
+  const said: Record<string, string> = { "done-1": "I'm done with this patient", "done-2": "I'm done with this patient, I have another one, a man about 50" };
+  const chunk = async (url: string, session: string, seq: number) => {
+    const audio = pcm([["quiet", 200], ["tone", 1000], ["quiet", 1000]]);
+    const form = new FormData();
+    form.append("audio", new Blob([Buffer.from(encodeWav(new Float32Array(audio.length / 2).map((_, i) => audio.readInt16LE(i * 2) / 32768), RATE))], { type: "audio/wav" }), `c${seq}.wav`);
+    form.append("owner", OWNER); form.append("admissionId", ADM); form.append("session_id", session); form.append("seq", String(seq));
+    return fetch(`${url}/tasks/listen?wait=1`, { method: "POST", body: form });
+  };
+  const status = async (url: string, session: string) => (await (await fetch(`${url}/tasks/listen?owner=${OWNER}&session_id=${session}`)).json()) as Record<string, any>;
+  // The session is ended beside the runtime's queues, so its marker's status is waited for.
+  const ended = async (url: string, session: string) => {
+    for (let i = 0; i < 200; i++) { const st = await status(url, session); if (st["state"] && st["utterances"].some((u: any) => u.seq === 1 && u.status === "completed")) return st; await new Promise((r) => setTimeout(r, 10)); }
+    return status(url, session);
+  };
+
+  it("ends the patient's listening session at its next number and reports done, with the arrival the same line opened", async () => {
+    const { s } = await boot({ asr: "rest", port: new ArrivalEmr(), transcribe: async (_w, _k, sid) => ({ final: true, text: said[sid.replace(/-\d+$/, "")] ?? "", audio_ms: 1000, session_id: sid, cost_usd: 0 }) });
+    expect((await chunk(s.url, "done-1", 0)).status).toBe(202);
+    await s.runtime.settled();
+    let st = await ended(s.url, "done-1");
+    expect(st).toMatchObject({ state: "done", reason: "owner_done" });
+    expect(st["arrival"]).toBeUndefined();
+    // The end marker went at the session's next number, as the strip's own marker would.
+    expect(st["utterances"].map((u: any) => [u.seq, u.status])).toEqual([[0, "completed"], [1, "completed"]]);
+    const task = s.runtime.view(st["task_id"])!;
+    expect([task.state, task.reason]).toEqual(["done", "owner_done"]);
+    // Negative control: a session that said nothing of the kind reports no state.
+    expect((await status(s.url, "other"))["state"]).toBeUndefined();
+    expect((await chunk(s.url, "done-2", 0)).status).toBe(202);
+    await s.runtime.settled();
+    st = await ended(s.url, "done-2");
+    expect(st).toMatchObject({ state: "done", reason: "owner_done", arrival: { task_id: expect.any(String) } });
+    expect(s.runtime.view(st["arrival"].task_id)!.unidentified).toBe(true);
+    await s.close();
+  });
 });

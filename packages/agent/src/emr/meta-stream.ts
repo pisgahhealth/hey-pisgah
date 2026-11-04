@@ -1,4 +1,4 @@
-import { ASR_MODEL, RealtimeSession, SILENCE_RMS, USD_PER_AUDIO_HOUR, VoiceError, concat, resample, type RealtimeEvent, type RealtimeMode, type RealtimeRate, type SocketFactory } from "@hey-pisgah/voice";
+import { ASR_MODEL, RealtimeSession, SILENCE_RMS, USD_PER_AUDIO_HOUR, VoiceError, concat, encodeWav, resample, type RealtimeEvent, type RealtimeMode, type RealtimeRate, type SocketFactory } from "@hey-pisgah/voice";
 import type { ListenSessions, ListenUtterance } from "./listen.js";
 import type { ReadingLedger } from "./local-ears.js";
 import type { EmrTarget } from "./port.js";
@@ -33,6 +33,16 @@ export const META_TURN_TAIL_MS = 300;
 export const META_KEEP_MS = 60_000;
 // Reconnects tried after a dropped connection before the stream fails.
 export const META_RECONNECTS = 3;
+// Meta hears audio no faster than real time, so a stream further ahead of its clock than this is late by that much and its pauses are shortened until it is live again.
+export const META_CATCHUP_AFTER_MS = 250;
+// While a stream catches up each pause keeps this much quiet, more than Meta needs to end a turn, so two lines never run together.
+export const META_CATCHUP_KEEP_MS = 1_000;
+// Speech the stream captured that no realtime turn put into words within this long of its end is read by the local fallback ear.
+export const META_FALLBACK_MS = 6_000;
+// Only a stretch of speech at least this long, first loud frame to last, is read by the fallback ear.
+export const META_FALLBACK_MIN_MS = 1_200;
+// The quiet that closes a stretch of speech for the fallback watch.
+export const META_FALLBACK_QUIET_MS = 700;
 
 export type MetaStreamOptions = {
   key: () => string; socket?: SocketFactory; url?: string; mode?: RealtimeMode; languageBias?: readonly string[];
@@ -40,7 +50,10 @@ export type MetaStreamOptions = {
   refuseFasterThanLive?: boolean; rollAtMs?: number; overlapMs?: number; joinQuietMs?: number; padAfterMs?: number; paceMs?: number; joinWaitMs?: number; turnWaitMs?: number; reconnectDelayMs?: number;
   // Every utterance a completed turn became, as it is delivered, for a caller that reports lines while the stream is still open.
   onHeard?: (sessionId: string, us: ListenUtterance[]) => void;
+  // The local ear that reads captured speech the realtime ear never turned into words; off when not given.
+  fallback?: (wav: Uint8Array) => Promise<string>; fallbackMs?: number;
 };
+type Span = { start_ms: number; end_ms: number };
 
 type Turn = { start_ms: number; end_ms: number | null; seq: number };
 // A connection owns the turns that start in [from_ms, until_ms) for its own patient; until the session before it has closed, its finished turns wait in held.
@@ -50,12 +63,16 @@ type Conn = {
   target: EmrTarget; listen_sid: string; after: Promise<unknown> | null; held: (() => void)[]; on_empty: (() => void) | null; on_close: (() => void) | null;
 };
 type Live = {
-  owner: string; next_turn: number; rate: number; send_rate: RealtimeRate; sids: Set<string>; delivered: { start_ms: number; end_ms: number; conn: Conn }[];
+  owner: string; next_turn: number; rate: number; send_rate: RealtimeRate; sids: Set<string>; delivered: { start_ms: number; end_ms: number; conn: Conn | null }[];
   conn: Conn | null; next: Conn | null; closing: Conn | null; rolling: Promise<void> | null; roll_since: number; roll_retry_at: number;
   draining: Promise<unknown>[]; ring: { at_ms: number; x: Float32Array }[]; fed_ms: number; fed: number; quiet_ms: number; padded_ms: number; resent_ms: number; last_end_ms: number;
-  inbox: { x: Float32Array; at: number }[]; debt_ms: number; trimmed_ms: number;
+  inbox: { x: Float32Array; at: number; timed: boolean }[]; debt_ms: number; trimmed_ms: number;
   wall: { ms: number; at: number; duration: number }[]; billed_ms: number; work: Promise<unknown>; errors: string[]; opened: number; failed: Error | null;
   reconnecting: Promise<void> | null; dropped_ms: number; ended: boolean; pad: ReturnType<typeof setInterval> | null;
+  // The fallback watch: the stretch of speech being heard, stretches waiting for a realtime turn, what the realtime ear put into words, and the counts.
+  // A stretch's heard_at is when Meta could first have heard its last loud frame: when it was sent, or later when the stream ran ahead of Meta's clock.
+  // Completed turns not yet delivered are pending, so their speech is neither read by the fallback ear nor counted as worded before they are kept.
+  speech: (Span & { heard_at: number }) | null; watched: { span: Span; heard_at: number; timer: ReturnType<typeof setTimeout> | null }[]; worded: Span[]; pending: Span[]; fallbacks: number; late_dropped: number;
 };
 
 export class MetaStreamFailed extends Error { constructor(message: string, readonly code: number | null) { super(message); } }
@@ -84,7 +101,8 @@ export class MetaStreamListener {
     const l: Live = {
       owner: c.owner, next_turn: 0, rate: c.rate, send_rate: sendRateOf(c.rate), sids: new Set(), delivered: [], conn: null, next: null, closing: null, rolling: null, roll_since: 0, roll_retry_at: 0,
       draining: [], ring: [], fed_ms: 0, fed: 0, quiet_ms: 0, padded_ms: 0, resent_ms: 0, last_end_ms: -Infinity, inbox: [], debt_ms: 0, trimmed_ms: 0,
-      wall: [], billed_ms: 0, work: Promise.resolve(), errors: [], opened: this.now(), failed: null, reconnecting: null, dropped_ms: 0, ended: false, pad: null
+      wall: [], billed_ms: 0, work: Promise.resolve(), errors: [], opened: this.now(), failed: null, reconnecting: null, dropped_ms: 0, ended: false, pad: null,
+      speech: null, watched: [], worded: [], pending: [], fallbacks: 0, late_dropped: 0
     };
     this.live.set(c.session_id, l);
     try { l.conn = await this.connect(c.session_id, l, c.target, c.listen_sid ?? c.session_id, -Infinity); } catch (e) { this.live.delete(c.session_id); throw e; }
@@ -119,7 +137,7 @@ export class MetaStreamListener {
     if (g.refused) throw new StreamRefused(g.refused);
     l.fed += samples.length;
     if (this.o.refuseFasterThanLive && (l.fed / l.rate) * 1000 > now - l.opened + STREAM_LIVE_SLACK_MS) throw new StreamRefused("faster_than_live");
-    l.inbox.push({ x: samples, at: capturedAt ?? now - (samples.length / l.rate) * 1000 });
+    l.inbox.push({ x: samples, at: capturedAt ?? now - (samples.length / l.rate) * 1000, timed: capturedAt !== undefined });
     this.flushInbox(sessionId, l, false);
   }
 
@@ -132,29 +150,37 @@ export class MetaStreamListener {
         const room = (this.o.paceMs ?? META_LEAD_MAX_MS) - (l.conn.s.sentMs - (this.now() - l.conn.opened));
         if (room <= 0) return;
         const n = Math.round((room * l.rate) / 1000);
-        if (n < head.x.length) { take = head.x.subarray(0, n); head.x = head.x.subarray(n); head.at += (n / l.rate) * 1000; this.spoken(sessionId, l, take, head.at - (n / l.rate) * 1000); continue; }
+        if (n < head.x.length) { take = head.x.subarray(0, n); head.x = head.x.subarray(n); head.at += (n / l.rate) * 1000; this.spoken(sessionId, l, take, head.at - (n / l.rate) * 1000, head.timed); continue; }
       }
       l.inbox.shift();
-      this.spoken(sessionId, l, take, head.at);
+      this.spoken(sessionId, l, take, head.at, head.timed);
     }
   }
 
   // Spoken audio after a stall that was padded: its silent frames repay the padding, so the stream comes back to the clock without losing a word.
-  private spoken(sessionId: string, l: Live, x: Float32Array, at: number): void {
-    if (l.debt_ms <= 0) { this.take(sessionId, l, x, false, at); return; }
+  // Captured audio that arrives with the stream already ahead of its clock has each pause cut to META_CATCHUP_KEEP_MS until the stream is live again; audio with no capture times is sent whole.
+  private spoken(sessionId: string, l: Live, x: Float32Array, at: number, timed: boolean): void {
+    const inbox = l.inbox.reduce((n, p) => n + p.x.length, 0);
+    let ahead = timed && l.conn && !l.reconnecting ? l.conn.s.sentMs - (this.now() - l.conn.opened) + ((inbox + x.length) / l.rate) * 1000 : 0;
+    if (l.debt_ms <= 0 && ahead <= META_CATCHUP_AFTER_MS) { this.take(sessionId, l, x, false, at); return; }
     const fr = Math.round(l.rate * 0.02);
     let from = 0;
+    let quiet = l.quiet_ms;
     for (let i = 0; i < x.length; i += fr) {
       const f = x.subarray(i, i + fr);
-      if (l.debt_ms > 0 && rms(f) < SILENCE_RMS) {
+      const ms = (f.length / l.rate) * 1000;
+      if (rms(f) >= SILENCE_RMS) { quiet = 0; continue; }
+      if (l.debt_ms > 0 || (ahead > META_CATCHUP_AFTER_MS && quiet >= META_CATCHUP_KEEP_MS)) {
         if (i > from) this.take(sessionId, l, x.subarray(from, i), false, at + (from / l.rate) * 1000);
-        const ms = (f.length / l.rate) * 1000;
-        l.debt_ms -= ms;
+        if (l.debt_ms > 0) l.debt_ms -= ms;
+        ahead -= ms;
         l.trimmed_ms += ms;
         from = i + f.length;
-      }
+      } else quiet += ms;
     }
     if (from < x.length) this.take(sessionId, l, x.subarray(from), false, at + (from / l.rate) * 1000);
+    // The quiet run is the one counted frame by frame here, so the next piece keeps no more of the same pause.
+    l.quiet_ms = quiet;
   }
 
   // One stretch of audio, spoken or padding, into the ring and to every connection hearing it; the wall table keeps when each was captured, padding at the time it was sent.
@@ -166,6 +192,7 @@ export class MetaStreamListener {
     while (l.ring.length > 1 && l.ring[1]!.at_ms < l.fed_ms - META_KEEP_MS) l.ring.shift();
     l.wall.push({ ms: l.fed_ms, duration: ms, at: padded || capturedAt === undefined ? now : capturedAt + ms });
     if (l.wall.length > 4000) l.wall.splice(0, l.wall.length - 3000);
+    this.watchSpeech(sessionId, l, samples, l.fed_ms - ms);
     l.quiet_ms = padded || rms(samples) < SILENCE_RMS ? l.quiet_ms + ms : 0;
     if (padded) l.padded_ms += ms;
     // While the connection is down the audio waits in the ring and is sent again once it is back.
@@ -179,6 +206,69 @@ export class MetaStreamListener {
   }
 
   private out(l: Live, x: Float32Array): Float32Array { return l.rate === l.send_rate ? x : resample(x, l.rate, l.send_rate); }
+
+  // Finds stretches of speech in what was sent, so one the realtime ear never puts into words is read by the fallback ear.
+  private watchSpeech(sessionId: string, l: Live, x: Float32Array, startMs: number): void {
+    if (!this.o.fallback) return;
+    const fr = Math.round(l.rate * 0.02);
+    const now = this.now();
+    // This audio goes to Meta now, and Meta hears it no sooner than its place on the connection's own clock.
+    const clock = l.conn && !l.reconnecting ? l.conn.opened + l.conn.s.sentMs : now;
+    for (let i = 0; i < x.length; i += fr) {
+      const f = x.subarray(i, i + fr);
+      const at = startMs + (i / l.rate) * 1000, end = at + (f.length / l.rate) * 1000;
+      if (rms(f) >= SILENCE_RMS) { l.speech ??= { start_ms: at, end_ms: end, heard_at: now }; l.speech.end_ms = end; l.speech.heard_at = Math.max(now, clock + ((i + f.length) / l.rate) * 1000); }
+      else if (l.speech && end - l.speech.end_ms >= META_FALLBACK_QUIET_MS) this.closeSpeech(sessionId, l);
+    }
+  }
+
+  private closeSpeech(sessionId: string, l: Live): void {
+    const span = l.speech;
+    l.speech = null;
+    if (!span || span.end_ms - span.start_ms < META_FALLBACK_MIN_MS) return;
+    const w: Live["watched"][number] = { span: { start_ms: span.start_ms, end_ms: span.end_ms }, heard_at: span.heard_at, timer: null };
+    l.watched.push(w);
+    // The wait runs from when Meta could have heard the stretch, never from its capture, so a stream behind real time does not hand Meta's lines to the fallback ear.
+    this.arm(sessionId, l, w, (this.o.fallbackMs ?? META_FALLBACK_MS) - Math.max(0, this.now() - w.heard_at));
+  }
+
+  private arm(sessionId: string, l: Live, w: Live["watched"][number], ms: number): void {
+    w.timer = setTimeout(() => { w.timer = null; void this.fallbackRead(sessionId, l, w); }, Math.max(0, ms));
+    w.timer.unref?.();
+  }
+
+  private overlaps(a: Span, b: Span): boolean { return Math.min(a.end_ms, b.end_ms) - Math.max(a.start_ms, b.start_ms) >= META_SAME_SPEECH_MS; }
+
+  // A watched stretch with no realtime words is read by the fallback ear and delivered once; one still inside an open realtime turn waits for that turn.
+  private async fallbackRead(sessionId: string, l: Live, w: Live["watched"][number], now = false): Promise<void> {
+    const i = l.watched.indexOf(w);
+    if (i < 0) return;
+    const { span } = w;
+    if (l.worded.some((h) => this.overlaps(h, span))) { l.watched.splice(i, 1); return; }
+    const conns = [l.conn, l.closing, l.next].filter((c): c is Conn => !!c);
+    const open = l.pending.some((p) => this.overlaps(p, span)) || conns.some((c) => [...c.open].some((id) => { const t = c.turns.get(id); return !!t && t.start_ms < span.end_ms; }));
+    if (open && !now) { this.arm(sessionId, l, w, this.o.fallbackMs ?? META_FALLBACK_MS); return; }
+    l.watched.splice(i, 1);
+    const conn = conns.find((c) => this.owns(c, span.start_ms)) ?? l.conn;
+    // A stream the endpoint refused is recovered by the sender's chunks, so the fallback ear stays out of it.
+    if (!conn || !this.o.fallback || l.failed) return;
+    // The stretch is claimed before it is read, so a realtime turn for it arriving later is dropped, never delivered as well.
+    l.delivered.push({ ...span, conn: null });
+    l.fallbacks += 1;
+    const samples = this.slice(l, span.start_ms - META_TURN_PREROLL_MS, span.end_ms + META_TURN_TAIL_MS);
+    const captureStart = this.wallAt(l, span.start_ms), captureEnd = this.wallAt(l, span.end_ms);
+    const sid = conn.listen_sid, target = conn.target, seq = l.next_turn++;
+    const read = this.o.fallback(encodeWav(samples, l.rate)).then((t) => t.trim(), (e: unknown) => { l.errors.push(`a line the realtime ear missed could not be read by the fallback ear; say it again (${e instanceof Error ? e.message.slice(0, 120) : "failed"})`); return ""; });
+    const print = this.listen.printOf?.(samples, l.rate);
+    l.work = l.work.then(async () => {
+      const raw = await read;
+      if (!raw) return;
+      const at = this.now();
+      const us = await this.listen.segment({ owner: l.owner, target, session_id: sid, samples, rate: l.rate, raw, trailing_ms: Math.max(0, at - captureEnd), arrived: at, heard_at: at, capture_start: captureStart, capture_end: captureEnd, turn_seq: seq, finished_by: "fallback_parakeet", ...(print ? { voiceprint: print } : {}) });
+      if (us.length) this.o.onHeard?.(sid, us);
+    }).catch((err: unknown) => { l.errors.push(err instanceof Error ? err.message.slice(0, 200) : "fallback failed"); });
+    await read;
+  }
 
   // A sender that has fallen behind the clock gets silence, so the endpoint never sees ingress below real time.
   private pad(sessionId: string): void {
@@ -272,8 +362,8 @@ export class MetaStreamListener {
   private abs(conn: Conn, ms: number): number { return conn.base_ms + ms; }
   private owns(conn: Conn, startMs: number): boolean { return startMs >= conn.from_ms && startMs < conn.until_ms; }
   // Speech another session already delivered, heard again across a join, a resend or an overlap.
-  private heardBefore(l: Live, conn: Conn, startMs: number, endMs: number): boolean {
-    return l.delivered.some((d) => d.conn !== conn && Math.min(d.end_ms, endMs) - Math.max(d.start_ms, startMs) >= META_SAME_SPEECH_MS);
+  private heardBefore(l: Live, conn: Conn, startMs: number, endMs: number): Live["delivered"][number] | undefined {
+    return l.delivered.find((d) => d.conn !== conn && Math.min(d.end_ms, endMs) - Math.max(d.start_ms, startMs) >= META_SAME_SPEECH_MS);
   }
 
   private onEvent(sessionId: string, l: Live, conn: Conn, e: RealtimeEvent): void {
@@ -301,20 +391,30 @@ export class MetaStreamListener {
     const processed = this.abs(conn, e.audioProcessedMs);
     const at = this.now();
     const raw = e.transcript.trim();
+    const span: Span = { start_ms: t.start_ms, end_ms: end };
+    if (raw) { l.pending.push(span); if (l.pending.length > 100) l.pending.shift(); }
     const samples = this.slice(l, t.start_ms - META_TURN_PREROLL_MS, end + META_TURN_TAIL_MS);
     const captureStart = this.wallAt(l, t.start_ms), captureEnd = this.wallAt(l, end);
     const cost = centsOf(Math.max(0, processed - l.billed_ms));
     l.billed_ms = Math.max(l.billed_ms, processed);
     const deliver = () => {
-      if (!this.owns(conn, t.start_ms) || this.heardBefore(l, conn, t.start_ms, end)) return;
+      const p = l.pending.indexOf(span);
+      if (p >= 0) l.pending.splice(p, 1);
+      if (!this.owns(conn, t.start_ms)) return;
+      const before = this.heardBefore(l, conn, t.start_ms, end);
+      // A realtime turn for speech the fallback ear already delivered is dropped and counted, and the rest of its span stays open to the fallback ear.
+      if (before) { if (!before.conn && raw) l.late_dropped += 1; return; }
+      if (raw) { l.worded.push(span); if (l.worded.length > 100) l.worded.shift(); }
       l.delivered.push({ start_ms: t.start_ms, end_ms: end, conn });
       if (l.delivered.length > 50) l.delivered.shift();
       l.last_end_ms = Math.max(l.last_end_ms, end);
       // Both are counted from when the end of the line was captured, so a late or paced upload is never measured as faster than it was.
       const latency = Math.max(0, at - captureEnd);
       const sid = conn.listen_sid, target = conn.target;
+      // The voiceprint is worked out as soon as the turn is complete, so a turn never waits on the one before it for that.
+      const print = raw ? this.listen.printOf?.(samples, l.rate) : undefined;
       l.work = l.work.then(async () => {
-        const us: ListenUtterance[] = raw ? await this.listen.segment({ owner: l.owner, target, session_id: sid, samples, rate: l.rate, raw, trailing_ms: latency, arrived: at, heard_at: at, ...(capturedStart ? { capture_start: captureStart } : {}), capture_end: captureEnd, turn_seq: t.seq }) : [];
+        const us: ListenUtterance[] = raw ? await this.listen.segment({ owner: l.owner, target, session_id: sid, samples, rate: l.rate, raw, trailing_ms: latency, arrived: at, heard_at: at, ...(capturedStart ? { capture_start: captureStart } : {}), capture_end: captureEnd, turn_seq: t.seq, ...(print ? { voiceprint: print } : {}) }) : [];
         if (us.length) this.o.onHeard?.(sid, us);
         this.row(us[0]?.task_id ?? null, us[0]?.line_id ?? null, latency, cost, null);
       }).catch((err: unknown) => { l.errors.push(err instanceof Error ? err.message.slice(0, 200) : "segment failed"); });
@@ -423,18 +523,19 @@ export class MetaStreamListener {
 
   // Ends the stream with endStream on every open session, drained to its close, then every turn is handed on and a line waiting on a number goes alone.
   // With dropOpen a line still being said is not handed on, since the sender will send it another way; kept_until is when the last kept audio was captured.
-  async end(sessionId: string, o: { dropOpen?: boolean } = {}): Promise<{ utterances: ListenUtterance[]; errors: string[]; failed: string | null; padded_ms: number; resent_ms: number; trimmed_ms: number; kept_until: number | null }> {
+  async end(sessionId: string, o: { dropOpen?: boolean } = {}): Promise<{ utterances: ListenUtterance[]; errors: string[]; failed: string | null; padded_ms: number; resent_ms: number; trimmed_ms: number; kept_until: number | null; fallbacks: number; late_dropped: number }> {
     const l = this.live.get(sessionId);
-    if (!l) return { utterances: [], errors: [], failed: null, padded_ms: 0, resent_ms: 0, trimmed_ms: 0, kept_until: null };
+    if (!l) return { utterances: [], errors: [], failed: null, padded_ms: 0, resent_ms: 0, trimmed_ms: 0, kept_until: null, fallbacks: 0, late_dropped: 0 };
     if (l.pad) clearInterval(l.pad);
     this.flushInbox(sessionId, l, true);
     await l.reconnecting;
     await l.rolling;
     let keptUntil = l.wall.at(-1)?.at ?? null;
+    let cut = Infinity;
     if (o.dropOpen) {
       const conns = [l.conn, l.closing, l.next].filter((x): x is Conn => !!x);
       const open = conns.flatMap((c) => [...c.open].map((id) => c.turns.get(id)?.start_ms)).filter((x): x is number => typeof x === "number");
-      const cut = open.length ? Math.min(...open) : l.fed_ms;
+      cut = open.length ? Math.min(...open) : l.fed_ms;
       for (const c of conns) c.until_ms = Math.min(c.until_ms, cut);
       if (open.length) keptUntil = this.wallAt(l, cut - META_TURN_PREROLL_MS);
     }
@@ -454,6 +555,14 @@ export class MetaStreamListener {
     await c?.after;
     this.live.delete(sessionId);
     await l.work;
+    // Speech still waiting for words when the stream ends is read by the fallback ear now, except a line the sender will send again.
+    this.closeSpeech(sessionId, l);
+    for (const w of [...l.watched]) {
+      if (w.timer) clearTimeout(w.timer);
+      if (w.span.start_ms >= cut) { l.watched.splice(l.watched.indexOf(w), 1); continue; }
+      await this.fallbackRead(sessionId, l, w, true);
+    }
+    await l.work;
     for (const sid of l.sids) await this.listen.flush(sid);
     // The audio after the last completed turn is billed too, so the ledger sums to the audio sent.
     const rest = Math.max(0, (c ? this.abs(c, c.s.sentMs) : l.fed_ms) - l.billed_ms);
@@ -461,7 +570,7 @@ export class MetaStreamListener {
     if (l.dropped_ms > 0) l.errors.push(`${Math.round(l.dropped_ms)} ms of audio arrived while the realtime ear was reconnecting and was not heard`);
     const utterances: ListenUtterance[] = [], errors = [...l.errors];
     for (const sid of l.sids) { const r = this.listen.unreportedOf(sid); utterances.push(...r.utterances); errors.push(...r.errors); }
-    return { utterances, errors, failed: l.failed?.message ?? null, padded_ms: Math.round(l.padded_ms), resent_ms: Math.round(l.resent_ms), trimmed_ms: Math.round(l.trimmed_ms), kept_until: keptUntil };
+    return { utterances, errors, failed: l.failed?.message ?? null, padded_ms: Math.round(l.padded_ms), resent_ms: Math.round(l.resent_ms), trimmed_ms: Math.round(l.trimmed_ms), kept_until: keptUntil, fallbacks: l.fallbacks, late_dropped: l.late_dropped };
   }
 
   async drain(sessionId: string): Promise<void> { await this.live.get(sessionId)?.work; }

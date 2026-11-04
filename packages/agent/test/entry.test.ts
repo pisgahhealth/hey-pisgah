@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { encodeWav } from "@hey-pisgah/voice";
 import { startEmrServe } from "../src/emr/serve.js";
-import { EMERGENCY_KIND, EMERGENCY_LINE, emergencyHeardLoosely, identityFrom, spokenPatient } from "../src/emr/entry.js";
+import { EMERGENCY_KIND, EMERGENCY_LINE, afterWake, emergencyHeardLoosely, emergencyReason, identityFrom, spokenPatient } from "../src/emr/entry.js";
 import { gatePrompt } from "../src/emr/gate.js";
 import type { EmrCommit, EmrContext, EmrPort, EmrProof, EmrTarget, Provenance, WorkArgs } from "../src/emr/port.js";
 import { OWNER, emrRoot, mockClient } from "./emr-helpers.js";
@@ -50,6 +50,15 @@ async function boot(heard: string[] = []) {
   });
   return { s, port, calls: () => calls };
 }
+
+describe("the wake carried into the words (4 Nov)", () => {
+  it("drops the wake before plain words and keeps the emergency phrase whole, filler included", () => {
+    expect(afterWake("Hey Pisgah, pulse is 110.")).toBe("pulse is 110.");
+    expect(afterWake("Hey Pisgah, emergency, a man collapsed.")).toBe("Hey Pisgah, emergency, a man collapsed.");
+    expect(afterWake("Hey Pisgah, um, we have an emergency, a man collapsed at the gate.")).toBe("Hey Pisgah, um, we have an emergency, a man collapsed at the gate.");
+    expect(emergencyReason("Hey Pisgah, um, we have an emergency, a man collapsed at the gate.")).toBe("Emergency arrival: a man collapsed at the gate.");
+  });
+});
 
 describe("hands-free entry rules", () => {
   it("hears the emergency phrase as transcribed, and not the word emergency in passing", () => {

@@ -137,11 +137,21 @@ describe("a door 429 on the speaker match is retried once after a second", () =>
   });
 });
 
+describe("a budget named in the profile paces the door", () => {
+  it("lets reads go up to the profile's capacity and paces the next one, with no budget passed to the port", async () => {
+    const { f, calls } = fakeFetch([() => json(200, {}), () => json(200, {}), () => json(200, {})]);
+    const port = new PisgahPort(profile({ budget: { capacity: 2, per_second: 0.001, write_reserve: 1, read_wait_ms: 0 } }), { bearers: { [OWNER]: "b" }, fetch: f });
+    expect((await port.request("GET", `stay/${ADM}`, PROV)).kind).toBe("response");
+    expect(await port.request("GET", `stay/${ADM}`, PROV)).toEqual({ kind: "network_error", reason: "paced" });
+    expect(calls).toHaveLength(1);
+  });
+});
+
 describe("the hints sent to the ear carry the profile's drug and test words", () => {
   it("after the patient's own words and the staff names", async () => {
     const { f } = fakeFetch([() => json(200, { name: "Test Patient", visitId: VISIT, ward: "Ward A" })]);
     const port = new PisgahPort(profile(), { bearers: { [OWNER]: "b" }, fetch: f, budget: null });
-    const l = new ListenSessions({ port } as unknown as EmrRuntime, { transcribe: async () => { throw new Error("no ear here"); }, staff: ["Dr Test"] });
+    const l = new ListenSessions({ port, listenContext: port.resolve.bind(port) } as unknown as EmrRuntime, { transcribe: async () => { throw new Error("no ear here"); }, staff: ["Dr Test"] });
     const hints = await l.hintsFor(OWNER, { admission_id: ADM }, "s-0000aaaa", Date.parse(PROV.spoken_at));
     expect(hints).toEqual(expect.arrayContaining(["oral paracetamol", "malaria parasite", "malaria test", "Dr Test", "Test Patient"]));
     expect(hints.indexOf("oral paracetamol")).toBeGreaterThan(hints.indexOf("Dr Test"));

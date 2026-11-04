@@ -100,6 +100,16 @@ describe("a new arrival heard from how clinicians talk, with nothing open", () =
     await s.close();
   });
 
+  it("opens the arrival when the phrase sits inside a natural line, and not for the word alone with no wake (4 Nov)", async () => {
+    const { s, say } = await boot(["The emergency ward is full today.", "Hey Pisgah, um, we have an emergency, a man collapsed at the gate."], () => false);
+    expect((await say(0)).no_patient).toBe(true);
+    const r = await say(1);
+    expect(r.entry).toBe("emergency");
+    await s.runtime.settled();
+    const v = s.runtime.view(r.utterances[0].task_id as string)!;
+    expect(v.transcript.find((x) => x.kept)?.text).toMatch(/a man collapsed at the gate/);
+    await s.close();
+  });
   it("opens nothing for ward chatter that describes no new patient", async () => {
     const chatter = [
       "Abeg who get the keys for the drug cupboard?",

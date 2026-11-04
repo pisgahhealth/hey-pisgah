@@ -85,6 +85,8 @@ export interface EmrPort {
   readBack?(owner: string, visitId: string, prov: Provenance): Promise<ReadBack>;
   // The tests and medicines the owner may order by voice, by the words that name them.
   orderables?(): Orderables;
+  // The kinds the hospital's door demands the owner's spoken confirm for, so the runtime asks exactly for those; absent, the engine's own list stands.
+  confirmKinds?(): readonly string[];
   // The clinicians whose verbal orders this owner may take, by the words that name them.
   verbalIssuers?(owner: string): Record<string, { words: readonly string[]; label: string }>;
   // The discharge paperwork filled from the record, read back before the owner confirms.
