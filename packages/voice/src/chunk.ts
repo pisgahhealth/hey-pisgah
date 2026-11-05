@@ -50,7 +50,7 @@ export type ChunkOptions = { tailMs?: number; capMs?: number; threshold?: number
 
 // Cuts a recording the way the strip does: tailMs after speech stops, or at the capMs limit mid-word; chunks with no speech are never sent, so seq counts sent chunks only.
 export function stripChunks(samples: Float32Array, rate: number, o: ChunkOptions = {}): AudioChunk[] {
-  const tail = o.tailMs ?? 700, cap = o.capMs ?? 6000, th = o.threshold ?? SILENCE_RMS;
+  const tail = o.tailMs ?? 1000, cap = o.capMs ?? 6000, th = o.threshold ?? SILENCE_RMS;
   const rms = frameRms(samples, rate);
   const out: AudioChunk[] = [];
   let start = 0, speech = false, quiet = 0;

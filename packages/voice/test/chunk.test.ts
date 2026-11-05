@@ -26,12 +26,12 @@ describe("silence and chunks", () => {
     expect(leadingSilenceMs(audio([["quiet", 600], ["talk", 500]]), RATE)).toBe(600);
   });
 
-  it("cuts like the strip: 700 ms after speech, at the 6 s cap mid-word, and never sends a quiet-only chunk", () => {
+  it("cuts like the strip: one second after speech, at the 6 s cap mid-word, and never sends a quiet-only chunk", () => {
     const a = audio([["quiet", 300], ["talk", 2000], ["quiet", 1500], ["talk", 8000], ["quiet", 900], ["quiet", 7000]]);
     const c = stripChunks(a, RATE);
     expect(c.map((x) => x.cut)).toEqual(["quiet_tail", "cap", "quiet_tail"]);
     expect(c.map((x) => x.seq)).toEqual([0, 1, 2]);
-    expect(c[0]!.end_ms).toBe(3000);
+    expect(c[0]!.end_ms).toBe(3300);
     expect(c[1]!.end_ms - c[1]!.start_ms).toBe(6000);
     expect(c[2]!.end_ms).toBeLessThan(a.length / 16);
   });

@@ -11,7 +11,7 @@ import { LINE_MATCH_MAX_MS, LISTEN_WINDOW_MS, ReplayGuard, matchWindows, printLi
 
 export type Transcriber = (wav: Uint8Array, keywords: readonly string[], sessionId: string) => Promise<FinalTranscript>;
 
-// The strip cuts a chunk 700 ms after speech stops or at a 6.00 s cap mid-word; a capped chunk with no quiet tail is held and joined with the next one before transcribing.
+// The strip cuts a chunk one second after speech stops or at a 6.00 s cap mid-word; a capped chunk with no quiet tail is held and joined with the next one before transcribing.
 export const CHUNK_CAP_MS = 6000;
 export const FINAL_SILENCE_MS = 500;
 // Held audio that grows past this without a pause is dropped, never transcribed or acted on.
@@ -21,7 +21,7 @@ export const STRONG_JOIN_WAIT_MS = 8000;
 // How long a vitals line that ends on a number waits for a next chunk that carries the number on ("point six").
 export const NUMBER_JOIN_WAIT_MS = 3000;
 // The quiet after speech at which the strip ends a chunk; a shorter pause between two flushed chunks is inside one utterance.
-export const STRIP_TAIL_MS = 700;
+export const STRIP_TAIL_MS = 1000;
 // How long audio held at the cap waits for a next chunk or the strip's end marker before it is finished alone; longer than one capped chunk.
 export const HELD_END_WAIT_MS = CHUNK_CAP_MS + 2000;
 // How many finished chunks are transcribed at once ahead of the session's chain, across all sessions.

@@ -271,7 +271,7 @@ describe("finished chunks are transcribed as they end and delivered in spoken or
   });
 
   it("keeps the name its own line when the pause before it was as long as the strip's tail, and a live short chunk with nothing behind it goes at once", async () => {
-    const said = await replayFlush(400);
+    const said = await replayFlush(700);
     expect(said.map((x) => [x.text, x.finished_by, x.seqs])).toEqual([["uh confusion.", "quiet_tail", [1]], ["her name is", "short_chunk", [2]], ["Ada Obi.", "quiet_tail", [3]], ["her temperature is 38.5", "number_alone", [4]]]);
     const live = runtime();
     const listen = new ListenSessions(live.rt, { transcribe: slowEar({ "l-2": "her name is" }, 300) });

@@ -165,6 +165,20 @@ describe("speech gate", () => {
     expect(v.actions.map((a) => a.args)).toEqual([{ resp_rate: 22 }]);
   });
 
+  it("notes a one- or two-word fragment the gate finds unclear instead of asking a question that would expire unanswered", async () => {
+    const { rt, listen } = boot((said) => (said.startsWith("Chart the rate") ? [{ class: "unclear", question: "18 or 22?" }] : [{ class: "unclear", question: "Could you complete your request?" }]),
+      earOf({ 1000: "Chart the rate, 18 or was it 22.", 1100: "Should I", 1200: "Sure,", 1300: "Send it" }));
+    await say(listen, 0, chunkWav(1000, 700));
+    await say(listen, 1, chunkWav(1100, 700));
+    await say(listen, 2, chunkWav(1200, 700));
+    await say(listen, 3, chunkWav(1300, 700));
+    await rt.settled();
+    const v = rt.views(OWNER)[0]!;
+    // The vitals line still asks its one-word question and a two-word order still asks; the two fragments ask nothing and are noted.
+    expect(v.questions.map((q) => q.text)).toEqual(["18 or 22?", "Could you complete your request?"]);
+    expect(v.notes.map((n) => n.text).filter((x) => x.startsWith("Heard only"))).toEqual(['Heard only "Should I", so nothing was written from it.', 'Heard only "Sure,", so nothing was written from it.']);
+  });
+
   it("applies only clauses whose words come from the line, and a correction with no value said asks instead of copying", async () => {
     const { rt, port, listen } = boot((said) => {
       if (said.startsWith("Chart pulse 96")) return [{ class: "instruction", kind: "record_observation", pulse: 96, confidence: 0.95, words: "Chart pulse 96." }];

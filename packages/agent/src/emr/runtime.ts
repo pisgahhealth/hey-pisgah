@@ -231,6 +231,10 @@ const CONTINUATION_MS = 10_000;
 const STRANGER_ASK_KINDS: ReadonlySet<string> = new Set(["prescribe", "order_test", "admit_patient", "request_admission", "assign_bed", "schedule_review", "delegate_task", "add_care_plan_item"]);
 // The words that make a second name a correction of the first.
 const RENAME_CUE = /\b(?:sorry|actually|correction|i mean|i meant)\b/i;
+// A verb that makes even a two-word line a request ("send it", "admit her"), so it is still asked about rather than noted as a fragment.
+const ORDER_VERB = /\b(?:give|start|send|order|prescribe|take|check|do|get|put|add|stop|admit|discharge|chart|record|cancel|hold|draft|prepare|sign|review|refer|book|schedule|call|page|repeat)\b/i;
+// A line of one or two words with no number and no order verb is a cut-off breath or an aside, never a request worth a question (4 Nov rehearsals: "D", "Sure,", "Should I", "Malaria").
+const fragmentOnly = (line: string): boolean => !/\d/.test(line) && !ORDER_VERB.test(line) && line.trim().split(/\s+/).filter(Boolean).length <= 2;
 // A record label that is a placeholder for an arrival, never a name.
 const UNNAMED_LABEL = /^(?:the patient|unknown\b|unnamed\b|unidentified\b)|\barrival\b|\b(?:john|jane) doe\b/i;
 // How soon after a wake said alone "emergency" said first on the next line still opens an arrival.
@@ -1953,6 +1957,8 @@ export class EmrRuntime {
         this.ask(l, lineId, q.text, q.choice && kind ? { ...q.choice, kind, base, corrects_action_id: null } : null);
         return;
       }
+      // A fragment with nothing to act on is noted, not asked, so a breath the ear cut off never raises a question that then expires unanswered.
+      if (!c.kind && fragmentOnly(lineText)) { this.note(l, `Heard only "${lineText.trim().slice(0, 60)}", so nothing was written from it.`); return; }
       const previous = this.asking;
       if (c.kind && kinds.includes(c.kind)) this.asking = { kind: c.kind, clause: Object.fromEntries(Object.entries(c).filter(([k, v]) => v != null && !["confidence", "question", "asked_for"].includes(k))), text: lineText };
       try { this.ask(l, lineId, c.question ?? `I did not catch what to record from "${c.words.slice(0, 120)}". Please say it again.`); } finally { this.asking = previous; }
