@@ -2,7 +2,7 @@
 
 Built with Muse Spark Open.
 
-None of the models below is bundled in this repository. The local models and the sherpa-onnx runtime are downloaded at setup. Licences were checked on 31 Oct 2026 against the sources linked.
+None of the models below is bundled in this repository. The local models and the sherpa-onnx runtime are downloaded at setup. Licences were checked against the sources linked.
 
 ## Models
 
@@ -10,7 +10,7 @@ None of the models below is bundled in this repository. The local models and the
 | --- | --- | --- | --- |
 | Muse Spark Open (Meta), served on Modal | Decides what each spoken line asks the agent to do, and what to ask back | Muse Spark Open licence, which asks for "Built with Muse Spark Open" to be shown | [licence](https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B/blob/main/LICENSE.md) |
 | Meta Voice Transcribe, through the Meta Model API | Turns the clinician's speech into text, over REST or realtime | Meta Model API terms and acceptable-use policy | [terms](https://dev.meta.ai/legal/terms-of-service), [policy](https://dev.meta.ai/legal/acceptable-use-policy) |
-| Kroko English streaming Zipformer, community model (Banafo), 2025-08-06 release | Optional local streaming ear | CC-BY-SA (the model card does not state a version) | [model card](https://huggingface.co/Banafo/Kroko-ASR) |
+| Kroko English streaming Zipformer, community model (Banafo) | Optional local streaming ear | CC-BY-SA (the model card does not state a version) | [model card](https://huggingface.co/Banafo/Kroko-ASR) |
 | NVIDIA Parakeet TDT 0.6B v2, int8 | Optional local second ear | CC-BY-4.0 | [model card](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) |
 | NVIDIA TitaNet-small | Local speaker model: who probably spoke, never a credential | Covered by the NeMo Toolkit licence, Apache-2.0 | [model card](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/nemo/models/titanet_small), [NeMo licence](https://github.com/NVIDIA/NeMo/blob/main/LICENSE) |
 | GigaSpeech keyword-spotting Zipformer 3.3M (k2-fsa) | Local wake-phrase spotter in the browser | Apache-2.0 | [release](https://github.com/k2-fsa/sherpa-onnx/releases/tag/kws-models) |

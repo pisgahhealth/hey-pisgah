@@ -10,3 +10,4 @@ coverage/
 .claude/
 docs/*
 !docs/CONTRIBUTIONS.md
+!docs/REVIEW.md

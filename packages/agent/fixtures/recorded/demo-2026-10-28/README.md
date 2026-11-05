@@ -1,4 +1,4 @@
-# Demo cases, recorded live on 28 Oct 2026
+# Demo cases, recorded live
 
 Two cases run live on Muse Spark Open (Modal, effort low on every call) under adopted version 2. Version 2 is the A-prior change (claim cover no longer waits for the summary final), adopted through serve by the synthetic ward manager.
 

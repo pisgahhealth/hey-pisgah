@@ -1,4 +1,4 @@
-# Recorded live case, 28 Oct 2026
+# Recorded live case
 
 One v1 case run live on Muse Spark Open (Modal, effort low), then frozen here so it replays with no network.
 

@@ -19,7 +19,7 @@ Append-only JSONL streams. Every durable record in Hey Pisgah is one line here.
 
 `fs.fsyncSync` calls libuv. On macOS libuv issues `fcntl(F_FULLFSYNC)`, falls back to `F_BARRIERFSYNC`, then to plain `fsync`.
 So the store gets a full flush to the drive with no native code.
-Source: libuv `src/unix/fs.c`, function `uv__fs_fsync`, tag v1.52.1 (the libuv in Node 20.19.5), checked 28 Oct 2026.
+Source: libuv `src/unix/fs.c`, function `uv__fs_fsync`, tag v1.52.1 (the libuv in Node 20.19.5).
 
 ## Projections
 

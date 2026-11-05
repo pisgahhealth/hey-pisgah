@@ -1,4 +1,4 @@
-# Evaluation tables (dev, measured, 2026-10-28T03:21:27.939Z)
+# Evaluation tables (dev, measured)
 
 All times are simulated minutes. Rows run on the definition executor unless stated.
 

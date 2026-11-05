@@ -43,11 +43,11 @@ Four Voice Transcribe calls failed in transport on the first pass and were read 
 ## What we saw
 
 - Spark Open accepts four named audio parts in one call. It hears the addressee well, but it does not tell staff voices apart: it named the second doctor the owner in 8 of his 11 lines, and the nurse in 4 of 7.
-- Spark added words nobody said in 2 of 60 clips, once a whole medication request. The 28 Oct invented-vitals failure has the same shape.
+- Spark added words nobody said in 2 of 60 clips, once a whole medication request. The recorded invented-vitals failure has the same shape.
 - The gate as shipped has no speaker, so every colleague's or patient's instruction-shaped line is treated as the owner's.
 - Synthetic voices are easier than people. Even a loose threshold gave no false authority here. The thresholds must be set again on real recordings.
 
-## Local speaker-verification options checked (29 Oct 2026)
+## Local speaker-verification options checked
 
 All run offline on macOS through sherpa-onnx (Apache-2.0, `pip install sherpa-onnx`, also `sherpa-onnx-node` on npm). Times are per clip, one thread, 24 kHz input resampled inside.
 
@@ -70,7 +70,7 @@ npx tsx packages/voice/research/assemble.run.ts --set final --results evaluation
 npx vitest run packages/voice/test/attribution.test.ts
 ```
 
-## Real recordings (R1.b, 29 Oct 2026)
+## Real recordings (R1.b)
 
 The owner recorded the script on a laptop mic: 60 files, 12 of them holding two or three lines. They were cut at pauses into 74 clips: 3 enrolment, 24 tuning, 46 held out and one added owner question. H39 and H44 were not recorded. No file was unusable. `real-set.json` lists every clip with its source, cut, hashes, the words heard by Voice Transcribe and by an offline Parakeet model, and the labels. Audio stays private.
 
@@ -116,7 +116,7 @@ All five lost values are the normaliser, not the ear: "one thirty over eighty fi
 
 Run it: `real.transcribe.run.ts`, `real_cut.py`, `embed.py`, `real_voices.py`, `real_parakeet.py`, `real.manifest.run.ts`, `readers.run.ts --gate-only --manifest packages/voice/research/real-set.json`, then `real.assemble.run.ts`; the scores are in `evaluation/results/attribution-real.json`.
 
-## Attribution v2: identity, addressee and intent scored apart (30 Oct 2026)
+## Attribution v2: identity, addressee and intent scored apart
 
 Thresholds are configuration with a source and a date (`evaluation/commitments/attribution-thresholds.json`). A change is a new revision with a reason. Revision 3 is in force: the owner rule from the real recordings (cosine at least 0.41, best match), the colleague placeholder 0.43, and the replay defence's limits, frozen before the v2 set was built.
 
@@ -138,6 +138,6 @@ The last row is the residual: session and presence cannot see a recording played
 
 Run it: `v2.build.run.ts --synth <say clips> --real <owner recordings> --model <TitaNet-small onnx> --sherpa <sherpa-onnx-node folder> --live` (add `--gate` once the route is back), then `v2.assemble.run.ts`.
 
-### The owner's own v2 recordings (30 Oct)
+### The owner's own v2 recordings
 
 The owner recorded his part of the v2 script. `v2.cut.run.ts` cuts it on the spoken ids by aligning an offline Parakeet reading to the script; `v2-real-set.json` lists every cut and its hash. On held-out lines the owner rule (0.41) passed 30 of 31 quiet lines but 14 of 30 with a radio playing. His phone replays were mostly too quiet to score; the 6 usable ones did not pass the voice, and presence held all 6 with the owner away. Same chunks sent again were refused 10 of 10. Voice Transcribe heard 53 of 61 values.
